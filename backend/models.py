@@ -1,0 +1,265 @@
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+
+from database import Base
+
+
+class Role(Base):
+    __tablename__ = "role"
+
+    role_id = Column(Integer, primary_key=True, index=True)
+    role_name = Column(String(30), nullable=False)
+    permissions = Column(Text)
+
+    users = relationship("User", back_populates="role")
+
+
+class User(Base):
+    __tablename__ = "user"
+
+    user_id = Column(Integer, primary_key=True, index=True)
+    role_id = Column(Integer, ForeignKey("role.role_id"))
+    username = Column(String(30), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    mfa_enabled = Column(Boolean, default=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    # Practical UI/account fields used by the current React application.
+    email = Column(String(255), index=True)
+    full_name = Column(String(255), default="")
+    approval_status = Column(String(30), nullable=False, default="pending")
+    is_active = Column(Boolean, nullable=False, default=True)
+    last_login_at = Column(DateTime)
+    profile_image_path = Column(Text)
+    profile_picture_path = Column(Text)
+    profile_completed = Column(Boolean, nullable=False, default=False)
+    first_name = Column(String(100))
+    middle_name = Column(String(100))
+    last_name = Column(String(100))
+    suffix = Column(String(30))
+    mobile_number = Column(String(30))
+    address = Column(Text)
+    sex = Column(String(20))
+    birth_date = Column(String(30))
+
+    role = relationship("Role", back_populates="users")
+
+
+class Client(Base):
+    __tablename__ = "client"
+
+    client_id = Column(Integer, primary_key=True, index=True)
+    name = Column(Text, nullable=False)
+    age = Column(Integer)
+    sex = Column(String(10))
+    civil_status = Column(String(50))
+    religion = Column(String(100))
+    educational_attainment = Column(String(150))
+    citizenship = Column(String(100))
+    language_dialect = Column(String(100))
+    created_at = Column(DateTime, server_default=func.now())
+    deleted_at = Column(DateTime)
+
+    details = relationship("ClientDetails", back_populates="client", uselist=False)
+    classification = relationship("ClientClassification", back_populates="client", uselist=False)
+    intakes = relationship("IntakeRecord", back_populates="client")
+    cases = relationship("Case", back_populates="client")
+
+
+class ClientClassification(Base):
+    __tablename__ = "client_classification"
+
+    classification_id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("client.client_id"), nullable=False)
+    class_cicl = Column(Boolean, default=False)
+    class_woman = Column(Boolean, default=False)
+    class_law_enforcer = Column(Boolean, default=False)
+    class_tenant_agrarian = Column(Boolean, default=False)
+    class_ofw_land = Column(Boolean, default=False)
+    class_ofw_sea = Column(Boolean, default=False)
+    class_former_rebel = Column(Boolean, default=False)
+    class_trafficking_victim = Column(Boolean, default=False)
+    class_senior_citizen = Column(Boolean, default=False)
+    class_vawc_victim = Column(Boolean, default=False)
+    class_drug_related = Column(Boolean, default=False)
+    class_terrorism_arrested = Column(Boolean, default=False)
+    class_torture_victim = Column(Boolean, default=False)
+    class_voluntary_rehab = Column(Boolean, default=False)
+    class_foreign_national = Column(String(100))
+    class_refugee = Column(String(100))
+    class_urban_poor = Column(String(100))
+    class_rural_poor = Column(String(100))
+    class_indigenous_people = Column(String(100))
+    class_pwd_type = Column(String(100))
+    class_urban = Column(Boolean, default=False)
+    class_rural = Column(Boolean, default=False)
+    class_9165 = Column(Boolean, default=False)
+    class_female = Column(Boolean, default=False)
+    classification_notes = Column(Text)
+
+    client = relationship("Client", back_populates="classification")
+
+
+class ClientDetails(Base):
+    __tablename__ = "client_details"
+
+    details_id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("client.client_id"), nullable=False)
+    address = Column(Text)
+    contact_no = Column(Text)
+    email = Column(Text)
+    individual_monthly_income = Column(Text)
+    spouse = Column(Text)
+    address_of_spouse = Column(Text)
+    contact_no_of_spouse = Column(Text)
+    representative_name = Column(Text)
+    representative_age = Column(Integer)
+    representative_sex = Column(String(20))
+    representative_civil_status = Column(String(50))
+    representative_address = Column(Text)
+    representative_contact_no = Column(Text)
+    representative_relationship = Column(String(100))
+    representative_email = Column(Text)
+    detained = Column(Boolean, default=False)
+    detained_since = Column(DateTime)
+    place_of_detention = Column(String(255))
+
+    client = relationship("Client", back_populates="details")
+
+
+class IntakeRecord(Base):
+    __tablename__ = "intake_record"
+
+    intake_id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("client.client_id"))
+    interviewer_id = Column(Integer, ForeignKey("user.user_id"))
+    control_no = Column(String(20), unique=True)
+    form_date = Column(DateTime, nullable=False)
+    region = Column(String(50))
+    district_office = Column(String(255))
+    party_represented = Column(String(50))
+    applicant_role = Column(String(100))
+    applicant_role_other = Column(String(255))
+    nature_of_request = Column(Text)
+    nature_of_case = Column(String(50))
+
+    client = relationship("Client", back_populates="intakes")
+    cases = relationship("Case", back_populates="intake")
+    representatives = relationship("Representative", back_populates="intake")
+    adverse_parties = relationship("AdverseParty", back_populates="intake")
+
+
+class CaseNature(Base):
+    __tablename__ = "case_nature"
+
+    nature_id = Column(Integer, primary_key=True, index=True)
+    nature_name = Column(String(50), nullable=False)
+
+
+class CourtBranch(Base):
+    __tablename__ = "court_branch"
+
+    branch_id = Column(Integer, primary_key=True, index=True)
+    branch_name = Column(String(50), nullable=False)
+
+
+class Case(Base):
+    __tablename__ = "case"
+
+    case_id = Column(Integer, primary_key=True, index=True)
+    intake_id = Column(Integer, ForeignKey("intake_record.intake_id"))
+    client_id = Column(Integer, ForeignKey("client.client_id"))
+    nature_id = Column(Integer, ForeignKey("case_nature.nature_id"))
+    branch_id = Column(Integer, ForeignKey("court_branch.branch_id"))
+    title_of_case = Column(String(50), nullable=False)
+    case_no = Column(String(20))
+    court_body = Column(String(255))
+    status_of_case = Column(String(20), nullable=False)
+    last_action_taken = Column(Text)
+    date_of_confinement = Column(DateTime)
+    place_of_detention = Column(String(255))
+    location_type = Column(String(20))
+    cause_of_action = Column(Text)
+    facts_of_case = Column(Text)
+    pending_in_court = Column(Boolean, default=False)
+    date_of_termination = Column(DateTime)
+    cause_of_termination = Column(Text)
+    last_updated = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    intake = relationship("IntakeRecord", back_populates="cases")
+    client = relationship("Client", back_populates="cases")
+    documents = relationship("Document", back_populates="case")
+
+
+class Representative(Base):
+    __tablename__ = "representative"
+
+    rep_id = Column(Integer, primary_key=True, index=True)
+    intake_id = Column(Integer, ForeignKey("intake_record.intake_id"))
+    rep_name = Column(Text, nullable=False)
+    rep_age = Column(Integer)
+    rep_sex = Column(String(20))
+    civil_status = Column(String(50))
+    rep_address = Column(Text)
+    rep_contact_no = Column(Text)
+    relationship_to_applicant = Column(String(50))
+
+    intake = relationship("IntakeRecord", back_populates="representatives")
+
+
+class AdverseParty(Base):
+    __tablename__ = "adverse_party"
+
+    adverse_id = Column(Integer, primary_key=True, index=True)
+    intake_id = Column(Integer, ForeignKey("intake_record.intake_id"))
+    role_plaintiff_complainant = Column(Boolean, default=False)
+    role_defendant_respondent_accused = Column(Boolean, default=False)
+    role_oppositor_others = Column(Boolean, default=False)
+    name = Column(Text, nullable=False)
+    address = Column(Text)
+
+    intake = relationship("IntakeRecord", back_populates="adverse_parties")
+
+
+class Document(Base):
+    __tablename__ = "document"
+
+    document_id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, ForeignKey("case.case_id"))
+    intake_id = Column(Integer, ForeignKey("intake_record.intake_id"))
+    uploaded_by = Column(Integer, ForeignKey("user.user_id"))
+    document_type = Column(String(50))
+    encrypted_file_path = Column(Text, nullable=False)
+    ocr_status = Column(String(20), default="PENDING")
+    uploaded_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    case = relationship("Case", back_populates="documents")
+    extracted_metadata = relationship("ExtractedMetadata", back_populates="document")
+
+
+class ExtractedMetadata(Base):
+    __tablename__ = "extracted_metadata"
+
+    meta_id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("document.document_id"))
+    verified_by = Column(Integer, ForeignKey("user.user_id"))
+    extracted_json = Column(JSONB, nullable=False)
+    verification_status = Column(String(20), default="PENDING")
+    verified_at = Column(DateTime)
+
+    document = relationship("Document", back_populates="extracted_metadata")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    log_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("user.user_id"))
+    action = Column(String(50), nullable=False)
+    target_entity = Column(String(50))
+    timestamp = Column(DateTime, nullable=False, server_default=func.now())
+    ip_address = Column(String(20))
+    description = Column(Text)
+    entity_id = Column(String(100))

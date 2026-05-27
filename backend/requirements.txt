@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+python-multipart
+python-dotenv
+requests
+pillow
+opencv-python
+numpy
+paddleocr
+spacy
+pandas
+openpyxl
