@@ -13,11 +13,11 @@ function formatDate(value: string) {
 function ModuleBadge({ module }: { module: AuditLogEntry["module"] }) {
   const className =
     module === "Authentication"
-      ? "bg-[#EFF6FF] text-[#4A7FB0]"
+      ? "bg-[#F7F0FA] text-[#704389]"
       : module === "Admin"
         ? "bg-[#FFFBEB] text-[#92400E]"
         : module === "Export"
-          ? "bg-[#DCFCE7] text-[#166534]"
+          ? "bg-[#F7F0FA] text-[#704389]"
           : "bg-[#F8FAFC] text-[#4B5563]";
 
   return (
@@ -30,9 +30,9 @@ function ModuleBadge({ module }: { module: AuditLogEntry["module"] }) {
 function UserTypeBadge({ role }: { role?: string | null }) {
   const label = role ? role.charAt(0).toUpperCase() + role.slice(1) : "System";
   const className = role === "admin"
-    ? "bg-[#EFF6FF] text-[#2563EB]"
+    ? "bg-[#F7F0FA] text-[#704389]"
     : role === "staff"
-      ? "bg-[#ECFDF5] text-[#047857]"
+      ? "bg-[#F8FAFC] text-[#4B5563]"
       : "bg-[#F3F4F6] text-[#4B5563]";
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{label}</span>;
 }
@@ -105,7 +105,7 @@ export default function AuditLogsPage() {
   return (
     <MainLayout>
       <div className="mb-5">
-        <p className="text-sm font-semibold text-[#4A7FB0]">System Activity</p>
+        <p className="text-sm font-semibold text-[#704389]">System Activity</p>
         <h2 className="text-2xl font-bold text-[#2B3642]">Audit Logs</h2>
       </div>
 
@@ -117,7 +117,7 @@ export default function AuditLogsPage() {
               <select
                 value={selectedUserId}
                 onChange={(event) => setSelectedUserId(event.target.value)}
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               >
                 <option value="all">All Users</option>
                 {userOptions.map(([id, label]) => (
@@ -133,7 +133,7 @@ export default function AuditLogsPage() {
             <select
               value={actionType}
               onChange={(event) => setActionType(event.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             >
               <option value="all">All Actions</option>
               {actionOptions.map((action) => (
@@ -149,7 +149,7 @@ export default function AuditLogsPage() {
               type="date"
               value={dateFrom}
               onChange={(event) => setDateFrom(event.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             />
           </label>
           <label className="block">
@@ -158,7 +158,7 @@ export default function AuditLogsPage() {
               type="date"
               value={dateTo}
               onChange={(event) => setDateTo(event.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             />
           </label>
         </div>
@@ -207,3 +207,4 @@ export default function AuditLogsPage() {
     </MainLayout>
   );
 }
+

@@ -20,7 +20,7 @@ const statusLabel: Record<ApprovalStatus, string> = {
 const statusClass: Record<ApprovalStatus, string> = {
   pending: "bg-[#FFFBEB] text-[#92400E] ring-[#FEF3C7]",
   under_review: "bg-[#F8FAFC] text-[#4B5563] ring-[#D6DEE7]",
-  approved: "bg-[#DCFCE7] text-[#166534] ring-[#15803D]/25",
+  approved: "bg-[#DCFCE7] text-[#15803D] ring-[#15803D]/25",
   rejected: "bg-[#FEE2E2] text-[#991B1B] ring-[#DC2626]/20",
   suspended: "bg-[#E5E7EB] text-[#2B3642] ring-[#9CA3AF]/30",
 };
@@ -178,20 +178,20 @@ export default function VerificationPage() {
     <MainLayout>
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#4A7FB0]">Application Review</p>
+          <p className="text-sm font-semibold text-[#704389]">Application Review</p>
           <h1 className="text-2xl font-semibold text-[#2B3642]">User Verification</h1>
         </div>
         <div className="flex items-center gap-2">
           <select
             value={filter}
             onChange={(event) => setFilter(event.target.value as ApprovalStatus | "all")}
-            className="h-10 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+            className="h-10 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
           >
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
           </select>
-          <span className="rounded-full bg-[#4A7FB0] px-3 py-1 text-xs font-semibold text-white">
+          <span className="rounded-full bg-[#704389] px-3 py-1 text-xs font-semibold text-white">
             {requestCount}
           </span>
         </div>
@@ -237,7 +237,7 @@ export default function VerificationPage() {
                   <tr key={user.user_id} className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]">
                     <td className="px-5 py-4">
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#4A7FB0] text-sm font-semibold text-white">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#704389] text-sm font-semibold text-white">
                           {initials(user.full_name, user.email)}
                         </div>
                         <div className="min-w-0">
@@ -260,7 +260,7 @@ export default function VerificationPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedUser(user)}
-                          className="rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition hover:bg-[#4A7FB0] hover:text-white"
+                          className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
                         >
                           {isFinalStatus(user.approval_status) ? "View Details" : "View"}
                         </button>
@@ -299,7 +299,7 @@ export default function VerificationPage() {
           <div className="max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-[#4A7FB0]">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">
                   Account Request
                 </p>
                 <h2 className="mt-1 text-lg font-semibold text-[#2B3642]">
@@ -368,7 +368,7 @@ export default function VerificationPage() {
                     type="button"
                     onClick={() => employerIdImage && setPreviewImage(employerIdImage)}
                     disabled={!employerIdImage}
-                    className="mt-4 w-full rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#3E6D97] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-4 w-full rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Preview ID
                   </button>
@@ -417,3 +417,4 @@ export default function VerificationPage() {
     </MainLayout>
   );
 }
+

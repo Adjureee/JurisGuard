@@ -32,3 +32,4 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
 export async function getClients(): Promise<ClientRecord[]> {
   return apiRequest<ClientRecord[]>("/clients/");
 }
+

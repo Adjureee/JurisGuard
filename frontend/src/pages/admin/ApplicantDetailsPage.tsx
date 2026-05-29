@@ -118,9 +118,9 @@ export default function ApplicantDetailsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-[#2B3642]">Applicant Details</h1>
           <nav className="mt-1 flex items-center gap-2 text-sm text-[#4B5563]">
-            <Link to="/dashboard" className="hover:text-[#4A7FB0]">Dashboard</Link>
+            <Link to="/dashboard" className="hover:text-[#704389]">Dashboard</Link>
             <span>/</span>
-            <Link to="/admin/verification" className="hover:text-[#4A7FB0]">Verification</Link>
+            <Link to="/admin/verification" className="hover:text-[#704389]">Verification</Link>
             <span>/</span>
             <span className="text-[#2B3642]">{applicant?.full_name || "Applicant"}</span>
           </nav>
@@ -201,3 +201,4 @@ export default function ApplicantDetailsPage() {
     </MainLayout>
   );
 }
+

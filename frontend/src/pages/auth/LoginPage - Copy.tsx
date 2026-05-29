@@ -62,7 +62,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] px-4 py-10">
       <div className="w-full max-w-md rounded-lg border border-[#E5E7EB] bg-white p-8 shadow-sm shadow-[#111827]/10">
         <div className="mb-8 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#2F80ED]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">
             JurisGuard
           </p>
           <h1 className="mt-2 text-2xl font-bold text-[#111827]">Sign In</h1>
@@ -76,7 +76,7 @@ export default function LoginPage() {
             <span className="text-sm font-medium text-[#111827]">Email</span>
             <input
               type="email"
-              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
@@ -88,7 +88,7 @@ export default function LoginPage() {
             <span className="text-sm font-medium text-[#111827]">Password</span>
             <input
               type="password"
-              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
@@ -111,7 +111,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-md bg-[#2F80ED] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1f6fd6] disabled:cursor-not-allowed disabled:opacity-70"
+            className="w-full rounded-md bg-[#704389] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? "Signing in..." : "Sign In"}
           </button>
@@ -119,7 +119,7 @@ export default function LoginPage() {
 
         <p className="mt-5 text-center text-sm text-[#6B7280]">
           Need an account?{" "}
-          <Link to="/register" className="font-semibold text-[#111827] hover:text-[#2F80ED]">
+          <Link to="/register" className="font-semibold text-[#111827] hover:text-[#704389]">
             Register
           </Link>
         </p>
@@ -127,3 +127,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

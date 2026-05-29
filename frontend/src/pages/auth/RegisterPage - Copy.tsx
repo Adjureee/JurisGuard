@@ -99,7 +99,7 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] px-4 py-10">
       <div className="w-full max-w-lg rounded-lg border border-[#E5E7EB] bg-white p-8 shadow-sm shadow-[#111827]/10">
         <div className="mb-8 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#2F80ED]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">
             JurisGuard
           </p>
           <h1 className="mt-2 text-2xl font-bold text-[#111827]">Create Account</h1>
@@ -113,7 +113,7 @@ export default function RegisterPage() {
             <span className="text-sm font-medium text-[#111827]">Full Name</span>
             <input
               type="text"
-              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
               autoComplete="name"
@@ -125,7 +125,7 @@ export default function RegisterPage() {
             <span className="text-sm font-medium text-[#111827]">Email</span>
             <input
               type="email"
-              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
@@ -160,7 +160,7 @@ export default function RegisterPage() {
                   </div>
                 </div>
               ) : (
-                <label className="block cursor-pointer rounded-md border border-dashed border-[#D1D5DB] bg-white px-4 py-5 text-center transition duration-200 hover:border-[#2F80ED] hover:bg-[#F9FAFB]">
+                <label className="block cursor-pointer rounded-md border border-dashed border-[#D1D5DB] bg-white px-4 py-5 text-center transition duration-200 hover:border-[#704389] hover:bg-[#F9FAFB]">
                   <span className="text-sm font-semibold text-[#111827]">
                     Select employee ID image
                   </span>
@@ -184,7 +184,7 @@ export default function RegisterPage() {
               <span className="text-sm font-medium text-[#111827]">Password</span>
               <input
                 type={showPassword ? "text" : "password"}
-                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="new-password"
@@ -197,7 +197,7 @@ export default function RegisterPage() {
               <span className="text-sm font-medium text-[#111827]">Confirm Password</span>
               <input
                 type={showPassword ? "text" : "password"}
-                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 autoComplete="new-password"
@@ -212,7 +212,7 @@ export default function RegisterPage() {
               type="checkbox"
               checked={showPassword}
               onChange={(event) => setShowPassword(event.target.checked)}
-              className="h-4 w-4 rounded border-[#D1D5DB] text-[#2F80ED] focus:ring-[#2F80ED]"
+              className="h-4 w-4 rounded border-[#D1D5DB] text-[#704389] focus:ring-[#704389]"
             />
             Show Password
           </label>
@@ -232,7 +232,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-md bg-[#2F80ED] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1f6fd6] disabled:cursor-not-allowed disabled:opacity-70"
+            className="w-full rounded-md bg-[#704389] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? "Submitting..." : "Register"}
           </button>
@@ -240,7 +240,7 @@ export default function RegisterPage() {
 
         <p className="mt-5 text-center text-sm text-[#6B7280]">
           Already have an account?{" "}
-          <Link to="/login" className="font-semibold text-[#111827] hover:text-[#2F80ED]">
+          <Link to="/login" className="font-semibold text-[#111827] hover:text-[#704389]">
             Login
           </Link>
         </p>
@@ -248,3 +248,4 @@ export default function RegisterPage() {
     </div>
   );
 }
+

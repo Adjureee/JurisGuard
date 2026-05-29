@@ -22,7 +22,7 @@ import {
 import ReportExportModal, { type ReportExportRow } from "../components/modals/ReportExportModal";
 import { getStaffWorkload, type StaffWorkload } from "../services/dashboardService";
 
-const COLORS = ["#2563EB", "#F59E0B", "#15803D", "#DC2626", "#7C3AED"];
+const COLORS = ["#704389", "#F59E0B", "#15803D", "#DC2626", "#7C3AED"];
 
 function monthKey(value: string) {
   const date = new Date(value);
@@ -140,7 +140,7 @@ export default function StaffAnalyticsPage() {
     <MainLayout>
       <div className="mb-8 flex flex-col gap-4 rounded-2xl border border-[#D7DEE7] bg-white px-6 py-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-[#2563EB]">Staff Analytics & Reports</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">Staff Analytics & Reports</p>
           <h1 className="mt-2 text-3xl font-bold text-[#111827]">Personal Productivity Workspace</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[#6B7280]">
             Personal case trends, OCR activity, status breakdowns, and staff-only exports.
@@ -150,7 +150,7 @@ export default function StaffAnalyticsPage() {
           type="button"
           onClick={() => setExportOpen(true)}
           disabled={exportRows.length === 0}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#2563EB] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <FileDown className="h-4 w-4" />
           Export Center
@@ -174,7 +174,7 @@ export default function StaffAnalyticsPage() {
                       <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
                       <YAxis allowDecimals={false} stroke="#6B7280" fontSize={12} />
                       <Tooltip />
-                      <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill="#2563EB" />
+                      <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill="#704389" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -190,7 +190,7 @@ export default function StaffAnalyticsPage() {
                       <XAxis dataKey="week" stroke="#6B7280" fontSize={11} />
                       <YAxis allowDecimals={false} stroke="#6B7280" fontSize={12} />
                       <Tooltip />
-                      <Bar dataKey="total_cases" name="Intake" radius={[8, 8, 0, 0]} fill="#4A7FB0" />
+                      <Bar dataKey="total_cases" name="Intake" radius={[8, 8, 0, 0]} fill="#704389" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -220,7 +220,7 @@ export default function StaffAnalyticsPage() {
                   {(workload?.status_breakdown ?? []).map((row) => (
                     <div key={row.status} className="flex items-center justify-between rounded-lg border border-[#D7DEE7] bg-white px-3 py-2">
                       <span className="text-sm font-semibold text-[#111827]">{row.status}</span>
-                      <span className="rounded-full bg-[#EFF6FF] px-2.5 py-1 text-xs font-bold text-[#2563EB]">{row.total_cases}</span>
+                      <span className="rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-bold text-[#704389]">{row.total_cases}</span>
                     </div>
                   ))}
                 </div>
@@ -261,7 +261,7 @@ export default function StaffAnalyticsPage() {
               type="button"
               onClick={() => setExportOpen(true)}
               disabled={exportRows.length === 0}
-              className="mt-4 rounded-md bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-4 rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Open Export Filters
             </button>
@@ -282,3 +282,4 @@ export default function StaffAnalyticsPage() {
     </MainLayout>
   );
 }
+

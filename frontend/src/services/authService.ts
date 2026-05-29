@@ -87,3 +87,4 @@ export function logout() {
 export async function loginRequest(email: string, password: string): Promise<TokenResponse> {
   return login({ email, password });
 }
+

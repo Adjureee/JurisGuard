@@ -75,3 +75,4 @@ export default function AddCaseModal({ isOpen, onClose }: AddCaseModalProps) {
     </div>
   );
 }
+

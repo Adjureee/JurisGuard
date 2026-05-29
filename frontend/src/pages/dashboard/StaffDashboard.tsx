@@ -42,10 +42,10 @@ function ActionCard({
   return (
     <Link
       to={to}
-      className="rounded-xl border border-[#D7DEE7] bg-white p-4 transition hover:border-[#2563EB] hover:bg-[#EFF6FF] hover:shadow-sm"
+      className="rounded-xl border border-[#D7DEE7] bg-white p-4 transition hover:border-[#704389] hover:bg-[#F7F0FA] hover:shadow-sm"
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#EFF6FF] text-[#2563EB]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#F7F0FA] text-[#704389]">
           {icon}
         </div>
         <div>
@@ -91,7 +91,7 @@ export default function StaffDashboard() {
   return (
     <MainLayout>
       <div className="mb-8 rounded-2xl border border-[#D7DEE7] bg-white px-6 py-6 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-wide text-[#2563EB]">Staff Workspace</p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">Staff Workspace</p>
         <h1 className="mt-2 text-3xl font-bold text-[#111827]">My Legal Intake Dashboard</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-[#6B7280]">
           Personal workload, assigned cases, and intake operations.
@@ -131,7 +131,7 @@ export default function StaffDashboard() {
                   to="/cases"
                   className="flex items-center gap-3 rounded-lg border border-[#D7DEE7] bg-white px-3 py-3 transition hover:bg-[#F9FAFB]"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#EFF6FF] text-[#2563EB]">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F7F0FA] text-[#704389]">
                     <UserRound className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
@@ -182,3 +182,4 @@ export default function StaffDashboard() {
     </MainLayout>
   );
 }
+

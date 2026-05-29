@@ -128,7 +128,7 @@ function TextInput({
       <input
         type={type}
         {...registration}
-        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
       />
       <FieldError message={error} />
     </label>
@@ -156,7 +156,7 @@ function SelectInput({
       </span>
       <select
         {...registration}
-        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
       >
         <option value="">Select</option>
         {options.map((option) => (
@@ -197,11 +197,11 @@ function MethodCard({
       onClick={() => onSelect(value)}
       className={`rounded-lg border bg-white p-5 text-left shadow-sm  transition duration-200 hover:-translate-y-px hover:shadow-md ${
         selected
-          ? "border-[#4A7FB0] shadow-[#4A7FB0]/20"
-          : "border-[#E5E7EB] hover:border-[#4A7FB0]"
+          ? "border-[#704389] shadow-[#704389]/20"
+          : "border-[#E5E7EB] hover:border-[#704389]"
       }`}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#4A7FB0]/10 text-[#4A7FB0]">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#704389]/10 text-[#704389]">
         <i className={`fa-solid ${icon}`} aria-hidden="true" />
       </div>
       <p className="mt-4 text-base font-semibold text-[#2B3642]">{title}</p>
@@ -527,7 +527,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                 <button
                   type="button"
                   onClick={() => setMethod(null)}
-                  className="rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition duration-200 hover:-translate-y-px hover:bg-[#4A7FB0] hover:text-white"
+                  className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
                 >
                   Change Method
                 </button>
@@ -543,13 +543,13 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                       className="aspect-video w-full rounded-md border border-[#E5E7EB] bg-[#F9FAFB] object-cover"
                     />
                     <div className="space-y-3">
-                      <button type="button" onClick={startCamera} className="w-full rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3E6D97]">
+                      <button type="button" onClick={startCamera} className="w-full rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675]">
                         Start Camera
                       </button>
                       <button type="button" onClick={stopCamera} className="w-full rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] hover:bg-[#F9FAFB]">
                         Stop Camera
                       </button>
-                      <button type="button" disabled={!isCameraActive || isExtracting} onClick={handleCapture} className="w-full rounded-md border border-[#4A7FB0] bg-white px-4 py-2 text-sm font-semibold text-[#4A7FB0] hover:bg-[#4A7FB0] hover:text-white disabled:opacity-50">
+                      <button type="button" disabled={!isCameraActive || isExtracting} onClick={handleCapture} className="w-full rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] hover:bg-[#704389] hover:text-white disabled:opacity-50">
                         {isExtracting ? "Extracting..." : "Capture"}
                       </button>
                       {cameraError && <p className="text-sm text-red-600">{cameraError}</p>}
@@ -566,7 +566,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                       type="file"
                       accept="image/*"
                       onChange={handleUpload}
-                      className="mt-3 block w-full text-sm text-[#4B5563] file:mr-4 file:rounded-md file:border-0 file:bg-[#4A7FB0] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
+                      className="mt-3 block w-full text-sm text-[#4B5563] file:mr-4 file:rounded-md file:border-0 file:bg-[#704389] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
                     />
                   </label>
                 </div>
@@ -625,7 +625,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                   <TextInput label="Relationship to Applicant" registration={register("client_details.representative_relationship")} status={indicators["client_details.representative_relationship"]} />
                   <TextInput label="Representative Email" type="email" registration={register("client_details.representative_email")} error={errors.client_details?.representative_email?.message} status={indicators["client_details.representative_email"]} />
                   <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
-                    <input type="checkbox" {...register("client_details.detained")} className="h-4 w-4 rounded border-[#E5E7EB] text-[#4A7FB0]" />
+                    <input type="checkbox" {...register("client_details.detained")} className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389]" />
                     Detained
                     <FieldStatus status={indicators["client_details.detained"]} />
                   </label>
@@ -645,7 +645,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                           <input
                             type="checkbox"
                             {...register(`client_classification.${name as keyof ClientFormValues["client_classification"]}`)}
-                            className="h-4 w-4 rounded border-[#E5E7EB] text-[#4A7FB0]"
+                            className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389]"
                           />
                           {label}
                           <FieldStatus status={indicators[`client_classification.${name}`]} />
@@ -708,12 +708,12 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                 <button
                   type="button"
                   onClick={() => setMethod(null)}
-                  className="rounded-md border border-[#4A7FB0] bg-white px-4 py-2 text-sm font-semibold text-[#4A7FB0] transition duration-200 hover:bg-[#4A7FB0] hover:text-white"
+                  className="rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#704389] hover:text-white"
                 >
                   Change Method
                 </button>
                 {step < steps.length - 1 ? (
-                  <button type="button" onClick={nextStep} className="rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white shadow-md  transition hover:bg-[#3E6D97]">
+                  <button type="button" onClick={nextStep} className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition hover:bg-[#5F3675]">
                     Continue
                   </button>
                 ) : (
@@ -729,4 +729,5 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
     </div>
   );
 }
+
 

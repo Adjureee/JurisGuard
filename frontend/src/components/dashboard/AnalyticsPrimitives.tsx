@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import ErrorBoundary from "../ErrorBoundary";
 
 export function AnalyticsPanel({
@@ -15,7 +16,7 @@ export function AnalyticsPanel({
 }) {
   return (
     <section
-      className={`rounded-xl border border-[#E5E7EB] bg-white shadow-sm  ${className}`}
+      className={`rounded-xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] ${className}`}
     >
       <div className="border-b border-[#E5E7EB] px-5 py-4">
         <h3 className="text-base font-bold text-[#2B3642]">{title}</h3>
@@ -38,6 +39,8 @@ export function IntelligenceMetricCard({
   tone,
   trend = "Database live",
   positive = true,
+  to,
+  actionLabel = "View details",
 }: {
   label: string;
   value: number;
@@ -46,11 +49,13 @@ export function IntelligenceMetricCard({
   tone: "blue" | "green" | "red" | "yellow" | "purple" | "dark";
   trend?: string;
   positive?: boolean;
+  to?: string;
+  actionLabel?: string;
 }) {
   const safeValue = Number.isFinite(value) ? value : 0;
   const formattedValue = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(safeValue);
   const tones = {
-    blue: "border-[#BFDBFE] text-[#1D4ED8]",
+    blue: "border-[#E7D7EE] text-[#5F3675]",
     green: "border-[#A7F3D0] text-[#065F46]",
     red: "border-[#FECACA] text-[#9F1239]",
     yellow: "border-[#FEF3C7] text-[#92400E]",
@@ -58,7 +63,7 @@ export function IntelligenceMetricCard({
     dark: "border-[#D1D5DB] text-[#2B3642]",
   };
   const iconTones = {
-    blue: "bg-[#EFF6FF] text-[#1D4ED8]",
+    blue: "bg-[#F7F0FA] text-[#5F3675]",
     green: "bg-[#ECFDF5] text-[#065F46]",
     red: "bg-[#FFF1F2] text-[#9F1239]",
     yellow: "bg-[#FFFBEB] text-[#92400E]",
@@ -67,7 +72,7 @@ export function IntelligenceMetricCard({
   };
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border bg-white ${tones[tone]} p-5 shadow-sm  transition duration-200 hover:-translate-y-0.5`}
+      className={`relative overflow-hidden rounded-xl border bg-white ${tones[tone]} p-5 shadow-[0_4px_20px_rgba(0,0,0,0.04)] transition duration-200 hover:-translate-y-0.5`}
     >
       <div className="absolute right-0 top-0 h-24 w-24 rounded-bl-[80px] bg-[#F9FAFB]" />
       <div className="relative flex items-start justify-between gap-3">
@@ -88,6 +93,14 @@ export function IntelligenceMetricCard({
           {trend}
         </span>
       </div>
+      {to && (
+        <Link
+          to={to}
+          className="relative mt-4 inline-flex text-xs font-bold text-[#704389] hover:text-[#5F3675]"
+        >
+          {actionLabel}
+        </Link>
+      )}
     </div>
   );
 }
@@ -113,3 +126,4 @@ export function initials(name: string) {
     .slice(0, 2)
     .toUpperCase();
 }
+

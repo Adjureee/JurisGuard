@@ -128,7 +128,7 @@ function TextInput({
       <input
         type={type}
         {...registration}
-        className="mt-1 w-full rounded-md border border-[#e5e7eb] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+        className="mt-1 w-full rounded-md border border-[#e5e7eb] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/15"
       />
       <FieldError message={error} />
     </label>
@@ -156,7 +156,7 @@ function SelectInput({
       </span>
       <select
         {...registration}
-        className="mt-1 w-full rounded-md border border-[#e5e7eb] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+        className="mt-1 w-full rounded-md border border-[#e5e7eb] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/15"
       >
         <option value="">Select</option>
         {options.map((option) => (
@@ -197,11 +197,11 @@ function MethodCard({
       onClick={() => onSelect(value)}
       className={`rounded-lg border bg-white p-5 text-left shadow-sm transition duration-200 hover:-translate-y-px hover:shadow-md ${
         selected
-          ? "border-[#2F80ED] shadow-[#2F80ED]/15"
-          : "border-[#E5E7EB] hover:border-[#2F80ED]"
+          ? "border-[#704389] shadow-[#704389]/15"
+          : "border-[#E5E7EB] hover:border-[#704389]"
       }`}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EFF6FF] text-[#2F80ED]">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F7F0FA] text-[#704389]">
         <i className={`fa-solid ${icon}`} aria-hidden="true" />
       </div>
       <p className="mt-4 text-base font-semibold text-[#111827]">{title}</p>
@@ -527,7 +527,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                 <button
                   type="button"
                   onClick={() => setMethod(null)}
-                  className="rounded-md border border-[#2F80ED] bg-white px-3 py-1.5 text-xs font-semibold text-[#2F80ED] transition duration-200 hover:-translate-y-px hover:bg-[#2F80ED] hover:text-white"
+                  className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
                 >
                   Change Method
                 </button>
@@ -543,13 +543,13 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                       className="aspect-video w-full rounded-md border border-[#E5E7EB] bg-[#F9FAFB] object-cover"
                     />
                     <div className="space-y-3">
-                      <button type="button" onClick={startCamera} className="w-full rounded-md bg-[#2F80ED] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1f6fd6]">
+                      <button type="button" onClick={startCamera} className="w-full rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675]">
                         Start Camera
                       </button>
                       <button type="button" onClick={stopCamera} className="w-full rounded-md border border-[#E5E7EB] bg-[#FFFFFF] px-4 py-2 text-sm font-semibold text-[#111827]/80 hover:bg-[#F9FAFB]">
                         Stop Camera
                       </button>
-                      <button type="button" disabled={!isCameraActive || isExtracting} onClick={handleCapture} className="w-full rounded-md border border-[#2F80ED] bg-white px-4 py-2 text-sm font-semibold text-[#2F80ED] hover:bg-[#2F80ED] hover:text-white disabled:opacity-50">
+                      <button type="button" disabled={!isCameraActive || isExtracting} onClick={handleCapture} className="w-full rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] hover:bg-[#704389] hover:text-white disabled:opacity-50">
                         {isExtracting ? "Extracting..." : "Capture"}
                       </button>
                       {cameraError && <p className="text-sm text-red-600">{cameraError}</p>}
@@ -566,7 +566,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                       type="file"
                       accept="image/*"
                       onChange={handleUpload}
-                      className="mt-3 block w-full text-sm text-[#111827]/70 file:mr-4 file:rounded-md file:border-0 file:bg-[#2F80ED] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
+                      className="mt-3 block w-full text-sm text-[#111827]/70 file:mr-4 file:rounded-md file:border-0 file:bg-[#704389] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
                     />
                   </label>
                 </div>
@@ -708,16 +708,16 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                 <button
                   type="button"
                   onClick={() => setMethod(null)}
-                  className="rounded-md border border-[#2F80ED] bg-white px-4 py-2 text-sm font-semibold text-[#2F80ED] transition duration-200 hover:bg-[#2F80ED] hover:text-white"
+                  className="rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#704389] hover:text-white"
                 >
                   Change Method
                 </button>
                 {step < steps.length - 1 ? (
-                  <button type="button" onClick={nextStep} className="rounded-md bg-[#2F80ED] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1f6fd6]">
+                  <button type="button" onClick={nextStep} className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]">
                     Continue
                   </button>
                 ) : (
-                  <button type="submit" className="rounded-md bg-[#15803D] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#166534]">
+                  <button type="submit" className="rounded-md bg-[#15803D] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#704389]">
                     Create Client & Attach Case
                   </button>
                 )}
@@ -729,4 +729,5 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
     </div>
   );
 }
+
 

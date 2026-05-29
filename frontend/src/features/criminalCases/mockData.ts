@@ -259,3 +259,4 @@ export const mockCases: CriminalCaseRecord[] = [
     last_updated: "2026-05-02",
   },
 ];
+

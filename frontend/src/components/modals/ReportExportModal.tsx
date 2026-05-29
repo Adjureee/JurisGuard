@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { FileDown, FileSpreadsheet, FileText } from "lucide-react";
+import { FileDown, FileSpreadsheet } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
 import { createAuditLog } from "../../services/auditService";
 
-export type ReportExportType = "csv" | "excel" | "pdf";
+export type ReportExportType = "csv" | "excel";
 
 export type ReportExportRow = Record<string, string | number | null | undefined>;
 
@@ -81,16 +81,6 @@ function buildExcelHtml(rows: ReportExportRow[], title: string) {
   return `<!doctype html><html><head><meta charset="utf-8" /><style>body{font-family:Arial,sans-serif}table{border-collapse:collapse;width:100%}th{background:#E9EEF3;color:#2B3642;text-transform:uppercase}th,td{border:1px solid #D6DEE7;padding:8px;font-size:12px}</style></head><body><h2>${title}</h2><table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></body></html>`;
 }
 
-function openPdfPrint(rows: ReportExportRow[], title: string) {
-  const html = buildExcelHtml(rows, title);
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=800");
-  if (!printWindow) throw new Error("Popup blocked. Allow popups to export PDF.");
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
-}
-
 function uniqueValues(rows: ReportExportRow[], keys: string[]) {
   const values = new Set<string>();
   rows.forEach((row) => {
@@ -150,10 +140,9 @@ export default function ReportExportModal({
   const [filters, setFilters] = useState<ReportExportFilters>(initialFilters);
   const [exportType, setExportType] = useState<ReportExportType>("csv");
   const exportTypes = useMemo<ReportExportType[]>(
-    () => (scope === "staff" ? ["csv", "pdf"] : ["csv", "excel", "pdf"]),
-    [scope]
+    () => ["csv", "excel"],
+    []
   );
-  const safeExportType = scope === "staff" && exportType === "excel" ? "csv" : exportType;
 
   const filteredRows = useMemo(() => rows.filter((row) => matchesFilter(row, filters)), [filters, rows]);
   const options = useMemo(() => {
@@ -190,8 +179,8 @@ export default function ReportExportModal({
     const toastId = toast.loading("Preparing report export...");
 
     try {
-      const action = safeExportType === "csv" ? "Export CSV" : safeExportType === "excel" ? "Export Excel" : "Export PDF";
-      const description = `${user?.full_name || user?.email || "User"} exported ${filteredRows.length} ${scope === "staff" ? "personal" : "institutional"} report rows as ${safeExportType.toUpperCase()}`;
+      const action = exportType === "csv" ? "Export CSV" : "Export Excel";
+      const description = `${user?.full_name || user?.email || "User"} exported ${filteredRows.length} ${scope === "staff" ? "personal" : "institutional"} report rows as ${exportType.toUpperCase()}`;
       const entityId = new Date().toISOString();
       await createAuditLog({
         action,
@@ -201,12 +190,10 @@ export default function ReportExportModal({
         entity_id: entityId,
       });
 
-      if (safeExportType === "csv") {
+      if (exportType === "csv") {
         downloadBlob(`${baseName}.csv`, buildCsv(filteredRows), "text/csv;charset=utf-8");
-      } else if (safeExportType === "excel") {
-        downloadBlob(`${baseName}.xls`, buildExcelHtml(filteredRows, title), "application/vnd.ms-excel;charset=utf-8");
       } else {
-        openPdfPrint(filteredRows, title);
+        downloadBlob(`${baseName}.xls`, buildExcelHtml(filteredRows, title), "application/vnd.ms-excel;charset=utf-8");
       }
 
       addLog({
@@ -222,7 +209,7 @@ export default function ReportExportModal({
         type: "export_completed",
         userId: user?.user_id,
         title: "Report Export",
-        message: `${safeExportType.toUpperCase()} report exported`,
+        message: `${exportType.toUpperCase()} report exported`,
         redirectTo,
         entityType: `${scope}_report_export`,
         entityId,
@@ -234,24 +221,45 @@ export default function ReportExportModal({
     }
   };
 
-  const selectClass = "mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20";
+  const selectClass = "mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20";
   const labelClass = "text-xs font-semibold uppercase tracking-wide text-[#2B3642]";
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-sm">
-      <div className="max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-        <div className="flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4 py-4 backdrop-blur-sm">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+        <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
+          <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold text-[#2B3642]">{title}</h2>
             <p className="mt-1 max-w-2xl text-sm text-[#4B5563]">{description}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-md border border-[#D1D5DB] bg-white px-3 py-1.5 text-sm font-semibold text-[#2B3642] hover:bg-[#F3F7FB]">
+          <button type="button" onClick={onClose} className="rounded-lg border border-[#D1D5DB] bg-white px-3 py-1.5 text-sm font-semibold text-[#2B3642] hover:bg-[#F3F7FB]">
             Close
           </button>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Available Rows</p>
+              <p className="mt-1 text-xl font-bold text-[#111827]">{rows.length}</p>
+            </div>
+            <div className="rounded-xl border border-[#E7D7EE] bg-[#F7F0FA] px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">Rows After Filters</p>
+              <p className="mt-1 text-xl font-bold text-[#5F3675]">{filteredRows.length}</p>
+            </div>
+            <div className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Export Scope</p>
+              <p className="mt-1 text-xl font-bold capitalize text-[#111827]">{scope}</p>
+            </div>
+          </div>
         </div>
 
-        <div className="max-h-[calc(92vh-150px)] overflow-y-auto px-6 py-5">
-          <div className="mb-5 grid gap-3 rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] p-4 sm:grid-cols-3">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          <div className="mb-5 rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
+            <div className="mb-3">
+              <p className="text-sm font-bold text-[#111827]">Export Format</p>
+              <p className="mt-1 text-xs font-medium text-[#6B7280]">Choose the file type before applying filters.</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
             {exportTypes.map((type) => (
               <button
                 key={type}
@@ -259,18 +267,23 @@ export default function ReportExportModal({
                 onClick={() => setExportType(type)}
                 className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold capitalize transition ${
                   exportType === type
-                    ? "border-[#2563EB] bg-[#2563EB] text-white"
+                    ? "border-[#704389] bg-[#704389] text-white"
                     : "border-[#D1D5DB] bg-white text-[#2B3642] hover:bg-[#F3F7FB]"
                 }`}
               >
                 {type === "csv" && <FileDown className="h-4 w-4" />}
                 {type === "excel" && <FileSpreadsheet className="h-4 w-4" />}
-                {type === "pdf" && <FileText className="h-4 w-4" />}
                 {type}
               </button>
             ))}
+            </div>
           </div>
 
+          <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
+            <div className="mb-4">
+              <p className="text-sm font-bold text-[#111827]">Report Filters</p>
+              <p className="mt-1 text-xs font-medium text-[#6B7280]">Filter first, then export the matching report rows.</p>
+            </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <label className="block">
               <span className={labelClass}>Date From</span>
@@ -337,21 +350,26 @@ export default function ReportExportModal({
               </select>
             </label>
           </div>
-
-          <div className="mt-5 rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#4B5563]">
-            <span className="font-bold text-[#2B3642]">{filteredRows.length}</span> of {rows.length} report rows match the selected filters.
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E5E7EB] bg-[#F8FAFC] px-6 py-4">
-          <button type="button" onClick={() => setFilters(initialFilters)} className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-semibold text-[#2B3642] hover:bg-[#F3F7FB]">
+        <div className="shrink-0 border-t border-[#E5E7EB] bg-[#F8FAFC] px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-medium text-[#4B5563]">
+            <span className="font-bold text-[#2B3642]">{filteredRows.length}</span> matching rows will be exported.
+          </p>
+          <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setFilters(initialFilters)} className="rounded-lg border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-semibold text-[#2B3642] hover:bg-[#F3F7FB]">
             Reset Filters
           </button>
-          <button type="button" onClick={handleExport} className="rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#1D4ED8]">
+          <button type="button" onClick={handleExport} className="rounded-lg bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#5F3675]">
             Export Report
           </button>
+          </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+

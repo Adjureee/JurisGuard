@@ -104,13 +104,13 @@ export default function UserProfilePage() {
   return (
     <MainLayout>
       <div className="mb-5">
-        <p className="text-sm font-semibold text-[#4A7FB0]">Account</p>
+        <p className="text-sm font-semibold text-[#704389]">Account</p>
         <h2 className="text-2xl font-bold text-[#2B3642]">My Profile</h2>
       </div>
 
       <section className="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-sm ">
         <div className="mb-5 flex flex-col gap-4 border-b border-[#E5E7EB] pb-5 sm:flex-row sm:items-center">
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#4A7FB0] text-xl font-semibold text-white">
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#704389] text-xl font-semibold text-white">
             {profileImageSrc ? (
               <img src={profileImageSrc} alt="Profile" className="h-full w-full object-cover" />
             ) : (
@@ -123,7 +123,7 @@ export default function UserProfilePage() {
             </h3>
             <p className="truncate text-sm text-[#4B5563]">{user?.email}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <label className={`rounded-md bg-[#4A7FB0] px-3 py-1.5 text-xs font-semibold text-white transition duration-200 hover:bg-[#3E6D97] ${isUploading ? "pointer-events-none opacity-70" : "cursor-pointer"}`}>
+              <label className={`rounded-md bg-[#704389] px-3 py-1.5 text-xs font-semibold text-white transition duration-200 hover:bg-[#5F3675] ${isUploading ? "pointer-events-none opacity-70" : "cursor-pointer"}`}>
                 {profileImageSrc ? "Change Profile Picture" : "Upload Profile Picture"}
                 <input
                   type="file"
@@ -138,7 +138,7 @@ export default function UserProfilePage() {
                   type="button"
                   onClick={handleSaveProfileImage}
                   disabled={isUploading}
-                  className="rounded-md bg-[#15803D] px-3 py-1.5 text-xs font-semibold text-white transition duration-200 hover:bg-[#166534] disabled:cursor-not-allowed disabled:opacity-70"
+                  className="rounded-md bg-[#704389] px-3 py-1.5 text-xs font-semibold text-white transition duration-200 hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isUploading ? "Uploading..." : "Save Image"}
                 </button>
@@ -172,3 +172,4 @@ export default function UserProfilePage() {
     </MainLayout>
   );
 }
+

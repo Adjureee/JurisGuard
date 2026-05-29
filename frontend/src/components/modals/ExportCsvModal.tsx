@@ -30,7 +30,7 @@ const initialFilters: CriminalCaseExportFilterDto = {
   termination_status: "All",
 };
 
-type ExportType = "csv" | "excel" | "pdf";
+type ExportType = "csv" | "excel";
 
 function uniqueValues(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
@@ -92,7 +92,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
     const toastId = toast.loading("Preparing report export...");
     try {
       const stamp = new Date().toISOString().slice(0, 10);
-      const action = exportType === "csv" ? "Export CSV" : exportType === "excel" ? "Export Excel" : "Export PDF";
+      const action = exportType === "csv" ? "Export CSV" : "Export Excel";
       const description = `${user?.full_name || user?.email || "User"} exported ${exportRows.length} criminal case record${exportRows.length === 1 ? "" : "s"} as ${exportType.toUpperCase()}`;
       const entityId = new Date().toISOString();
       await createAuditLog({
@@ -105,15 +105,8 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
       if (exportType === "csv") {
         const csv = buildCriminalCasesCsv(rows, filters);
         downloadCsv(`jurisguard-criminal-cases_${stamp}.csv`, csv);
-      } else if (exportType === "excel") {
-        downloadText(`jurisguard-criminal-cases_${stamp}.xls`, buildInventoryTable(exportRows), "application/vnd.ms-excel;charset=utf-8");
       } else {
-        const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=800");
-        if (!printWindow) throw new Error("Popup blocked. Allow popups to export PDF.");
-        printWindow.document.write(buildInventoryTable(exportRows));
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
+        downloadText(`jurisguard-criminal-cases_${stamp}.xls`, buildInventoryTable(exportRows), "application/vnd.ms-excel;charset=utf-8");
       }
       addLog({
         userId: user?.user_id,
@@ -147,7 +140,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
           <div>
             <h2 className="text-lg font-bold text-[#2B3642]">Advanced Criminal Cases Export</h2>
             <p className="mt-1 text-sm text-[#4B5563]">
-              Filter legal records and export to CSV, Excel, or print-ready PDF.
+              Filter legal records and export to CSV or Excel.
             </p>
           </div>
           <button
@@ -160,15 +153,15 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
         </div>
 
         <div className="space-y-4 bg-white px-6 py-5">
-          <div className="grid gap-3 rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] p-3 sm:grid-cols-3">
-            {(["csv", "excel", "pdf"] as ExportType[]).map((type) => (
+          <div className="grid gap-3 rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] p-3 sm:grid-cols-2">
+            {(["csv", "excel"] as ExportType[]).map((type) => (
               <button
                 key={type}
                 type="button"
                 onClick={() => setExportType(type)}
                 className={`rounded-lg border px-3 py-2 text-sm font-semibold uppercase ${
                   exportType === type
-                    ? "border-[#2563EB] bg-[#2563EB] text-white"
+                    ? "border-[#704389] bg-[#704389] text-white"
                     : "border-[#D1D5DB] bg-white text-[#2B3642] hover:bg-[#F3F7FB]"
                 }`}
               >
@@ -182,7 +175,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
             <select
               value={filters.status}
               onChange={(event) => updateFilter("status", event.target.value)}
-              className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+              className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             >
               <option>All</option>
               <option>Active</option>
@@ -200,7 +193,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
                 type="date"
                 value={filters.date_from}
                 onChange={(event) => updateFilter("date_from", event.target.value)}
-                className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+                className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               />
             </label>
             <label className="block">
@@ -209,7 +202,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
                 type="date"
                 value={filters.date_to}
                 onChange={(event) => updateFilter("date_to", event.target.value)}
-                className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+                className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               />
             </label>
           </div>
@@ -219,7 +212,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
             <select
               value={filters.location_type}
               onChange={(event) => updateFilter("location_type", event.target.value)}
-              className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+              className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             >
               <option>All</option>
               <option>Urban</option>
@@ -230,28 +223,28 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="text-sm font-medium text-[#2B3642]">Barangay</span>
-              <select value={filters.barangay} onChange={(event) => updateFilter("barangay", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20">
+              <select value={filters.barangay} onChange={(event) => updateFilter("barangay", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
                 <option>All</option>
                 {options.barangays.map((option) => <option key={option}>{option}</option>)}
               </select>
             </label>
             <label className="block">
               <span className="text-sm font-medium text-[#2B3642]">Case Category</span>
-              <select value={filters.case_category} onChange={(event) => updateFilter("case_category", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20">
+              <select value={filters.case_category} onChange={(event) => updateFilter("case_category", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
                 <option>All</option>
                 {options.categories.map((option) => <option key={option}>{option}</option>)}
               </select>
             </label>
             <label className="block">
               <span className="text-sm font-medium text-[#2B3642]">Staff</span>
-              <select value={filters.staff} onChange={(event) => updateFilter("staff", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20">
+              <select value={filters.staff} onChange={(event) => updateFilter("staff", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
                 <option>All</option>
                 {options.staff.map((option) => <option key={option}>{option}</option>)}
               </select>
             </label>
             <label className="block">
               <span className="text-sm font-medium text-[#2B3642]">Termination Status</span>
-              <select value={filters.termination_status} onChange={(event) => updateFilter("termination_status", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20">
+              <select value={filters.termination_status} onChange={(event) => updateFilter("termination_status", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
                 <option>All</option>
                 <option>Active</option>
                 <option>Terminated</option>
@@ -275,7 +268,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
           <button
             type="button"
             onClick={handleExport}
-            className="rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#1D4ED8]"
+            className="rounded-lg bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
           >
             Export {exportType.toUpperCase()}
           </button>
@@ -284,3 +277,4 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
     </div>
   );
 }
+

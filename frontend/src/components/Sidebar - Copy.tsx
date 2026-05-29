@@ -57,8 +57,8 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   const itemClass = (path: string) =>
     location.pathname === path || (path !== "/dashboard" && location.pathname.startsWith(path))
-      ? "bg-[#2f80ed] text-white shadow-sm"
-      : "text-[#6b7280] hover:-translate-y-px hover:bg-[#2f80ed] hover:text-white hover:shadow-sm";
+      ? "bg-[#704389] text-white shadow-sm"
+      : "text-[#6b7280] hover:-translate-y-px hover:bg-[#704389] hover:text-white hover:shadow-sm";
 
   return (
     <>
@@ -75,7 +75,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
       }`}>
       <div className="mb-5 flex justify-center">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white shadow-sm shadow-[#111827]/5">
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7 text-[#2F80ED]">
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7 text-[#704389]">
             <path fill="currentColor" d="M12 3 4 6v5c0 5 3.4 8.3 8 10 4.6-1.7 8-5 8-10V6l-8-3Zm0 3.2 5 1.9V11c0 3.4-2 5.8-5 7.2-3-1.4-5-3.8-5-7.2V8.1l5-1.9ZM9 10h6v2H9v-2Zm1 3h4v2h-4v-2Z" />
           </svg>
         </div>
@@ -100,3 +100,4 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     </>
   );
 }
+

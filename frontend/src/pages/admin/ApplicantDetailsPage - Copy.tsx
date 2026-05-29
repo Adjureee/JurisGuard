@@ -118,9 +118,9 @@ export default function ApplicantDetailsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-[#111827]">Applicant Details</h1>
           <nav className="mt-1 flex items-center gap-2 text-sm text-[#6B7280]">
-            <Link to="/dashboard" className="hover:text-[#2F80ED]">Dashboard</Link>
+            <Link to="/dashboard" className="hover:text-[#704389]">Dashboard</Link>
             <span>/</span>
-            <Link to="/admin/verification" className="hover:text-[#2F80ED]">Verification</Link>
+            <Link to="/admin/verification" className="hover:text-[#704389]">Verification</Link>
             <span>/</span>
             <span className="text-[#111827]">{applicant?.full_name || "Applicant"}</span>
           </nav>
@@ -182,7 +182,7 @@ export default function ApplicantDetailsPage() {
                 <button
                   onClick={() => changeStatus("approved")}
                   disabled={isUpdating}
-                  className="rounded-md bg-[#15803D] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#166534] disabled:opacity-60"
+                  className="rounded-md bg-[#15803D] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#704389] disabled:opacity-60"
                 >
                   Approve
                 </button>
@@ -201,3 +201,4 @@ export default function ApplicantDetailsPage() {
     </MainLayout>
   );
 }
+

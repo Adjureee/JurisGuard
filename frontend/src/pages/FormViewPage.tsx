@@ -62,7 +62,7 @@ export default function FormViewPage() {
     <MainLayout>
       <div className="mb-4 flex flex-col gap-3 print:hidden lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#4A7FB0]">Official PAO Intake Form</p>
+          <p className="text-sm font-semibold text-[#704389]">Official PAO Intake Form</p>
           <h1 className="text-2xl font-bold text-[#2B3642]">
             {data?.client.client.name ?? "Printable Form"}
           </h1>
@@ -76,7 +76,7 @@ export default function FormViewPage() {
               type="button"
               onClick={() => setLanguage("english")}
               className={`rounded px-3 py-1.5 text-sm font-semibold ${
-                language === "english" ? "bg-[#4A7FB0] text-white" : "text-[#4B5563]"
+                language === "english" ? "bg-[#704389] text-white" : "text-[#4B5563]"
               }`}
             >
               English
@@ -85,7 +85,7 @@ export default function FormViewPage() {
               type="button"
               onClick={() => setLanguage("filipino")}
               className={`rounded px-3 py-1.5 text-sm font-semibold ${
-                language === "filipino" ? "bg-[#4A7FB0] text-white" : "text-[#4B5563]"
+                language === "filipino" ? "bg-[#704389] text-white" : "text-[#4B5563]"
               }`}
             >
               Filipino
@@ -95,7 +95,7 @@ export default function FormViewPage() {
             type="button"
             onClick={printForm}
             disabled={!data}
-            className="rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#3E6D97] disabled:opacity-50"
+            className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#5F3675] disabled:opacity-50"
           >
             Print Form
           </button>
@@ -132,3 +132,4 @@ export default function FormViewPage() {
     </MainLayout>
   );
 }
+

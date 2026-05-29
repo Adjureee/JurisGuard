@@ -21,3 +21,4 @@ export async function createCaseRecord(values: CaseFormValues): Promise<Criminal
   const response = await apiClient.post<CriminalCaseRecord>("/cases/", values);
   return response.data;
 }
+

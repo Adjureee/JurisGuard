@@ -24,3 +24,4 @@ export async function updateApplicantApproval(
   });
   return response.data;
 }
+

@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import shutil
+import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -56,44 +57,47 @@ ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 DEFAULT_INCIDENT_CITY = "Panabo City"
 PANABO_CENTER = {"lat": 7.3081, "lng": 125.6841}
 BARANGAY_CENTROIDS: dict[str, tuple[float, float]] = {
-    "A. O. Floirendo": (7.3376, 125.6578),
-    "Cacao": (7.2654, 125.7109),
-    "Cagangohan": (7.3358, 125.6069),
-    "Consolacion": (7.3423, 125.6906),
-    "Dapco": (7.3978, 125.6542),
-    "Gredu": (7.3087, 125.6951),
-    "J. P. Laurel": (7.2959, 125.7075),
-    "Kasilak": (7.3927, 125.6954),
-    "Katipunan": (7.3608, 125.6813),
-    "Katualan": (7.2647, 125.6718),
-    "Kauswagan": (7.2824, 125.6811),
-    "Kiotoy": (7.3189, 125.7147),
-    "Little Panay": (7.3311, 125.7273),
-    "Lower Panaga": (7.3174, 125.6748),
-    "Mabunao": (7.3498, 125.7286),
-    "Maduao": (7.2856, 125.6267),
-    "Malativas": (7.3536, 125.6334),
-    "Manay": (7.3776, 125.7103),
-    "Nanyo": (7.3073, 125.6483),
-    "New Malaga": (7.2555, 125.6914),
-    "New Malitbog": (7.4051, 125.6791),
-    "New Pandan": (7.2973, 125.6731),
-    "New Visayas": (7.3223, 125.7009),
-    "Quezon": (7.2701, 125.6502),
-    "Salvacion": (7.3832, 125.6341),
-    "San Francisco": (7.2895, 125.7012),
-    "San Nicolas": (7.3065, 125.6294),
-    "San Pedro": (7.3251, 125.6241),
-    "San Roque": (7.3069, 125.6875),
-    "San Vicente": (7.3117, 125.6628),
-    "Santa Cruz": (7.2817, 125.7162),
-    "Santo Nino": (7.2952, 125.6842),
-    "Sindaton": (7.3584, 125.7049),
-    "Southern Davao": (7.3704, 125.6572),
-    "Tagpore": (7.2463, 125.6328),
-    "Tibungol": (7.3302, 125.6436),
-    "Upper Licanan": (7.4078, 125.6194),
-    "Waterfall": (7.3842, 125.7444),
+    "A. O. Floirendo": (7.3977, 125.5802),
+    "Buenavista": (7.2756, 125.5907),
+    "Cacao": (7.3083, 125.6077),
+    "Cagangohan": (7.2815, 125.6829),
+    "Consolacion": (7.3169, 125.5538),
+    "Dapco": (7.3921, 125.5983),
+    "Datu Abdul Dadia": (7.3153, 125.6548),
+    "Gredu": (7.2957, 125.6776),
+    "J. P. Laurel": (7.2759, 125.6700),
+    "Kasilak": (7.3268, 125.5951),
+    "Katipunan": (7.3007, 125.6306),
+    "Katualan": (7.2301, 125.5543),
+    "Kauswagan": (7.3102, 125.5831),
+    "Kiotoy": (7.2443, 125.6077),
+    "Little Panay": (7.2979, 125.6482),
+    "Lower Panaga": (7.4320, 125.5640),
+    "Mabunao": (7.2543, 125.5745),
+    "Maduao": (7.2796, 125.6433),
+    "Malativas": (7.2936, 125.5648),
+    "Manay": (7.3456, 125.6022),
+    "Nanyo": (7.3329, 125.6361),
+    "New Malaga": (7.3442, 125.5725),
+    "New Malitbog": (7.3339, 125.6209),
+    "New Pandan": (7.2973, 125.6801),
+    "New Visayas": (7.3081, 125.6682),
+    "Quezon": (7.3327, 125.6795),
+    "Salvacion": (7.3182, 125.6882),
+    "San Francisco": (7.3068, 125.6803),
+    "San Nicolas": (7.2626, 125.6181),
+    "San Pedro": (7.2973, 125.7106),
+    "San Roque": (7.2552, 125.5533),
+    "San Vicente": (7.3088, 125.7003),
+    "Santa Cruz": (7.2365, 125.5896),
+    "Santo Nino": (7.3082, 125.6867),
+    "Santo Niño": (7.3082, 125.6867),
+    "Sindaton": (7.4396, 125.5842),
+    "Southern Davao": (7.3323, 125.6577),
+    "Tagpore": (7.2743, 125.6250),
+    "Tibungol": (7.3947, 125.5555),
+    "Upper Licanan": (7.2856, 125.6325),
+    "Waterfall": (7.2886, 125.5834),
 }
 
 
@@ -243,8 +247,8 @@ def seed_roles() -> None:
             text(
                 """
                 INSERT INTO role (role_name, permissions)
-                SELECT 'user', 'clients,cases,documents'
-                WHERE NOT EXISTS (SELECT 1 FROM role WHERE role_name = 'user')
+                SELECT 'staff', 'clients,cases,documents'
+                WHERE NOT EXISTS (SELECT 1 FROM role WHERE role_name = 'staff')
                 """
             )
         )
@@ -330,6 +334,13 @@ def is_admin(user: models.User) -> bool:
     return (user.role.role_name if user.role else "").lower() == "admin"
 
 
+def display_role_name(user: models.User | None) -> str | None:
+    if not user or not user.role:
+        return None
+    role_name = (user.role.role_name or "").lower()
+    return "admin" if role_name == "admin" else "staff"
+
+
 def scoped_case_query(db: Session, user: models.User):
     query = db.query(models.Case).outerjoin(models.IntakeRecord)
     if is_admin(user):
@@ -389,6 +400,8 @@ def ensure_client_access(client: models.Client | None, user: models.User, db: Se
 
 def role_id(db: Session, name: str) -> int:
     role = db.query(models.Role).filter(models.Role.role_name == name).first()
+    if not role and name == "staff":
+        role = db.query(models.Role).filter(models.Role.role_name == "user").first()
     if not role:
         raise HTTPException(status_code=500, detail=f"Missing role: {name}")
     return role.role_id
@@ -796,9 +809,10 @@ def is_case_terminated(record: models.Case) -> bool:
 def barangay_coordinates(barangay: str) -> tuple[float, float] | None:
     if not barangay:
         return None
-    normalized = barangay.strip().lower()
+    normalized = unicodedata.normalize("NFKD", barangay.strip().lower()).encode("ascii", "ignore").decode("ascii")
     for name, coords in BARANGAY_CENTROIDS.items():
-        if name.lower() == normalized:
+        candidate = unicodedata.normalize("NFKD", name.lower()).encode("ascii", "ignore").decode("ascii")
+        if candidate == normalized:
             return coords
     return None
 
@@ -827,19 +841,13 @@ def build_barangay_stats(records: list[models.Case]) -> list[dict[str, Any]]:
             bucket["active_cases"] += 1
         category = case_category(record)
         bucket["categories"][category] = bucket["categories"].get(category, 0) + 1
-        lat = parse_float(record.latitude)
-        lng = parse_float(record.longitude)
-        if lat is not None and lng is not None:
-            bucket["latitude"] = lat
-            bucket["longitude"] = lng
 
     stats: list[dict[str, Any]] = []
     for bucket in buckets.values():
         categories = bucket.pop("categories")
-        if bucket["latitude"] is None or bucket["longitude"] is None:
-            fallback = barangay_coordinates(bucket["barangay"])
-            if fallback:
-                bucket["latitude"], bucket["longitude"] = fallback
+        fallback = barangay_coordinates(bucket["barangay"])
+        if fallback:
+            bucket["latitude"], bucket["longitude"] = fallback
         most_common = max(categories.items(), key=lambda item: item[1])[0] if categories else "Uncategorized"
         stats.append({**bucket, "most_common_category": most_common})
     return sorted(stats, key=lambda row: row["total_cases"], reverse=True)
@@ -998,13 +1006,10 @@ def dashboard_intake_load(
         if row.weekday is not None:
             weekly[int(row.weekday)]["total_cases"] = row.total_cases
     hourly = [
-        {"hour": f"{hour:02d}:00", "total_cases": 0}
-        for hour in range(8, 18)
+        {"hour": f"{int(row.hour):02d}:00", "total_cases": row.total_cases}
+        for row in sorted(hour_rows, key=lambda item: item.hour or 0)
+        if row.hour is not None
     ]
-    hour_lookup = {int(row.hour): row.total_cases for row in hour_rows if row.hour is not None}
-    for entry in hourly:
-        hour = int(entry["hour"].split(":", 1)[0])
-        entry["total_cases"] = hour_lookup.get(hour, 0)
     busiest_day = max(weekly, key=lambda item: item["total_cases"]) if weekly else None
     busiest_hour = max(hourly, key=lambda item: item["total_cases"]) if hourly else None
     total_weekly = sum(item["total_cases"] for item in weekly)
@@ -1242,7 +1247,7 @@ def register(payload: RegisterPayload, request: Request, db: Session = Depends(g
 
     is_first_user = db.query(models.User).count() == 0
     user = models.User(
-        role_id=role_id(db, "admin" if is_first_user else "user"),
+        role_id=role_id(db, "admin" if is_first_user else "staff"),
         username=make_username(email),
         email=email,
         full_name=payload.full_name.strip(),
@@ -1724,8 +1729,8 @@ def list_audit_logs(
                 "createdBy": row.user_id,
                 "user_id": row.user_id,
                 "user": row.user.full_name or row.user.email or row.user.username if row.user else "System",
-                "userRole": row.user.role.role_name if row.user and row.user.role else None,
-                "user_role": row.user.role.role_name if row.user and row.user.role else None,
+                "userRole": display_role_name(row.user),
+                "user_role": display_role_name(row.user),
                 "action": row.action,
                 "module": module,
                 "description": row.description or "",

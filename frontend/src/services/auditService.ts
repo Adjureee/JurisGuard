@@ -14,6 +14,7 @@ export interface ListAuditLogsParams {
 }
 
 export async function listAuditLogs(params: ListAuditLogsParams = {}): Promise<AuditLogEntry[]> {
+  const userId = params.currentUser?.role === "staff" ? undefined : params.userId;
   const response = await apiClient.get<AuditLogEntry[]>("/audit-logs/", {
     params: {
       limit: params.limit,
@@ -21,7 +22,7 @@ export async function listAuditLogs(params: ListAuditLogsParams = {}): Promise<A
       action: params.action,
       date_from: params.dateFrom,
       date_to: params.dateTo,
-      user_id: params.userId,
+      user_id: userId,
       search: params.search,
     },
   });
@@ -43,3 +44,4 @@ export async function createAuditLog(payload: CreateAuditLogPayload) {
   const response = await apiClient.post<{ message: string }>("/audit-logs/", payload);
   return response.data;
 }
+

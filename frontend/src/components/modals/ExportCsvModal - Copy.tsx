@@ -92,7 +92,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
             <select
               value={filters.status}
               onChange={(event) => updateFilter("status", event.target.value)}
-              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/15"
             >
               <option>All</option>
               <option>Active</option>
@@ -110,7 +110,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
                 type="date"
                 value={filters.date_from}
                 onChange={(event) => updateFilter("date_from", event.target.value)}
-                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/15"
               />
             </label>
             <label className="block">
@@ -119,7 +119,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
                 type="date"
                 value={filters.date_to}
                 onChange={(event) => updateFilter("date_to", event.target.value)}
-                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/15"
               />
             </label>
           </div>
@@ -129,7 +129,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
             <select
               value={filters.location_type}
               onChange={(event) => updateFilter("location_type", event.target.value)}
-              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/15"
             >
               <option>All</option>
               <option>Urban</option>
@@ -153,7 +153,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
           <button
             type="button"
             onClick={handleExport}
-            className="rounded-md bg-[#2F80ED] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#1f6fd6]"
+            className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
           >
             Export CSV
           </button>
@@ -162,3 +162,4 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
     </div>
   );
 }
+

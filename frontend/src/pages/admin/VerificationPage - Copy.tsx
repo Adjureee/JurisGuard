@@ -18,7 +18,7 @@ const statusLabel: Record<ApprovalStatus, string> = {
 const statusClass: Record<ApprovalStatus, string> = {
   pending: "bg-amber-100 text-amber-800 ring-amber-200",
   under_review: "bg-[#F3F4F6] text-[#374151] ring-[#D1D5DB]",
-  approved: "bg-[#DCFCE7] text-[#166534] ring-[#15803D]/25",
+  approved: "bg-[#DCFCE7] text-[#704389] ring-[#15803D]/25",
   rejected: "bg-[#FEE2E2] text-[#991B1B] ring-[#DC2626]/20",
   suspended: "bg-[#E5E7EB] text-[#111827] ring-[#9CA3AF]/30",
 };
@@ -167,14 +167,14 @@ export default function VerificationPage() {
     <MainLayout>
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#2F80ED]">Application Review</p>
+          <p className="text-sm font-semibold text-[#704389]">Application Review</p>
           <h1 className="text-2xl font-semibold text-[#111827]">User Verification</h1>
         </div>
         <div className="flex items-center gap-2">
           <select
             value={filter}
             onChange={(event) => setFilter(event.target.value as ApprovalStatus | "all")}
-            className="h-10 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+            className="h-10 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
           >
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
@@ -259,7 +259,7 @@ export default function VerificationPage() {
                               type="button"
                               onClick={() => changeStatus(user.user_id, "approved")}
                               disabled={updatingId === user.user_id}
-                              className="rounded-md bg-[#15803D] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#166534] disabled:opacity-60"
+                              className="rounded-md bg-[#15803D] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#704389] disabled:opacity-60"
                             >
                               Approve
                             </button>
@@ -288,7 +288,7 @@ export default function VerificationPage() {
           <div className="w-full max-w-lg animate-[modalIn_200ms_ease-out] overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-2xl shadow-[#111827]/20">
             <div className="flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-[#F3F4F6] px-5 py-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-[#2F80ED]">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">
                   Account Request
                 </p>
                 <h2 className="mt-1 text-lg font-semibold text-[#111827]">
@@ -331,7 +331,7 @@ export default function VerificationPage() {
                       type="button"
                       onClick={() => changeStatus(selectedUser.user_id, "approved")}
                       disabled={updatingId === selectedUser.user_id}
-                      className="rounded-md bg-[#15803D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#166534] disabled:opacity-60"
+                      className="rounded-md bg-[#15803D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#704389] disabled:opacity-60"
                     >
                       Approve
                     </button>
@@ -353,3 +353,4 @@ export default function VerificationPage() {
     </MainLayout>
   );
 }
+

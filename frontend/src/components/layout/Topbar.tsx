@@ -144,6 +144,9 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
           </button>
           <div className="min-w-0">
             <h1 className="truncate text-lg font-bold text-[#2B3642]">JurisGuard</h1>
+            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.15em] text-[#704389]">
+              PAO Panabo
+            </p>
           </div>
         </div>
 
@@ -176,7 +179,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                         <button
                           type="button"
                           onClick={() => markAllRead(visibleNotificationIds)}
-                          className="text-xs font-semibold text-[#4A7FB0] hover:text-[#4A7FB0]"
+                          className="text-xs font-semibold text-[#704389] hover:text-[#704389]"
                         >
                           Mark all read
                         </button>
@@ -199,14 +202,14 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                       <div
                         key={notification.id}
                         className={`flex gap-3 px-4 py-3 transition ${
-                          notification.isRead ? "bg-white text-[#4B5563]" : "bg-[#EFF6FF] text-[#2B3642]"
+                          notification.isRead ? "bg-white text-[#4B5563]" : "bg-[#F7F0FA] text-[#2B3642]"
                         }`}
                       >
                         <span
                           className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
                             notification.isRead
                               ? "bg-[#F8FAFC] text-[#6B7280]"
-                              : "bg-[#4A7FB0]/10 text-[#4A7FB0]"
+                              : "bg-[#704389]/10 text-[#704389]"
                           }`}
                         >
                           {notificationSymbol(notification.type)}
@@ -219,7 +222,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                           >
                             <span className="flex items-start gap-2">
                               {!notification.isRead && (
-                                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#4A7FB0]" />
+                                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#704389]" />
                               )}
                               <span className="min-w-0">
                                 <span
@@ -245,7 +248,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                               <button
                                 type="button"
                                 onClick={() => markRead(notification.id)}
-                                className="text-xs font-semibold text-[#4A7FB0] hover:text-[#4A7FB0]"
+                                className="text-xs font-semibold text-[#704389] hover:text-[#704389]"
                               >
                                 Mark as Read
                               </button>
@@ -267,7 +270,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                 </div>
                 <button
                   type="button"
-                  className="w-full border-t border-[#E5E7EB] bg-white px-4 py-3 text-center text-sm font-semibold text-[#4A7FB0] transition duration-200 hover:bg-[#F8FAFC]"
+                  className="w-full border-t border-[#E5E7EB] bg-white px-4 py-3 text-center text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#F8FAFC]"
                 >
                   View all notifications
                 </button>
@@ -284,7 +287,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
               }}
               className="inline-flex h-10 items-center gap-2 rounded-md border border-[#E5E7EB] bg-white px-2 text-[#2B3642] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC] sm:px-3"
             >
-              <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#4A7FB0] text-xs font-semibold text-white">
+              <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#704389] text-xs font-semibold text-white">
                 {profileImageSrc ? (
                   <img src={profileImageSrc} alt="" className="h-full w-full object-cover" />
                 ) : (
@@ -328,3 +331,4 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
     </header>
   );
 }
+

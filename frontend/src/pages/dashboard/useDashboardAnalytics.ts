@@ -36,10 +36,7 @@ export const emptyIntakeLoad: IntakeLoadAnalytics = {
     day,
     total_cases: 0,
   })),
-  hourly: Array.from({ length: 10 }, (_, index) => ({
-    hour: `${String(index + 8).padStart(2, "0")}:00`,
-    total_cases: 0,
-  })),
+  hourly: [],
   busiest_day: null,
   busiest_hour: null,
 };
@@ -243,3 +240,4 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
     terminatedStats,
   };
 }
+

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
 import { listCaseRecords, listClientRecords } from "../services/recordService";
 import type { ClientRecord, CriminalCaseRecord } from "../types";
@@ -15,6 +16,20 @@ function csvEscape(value: string | number | null | undefined) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
+function htmlEscape(value: string | number | null | undefined) {
+  return String(value ?? "").replace(/[<>&]/g, (char) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[char] ?? char));
+}
+
+function downloadText(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function DetailField({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
     <div className="rounded-md border border-[#E5E7EB] bg-white p-3">
@@ -25,6 +40,18 @@ function DetailField({ label, value }: { label: string; value: string | number |
 }
 
 type TerminatedSortColumn = "client" | "title" | "reason" | "date" | "status";
+
+const TERMINATED_EXPORT_HEADERS = [
+  "Client name",
+  "Case title",
+  "Case number",
+  "Resolution type",
+  "Termination reason",
+  "Date terminated",
+  "Terminated by",
+  "Status",
+  "Final remarks",
+];
 
 function SortHeader({
   column,
@@ -52,6 +79,7 @@ function SortHeader({
 }
 
 export default function TerminatedCasesPage() {
+  const navigate = useNavigate();
   const [cases, setCases] = useState<CriminalCaseRecord[]>([]);
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [search, setSearch] = useState("");
@@ -143,36 +171,37 @@ export default function TerminatedCasesPage() {
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
 
-  const exportCsv = () => {
-    const header = [
-      "Client name",
-      "Case title",
-      "Termination reason",
-      "Date terminated",
-      "Terminated by",
-      "Status",
-    ];
-    const lines = filteredRows.map((record) =>
-      [
+  const exportRows = useMemo(
+    () =>
+      filteredRows.map((record) => [
         clientById.get(record.client_id)?.client.name ?? "Unknown client",
         record.cases.title_of_case,
+        record.cases.case_no,
+        record.cases.resolution_type,
         record.cases.termination_reason,
         record.cases.terminated_at,
         record.cases.handled_by,
         record.cases.status_of_case,
-      ]
-        .map(csvEscape)
-        .join(",")
-    );
-    const blob = new Blob([[header.map(csvEscape).join(","), ...lines].join("\n")], {
-      type: "text/csv;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "terminated-cases.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+        record.cases.termination_remarks,
+      ]),
+    [clientById, filteredRows]
+  );
+
+  const exportCsv = () => {
+    const header = [
+      ...TERMINATED_EXPORT_HEADERS,
+    ];
+    const lines = exportRows.map((row) => row.map(csvEscape).join(","));
+    downloadText("terminated-cases.csv", [header.map(csvEscape).join(","), ...lines].join("\n"), "text/csv;charset=utf-8");
+  };
+
+  const exportExcel = () => {
+    const headerCells = TERMINATED_EXPORT_HEADERS.map((header) => `<th>${htmlEscape(header)}</th>`).join("");
+    const bodyRows = exportRows
+      .map((row) => `<tr>${row.map((value) => `<td>${htmlEscape(value)}</td>`).join("")}</tr>`)
+      .join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8" /><style>body{font-family:Arial,sans-serif;color:#2B3642}table{border-collapse:collapse;width:100%}th{background:#E9EEF3;text-transform:uppercase;letter-spacing:.04em}th,td{border:1px solid #D6DEE7;padding:8px;font-size:12px}</style></head><body><h2>JurisGuard Terminated Cases Export</h2><table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></body></html>`;
+    downloadText("terminated-cases.xls", html, "application/vnd.ms-excel;charset=utf-8");
   };
 
   const changeSort = (column: TerminatedSortColumn) => {
@@ -184,16 +213,25 @@ export default function TerminatedCasesPage() {
     <MainLayout>
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#4A7FB0]">Case Archive</p>
+          <p className="text-sm font-semibold text-[#704389]">Case Archive</p>
           <h1 className="text-2xl font-semibold text-[#2B3642]">Terminated Cases</h1>
         </div>
-        <button
-          type="button"
-          onClick={exportCsv}
-          className="h-10 rounded-md bg-[#4A7FB0] px-4 text-sm font-semibold text-white transition hover:bg-[#3E6D97]"
-        >
-          Export CSV
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="h-10 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white transition hover:bg-[#5F3675]"
+          >
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={exportExcel}
+            className="h-10 rounded-md border border-[#704389] bg-white px-4 text-sm font-semibold text-[#704389] transition hover:bg-[#F7F0FA]"
+          >
+            Export Excel
+          </button>
+        </div>
       </div>
 
       <section className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
@@ -206,7 +244,7 @@ export default function TerminatedCasesPage() {
               setPage(1);
             }}
             placeholder="Search terminated cases..."
-            className="h-10 rounded-md border border-[#D1D5DB] px-3 text-sm outline-none focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+            className="h-10 rounded-md border border-[#D1D5DB] px-3 text-sm outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
           />
           <select
             value={resolutionFilter}
@@ -214,7 +252,7 @@ export default function TerminatedCasesPage() {
               setResolutionFilter(event.target.value);
               setPage(1);
             }}
-            className="h-10 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm outline-none focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+            className="h-10 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
           >
             <option value="all">All resolutions</option>
             {resolutionOptions.map((option) => (
@@ -262,7 +300,7 @@ export default function TerminatedCasesPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedRecord(record)}
-                        className="rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition hover:bg-[#4A7FB0] hover:text-white"
+                        className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
                       >
                         View
                       </button>
@@ -321,9 +359,26 @@ export default function TerminatedCasesPage() {
                 <DetailField label="Final Remarks" value={selectedRecord.cases.termination_remarks} />
               </div>
             </div>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+              <button
+                type="button"
+                onClick={() => navigate(`/criminal-cases/form-view/${selectedRecord.case_id}`)}
+                className="rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition hover:bg-[#F7F0FA]"
+              >
+                View Form
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(`/criminal-cases/form-view/${selectedRecord.case_id}?print=1`)}
+                className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#5F3675]"
+              >
+                Print Form
+              </button>
+            </div>
           </div>
         </div>
       )}
     </MainLayout>
   );
 }
+

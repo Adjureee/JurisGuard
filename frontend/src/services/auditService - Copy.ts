@@ -5,3 +5,4 @@ export async function listAuditLogs(): Promise<AuditLogEntry[]> {
   const response = await apiClient.get<AuditLogEntry[]>("/audit-logs/");
   return response.data;
 }
+

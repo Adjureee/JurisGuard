@@ -214,3 +214,4 @@ export function hydrateOfficialTemplate(
   else hydrateFilipino(doc, data);
   return `<!doctype html>\n${doc.documentElement.outerHTML}`;
 }
+

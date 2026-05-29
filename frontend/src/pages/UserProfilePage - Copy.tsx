@@ -104,7 +104,7 @@ export default function UserProfilePage() {
   return (
     <MainLayout>
       <div className="mb-5">
-        <p className="text-sm font-semibold text-[#2F80ED]">Account</p>
+        <p className="text-sm font-semibold text-[#704389]">Account</p>
         <h2 className="text-2xl font-bold text-[#111827]">My Profile</h2>
       </div>
 
@@ -123,7 +123,7 @@ export default function UserProfilePage() {
             </h3>
             <p className="truncate text-sm text-[#6B7280]">{user?.email}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <label className={`rounded-md bg-[#2F80ED] px-3 py-1.5 text-xs font-semibold text-white transition duration-200 hover:bg-[#1f6fd6] ${isUploading ? "pointer-events-none opacity-70" : "cursor-pointer"}`}>
+              <label className={`rounded-md bg-[#704389] px-3 py-1.5 text-xs font-semibold text-white transition duration-200 hover:bg-[#5F3675] ${isUploading ? "pointer-events-none opacity-70" : "cursor-pointer"}`}>
                 {profileImageSrc ? "Change Profile Picture" : "Upload Profile Picture"}
                 <input
                   type="file"
@@ -138,7 +138,7 @@ export default function UserProfilePage() {
                   type="button"
                   onClick={handleSaveProfileImage}
                   disabled={isUploading}
-                  className="rounded-md bg-[#15803D] px-3 py-1.5 text-xs font-semibold text-white transition duration-200 hover:bg-[#166534] disabled:cursor-not-allowed disabled:opacity-70"
+                  className="rounded-md bg-[#15803D] px-3 py-1.5 text-xs font-semibold text-white transition duration-200 hover:bg-[#704389] disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isUploading ? "Uploading..." : "Save Image"}
                 </button>
@@ -172,3 +172,4 @@ export default function UserProfilePage() {
     </MainLayout>
   );
 }
+

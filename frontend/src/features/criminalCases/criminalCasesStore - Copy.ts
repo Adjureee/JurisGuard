@@ -63,3 +63,4 @@ export const useCriminalCasesStore = create<CriminalCasesState>((set, get) => ({
     return record;
   },
 }));
+

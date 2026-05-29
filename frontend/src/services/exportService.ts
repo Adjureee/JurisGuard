@@ -222,3 +222,4 @@ export function downloadCsv(filename: string, csv: string) {
   link.click();
   URL.revokeObjectURL(url);
 }
+

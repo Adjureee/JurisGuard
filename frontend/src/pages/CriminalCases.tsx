@@ -25,11 +25,11 @@ import type { CaseStatus, ClientRecord, CriminalCaseRecord } from "../types";
 import type { CaseFormValues, ClientFormValues } from "../features/criminalCases/schemas";
 
 const accordionBorderClass: Record<CaseStatus, string> = {
-  Pending: "border-l-amber-400",
-  Ongoing: "border-l-[#4A7FB0]",
-  Active: "border-l-[#4A7FB0]",
-  Terminated: "border-l-[#DC2626]",
-  Archived: "border-l-gray-400",
+  Pending: "border-amber-200",
+  Ongoing: "border-emerald-200",
+  Active: "border-emerald-200",
+  Terminated: "border-red-200",
+  Archived: "border-gray-300",
 };
 
 const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
@@ -42,10 +42,12 @@ const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
 
 const panaboBarangays = [
   "A. O. Floirendo",
+  "Buenavista",
   "Cacao",
   "Cagangohan",
   "Consolacion",
   "Dapco",
+  "Datu Abdul Dadia",
   "Gredu",
   "J. P. Laurel",
   "Kasilak",
@@ -170,7 +172,7 @@ function TextField({
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+        className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
       />
     </label>
   );
@@ -192,7 +194,7 @@ function TextAreaField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         rows={3}
-        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
+        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
       />
     </label>
   );
@@ -233,7 +235,7 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className={`rounded-[10px] border border-l-4 border-[#E5E7EB] bg-white ${accordionBorderClass[record.cases.status_of_case]}`}>
+    <div className={`rounded-[10px] border bg-white ${accordionBorderClass[record.cases.status_of_case]}`}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -374,7 +376,7 @@ function UpdateClientInfoModal({
           <button type="button" onClick={onClose} className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]">
             Cancel
           </button>
-          <button type="button" onClick={submit} disabled={saving} className="rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3E6D97] disabled:opacity-60">
+          <button type="button" onClick={submit} disabled={saving} className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:opacity-60">
             {saving ? "Saving..." : "Save Client Info"}
           </button>
         </div>
@@ -440,7 +442,7 @@ function UpdateCaseModal({
             <TextField label="Case Number" value={values.cases.case_no} onChange={(value) => updateCase("case_no", value)} />
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Case Status</span>
-              <select value={values.cases.status_of_case} onChange={(event) => updateCase("status_of_case", event.target.value as CaseStatus)} className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20">
+              <select value={values.cases.status_of_case} onChange={(event) => updateCase("status_of_case", event.target.value as CaseStatus)} className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
                 <option>Pending</option>
                 <option>Ongoing</option>
                 <option>Active</option>
@@ -452,7 +454,7 @@ function UpdateCaseModal({
             <TextField label="Hearing Schedule" value={values.cases.hearing_schedule ?? ""} onChange={(value) => updateCase("hearing_schedule", value)} />
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Barangay</span>
-              <select value={values.cases.incident_barangay ?? ""} onChange={(event) => updateCase("incident_barangay", event.target.value)} className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20">
+              <select value={values.cases.incident_barangay ?? ""} onChange={(event) => updateCase("incident_barangay", event.target.value)} className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
                 <option value="">Select barangay</option>
                 {panaboBarangays.map((barangay) => (
                   <option key={barangay}>{barangay}</option>
@@ -477,7 +479,7 @@ function UpdateCaseModal({
           <button type="button" onClick={onClose} className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]">
             Cancel
           </button>
-          <button type="button" onClick={submit} disabled={saving} className="rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3E6D97] disabled:opacity-60">
+          <button type="button" onClick={submit} disabled={saving} className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:opacity-60">
             {saving ? "Saving..." : "Save Case"}
           </button>
         </div>
@@ -536,7 +538,7 @@ function TerminationModal({
           <TextAreaField label="Reason" value={values.termination_reason} onChange={(value) => setValues((current) => ({ ...current, termination_reason: value }))} />
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Resolution Type</span>
-            <select value={values.resolution_type} onChange={(event) => setValues((current) => ({ ...current, resolution_type: event.target.value }))} className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20">
+            <select value={values.resolution_type} onChange={(event) => setValues((current) => ({ ...current, resolution_type: event.target.value }))} className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
               <option value="">Select resolution</option>
               <option>Dismissed</option>
               <option>Resolved</option>
@@ -585,30 +587,38 @@ function ClientRecordModal({
   const [caseUpdateRecord, setCaseUpdateRecord] = useState<CriminalCaseRecord | null>(null);
   const [terminationRecord, setTerminationRecord] = useState<CriminalCaseRecord | null>(null);
   if (!client) return null;
+  const terminatedCount = cases.filter((record) => record.cases.is_terminated || record.cases.status_of_case === "Terminated").length;
+  const activeCount = Math.max(cases.length - terminatedCount, 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
       <div className="max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-        <div className="flex items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
-          <div>
-            <h2 className="text-lg font-bold text-[#2B3642]">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
+              <span>Dashboard</span>
+              <span className="text-[#CBD5E1]">/</span>
+              <span>Criminal Cases</span>
+            </div>
+            <h2 className="mt-2 text-xl font-bold text-[#2B3642]">
               {mode === "view" ? "Criminal Case Record" : "Update Record"}
             </h2>
-            <nav className="mt-1 flex items-center gap-2 text-sm text-[#4B5563]">
-              <span>Dashboard</span>
-              <span>/</span>
-              <span>Criminal Cases</span>
-              <span>/</span>
-              <span className="text-[#2B3642]">{client.client.name}</span>
-            </nav>
+            <p className="mt-1 truncate text-sm font-semibold text-[#704389]">{client.client.name}</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-white hover:text-[#2B3642]"
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="hidden gap-2 sm:flex">
+              <span className="rounded-full bg-[#F7F0FA] px-3 py-1 text-xs font-bold text-[#704389]">{cases.length} case(s)</span>
+              <span className="rounded-full bg-[#ECFDF5] px-3 py-1 text-xs font-bold text-[#065F46]">{activeCount} active</span>
+              <span className="rounded-full bg-[#FFF1F2] px-3 py-1 text-xs font-bold text-[#9F1239]">{terminatedCount} closed</span>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-[#D1D5DB] bg-white px-3 py-1.5 text-sm font-semibold text-[#4B5563] transition duration-200 hover:bg-[#F3F4F6] hover:text-[#2B3642]"
+            >
+              Close
+            </button>
+          </div>
         </div>
 
         <div className="max-h-[calc(92vh-90px)] overflow-y-auto bg-white px-6 py-5">
@@ -619,7 +629,7 @@ function ClientRecordModal({
                 <button
                   type="button"
                   onClick={() => setClientUpdateOpen(true)}
-                  className="rounded-md bg-[#4A7FB0] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#3E6D97]"
+                  className="rounded-md bg-[#704389] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#5F3675]"
                 >
                   Update Client Info
                 </button>
@@ -652,14 +662,14 @@ function ClientRecordModal({
                         <button
                           type="button"
                           onClick={() => navigate(`/criminal-cases/form-view/${record.case_id}`)}
-                          className="rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition hover:bg-[#4A7FB0] hover:text-white"
+                          className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
                         >
                           View Form
                         </button>
                         <button
                           type="button"
                           onClick={() => navigate(`/criminal-cases/form-view/${record.case_id}?print=1`)}
-                          className="rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition hover:bg-[#4A7FB0] hover:text-white"
+                          className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
                         >
                           Print Form
                         </button>
@@ -672,7 +682,7 @@ function ClientRecordModal({
                             <button
                               type="button"
                               onClick={() => setCaseUpdateRecord(record)}
-                              className="rounded-md bg-[#4A7FB0] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#3E6D97]"
+                              className="rounded-md bg-[#704389] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#5F3675]"
                             >
                               Update Case
                             </button>
@@ -828,7 +838,7 @@ export default function CriminalCasesPage() {
           <button
             type="button"
             onClick={() => setShowCaseModal(true)}
-            className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#4A7FB0] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3E6D97]"
+            className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]"
           >
             <PlusIcon />
             Add Case
@@ -850,14 +860,14 @@ export default function CriminalCasesPage() {
             <CaseFilterSelect value={filter} onChange={setFilter} />
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[#4B5563]">Total:</span>
-              <span className="rounded-md bg-[#4A7FB0] px-2.5 py-1 text-base font-semibold leading-none text-white">
+              <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
                 {filteredRows.length}
               </span>
             </div>
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
-              className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#4A7FB0] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#3E6D97]"
+              className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
             >
               Export CSV
             </button>
@@ -866,7 +876,7 @@ export default function CriminalCasesPage() {
           <input
             type="text"
             placeholder="Search case..."
-            className="h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition placeholder:text-[#4B5563] focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20 lg:w-1/4"
+            className="h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition placeholder:text-[#4B5563] focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20 lg:w-1/4"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -908,7 +918,7 @@ export default function CriminalCasesPage() {
                         <button
                           type="button"
                           onClick={() => openRecord(record, "view")}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition duration-200 hover:-translate-y-px hover:bg-[#4A7FB0] hover:text-white"
+                          className="inline-flex items-center gap-1.5 rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
                         >
                           <EyeIcon />
                           View
@@ -949,3 +959,4 @@ export default function CriminalCasesPage() {
     </MainLayout>
   );
 }
+

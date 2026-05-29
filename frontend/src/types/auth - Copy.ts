@@ -57,3 +57,4 @@ export interface UserProfile {
 export interface AdminUserDetails extends AdminUserListItem {
   profile: UserProfile;
 }
+

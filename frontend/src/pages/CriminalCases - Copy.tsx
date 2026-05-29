@@ -16,11 +16,11 @@ import { listCaseRecords, listClientRecords } from "../services/recordService";
 import type { CaseStatus, ClientRecord, CriminalCaseRecord } from "../types";
 
 const accordionBorderClass: Record<CaseStatus, string> = {
-  Pending: "border-l-amber-400",
-  Ongoing: "border-l-[#2F80ED]",
-  Active: "border-l-[#2F80ED]",
-  Terminated: "border-l-[#DC2626]",
-  Archived: "border-l-gray-400",
+  Pending: "border-amber-200",
+  Ongoing: "border-emerald-200",
+  Active: "border-emerald-200",
+  Terminated: "border-red-200",
+  Archived: "border-gray-300",
 };
 
 const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
@@ -108,7 +108,7 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className={`rounded-[10px] border border-l-4 border-[#e5e7eb] bg-white ${accordionBorderClass[record.cases.status_of_case]}`}>
+    <div className={`rounded-[10px] border bg-white ${accordionBorderClass[record.cases.status_of_case]}`}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -343,7 +343,7 @@ export default function CriminalCasesPage() {
           <button
             type="button"
             onClick={() => setShowCaseModal(true)}
-            className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#2F80ED] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1f6fd6]"
+            className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]"
           >
             <PlusIcon />
             Add Case
@@ -351,7 +351,7 @@ export default function CriminalCasesPage() {
           <button
             type="button"
             onClick={() => setShowClientModal(true)}
-            className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#15803D] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#166534]"
+            className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#15803D] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#704389]"
           >
             <UserPlusIcon />
             Add Client
@@ -365,14 +365,14 @@ export default function CriminalCasesPage() {
             <CaseFilterSelect value={filter} onChange={setFilter} />
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[#6b7280]">Total:</span>
-              <span className="rounded-md bg-[#2F80ED] px-2.5 py-1 text-base font-semibold leading-none text-white">
+              <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
                 {filteredRows.length}
               </span>
             </div>
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
-              className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#2F80ED] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#1f6fd6]"
+              className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
             >
               Export CSV
             </button>
@@ -381,7 +381,7 @@ export default function CriminalCasesPage() {
           <input
             type="text"
             placeholder="Search case..."
-            className="h-10 w-full rounded-md border border-[#e5e7eb] bg-white px-3 text-sm text-[#111827] outline-none transition placeholder:text-[#6b7280] focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15 lg:w-1/4"
+            className="h-10 w-full rounded-md border border-[#e5e7eb] bg-white px-3 text-sm text-[#111827] outline-none transition placeholder:text-[#6b7280] focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/15 lg:w-1/4"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -423,7 +423,7 @@ export default function CriminalCasesPage() {
                         <button
                           type="button"
                           onClick={() => openRecord(record, "view")}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-[#2F80ED] bg-white px-3 py-1.5 text-xs font-semibold text-[#2F80ED] transition duration-200 hover:-translate-y-px hover:bg-[#2F80ED] hover:text-white"
+                          className="inline-flex items-center gap-1.5 rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
                         >
                           <EyeIcon />
                           View
@@ -461,3 +461,4 @@ export default function CriminalCasesPage() {
     </MainLayout>
   );
 }
+

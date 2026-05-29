@@ -19,7 +19,7 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={() => setRetryKey((current) => current + 1)}
-              className="mt-4 inline-flex h-9 items-center justify-center rounded-md bg-[#4A7FB0] px-4 text-sm font-semibold text-white shadow-md  hover:bg-[#3E6D97]"
+              className="mt-4 inline-flex h-9 items-center justify-center rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-md  hover:bg-[#5F3675]"
             >
               Retry dashboard
             </button>
@@ -39,3 +39,4 @@ export default function Dashboard() {
     </ErrorBoundary>
   );
 }
+

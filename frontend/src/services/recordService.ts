@@ -79,3 +79,4 @@ export async function getPrintableIntake(caseId: string): Promise<PrintableIntak
   const response = await apiClient.get<PrintableIntakeResponse>(`/printable-intake/${caseId}`);
   return response.data;
 }
+

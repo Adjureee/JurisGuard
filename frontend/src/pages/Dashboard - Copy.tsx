@@ -20,7 +20,7 @@ export default function Dashboard() {
     <MainLayout>
       <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#2F80ED]">Overview</p>
+          <p className="text-sm font-semibold text-[#704389]">Overview</p>
           <h2 className="text-2xl font-bold text-[#111827]">Case Dashboard</h2>
         </div>
       </div>
@@ -78,3 +78,4 @@ export default function Dashboard() {
     </MainLayout>
   );
 }
+
