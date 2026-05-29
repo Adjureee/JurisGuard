@@ -2,6 +2,7 @@ import CountUp from "react-countup";
 import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import ErrorBoundary from "../ErrorBoundary";
 
 export function AnalyticsPanel({
   title,
@@ -25,7 +26,11 @@ export function AnalyticsPanel({
         <h3 className="text-base font-semibold text-[#111827]">{title}</h3>
         {subtitle && <p className="mt-1 text-sm leading-6 text-[#6B7280]">{subtitle}</p>}
       </div>
-      <div className="p-5">{children}</div>
+      <div className="p-5">
+        <ErrorBoundary fallback={<EmptyState message="This dashboard widget could not render. Other widgets remain available." />}>
+          {children}
+        </ErrorBoundary>
+      </div>
     </motion.section>
   );
 }

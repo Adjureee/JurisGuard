@@ -2,7 +2,12 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 psycopg2-binary
+pydantic
 python-multipart
+python-jose
+passlib[bcrypt]
+alembic
+email-validator
 python-dotenv
 requests
 pillow

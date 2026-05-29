@@ -1,0 +1,1166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PAO Interview Sheet - Clean 8x13 Replica</title>
+    <style>
+      /* --- Base Reset & Page Setup --- */
+      * {
+        box-sizing: border-box;
+        margin: 1;
+        padding: 0;
+      }
+
+      html,
+      body,
+      .print-page,
+      .green-bar,
+      .green-sub-instructions {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 11px;
+        color: #000;
+        background-color: #525659;
+        padding: 15px 0;
+      }
+
+      /* --- Print Page Canvas (Strict 8x13 Folio Paper) --- */
+      .print-page {
+        background-color: #fff;
+        width: 8in;
+        height: 13in;
+        margin: 0 auto 20px auto;
+        padding: 0.4in 0.85in 0.5in 0.25in;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      }
+
+      /* --- The Outer Bounding Box --- */
+      .main-outer-outline {
+        border: 2px solid #000;
+        width: 100%;
+        height: 11.8in;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      /* --- Global Form Utilities --- */
+      .green-bar {
+        background-color: #1e4620 !important;
+        color: #fff !important;
+        font-weight: bold;
+        text-align: center;
+        padding: 3px;
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.3px;
+        width: 100%;
+        border-top: 2px solid #000;
+        border-bottom: 2px solid #000;
+      }
+      .main-outer-outline > .green-bar:first-child {
+        border-top: none;
+      }
+      .green-sub-instructions {
+        background-color: #1e4620 !important;
+        color: #fff !important;
+        text-align: center;
+        padding: 1px;
+        font-size: 7px;
+        margin-top: -1px;
+        width: 100%;
+        border-bottom: 1px solid #000;
+      }
+
+      .green-bar span {
+        font-weight: normal !important;
+        text-transform: none;
+        font-size: 7.5px;
+      }
+      .flex-row {
+        display: flex;
+        align-items: flex-end;
+        margin-bottom: 3px;
+        width: 100%;
+      }
+      .inline-label {
+        white-space: nowrap;
+        padding-right: 3px;
+      }
+
+      /* --- Interactive Input Elements --- */
+      input[type="text"] {
+        flex-grow: 1;
+        border: none;
+        border-bottom: 1px solid #000;
+        background: transparent;
+        font-family: Arial, sans-serif;
+        font-size: 11px;
+        padding: 0 2px;
+        outline: none;
+        min-height: 12px;
+        text-align: left;
+      }
+      input[type="checkbox"] {
+        margin-right: 3px;
+        transform: scale(0.9);
+        vertical-align: middle;
+      }
+      textarea.live-box {
+        width: 100%;
+        border: none;
+        background: transparent;
+        font-family: Arial, sans-serif;
+        font-size: 11px;
+        line-height: 16px;
+        resize: none;
+        outline: none;
+        padding: 0 4px;
+        overflow: hidden;
+      }
+
+      .checkbox-item {
+        display: flex;
+        align-items: center;
+        white-space: nowrap;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .bold {
+        font-weight: bold;
+      }
+
+      /* --- Form Grid & Structural Blocks --- */
+      .header-container {
+        display: flex;
+        width: 100%;
+        padding: 5px 6px 2px 6px;
+      }
+      .header-main-col {
+        width: 100%;
+      }
+
+      /* Floating Exterior Timestamps */
+      .sidebar-timestamps {
+        position: absolute;
+        top: 0.45in;
+        right: 0.1in;
+        width: 0.7in;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+      .timestamp-element-group {
+        font-size: 7.5px;
+        font-weight: bold;
+        text-align: center;
+        line-height: 1.1;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .timestamp-element-group input[type="text"] {
+        width: 100%;
+        margin-top: 2px;
+        text-align: center;
+        border: none;
+        border-bottom: 1px solid #000;
+        font-size: 8px;
+        padding: 0;
+        min-height: 11px;
+      }
+
+      .title-bar {
+        border: 2px solid #000;
+        text-align: center;
+        font-weight: bold;
+        font-size: 10.5px;
+        padding: 3px;
+        margin-bottom: 3px;
+        width: 100%;
+      }
+      .banner-placeholder {
+        width: 100%;
+        height: 45px;
+        border: 1px dashed #777;
+        background-color: #f5f5f5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 8.5px;
+        color: #555;
+        margin-bottom: 4px;
+      }
+      .region-district-section {
+        margin: 3px auto;
+        width: 100%;
+      }
+      .two-col-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        width: 100%;
+      }
+      .section-i-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 1.1fr 1.5fr;
+        gap: 4px;
+        width: 100%;
+      }
+      .section-ii-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 1fr;
+        column-gap: 10px;
+        row-gap: 1px;
+        width: 100%;
+      }
+      .section-iii-grid,
+      .section-iv-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        row-gap: 2px;
+        width: 100%;
+      }
+
+      /* --- Section Content Layout Padding --- */
+      .section-content-padding {
+        padding: 3px 6px;
+        width: 100%;
+      }
+
+      .field-subtext-group {
+        display: block;
+        width: 100%;
+        margin-bottom: 3px;
+      }
+      .field-subtext-group .flex-row {
+        margin-bottom: 1px;
+      }
+      .sub-caption-label {
+        font-size: 7.5px;
+        font-weight: bold;
+        text-align: center;
+        width: 100%;
+        display: block;
+        padding-top: 1px;
+        line-height: 1;
+      }
+
+      /* --- Affidavit Layout Styling --- */
+      .affidavit-block {
+        padding: 3px 6px;
+        line-height: 1.35;
+      }
+      .affidavit-title {
+        text-align: center;
+        font-weight: bold;
+        font-size: 10.5px;
+        margin: 2px 0;
+      }
+      .signature-row-block {
+        margin-top: 4px;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .signature-wrapper {
+        width: 220px;
+        text-align: center;
+      }
+
+      /* --- Page 2 Specific Blocks --- */
+      .instruction-underline {
+        text-align: center;
+        font-weight: bold;
+        text-decoration: underline;
+        margin: 3px 0;
+        font-style: italic;
+        font-size: 8px;
+        width: 100%;
+      }
+      .conflict-question-block {
+        padding: 3px 6px;
+        border-bottom: 1px solid #ddd;
+        width: 100%;
+      }
+      .conflict-indent-text {
+        padding-left: 15px;
+        margin: 0.5px 0;
+        text-align: justify;
+        font-size: 11px;
+        line-height: 1.2;
+      }
+      .indigency-doc-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1.2fr;
+        gap: 4px;
+        width: 100%;
+        margin-top: 3px;
+      }
+      .doc-column-cell {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+      .judicial-warning-text {
+        text-align: center;
+        font-weight: bold;
+        font-size: 9px;
+        padding: 3px 0;
+        border-top: 1.5px solid #000;
+        width: 100%;
+      }
+
+      /* --- Notebook Rule Lines Grid System --- */
+      .writing-grid-container {
+        width: 100%;
+        background-image: linear-gradient(#fff 15px, #000 16px);
+        background-size: 100% 16px;
+        border-top: 1px solid #000;
+      }
+
+      /* --- Outside Footer Placement --- */
+      .form-footer-code {
+        position: absolute;
+        bottom: 0.25in;
+        left: 0.25in;
+        font-size: 8px;
+        color: #000;
+        font-weight: bold;
+      }
+
+      /* --- Print Configurations --- */
+      @media print {
+        @page {
+          size: 8in 13in;
+          margin: 0;
+        }
+        body {
+          background-color: #fff;
+          padding: 0;
+          margin: 0;
+        }
+        .print-page {
+          margin: 0;
+          box-shadow: none;
+          page-break-after: always;
+          width: 8in;
+          height: 13in;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="print-page" id="page-1">
+      <div class="sidebar-timestamps">
+        <div class="timestamp-element-group">
+          Time In<br />(Service/<br />Office)<input type="text" />
+        </div>
+        <div class="timestamp-element-group">
+          Time In<br />(Lawyer)<input type="text" />
+        </div>
+        <div class="timestamp-element-group">
+          Time Out<br />(Lawyer)<input type="text" />
+        </div>
+      </div>
+
+      <div class="main-outer-outline">
+        <div>
+          <div class="header-container">
+            <div class="header-main-col">
+              <div class="title-bar">
+                INTERVIEW SHEET (For Legal Action/Assistance and Representation)
+              </div>
+
+              <div class="banner-placeholder">
+                <img
+                  src="image_451def.png"
+                  alt="Public Attorney's Office Banner Graphic"
+                  style="
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    display: block;
+                  "
+                  onerror="this.style.display = 'none'"
+                />
+                <span>[IMAGE PLACEHOLDER: PAO Banner Header Graphic]</span>
+              </div>
+
+              <div class="region-district-section">
+                <div
+                  class="flex-row"
+                  style="
+                    justify-content: flex-start;
+                    width: 30%;
+                    margin: 0 auto;
+                  "
+                >
+                  <span class="inline-label">Region</span><input type="text" />
+                </div>
+                <div
+                  class="flex-row"
+                  style="
+                    justify-content: flex-start;
+                    width: 40%;
+                    margin: 2px auto 0 auto;
+                  "
+                >
+                  <span class="inline-label">District Office</span
+                  ><input type="text" />
+                </div>
+              </div>
+
+              <div class="two-col-grid">
+                <div>
+                  <div class="flex-row">
+                    <span class="inline-label bold">Date:</span
+                    ><input type="text" />
+                  </div>
+                  <div class="flex-row">
+                    <span class="inline-label bold">Control No.:</span
+                    ><input type="text" />
+                  </div>
+                  <br />
+                  <br />
+                  <div class="field-subtext-group" style="margin-top: 4px">
+                    <div class="flex-row">
+                      <span class="inline-label bold">Interviewer:</span
+                      ><input type="text" />
+                    </div>
+                    <span class="sub-caption-label bold"
+                      >(Name & Signature) Public Attorney</span
+                    >
+                  </div>
+
+                  <div class="flex-row" style="margin-top: 2px">
+                    <span class="inline-label bold"
+                      >Referred by/Indorsed by:</span
+                    ><input type="text" />
+                  </div>
+                </div>
+
+                <div>
+                  <div style="padding: 0 0 3px 2px">
+                    <div class="bold">Action Taken:</div>
+                    <div class="checkbox-item" style="margin: 1px 0">
+                      <input type="checkbox" /> For further evaluation (merit
+                      and indigency test)
+                    </div>
+                    <div class="checkbox-item">
+                      <input type="checkbox" /> For legal representation and
+                      further legal assistance
+                    </div>
+                  </div>
+                  <div class="flex-row" style="margin-top: 2px">
+                    <span class="inline-label bold">Assigned to:</span
+                    ><input type="text" />
+                  </div>
+                  <div
+                    class="checkbox-item"
+                    style="margin-left: 2px; width: 98%; display: flex"
+                  >
+                    <input type="checkbox" />
+                    <span>Legal assistance given:</span
+                    ><input type="text" style="flex-grow: 1" />
+                  </div>
+                  <div
+                    class="checkbox-item"
+                    style="
+                      margin-left: 2px;
+                      margin-top: 1px;
+                      width: 98%;
+                      display: flex;
+                    "
+                  >
+                    <input type="checkbox" /> <span>Others:</span
+                    ><input type="text" style="flex-grow: 1" />
+                  </div>
+
+                  <div class="field-subtext-group" style="margin-top: 2px">
+                    <div class="flex-row">
+                      <span class="inline-label bold">Action approved by:</span
+                      ><input type="text" />
+                    </div>
+                    <span
+                      class="sub-caption-label bold"
+                      style="margin-left: 20%"
+                      >Name & Signature of DPA/RPA/OIC</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="green-bar">
+          I. NATURE OF REQUEST <span>(To be filled up by PAO personnel)</span>
+        </div>
+        <div class="section-i-grid section-content-padding">
+          <div>
+            <div class="checkbox-item">
+              <input type="checkbox" /> Legal Documentation
+            </div>
+            <div class="checkbox-item" style="margin-top: 2px">
+              <input type="checkbox" /> Inquest Legal Assistance
+            </div>
+          </div>
+          <div>
+            <div class="checkbox-item">
+              <input type="checkbox" /> Administration of Oath
+            </div>
+            <div class="checkbox-item" style="margin-top: 2px">
+              <input type="checkbox" /> Mediation/Conciliation
+            </div>
+          </div>
+          <div>
+            <div class="checkbox-item">
+              <input type="checkbox" /> Representation in Court/Quasi-Judicial
+              Bodies
+            </div>
+            <div
+              class="checkbox-item flex-row"
+              style="margin-top: 2px; margin-bottom: 0"
+            >
+              <input type="checkbox" />
+              <span style="white-space: nowrap">Others:</span
+              ><input type="text" />
+            </div>
+          </div>
+        </div>
+
+        <div class="green-bar">
+          II. APPLICANT'S PERSONAL CIRCUMSTANCES <br />
+          <span
+            >(To be filled up by applicant/representative; Use another sheet of
+            paper if there's more than one client)</span
+          >
+        </div>
+
+        <div class="section-ii-grid section-content-padding">
+          <div>
+            <div class="flex-row">
+              <span class="inline-label">Name:</span><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Religion:</span><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Citizenship:</span
+              ><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Address:</span><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">E-mail:</span><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Individual Monthly Income:</span
+              ><input type="text" />
+            </div>
+            <div class="flex-row" style="padding-bottom: 1px">
+              <span
+                class="inline-label"
+                style="margin-right: 12px; margin-bottom: 3px"
+                >Detained:</span
+              >
+              <span class="checkbox-item" style="margin-right: 12px"
+                >Yes <input type="checkbox"
+              /></span>
+              <span class="checkbox-item">No <input type="checkbox" /></span>
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Detained Since:</span
+              ><input type="text" />
+            </div>
+          </div>
+          <div>
+            <div class="flex-row">
+              <span class="inline-label">Age:</span
+              ><input type="text" style="max-width: 35px" />
+              <span class="inline-label" style="margin-left: 4px">Sex:</span
+              ><input type="text" style="max-width: 40px" />
+              <span class="inline-label" style="margin-left: 4px"
+                >Civil Status:</span
+              ><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Educational Attainment:</span
+              ><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Language/Dialect:</span
+              ><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Contact No.:</span
+              ><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Spouse:</span><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Address of Spouse:</span
+              ><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Contact No. of Spouse:</span
+              ><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Place of Detention:</span
+              ><input type="text" />
+            </div>
+          </div>
+        </div>
+
+        <div class="green-bar">
+          II-A. REPRESENTATIVE'S PERSONAL CIRCUMSTANCES
+          <span>(To be filled up if the applicant is not present)</span>
+        </div>
+        <div class="section-ii-grid section-content-padding">
+          <div>
+            <div class="flex-row">
+              <span class="inline-label">Name:</span><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Address:</span><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Relationship to applicant:</span
+              ><input type="text" />
+            </div>
+          </div>
+          <div>
+            <div class="flex-row">
+              <span class="inline-label">Age:</span
+              ><input type="text" style="max-width: 35px" />
+              <span class="inline-label" style="margin-left: 4px">Sex:</span
+              ><input type="text" style="max-width: 40px" />
+              <span class="inline-label" style="margin-left: 4px"
+                >Civil Status:</span
+              ><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Contact No.:</span
+              ><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">E-mail:</span><input type="text" />
+            </div>
+          </div>
+        </div>
+
+        <div class="green-bar">III. NATURE OF THE CASE</div>
+        <div class="section-iii-grid section-content-padding">
+          <div class="checkbox-item"><input type="checkbox" /> Criminal</div>
+          <div class="checkbox-item"><input type="checkbox" /> Civil</div>
+          <div class="checkbox-item"><input type="checkbox" /> Labor</div>
+          <div class="checkbox-item">
+            <input type="checkbox" /> Administrative
+          </div>
+          <div class="checkbox-item"><input type="checkbox" /> Appealed</div>
+          <div></div>
+        </div>
+
+        <div class="green-bar">IV. APPLICANT'S CLASSIFICATION</div>
+        <div class="section-iv-grid section-content-padding">
+          <div class="checkbox-item">
+            <input type="checkbox" /> Child in Conflict with the Law
+          </div>
+          <div class="checkbox-item">
+            <input type="checkbox" /> Senior Citizen
+          </div>
+          <div
+            class="checkbox-item"
+            style="
+              display: grid;
+              grid-template-columns: auto auto 1fr;
+              align-items: flex-end;
+              width: 100%;
+            "
+          >
+            <input type="checkbox" />
+            <span class="inline-label" style="padding-right: 3px"
+              >Foreign National:</span
+            ><input type="text" style="width: 100%; min-width: 0" />
+          </div>
+
+          <div class="checkbox-item">
+            <input type="checkbox" /> Woman &nbsp;&nbsp;&nbsp;&nbsp;
+            <input type="checkbox" /> VAWC Victim
+          </div>
+          <div class="checkbox-item">
+            <input type="checkbox" /> Refugee/Evacuee
+          </div>
+          <div
+            class="checkbox-item"
+            style="
+              display: grid;
+              grid-template-columns: auto auto 1fr;
+              align-items: flex-end;
+              width: 100%;
+            "
+          >
+            <input type="checkbox" />
+            <span class="inline-label" style="padding-right: 3px"
+              >Urban Poor:</span
+            ><input type="text" style="width: 100%; min-width: 0" />
+          </div>
+
+          <div class="checkbox-item">
+            <input type="checkbox" /> Law Enforcer &nbsp;
+            <input type="checkbox" /> Drug-related Duty
+          </div>
+          <div class="checkbox-item">
+            <input type="checkbox" /> Tenant in Agrarian Case
+          </div>
+          <div
+            class="checkbox-item"
+            style="
+              display: grid;
+              grid-template-columns: auto auto 1fr;
+              align-items: flex-end;
+              width: 100%;
+            "
+          >
+            <input type="checkbox" />
+            <span class="inline-label" style="padding-right: 3px"
+              >Rural Poor:</span
+            ><input type="text" style="width: 100%; min-width: 0" />
+          </div>
+
+          <div class="checkbox-item">
+            <input type="checkbox" /> OFW - Land-based
+          </div>
+          <div class="checkbox-item">
+            <input type="checkbox" /> Arrested for Terrorism (R.A. No. 11479)
+          </div>
+          <div
+            class="checkbox-item"
+            style="
+              display: grid;
+              grid-template-columns: auto auto 1fr;
+              align-items: flex-end;
+              width: 100%;
+            "
+          >
+            <input type="checkbox" />
+            <span class="inline-label" style="padding-right: 3px"
+              >Indigenous People:</span
+            ><input type="text" style="width: 100%; min-width: 0" />
+          </div>
+
+          <div class="checkbox-item">
+            <input type="checkbox" /> OFW - Sea-based
+          </div>
+          <div class="checkbox-item">
+            <input type="checkbox" /> Victim of Torture (R.A. No. 9745)
+          </div>
+          <div
+            class="checkbox-item"
+            style="
+              display: grid;
+              grid-template-columns: auto auto 1fr;
+              align-items: flex-end;
+              width: 100%;
+            "
+          >
+            <input type="checkbox" />
+            <span class="inline-label" style="padding-right: 3px"
+              >PWD; Type of Disability:</span
+            ><input type="text" style="width: 100%; min-width: 0" />
+          </div>
+
+          <div
+            class="checkbox-item"
+            style="
+              align-items: flex-start;
+              white-space: normal;
+              line-height: 1.1;
+            "
+          >
+            <input type="checkbox" style="margin-top: 1px" /> Former Rebel (FR)
+            and<br />&nbsp;&nbsp;&nbsp;&nbsp;Former Violent Extremist (FVE)
+          </div>
+          <div class="checkbox-item">
+            <input type="checkbox" /> Victim of Trafficking (R.A. No. 9208)
+          </div>
+          <div
+            class="checkbox-item"
+            style="
+              align-items: flex-start;
+              white-space: normal;
+              line-height: 1.1;
+            "
+          >
+            <input type="checkbox" style="margin-top: 1px" /> Petitioner for
+            Voluntary Rehabilitation<br />&nbsp;&nbsp;&nbsp;&nbsp;(Drugs)
+          </div>
+        </div>
+
+        <div class="green-bar">V. AFFIDAVIT OF INDIGENCY</div>
+        <div class="affidavit-block">
+          Republic of the Philippines)<br />
+          (<input type="text" style="max-width: 150px" />) S.c.
+
+          <div class="affidavit-title">AFFIDAVIT OF INDIGENCY</div>
+          <div style="margin-left: 20px; margin-top: 2px">
+            I,
+            <input
+              type="text"
+              style="width: 25%; display: inline-block; margin-top: 1px"
+            />, of legal age, <input type="checkbox" /> single &nbsp;
+            <input type="checkbox" /> married to:
+            <input
+              type="text"
+              style="width: 24%; display: inline-block; margin-top: 1px"
+            />
+            <input type="checkbox" /> widow/widower
+          </div>
+          and residing at
+          <input
+            type="text"
+            style="width: 35.8%; display: inline-block; margin-top: 1px"
+          />
+          and having been duly sworn in accordance with law, depose and say:
+
+          <div style="margin-left: 32px; margin-top: 2px">
+            1. That I desire to avail of the free legal service of the Public
+            Attorney's Office;<br />
+            2. That my monthly net salary/income is P
+            <input type="text" style="max-width: 100px" />; and<br />
+            3. That I am executing this affidavit to attest to the truth of the
+            foregoing, and to entitle me to the desired legal services.
+          </div>
+
+          <div style="margin-left: 32px; margin-top: 3px">
+            IN WITNESS WHEREOF, I hereby affix my signature this
+            <input
+              type="text"
+              style="width: 8%; display: inline-block; margin-top: 1px"
+            />
+            day of
+            <input
+              type="text"
+              style="width: 12%; display: inline-block; margin-top: 1px"
+            />
+            in
+            <input
+              type="text"
+              style="width: 16%; display: inline-block; margin-top: 1px"
+            />, Philippines.
+          </div>
+
+          <div class="signature-row-block" style="margin-right: 45px">
+            <div class="signature-wrapper">
+              <input type="text" style="width: 60%; text-align: center" />
+              <div class="bold" style="font-size: 8px; margin-top: 1px">
+                Signature of Affiant
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-left: 32px; margin-top: 2px">
+            SUBSCRIBED AND SWORN to before me this
+            <input
+              type="text"
+              style="width: 10%; display: inline-block; margin-top: 1px"
+            />
+            day of
+            <input
+              type="text"
+              style="width: 14%; display: inline-block; margin-top: 1px"
+            />
+            in
+            <input
+              type="text"
+              style="width: 20%; display: inline-block; margin-top: 1px"
+            />, Philippines.
+          </div>
+
+          <div
+            class="signature-row-block"
+            style="margin-top: 2px; margin-right: 30px"
+          >
+            <div class="signature-wrapper" style="width: 250px">
+              <input type="text" style="width: 60%; text-align: center" />
+              <div class="bold" style="font-size: 8px; margin-top: 1px">
+                Public Attorney (Pursuant to R.A. No. 9406)
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-footer-code">
+        FOSS.F.003/REV.3 (effective 14 April 2023)
+      </div>
+    </div>
+
+    <div class="print-page" id="page-2">
+      <div class="main-outer-outline">
+        <div class="green-bar">VI. CONFLICT-OF-INTEREST REPRESENTATION</div>
+
+        <div class="conflict-question-block">
+          <p>
+            Would/do you agree that the adverse party will be/is represented by
+            a lawyer from the Public Attorney's Office (although from a
+            different District Office), in your case and any related case?
+          </p>
+          <div
+            class="flex-row"
+            style="margin-top: 2px; gap: 35px; margin-left: 10px"
+          >
+            <span class="checkbox-item"><input type="checkbox" /> Yes</span>
+            <span class="checkbox-item"><input type="checkbox" /> No</span>
+          </div>
+        </div>
+
+        <div class="conflict-question-block">
+          <p>
+            Would/do you agree that the adverse party will be/is represented by
+            a lawyer from the Public Attorney's Office (same department of the
+            PAO: Special and Appealed Cases Service/Regional Special and
+            Appealed Cases Unit) in the appeal or other mode of review of your
+            case and any related case?
+          </p>
+          <div
+            class="flex-row"
+            style="margin-top: 2px; gap: 35px; margin-left: 10px"
+          >
+            <span class="checkbox-item"><input type="checkbox" /> Yes</span>
+            <span class="checkbox-item"><input type="checkbox" /> No</span>
+          </div>
+        </div>
+
+        <div class="instruction-underline">
+          PLEASE ANSWER THE NEXT 2 QUESTIONS IF YOU ANSWERED "YES" TO BOTH
+          QUESTIONS ABOVE
+        </div>
+
+        <div class="conflict-question-block">
+          <p>
+            If you agree to the conflict-of-interest representation, do you
+            understand that you are waiving your right to file any complaint
+            against your assigned Public Attorney and his/her immediate
+            supervisor, or the opposing Public Attorney and his/her immediate
+            supervisor, on the mere basis and on mere allegations/suspicions of:
+          </p>
+          <div class="conflict-indent-text">
+            (1) infidelity, double-dealing, or collusion with the other Public
+            Attorney or opposing client/s;
+          </div>
+          <div class="conflict-indent-text">
+            (2) access to details about each other's case, evidence, and legal
+            strategy; (3) losing your case;
+          </div>
+          <div class="conflict-indent-text">
+            (4) handling an unmeritorious case; (4) other similar grounds
+            indicating lack of confidence and trust to the assigned Public
+            Attorney and his/her immediate supervisor?
+          </div>
+          <div class="checkbox-item" style="margin-top: 4px; margin-left: 10px">
+            <input type="checkbox" /> Yes, without condition or qualification
+          </div>
+        </div>
+
+        <div class="conflict-question-block" style="border-bottom: none">
+          <p>
+            If you agree to the conflict-of-interest representation, do you
+            still trust that your assigned Public Attorney and his/her immediate
+            supervisor, and agree that the adverse party's Public Attorney and
+            his/her immediate supervisor, shall handle their respective cases to
+            the best of their ability, with full fidelity to the cause of their
+            respective clients, and shall be influenced by no other than the
+            evidence on record?
+          </p>
+          <div class="checkbox-item" style="margin-top: 4px; margin-left: 10px">
+            <input type="checkbox" /> Yes, without condition or qualification
+          </div>
+        </div>
+
+        <div
+          class="signature-row-block"
+          style="margin-top: 3px; margin-bottom: 4px"
+        >
+          <div class="signature-wrapper" style="width: 260px">
+            <input type="text" style="width: 95%; text-align: center" />
+            <div class="bold" style="font-size: 8px; margin-top: 1px">
+              Full Name and Signature of Party/Representative
+            </div>
+          </div>
+        </div>
+
+        <div class="green-bar">VII. PROOF OF INDIGENCY</div>
+        <div class="section-content-padding">
+          <div class="checkbox-item" style="width: 46.5%; display: flex">
+            <input type="checkbox" /> <span>For submission on or before</span>
+            <input type="text" style="flex-grow: 1" />
+          </div>
+
+          <div class="indigency-doc-grid">
+            <div class="doc-column-cell">
+              <div class="checkbox-item">
+                <input type="checkbox" /> Income Tax Return
+              </div>
+              <div class="flex-row" style="margin-bottom: 0">
+                <span style="font-size: 8.5px; padding-right: 2px">dated</span
+                ><input type="text" style="width: 100%; min-width: 0" />
+              </div>
+            </div>
+            <div class="doc-column-cell">
+              <div class="checkbox-item">
+                <input type="checkbox" /> Certification from Barangay
+              </div>
+              <div class="flex-row" style="margin-bottom: 0">
+                <span style="font-size: 8.5px; padding-right: 2px">dated</span
+                ><input type="text" style="width: 100%; min-width: 0" />
+              </div>
+            </div>
+            <div class="doc-column-cell">
+              <div class="checkbox-item">
+                <input type="checkbox" /> Certification from DSWD
+              </div>
+              <div class="flex-row" style="margin-bottom: 0">
+                <span style="font-size: 8.5px; padding-right: 2px">dated</span
+                ><input type="text" style="width: 100%; min-width: 0" />
+              </div>
+            </div>
+            <div class="doc-column-cell">
+              <div class="checkbox-item">
+                <input type="checkbox" /> Others (payslips, etc.):
+              </div>
+              <div
+                class="flex-row"
+                style="margin-bottom: 0; padding-left: 12px"
+              >
+                <span style="font-size: 8.5px; padding-right: 2px">dated</span
+                ><input type="text" style="width: 100%; min-width: 0" />
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="signature-row-block"
+            style="margin-top: 10px; margin-bottom: 0px; margin-right: 30%"
+          >
+            <div class="signature-wrapper" style="width: 260px">
+              <input type="text" style="width: 100%; text-align: center" />
+              <div class="bold" style="font-size: 8px; margin-top: 1px">
+                Full Name and Signature of Party/Representative
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="judicial-warning-text">
+          FOR LEGAL REPRESENTATION IN JUDICIAL AND QUASI-JUDICIAL CASES ONLY<br />
+          <span style="font-size: 7.5px; font-weight: normal, bold"
+            >(To be filled up by PAO Personnel; Write N/A if inapplicable)</span
+          >
+        </div>
+
+        <div class="green-bar">VIII. APPLICANT'S CASE INVOLVEMENT</div>
+        <div class="section-iii-grid section-content-padding">
+          <div class="checkbox-item"><input type="checkbox" /> Plaintiff</div>
+          <div class="checkbox-item"><input type="checkbox" /> Defendant</div>
+          <div class="checkbox-item"><input type="checkbox" /> Oppositor</div>
+
+          <div class="checkbox-item"><input type="checkbox" /> Petitioner</div>
+          <div class="checkbox-item"><input type="checkbox" /> Respondent</div>
+          <div class="checkbox-item flex-row" style="margin-bottom: 0">
+            <input type="checkbox" />
+            <span style="white-space: nowrap">Others:</span
+            ><input type="text" />
+          </div>
+
+          <div class="checkbox-item"><input type="checkbox" /> Complainant</div>
+          <div class="checkbox-item"><input type="checkbox" /> Accused</div>
+          <div></div>
+        </div>
+
+        <div class="green-bar">VIII-A. ADVERSE PARTY</div>
+        <div class="section-content-padding">
+          <div class="flex-row" style="gap: 25px">
+            <span class="checkbox-item"
+              ><input type="checkbox" /> Plaintiff/Complainant</span
+            >
+            <span class="checkbox-item"
+              ><input type="checkbox" /> Defendant/Respondent/Accused</span
+            >
+            <span class="checkbox-item"
+              ><input type="checkbox" /> Oppositor/Others</span
+            >
+          </div>
+          <div class="two-col-grid" style="margin-top: 3px">
+            <div class="flex-row">
+              <span class="inline-label">Name:</span><input type="text" />
+            </div>
+            <div class="flex-row">
+              <span class="inline-label">Address:</span><input type="text" />
+            </div>
+          </div>
+        </div>
+
+        <div class="green-bar">
+          VIII-B. FACTS OF THE CASE
+          <span>(Use separate sheet if necessary)</span>
+        </div>
+        <div class="writing-grid-container">
+          <textarea class="live-box" rows="5"></textarea>
+        </div>
+
+        <div class="green-bar">VIII-C. CAUSE OF ACTION/NATURE OF OFFENSE</div>
+        <div class="writing-grid-container">
+          <textarea class="live-box" rows="3"></textarea>
+        </div>
+
+        <div
+          class="green-bar"
+          style="text-align: left; padding-left: 5px; text-align: center"
+        >
+          VIII-D. PENDING IN COURT?
+          <span style="margin-left: 15px; font-weight: normal"
+            ><input type="checkbox" /> YES</span
+          >
+          <span style="margin-left: 10px; font-weight: normal"
+            ><input type="checkbox" /> NO</span
+          >
+        </div>
+        <div style="padding: 2px 0">
+          <span class="bold" style="font-size: 9px"
+            >Title of the Case and Docket No:</span
+          >
+          <div class="writing-grid-container" style="margin-top: 1px">
+            <textarea class="live-box" rows="2"></textarea>
+          </div>
+        </div>
+        <div style="padding: 2px 0">
+          <span class="bold" style="font-size: 9px"
+            >Court/Body/Tribunal where pending:</span
+          >
+          <div class="writing-grid-container" style="margin-top: 1px">
+            <textarea class="live-box" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-footer-code">
+        FOSS.F.003/REV.3 (effective 14 April 2023)
+      </div>
+    </div>
+  </body>
+</html>
