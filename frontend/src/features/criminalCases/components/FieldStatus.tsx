@@ -7,8 +7,8 @@ export function FieldStatus({ status }: { status?: ExtractionStatus }) {
     <span
       className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
         status === "extracted"
-          ? "bg-emerald-50 text-emerald-700"
-          : "bg-amber-50 text-amber-700"
+          ? "bg-[#ECFDF5] text-[#065F46]"
+          : "bg-[#FFFBEB] text-[#92400E]"
       }`}
     >
       {status === "extracted" ? "Extracted" : "Missing"}

@@ -15,11 +15,11 @@ export function AnalyticsPanel({
 }) {
   return (
     <section
-      className={`rounded-xl border border-[#E5E7EB] bg-white shadow-sm shadow-[#111827]/10 ${className}`}
+      className={`rounded-xl border border-[#E5E7EB] bg-white shadow-sm shadow-gray-200/60 ${className}`}
     >
       <div className="border-b border-[#E5E7EB] px-5 py-4">
-        <h3 className="text-base font-semibold text-[#111827]">{title}</h3>
-        {subtitle && <p className="mt-1 text-sm leading-6 text-[#6B7280]">{subtitle}</p>}
+        <h3 className="text-base font-bold text-[#111827]">{title}</h3>
+        {subtitle && <p className="mt-1 text-sm font-medium leading-6 text-[#4B5563]">{subtitle}</p>}
       </div>
       <div className="p-5">
         <ErrorBoundary fallback={<EmptyState message="This dashboard widget could not render. Other widgets remain available." />}>
@@ -50,32 +50,40 @@ export function IntelligenceMetricCard({
   const safeValue = Number.isFinite(value) ? value : 0;
   const formattedValue = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(safeValue);
   const tones = {
-    blue: "from-[#1D4ED8] to-[#60A5FA]",
-    green: "from-[#047857] to-[#34D399]",
-    red: "from-[#B91C1C] to-[#F87171]",
-    yellow: "from-[#B45309] to-[#FBBF24]",
-    purple: "from-[#6D28D9] to-[#A78BFA]",
-    dark: "from-[#111827] to-[#4B5563]",
+    blue: "border-[#BFDBFE] text-[#1D4ED8]",
+    green: "border-[#A7F3D0] text-[#065F46]",
+    red: "border-[#FECACA] text-[#9F1239]",
+    yellow: "border-[#FEF3C7] text-[#92400E]",
+    purple: "border-[#DDD6FE] text-[#5B21B6]",
+    dark: "border-[#D1D5DB] text-[#111827]",
+  };
+  const iconTones = {
+    blue: "bg-[#EFF6FF] text-[#1D4ED8]",
+    green: "bg-[#ECFDF5] text-[#065F46]",
+    red: "bg-[#FFF1F2] text-[#9F1239]",
+    yellow: "bg-[#FFFBEB] text-[#92400E]",
+    purple: "bg-[#F5F3FF] text-[#5B21B6]",
+    dark: "bg-[#F3F4F6] text-[#111827]",
   };
   return (
     <div
-      className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${tones[tone]} p-5 text-white shadow-lg shadow-[#111827]/15 transition duration-200 hover:-translate-y-0.5`}
+      className={`relative overflow-hidden rounded-xl border bg-white ${tones[tone]} p-5 shadow-sm shadow-gray-200/60 transition duration-200 hover:-translate-y-0.5`}
     >
-      <div className="absolute right-0 top-0 h-24 w-24 rounded-bl-[80px] bg-white/10" />
+      <div className="absolute right-0 top-0 h-24 w-24 rounded-bl-[80px] bg-[#F9FAFB]" />
       <div className="relative flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-white/75">{label}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">{label}</p>
           <h3 className="mt-2 text-3xl font-bold">
             {formattedValue}
           </h3>
         </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/15 text-white shadow-inner">
+        <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${iconTones[tone]} shadow-inner`}>
           {icon}
         </div>
       </div>
       <div className="relative mt-5 flex items-center justify-between gap-3 text-xs">
-        <span className="font-medium text-white/80">{detail}</span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-1 font-semibold">
+        <span className="font-medium text-[#4B5563]">{detail}</span>
+        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold ${iconTones[tone]}`}>
           {positive ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
           {trend}
         </span>
@@ -90,7 +98,7 @@ export function SkeletonBlock({ className = "" }: { className?: string }) {
 
 export function EmptyState({ message }: { message: string }) {
   return (
-    <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed border-[#D1D5DB] bg-[#F9FAFB] px-4 text-center text-sm text-[#6B7280]">
+    <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed border-[#D1D5DB] bg-[#F9FAFB] px-4 text-center text-sm font-medium text-[#4B5563]">
       {message}
     </div>
   );

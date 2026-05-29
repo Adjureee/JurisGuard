@@ -18,7 +18,7 @@ function csvEscape(value: string | number | null | undefined) {
 function DetailField({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
     <div className="rounded-md border border-[#E5E7EB] bg-white p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">{label}</p>
       <p className="mt-1 break-words text-sm font-semibold text-[#111827]">{value || "-"}</p>
     </div>
   );
@@ -43,7 +43,7 @@ function SortHeader({
     <button
       type="button"
       onClick={() => onSort(column)}
-      className="inline-flex items-center gap-1 font-semibold text-[#374151] hover:text-[#111827]"
+      className="inline-flex items-center gap-1 font-semibold text-[#4B5563] hover:text-[#111827]"
     >
       {label}
       <span className="text-[10px]">{sortBy === column ? (sortDirection === "asc" ? "UP" : "DOWN") : ""}</span>
@@ -184,19 +184,19 @@ export default function TerminatedCasesPage() {
     <MainLayout>
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#2F80ED]">Case Archive</p>
+          <p className="text-sm font-semibold text-[#1D4ED8]">Case Archive</p>
           <h1 className="text-2xl font-semibold text-[#111827]">Terminated Cases</h1>
         </div>
         <button
           type="button"
           onClick={exportCsv}
-          className="h-10 rounded-md bg-[#2F80ED] px-4 text-sm font-semibold text-white transition hover:bg-[#1f6fd6]"
+          className="h-10 rounded-md bg-[#1D4ED8] px-4 text-sm font-semibold text-white transition hover:bg-[#1E40AF]"
         >
           Export CSV
         </button>
       </div>
 
-      <section className="rounded-lg border border-[#E5E7EB] bg-white shadow-sm shadow-[#111827]/10">
+      <section className="rounded-lg border border-[#E5E7EB] bg-white shadow-sm shadow-gray-200/60">
         <div className="grid gap-3 border-b border-[#E5E7EB] px-5 py-4 md:grid-cols-[1fr_220px]">
           <input
             type="text"
@@ -206,7 +206,7 @@ export default function TerminatedCasesPage() {
               setPage(1);
             }}
             placeholder="Search terminated cases..."
-            className="h-10 rounded-md border border-[#D1D5DB] px-3 text-sm outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+            className="h-10 rounded-md border border-[#E5E7EB] px-3 text-sm outline-none focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/15"
           />
           <select
             value={resolutionFilter}
@@ -214,7 +214,7 @@ export default function TerminatedCasesPage() {
               setResolutionFilter(event.target.value);
               setPage(1);
             }}
-            className="h-10 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+            className="h-10 rounded-md border border-[#E5E7EB] bg-white px-3 text-sm outline-none focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/15"
           >
             <option value="all">All resolutions</option>
             {resolutionOptions.map((option) => (
@@ -225,7 +225,7 @@ export default function TerminatedCasesPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-sm">
-            <thead className="border-b border-[#E5E7EB] bg-[#F3F4F6] text-[#374151]">
+            <thead className="border-b border-[#E5E7EB] bg-[#F3F4F6] text-[#4B5563]">
               <tr>
                 <th className="px-5 py-3 text-left"><SortHeader column="client" label="Client Name" sortBy={sortBy} sortDirection={sortDirection} onSort={changeSort} /></th>
                 <th className="px-5 py-3 text-left"><SortHeader column="title" label="Case Title" sortBy={sortBy} sortDirection={sortDirection} onSort={changeSort} /></th>
@@ -239,20 +239,20 @@ export default function TerminatedCasesPage() {
             <tbody className="divide-y divide-[#E5E7EB]">
               {pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-[#6B7280]">
+                  <td colSpan={7} className="px-5 py-10 text-center text-[#4B5563]">
                     No terminated cases found.
                   </td>
                 </tr>
               ) : (
                 pageRows.map((record) => (
-                  <tr key={record.case_id} className="bg-white hover:bg-gray-50">
+                  <tr key={record.case_id} className="bg-white hover:bg-[#F3F4F6]">
                     <td className="px-5 py-4 font-medium text-[#111827]">
                       {clientById.get(record.client_id)?.client.name ?? "Unknown client"}
                     </td>
-                    <td className="px-5 py-4 text-[#111827]/80">{record.cases.title_of_case || "-"}</td>
-                    <td className="px-5 py-4 text-[#111827]/80">{record.cases.termination_reason || "-"}</td>
-                    <td className="px-5 py-4 text-[#111827]/80">{formatDate(record.cases.terminated_at)}</td>
-                    <td className="px-5 py-4 text-[#111827]/80">{record.cases.handled_by || "-"}</td>
+                    <td className="px-5 py-4 text-[#4B5563]">{record.cases.title_of_case || "-"}</td>
+                    <td className="px-5 py-4 text-[#4B5563]">{record.cases.termination_reason || "-"}</td>
+                    <td className="px-5 py-4 text-[#4B5563]">{formatDate(record.cases.terminated_at)}</td>
+                    <td className="px-5 py-4 text-[#4B5563]">{record.cases.handled_by || "-"}</td>
                     <td className="px-5 py-4">
                       <span className="rounded-full bg-[#FEE2E2] px-2.5 py-1 text-xs font-semibold text-[#991B1B]">
                         {record.cases.status_of_case}
@@ -262,7 +262,7 @@ export default function TerminatedCasesPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedRecord(record)}
-                        className="rounded-md border border-[#111827] bg-white px-3 py-1.5 text-xs font-semibold text-[#111827] transition hover:bg-[#111827] hover:text-white"
+                        className="rounded-md border border-[#1D4ED8] bg-white px-3 py-1.5 text-xs font-semibold text-[#1D4ED8] transition hover:bg-[#1D4ED8] hover:text-white"
                       >
                         View
                       </button>
@@ -275,7 +275,7 @@ export default function TerminatedCasesPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E5E7EB] px-5 py-4">
-          <p className="text-sm text-[#6B7280]">
+          <p className="text-sm text-[#4B5563]">
             Page {page} of {totalPages} - {filteredRows.length} records
           </p>
           <div className="flex gap-2">
@@ -283,7 +283,7 @@ export default function TerminatedCasesPage() {
               type="button"
               onClick={() => setPage((current) => Math.max(1, current - 1))}
               disabled={page === 1}
-              className="rounded-md border border-[#D1D5DB] bg-white px-3 py-1.5 text-sm font-medium text-[#6B7280] disabled:opacity-50"
+              className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-sm font-medium text-[#4B5563] disabled:opacity-50"
             >
               Previous
             </button>
@@ -291,7 +291,7 @@ export default function TerminatedCasesPage() {
               type="button"
               onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
               disabled={page === totalPages}
-              className="rounded-md border border-[#D1D5DB] bg-white px-3 py-1.5 text-sm font-medium text-[#6B7280] disabled:opacity-50"
+              className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-sm font-medium text-[#4B5563] disabled:opacity-50"
             >
               Next
             </button>
@@ -300,11 +300,11 @@ export default function TerminatedCasesPage() {
       </section>
 
       {selectedRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/45 px-4 py-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
           <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
               <h2 className="text-base font-semibold text-[#111827]">Terminated Case Details</h2>
-              <button type="button" onClick={() => setSelectedRecord(null)} className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#6B7280] hover:bg-[#F3F4F6]">
+              <button type="button" onClick={() => setSelectedRecord(null)} className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F3F4F6]">
                 Close
               </button>
             </div>

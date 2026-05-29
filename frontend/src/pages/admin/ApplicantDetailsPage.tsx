@@ -26,7 +26,7 @@ function formatDate(value: string | null) {
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">{label}</p>
       <p className="mt-1 text-sm font-medium text-[#111827]">{value || "Not provided"}</p>
     </div>
   );
@@ -117,10 +117,10 @@ export default function ApplicantDetailsPage() {
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-[#111827]">Applicant Details</h1>
-          <nav className="mt-1 flex items-center gap-2 text-sm text-[#6B7280]">
-            <Link to="/dashboard" className="hover:text-[#2F80ED]">Dashboard</Link>
+          <nav className="mt-1 flex items-center gap-2 text-sm text-[#4B5563]">
+            <Link to="/dashboard" className="hover:text-[#1D4ED8]">Dashboard</Link>
             <span>/</span>
-            <Link to="/admin/verification" className="hover:text-[#2F80ED]">Verification</Link>
+            <Link to="/admin/verification" className="hover:text-[#1D4ED8]">Verification</Link>
             <span>/</span>
             <span className="text-[#111827]">{applicant?.full_name || "Applicant"}</span>
           </nav>
@@ -134,13 +134,13 @@ export default function ApplicantDetailsPage() {
       )}
 
       {isLoading || !applicant ? (
-        <div className="rounded-[14px] border border-[#E5E7EB] bg-white p-10 text-center text-sm text-[#6B7280]">
+        <div className="rounded-[14px] border border-[#E5E7EB] bg-white p-10 text-center text-sm text-[#4B5563]">
           Loading applicant...
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4">
-            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-[#111827]/5">
+            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-gray-200/70">
               <div className="mb-4 flex items-center justify-between border-b border-[#E5E7EB] pb-4">
                 <h2 className="text-base font-semibold text-[#111827]">Account Info</h2>
                 <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass[applicant.approval_status]}`}>
@@ -155,7 +155,7 @@ export default function ApplicantDetailsPage() {
               </div>
             </section>
 
-            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-[#111827]/5">
+            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-gray-200/70">
               <h2 className="mb-4 border-b border-[#E5E7EB] pb-4 text-base font-semibold text-[#111827]">
                 Profile Info
               </h2>
@@ -171,10 +171,10 @@ export default function ApplicantDetailsPage() {
             </section>
           </div>
 
-          <aside className="h-fit rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-[#111827]/5">
+          <aside className="h-fit rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-gray-200/70">
             <h2 className="text-base font-semibold text-[#111827]">Actions</h2>
             {isFinalStatus(applicant.approval_status) ? (
-              <p className="mt-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm text-[#6B7280]">
+              <p className="mt-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm text-[#4B5563]">
                 This application is finalized and available for viewing only.
               </p>
             ) : (

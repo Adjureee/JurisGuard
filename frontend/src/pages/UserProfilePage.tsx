@@ -11,7 +11,7 @@ import {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">{label}</p>
       <p className="mt-1 break-words text-sm font-semibold text-[#111827]">{value}</p>
     </div>
   );
@@ -104,13 +104,13 @@ export default function UserProfilePage() {
   return (
     <MainLayout>
       <div className="mb-5">
-        <p className="text-sm font-semibold text-[#2F80ED]">Account</p>
+        <p className="text-sm font-semibold text-[#1D4ED8]">Account</p>
         <h2 className="text-2xl font-bold text-[#111827]">My Profile</h2>
       </div>
 
-      <section className="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-[#111827]/10">
+      <section className="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-gray-200/60">
         <div className="mb-5 flex flex-col gap-4 border-b border-[#E5E7EB] pb-5 sm:flex-row sm:items-center">
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#111827] text-xl font-semibold text-white">
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#1D4ED8] text-xl font-semibold text-white">
             {profileImageSrc ? (
               <img src={profileImageSrc} alt="Profile" className="h-full w-full object-cover" />
             ) : (
@@ -121,9 +121,9 @@ export default function UserProfilePage() {
             <h3 className="truncate text-lg font-semibold text-[#111827]">
               {user?.full_name || "User"}
             </h3>
-            <p className="truncate text-sm text-[#6B7280]">{user?.email}</p>
+            <p className="truncate text-sm text-[#4B5563]">{user?.email}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <label className={`rounded-md bg-[#2F80ED] px-3 py-1.5 text-xs font-semibold text-white transition duration-200 hover:bg-[#1f6fd6] ${isUploading ? "pointer-events-none opacity-70" : "cursor-pointer"}`}>
+              <label className={`rounded-md bg-[#1D4ED8] px-3 py-1.5 text-xs font-semibold text-white transition duration-200 hover:bg-[#1E40AF] ${isUploading ? "pointer-events-none opacity-70" : "cursor-pointer"}`}>
                 {profileImageSrc ? "Change Profile Picture" : "Upload Profile Picture"}
                 <input
                   type="file"
@@ -148,7 +148,7 @@ export default function UserProfilePage() {
                   type="button"
                   onClick={handleRemoveProfileImage}
                   disabled={isUploading}
-                  className="rounded-md border border-[#D1D5DB] bg-white px-3 py-1.5 text-xs font-semibold text-[#6B7280] transition duration-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:bg-[#F3F4F6] disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isUploading ? "Uploading..." : "Remove Profile Picture"}
                 </button>
@@ -166,7 +166,7 @@ export default function UserProfilePage() {
         </div>
       </section>
 
-      <section id="security" className="mt-4 rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-[#111827]/10">
+      <section id="security" className="mt-4 rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-gray-200/60">
         <h3 className="font-semibold text-[#111827]">Security</h3>
       </section>
     </MainLayout>

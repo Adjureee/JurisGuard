@@ -32,7 +32,7 @@ import {
 } from "../../components/dashboard/AnalyticsPrimitives";
 import { StatusBadge } from "../../features/criminalCases/components/StatusBadge";
 
-const COLORS = ["#2F80ED", "#15803D", "#F59E0B", "#DC2626", "#7C3AED"];
+const COLORS = ["#1D4ED8", "#15803D", "#F59E0B", "#DC2626", "#7C3AED"];
 
 function formatDate(value: string) {
   if (!value) return "-";
@@ -71,20 +71,20 @@ export default function StaffDashboard() {
 
   return (
     <MainLayout>
-      <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-[#DBEAFE] bg-gradient-to-br from-[#EFF6FF] to-white px-6 py-6 shadow-sm shadow-[#111827]/10 lg:flex-row lg:items-end lg:justify-between">
+      <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] bg-white px-6 py-6 shadow-sm shadow-gray-200/60 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-[#2F80ED]">Staff Workspace</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-[#1D4ED8]">Staff Workspace</p>
           <h1 className="mt-2 text-3xl font-bold text-[#111827]">My Legal Intake Dashboard</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-[#6B7280]">
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-[#4B5563]">
             Personal workload, OCR activity, recent clients, assigned case movement, and quick actions for daily PAO operations.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/criminal-cases" className="inline-flex h-10 items-center gap-2 rounded-md bg-[#2F80ED] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#1f6fd6]">
+          <Link to="/criminal-cases" className="inline-flex h-10 items-center gap-2 rounded-md bg-[#1D4ED8] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#1E40AF]">
             <Plus className="h-4 w-4" />
             Add Case
           </Link>
-          <Link to="/cases" className="inline-flex h-10 items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-4 text-sm font-semibold text-[#374151] hover:bg-[#F9FAFB]">
+          <Link to="/cases" className="inline-flex h-10 items-center gap-2 rounded-md border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#4B5563] hover:bg-[#F9FAFB]">
             <Search className="h-4 w-4" />
             Search Records
           </Link>
@@ -132,7 +132,7 @@ export default function StaffDashboard() {
                       <p className="font-semibold text-[#111827]">{record.cases.title_of_case || record.intake_record.control_no}</p>
                       <StatusBadge status={record.cases.status_of_case} />
                     </div>
-                    <p className="mt-1 text-sm text-[#6B7280]">Control No. {record.intake_record.control_no || "-"}</p>
+                    <p className="mt-1 text-sm text-[#4B5563]">Control No. {record.intake_record.control_no || "-"}</p>
                   </div>
                 ))}
               </div>
@@ -150,7 +150,7 @@ export default function StaffDashboard() {
                 <XAxis dataKey="status" fontSize={12} />
                 <YAxis allowDecimals={false} fontSize={12} />
                 <Tooltip />
-                <Bar dataKey="total_cases" radius={[8, 8, 0, 0]} fill="#2F80ED" />
+                <Bar dataKey="total_cases" radius={[8, 8, 0, 0]} fill="#1D4ED8" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -160,12 +160,12 @@ export default function StaffDashboard() {
           <div className="space-y-3">
             {(workload?.recent_clients ?? []).length === 0 ? <EmptyState message="No recent client activity yet." /> : (workload?.recent_clients ?? []).map((client) => (
               <div key={client.client_id} className="flex items-center gap-3 rounded-lg border border-[#E5E7EB] bg-white p-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#111827] text-white">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1D4ED8] text-white">
                   <UserRound className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-[#111827]">{client.client.name}</p>
-                  <p className="truncate text-xs text-[#6B7280]">{client.client_details.address || "No address encoded"}</p>
+                  <p className="truncate text-xs text-[#4B5563]">{client.client_details.address || "No address encoded"}</p>
                 </div>
               </div>
             ))}
@@ -178,9 +178,9 @@ export default function StaffDashboard() {
               <div key={item.document_id} className="rounded-lg border border-[#E5E7EB] bg-white p-3">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-[#111827]">Document #{item.document_id}</p>
-                  <span className="rounded-full bg-[#F3F4F6] px-2 py-1 text-xs font-semibold text-[#374151]">{item.ocr_status}</span>
+                  <span className="rounded-full bg-[#F3F4F6] px-2 py-1 text-xs font-semibold text-[#4B5563]">{item.ocr_status}</span>
                 </div>
-                <p className="mt-1 text-xs text-[#6B7280]">{formatDate(item.uploaded_at)}</p>
+                <p className="mt-1 text-xs text-[#4B5563]">{formatDate(item.uploaded_at)}</p>
               </div>
             ))}
           </div>
@@ -190,13 +190,13 @@ export default function StaffDashboard() {
       <div className="mt-6 grid gap-6 xl:grid-cols-[0.75fr_1.25fr]">
         <AnalyticsPanel title="Quick Actions" subtitle="Common staff workflows.">
           <div className="grid gap-3">
-            <Link to="/cases" className="rounded-xl border border-[#E5E7EB] bg-white p-4 font-semibold text-[#111827] transition hover:-translate-y-0.5 hover:border-[#2F80ED] hover:shadow-md">
+            <Link to="/cases" className="rounded-xl border border-[#E5E7EB] bg-white p-4 font-semibold text-[#111827] transition hover:-translate-y-0.5 hover:border-[#1D4ED8] hover:shadow-md">
               Create or attach a criminal case
             </Link>
             <Link to="/terminated-cases" className="rounded-xl border border-[#E5E7EB] bg-white p-4 font-semibold text-[#111827] transition hover:-translate-y-0.5 hover:border-[#DC2626] hover:shadow-md">
               Review terminated cases
             </Link>
-            <Link to="/audit-logs" className="rounded-xl border border-[#E5E7EB] bg-white p-4 font-semibold text-[#111827] transition hover:-translate-y-0.5 hover:border-[#111827] hover:shadow-md">
+            <Link to="/audit-logs" className="rounded-xl border border-[#E5E7EB] bg-white p-4 font-semibold text-[#111827] transition hover:-translate-y-0.5 hover:border-[#1D4ED8] hover:shadow-md">
               View my audit trail
             </Link>
           </div>
@@ -208,9 +208,9 @@ export default function StaffDashboard() {
               <div key={action.id} className="rounded-lg border border-[#E5E7EB] bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold text-[#111827]">{action.action}</p>
-                  <span className="text-xs text-[#6B7280]">{formatDate(action.timestamp)}</span>
+                  <span className="text-xs text-[#4B5563]">{formatDate(action.timestamp)}</span>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-[#374151]">{action.description || "Action recorded"}</p>
+                <p className="mt-2 text-sm leading-6 text-[#4B5563]">{action.description || "Action recorded"}</p>
               </div>
             ))}
           </div>

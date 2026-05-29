@@ -36,7 +36,7 @@ import type { RecentActivity } from "../services/dashboardService";
 
 const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsMap"));
 
-const COLORS = ["#2F80ED", "#15803D", "#F59E0B", "#DC2626", "#7C3AED", "#0F766E"];
+const COLORS = ["#1D4ED8", "#15803D", "#F59E0B", "#DC2626", "#7C3AED", "#0F766E"];
 
 type ExportRow = Record<string, string | number | null | undefined>;
 
@@ -64,7 +64,7 @@ function ExportControls({ dataToExport, fileName }: { dataToExport: ExportRow[];
       type="button"
       onClick={handleExportCSV}
       disabled={dataToExport.length === 0}
-      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#111827] px-4 text-sm font-semibold text-white transition hover:bg-[#374151] disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#1D4ED8] px-4 text-sm font-semibold text-white shadow-lg shadow-gray-200/70 transition hover:bg-[#1E40AF] disabled:cursor-not-allowed disabled:opacity-50"
     >
       <FileDown className="h-4 w-4" />
       Export Dataset (.CSV)
@@ -90,10 +90,10 @@ function ChartTooltip({
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm shadow-xl shadow-[#111827]/10">
+    <div className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm shadow-xl shadow-gray-200/70">
       <p className="font-semibold text-[#111827]">{label}</p>
       {payload.map((item) => (
-        <p key={item.name ?? "value"} className="text-[#374151]">
+        <p key={item.name ?? "value"} className="text-[#4B5563]">
           {item.name ?? "Cases"}: <span className="font-semibold">{item.value}</span>
         </p>
       ))}
@@ -106,9 +106,9 @@ function StaffActivityFeed({ activities }: { activities: RecentActivity[] }) {
   return (
     <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
       {activities.map((activity) => (
-        <div key={activity.id} className="rounded-lg border border-[#E5E7EB] bg-white p-4 transition hover:bg-[#F9FAFB]">
+        <div key={activity.id} className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4 transition hover:bg-[#F3F4F6]">
           <div className="flex gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#111827] text-sm font-bold text-white">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1D4ED8] text-sm font-bold text-white">
               {initials(activity.user)}
             </div>
             <div className="min-w-0 flex-1">
@@ -118,7 +118,7 @@ function StaffActivityFeed({ activities }: { activities: RecentActivity[] }) {
                   {activity.action}
                 </span>
               </div>
-              <p className="mt-1 text-sm leading-6 text-[#374151]">{activity.description || "System activity recorded"}</p>
+              <p className="mt-1 text-sm leading-6 text-[#4B5563]">{activity.description || "System activity recorded"}</p>
               <p className="mt-1 text-xs font-medium text-[#6B7280]">{formatDateTime(activity.timestamp)}</p>
             </div>
           </div>
@@ -185,11 +185,11 @@ export default function AnalyticsPage() {
 
   return (
     <MainLayout>
-      <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-[#D1D5DB] bg-white px-6 py-5 shadow-sm shadow-[#111827]/10 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] bg-white px-6 py-5 shadow-sm shadow-gray-200/60 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-[#2F80ED]">PAO Panabo Analytics Workspace</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-[#1D4ED8]">PAO Panabo Analytics Workspace</p>
           <h1 className="mt-2 text-3xl font-bold text-[#111827]">Deep Analytics & Export</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-[#6B7280]">
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-[#4B5563]">
             Dedicated legal operations intelligence for case trends, barangay hotspots, categories, closures, OCR usage, and staff activity.
           </p>
         </div>
@@ -209,11 +209,11 @@ export default function AnalyticsPage() {
           <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
             <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="OpenStreetMap heat layer with barangay density and case concentration.">
               <div className="mb-4 flex flex-wrap gap-2">
-                <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-[#111827] text-white" : "border border-[#D1D5DB] text-[#374151]"}`}>
+            <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-[#1D4ED8] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
                   All Barangays
                 </button>
                 {topBarangays.slice(0, 8).map((barangay) => (
-                  <button type="button" key={barangay.barangay} onClick={() => setSelectedBarangay(barangay.barangay)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === barangay.barangay ? "bg-[#2F80ED] text-white" : "border border-[#D1D5DB] text-[#374151]"}`}>
+                  <button type="button" key={barangay.barangay} onClick={() => setSelectedBarangay(barangay.barangay)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === barangay.barangay ? "bg-[#1D4ED8] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
                     {barangay.barangay}
                   </button>
                 ))}
@@ -232,11 +232,11 @@ export default function AnalyticsPage() {
             <AnalyticsPanel title="Top Affected Barangays" subtitle="Case density, status movement, and common case category.">
               <div className="space-y-3">
                 {topBarangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : topBarangays.map((barangay, index) => (
-                  <button key={barangay.barangay} type="button" onClick={() => setSelectedBarangay(barangay.barangay)} className="flex w-full items-center gap-3 rounded-lg border border-[#E5E7EB] bg-white p-3 text-left hover:bg-[#F9FAFB]">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#111827] text-sm font-bold text-white">{index + 1}</span>
+                  <button key={barangay.barangay} type="button" onClick={() => setSelectedBarangay(barangay.barangay)} className="flex w-full items-center gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3 text-left hover:bg-[#F3F4F6]">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1D4ED8] text-sm font-bold text-white">{index + 1}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-[#111827]">{barangay.barangay}</span>
-                      <span className="text-xs text-[#6B7280]">{barangay.most_common_category}</span>
+                      <span className="text-xs text-[#4B5563]">{barangay.most_common_category}</span>
                     </span>
                     <span className="rounded-full bg-[#EFF6FF] px-2.5 py-1 text-xs font-bold text-[#1D4ED8]">{barangay.total_cases}</span>
                   </button>
@@ -254,7 +254,7 @@ export default function AnalyticsPage() {
                     <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
                     <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
                     <Tooltip content={<ChartTooltip />} />
-                    <Line type="monotone" dataKey="total_cases" name="Cases" stroke="#2F80ED" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 7 }} />
+                    <Line type="monotone" dataKey="total_cases" name="Cases" stroke="#1D4ED8" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 7 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -282,8 +282,8 @@ export default function AnalyticsPage() {
                   const max = Math.max(...(intakeLoad?.hourly ?? []).map((row) => row.total_cases), 1);
                   return (
                     <div key={item.hour} className="grid grid-cols-[64px_1fr_42px] items-center gap-3 text-sm">
-                      <span className="font-semibold text-[#374151]">{item.hour}</span>
-                      <div className="h-3 overflow-hidden rounded-full bg-[#F3F4F6]">
+                      <span className="font-semibold text-[#4B5563]">{item.hour}</span>
+                      <div className="h-3 overflow-hidden rounded-full bg-[#E5E7EB]">
                         <div className="h-full rounded-full bg-[#F59E0B]" style={{ width: `${Math.max((item.total_cases / max) * 100, 4)}%` }} />
                       </div>
                       <span className="text-right font-bold text-[#111827]">{item.total_cases}</span>
@@ -299,9 +299,9 @@ export default function AnalyticsPage() {
                   <div key={item.category}>
                     <div className="mb-1 flex justify-between text-sm">
                       <span className="font-semibold text-[#111827]">{item.category}</span>
-                      <span className="text-[#6B7280]">{item.total_cases}</span>
+                      <span className="text-[#4B5563]">{item.total_cases}</span>
                     </div>
-                    <div className="h-2 rounded-full bg-[#F3F4F6]">
+                    <div className="h-2 rounded-full bg-[#E5E7EB]">
                       <div className="h-2 rounded-full" style={{ width: `${Math.max((item.total_cases / Math.max(...caseCategories.map((row) => row.total_cases), 1)) * 100, 4)}%`, backgroundColor: COLORS[index % COLORS.length] }} />
                     </div>
                   </div>
@@ -370,7 +370,7 @@ export default function AnalyticsPage() {
                 {(ocrAnalytics?.recent ?? []).length === 0 ? <EmptyState message="No OCR activity has been recorded yet." /> : (ocrAnalytics?.recent ?? []).slice(0, 5).map((item) => (
                   <div key={item.document_id} className="flex items-center justify-between rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm">
                     <span className="font-semibold text-[#111827]">Document #{item.document_id}</span>
-                    <span className="rounded-full bg-[#F3F4F6] px-2 py-1 text-xs font-semibold text-[#374151]">{item.ocr_status}</span>
+                    <span className="rounded-full bg-[#E5E7EB] px-2 py-1 text-xs font-semibold text-[#4B5563]">{item.ocr_status}</span>
                   </div>
                 ))}
               </div>
@@ -388,7 +388,7 @@ export default function AnalyticsPage() {
                   { label: "Termination rows", value: terminatedStats?.monthly.length ?? 0 },
                 ].map((row) => (
                   <div key={row.label} className="flex items-center justify-between rounded-lg border border-[#E5E7EB] px-3 py-2">
-                    <span className="text-sm font-semibold text-[#374151]">{row.label}</span>
+                    <span className="text-sm font-semibold text-[#4B5563]">{row.label}</span>
                     <span className="rounded-full bg-[#EFF6FF] px-2.5 py-1 text-xs font-bold text-[#1D4ED8]">{row.value}</span>
                   </div>
                 ))}
@@ -402,9 +402,9 @@ export default function AnalyticsPage() {
         </>
       )}
 
-      <div className="mt-6 rounded-xl border border-[#E5E7EB] bg-white p-5 text-sm text-[#6B7280] shadow-sm shadow-[#111827]/10">
+      <div className="mt-6 rounded-xl border border-[#E5E7EB] bg-white p-5 text-sm text-[#4B5563] shadow-sm shadow-gray-200/60">
         <div className="flex items-start gap-3">
-          <BarChart3 className="mt-0.5 h-5 w-5 shrink-0 text-[#2F80ED]" />
+          <BarChart3 className="mt-0.5 h-5 w-5 shrink-0 text-[#1D4ED8]" />
           <p>
             Export includes monthly trends, weekly volume, category distribution, barangay density, and terminated case movement from the live database.
           </p>

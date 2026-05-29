@@ -30,7 +30,7 @@ interface GeoAnalyticsMapProps {
 }
 
 function createClusterIcon(total: number, terminated: number) {
-  const color = terminated > 0 && terminated === total ? "#DC2626" : "#2F80ED";
+  const color = terminated > 0 && terminated === total ? "#DC2626" : "#1D4ED8";
   return L.divIcon({
     className: "",
     html: `<div style="height:38px;width:38px;border-radius:999px;background:${color};color:white;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 12px 26px rgba(17,24,39,.25);font-size:13px;font-weight:800">${total}</div>`,
@@ -140,7 +140,7 @@ export default function GeoAnalyticsMap({
   );
 
   return (
-    <div className="overflow-hidden rounded-lg border border-[#D1D5DB] bg-white">
+    <div className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white">
       <div className="h-[460px]">
         <MapContainer
           center={[safeCenter.lat, safeCenter.lng]}
@@ -164,7 +164,7 @@ export default function GeoAnalyticsMap({
               <Popup>
                 <div className="min-w-52">
                   <p className="text-sm font-bold text-[#111827]">{barangay.barangay}</p>
-                  <p className="text-xs text-[#6B7280]">{barangay.city}</p>
+                  <p className="text-xs text-[#4B5563]">{barangay.city}</p>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                     <div className="rounded-md bg-[#EFF6FF] p-2">
                       <p className="text-base font-bold text-[#1D4ED8]">{barangay.total_cases}</p>
@@ -179,7 +179,7 @@ export default function GeoAnalyticsMap({
                       <p className="text-[10px] uppercase text-[#991B1B]">Closed</p>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-[#374151]">
+                  <p className="mt-3 text-xs text-[#4B5563]">
                     Common type: <span className="font-semibold">{barangay.most_common_category}</span>
                   </p>
                 </div>

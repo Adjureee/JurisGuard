@@ -47,17 +47,17 @@ export default function AdminDashboard() {
 
   return (
     <MainLayout>
-      <div className="mb-6 overflow-hidden rounded-2xl border border-[#D1D5DB] bg-[#111827] px-6 py-6 text-white shadow-xl shadow-[#111827]/15">
+      <div className="relative mb-6 overflow-hidden rounded-2xl border border-[#111827] border-l-4 border-l-[#2563EB] bg-[#111827] px-6 py-6 text-white shadow-xl shadow-gray-200/70">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-[#93C5FD]">PAO Panabo Command Center</p>
             <h1 className="mt-2 text-3xl font-bold">Executive Operations Dashboard</h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70">
+            <p className="mt-3 max-w-3xl text-sm font-medium leading-6 text-gray-300">
               A focused command snapshot for client volume, active workload, closures, monthly intake, and OCR digitization from the live JurisGuard database.
             </p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
-            <p className="text-xs uppercase tracking-wide text-white/60">Operational posture</p>
+            <p className="text-xs uppercase tracking-wide text-gray-300">Operational posture</p>
             <p className="mt-1 text-lg font-bold">Live legal intelligence</p>
           </div>
         </div>
@@ -82,27 +82,27 @@ export default function AdminDashboard() {
         <AnalyticsPanel title="System Operational Insights" subtitle="Fast executive readout from intake, barangay, OCR, and trend data.">
           <div className="grid gap-3 md:grid-cols-2">
             {insights.map((insight) => (
-              <div key={insight} className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-4">
-                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-[#2F80ED] text-white">
+              <div key={insight} className={`rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm ${["border-l-4 border-emerald-500", "border-l-4 border-amber-500", "border-l-4 border-blue-500"][insights.indexOf(insight) % 3]}`}>
+                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-[#EFF6FF] text-[#1D4ED8]">
                   <Brain className="h-4 w-4" />
                 </div>
-                <p className="text-sm font-semibold leading-6 text-[#1E3A8A]">{insight}</p>
+                <p className="text-sm font-medium leading-6 text-[#4B5563]">{insight}</p>
               </div>
             ))}
           </div>
         </AnalyticsPanel>
 
-        <section className="flex flex-col justify-between rounded-xl border border-[#D1D5DB] bg-white p-5 shadow-sm shadow-[#111827]/10">
+        <section className="flex flex-col justify-between rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-gray-200/60">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#2F80ED]">Deep analytics</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#1D4ED8]">Deep analytics</p>
             <h2 className="mt-2 text-xl font-bold text-[#111827]">Charts, map, OCR, audit, and export tools</h2>
-            <p className="mt-3 text-sm leading-6 text-[#6B7280]">
+            <p className="mt-3 text-sm font-medium leading-6 text-[#4B5563]">
               Open the dedicated analytics workspace when you need detailed barangay hotspots, intake trends, category distribution, staff activity, or export-ready datasets.
             </p>
           </div>
           <Link
             to="/analytics"
-            className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#111827] px-4 text-sm font-semibold text-white transition hover:bg-[#374151]"
+            className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#111827] px-4 text-sm font-bold text-white shadow-sm transition-all hover:bg-gray-800"
           >
             Go to Deep Analytics & Export
             <ArrowRight className="h-4 w-4" />

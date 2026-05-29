@@ -16,7 +16,7 @@ const AnalyticsPage = lazy(() => import("../pages/AnalyticsPage"));
 
 function RouteLoadingFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] text-sm font-semibold text-[#6B7280]">
+    <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] text-sm font-semibold text-[#4B5563]">
       Loading analytics workspace...
     </div>
   );

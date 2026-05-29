@@ -68,19 +68,19 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/30 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
-      <div className="w-full max-w-xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-2xl shadow-[#111827]/10">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
+      <div className="w-full max-w-xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-2xl shadow-gray-200/60">
         <div className="flex items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F3F4F6] px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-[#111827]">Export Criminal Cases</h2>
-            <p className="mt-1 text-sm text-[#6B7280]">
+            <p className="mt-1 text-sm text-[#4B5563]">
               Export filtered case records to CSV.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-[#6B7280] transition duration-200 hover:bg-white hover:text-[#111827]"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-white hover:text-[#111827]"
           >
             Close
           </button>
@@ -88,11 +88,11 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
 
         <div className="space-y-4 bg-white px-6 py-5">
           <label className="block">
-            <span className="text-sm font-medium text-[#111827]/80">Case Status</span>
+            <span className="text-sm font-medium text-[#4B5563]">Case Status</span>
             <select
               value={filters.status}
               onChange={(event) => updateFilter("status", event.target.value)}
-              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/15"
             >
               <option>All</option>
               <option>Active</option>
@@ -105,31 +105,31 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-sm font-medium text-[#111827]/80">Date From</span>
+              <span className="text-sm font-medium text-[#4B5563]">Date From</span>
               <input
                 type="date"
                 value={filters.date_from}
                 onChange={(event) => updateFilter("date_from", event.target.value)}
-                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/15"
               />
             </label>
             <label className="block">
-              <span className="text-sm font-medium text-[#111827]/80">Date To</span>
+              <span className="text-sm font-medium text-[#4B5563]">Date To</span>
               <input
                 type="date"
                 value={filters.date_to}
                 onChange={(event) => updateFilter("date_to", event.target.value)}
-                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/15"
               />
             </label>
           </div>
 
           <label className="block">
-            <span className="text-sm font-medium text-[#111827]/80">Location Type</span>
+            <span className="text-sm font-medium text-[#4B5563]">Location Type</span>
             <select
               value={filters.location_type}
               onChange={(event) => updateFilter("location_type", event.target.value)}
-              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/15"
             >
               <option>All</option>
               <option>Urban</option>
@@ -137,7 +137,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
             </select>
           </label>
 
-          <div className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-sm text-[#6B7280]">
+          <div className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-sm text-[#4B5563]">
             {exportRows.length} record{exportRows.length === 1 ? "" : "s"} will be exported.
           </div>
         </div>
@@ -146,14 +146,14 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
           <button
             type="button"
             onClick={() => setFilters(initialFilters)}
-            className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-medium text-[#6B7280] transition duration-200 hover:bg-gray-50"
+            className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#F3F4F6]"
           >
             Reset
           </button>
           <button
             type="button"
             onClick={handleExport}
-            className="rounded-md bg-[#2F80ED] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#1f6fd6]"
+            className="rounded-md bg-[#1D4ED8] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#1E40AF]"
           >
             Export CSV
           </button>

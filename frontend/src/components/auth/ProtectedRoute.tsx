@@ -13,7 +13,7 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] text-sm font-medium text-[#6B7280]">
+      <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] text-sm font-medium text-[#4B5563]">
         Checking session...
       </div>
     );

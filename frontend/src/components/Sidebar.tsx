@@ -76,8 +76,8 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   const itemClass = (path: string) =>
     location.pathname === path || (path !== "/dashboard" && location.pathname.startsWith(path))
-      ? "bg-[#2f80ed] text-white shadow-sm"
-      : "text-[#6b7280] hover:-translate-y-px hover:bg-[#2f80ed] hover:text-white hover:shadow-sm";
+      ? "border-l-4 border-[#2563EB] bg-white/10 font-semibold text-white shadow-sm"
+      : "border-l-4 border-transparent text-gray-400 hover:-translate-y-px hover:bg-white/5 hover:text-white hover:shadow-sm";
 
   return (
     <>
@@ -86,15 +86,15 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           type="button"
           aria-label="Close sidebar"
           onClick={onClose}
-          className="fixed inset-0 z-30 bg-[#111827]/25 md:hidden"
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
         />
       )}
-      <aside className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-[#e5e7eb] bg-[#f5f5f5] px-5 py-5 transition duration-200 md:translate-x-0 ${
+      <aside className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-[#E5E7EB] bg-[#111827] px-5 py-5 text-white transition duration-200 md:translate-x-0 ${
         isOpen ? "translate-x-0" : "-translate-x-full"
       }`}>
       <div className="mb-5 flex justify-center">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white shadow-sm shadow-[#111827]/5">
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7 text-[#2F80ED]">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/10 shadow-sm shadow-gray-200/70">
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7 text-white">
             <path fill="currentColor" d="M12 3 4 6v5c0 5 3.4 8.3 8 10 4.6-1.7 8-5 8-10V6l-8-3Zm0 3.2 5 1.9V11c0 3.4-2 5.8-5 7.2-3-1.4-5-3.8-5-7.2V8.1l5-1.9ZM9 10h6v2H9v-2Zm1 3h4v2h-4v-2Z" />
           </svg>
         </div>

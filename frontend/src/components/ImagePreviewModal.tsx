@@ -26,14 +26,14 @@ export default function ImagePreviewModal({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-[#111827]/75 px-4 py-6 backdrop-blur-sm"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-sm"
       onMouseDown={onClose}
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
       <div
-        className="relative max-h-[92vh] w-full max-w-4xl animate-[modalIn_180ms_ease-out] overflow-hidden rounded-2xl border border-white/20 bg-white p-4 shadow-2xl shadow-[#111827]/30"
+        className="relative max-h-[92vh] w-full max-w-4xl animate-[modalIn_180ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-2xl shadow-gray-200/70"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -41,7 +41,7 @@ export default function ImagePreviewModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-lg font-semibold leading-none text-[#374151] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-[#F3F4F6] text-lg font-semibold leading-none text-[#4B5563] transition hover:bg-[#E5E7EB] hover:text-[#111827]"
             aria-label="Close preview"
           >
             x
@@ -50,7 +50,7 @@ export default function ImagePreviewModal({
         <img
           src={image}
           alt={alt}
-          className="max-h-[78vh] w-full rounded-xl bg-[#F9FAFB] object-contain"
+          className="max-h-[78vh] w-full rounded-xl bg-[#F3F4F6] object-contain"
         />
       </div>
     </div>

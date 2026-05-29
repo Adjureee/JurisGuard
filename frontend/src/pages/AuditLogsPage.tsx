@@ -18,7 +18,7 @@ function ModuleBadge({ module }: { module: AuditLogEntry["module"] }) {
         ? "bg-amber-100 text-amber-800"
         : module === "Export"
           ? "bg-[#DCFCE7] text-[#166534]"
-          : "bg-[#F3F4F6] text-[#374151]";
+          : "bg-[#F3F4F6] text-[#4B5563]";
 
   return (
     <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>
@@ -92,19 +92,19 @@ export default function AuditLogsPage() {
   return (
     <MainLayout>
       <div className="mb-5">
-        <p className="text-sm font-semibold text-[#2F80ED]">System Activity</p>
+        <p className="text-sm font-semibold text-[#1D4ED8]">System Activity</p>
         <h2 className="text-2xl font-bold text-[#111827]">Audit Logs</h2>
       </div>
 
-      <section className="rounded-lg border border-[#E5E7EB] bg-white shadow-sm shadow-[#111827]/10">
+      <section className="rounded-lg border border-[#E5E7EB] bg-white shadow-sm shadow-gray-200/60">
         <div className="grid gap-3 border-b border-[#E5E7EB] bg-white px-5 py-4 md:grid-cols-4">
           {user?.role === "admin" && (
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">User</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">User</span>
               <select
                 value={selectedUserId}
                 onChange={(event) => setSelectedUserId(event.target.value)}
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+                className="mt-1 h-10 w-full rounded-md border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/20"
               >
                 <option value="all">All Users</option>
                 {userOptions.map(([id, label]) => (
@@ -116,11 +116,11 @@ export default function AuditLogsPage() {
             </label>
           )}
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Action Type</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Action Type</span>
             <select
               value={actionType}
               onChange={(event) => setActionType(event.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+              className="mt-1 h-10 w-full rounded-md border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/20"
             >
               <option value="all">All Actions</option>
               {actionOptions.map((action) => (
@@ -131,21 +131,21 @@ export default function AuditLogsPage() {
             </select>
           </label>
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Date From</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Date From</span>
             <input
               type="date"
               value={dateFrom}
               onChange={(event) => setDateFrom(event.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+              className="mt-1 h-10 w-full rounded-md border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/20"
             />
           </label>
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Date To</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Date To</span>
             <input
               type="date"
               value={dateTo}
               onChange={(event) => setDateTo(event.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+              className="mt-1 h-10 w-full rounded-md border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/20"
             />
           </label>
         </div>
@@ -154,7 +154,7 @@ export default function AuditLogsPage() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-sm">
-            <thead className="sticky top-0 z-10 border-b border-[#E5E7EB] bg-[#F3F4F6] text-[#374151]">
+            <thead className="sticky top-0 z-10 border-b border-[#E5E7EB] bg-[#F3F4F6] text-[#4B5563]">
               <tr>
                 <th className="px-5 py-3 text-left font-semibold">Timestamp</th>
                 <th className="px-5 py-3 text-left font-semibold">User</th>
@@ -166,20 +166,20 @@ export default function AuditLogsPage() {
             <tbody className="divide-y divide-[#E5E7EB]">
               {visibleLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-[#6B7280]">
+                  <td colSpan={5} className="px-5 py-10 text-center text-[#4B5563]">
                     No audit logs recorded yet.
                   </td>
                 </tr>
               ) : (
                 visibleLogs.map((log) => (
-                  <tr key={log.id} className="bg-white transition duration-200 hover:bg-gray-50">
+                  <tr key={log.id} className="bg-white transition duration-200 hover:bg-[#F3F4F6]">
                     <td className="px-5 py-4 text-[#111827]">{formatDate(log.timestamp)}</td>
-                    <td className="px-5 py-4 text-[#111827]/80">{log.user}</td>
+                    <td className="px-5 py-4 text-[#4B5563]">{log.user}</td>
                     <td className="px-5 py-4">
                       <ModuleBadge module={log.module} />
                     </td>
                     <td className="px-5 py-4 font-medium text-[#111827]">{log.action}</td>
-                    <td className="px-5 py-4 text-[#111827]/80">{log.description}</td>
+                    <td className="px-5 py-4 text-[#4B5563]">{log.description}</td>
                   </tr>
                 ))
               )}

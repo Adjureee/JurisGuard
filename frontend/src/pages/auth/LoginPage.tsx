@@ -59,14 +59,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] px-4 py-10">
-      <div className="w-full max-w-md rounded-lg border border-[#E5E7EB] bg-white p-8 shadow-sm shadow-[#111827]/10">
+    <div className="flex min-h-screen items-center justify-center bg-[#F3F4F6] px-4 py-10">
+      <div className="w-full max-w-md rounded-2xl border border-[#E5E7EB] bg-white p-8 shadow-lg shadow-gray-200/70">
         <div className="mb-8 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#2F80ED]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#1D4ED8]">
             JurisGuard
           </p>
           <h1 className="mt-2 text-2xl font-bold text-[#111827]">Sign In</h1>
-          <p className="mt-2 text-sm text-[#6B7280]">
+          <p className="mt-2 text-sm font-medium text-[#4B5563]">
             Sign in with your approved JurisGuard account.
           </p>
         </div>
@@ -76,7 +76,7 @@ export default function LoginPage() {
             <span className="text-sm font-medium text-[#111827]">Email</span>
             <input
               type="email"
-              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+              className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#111827] outline-none transition placeholder-gray-400 focus:border-[#1D4ED8] focus:ring-1 focus:ring-[#1D4ED8]"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
@@ -88,7 +88,7 @@ export default function LoginPage() {
             <span className="text-sm font-medium text-[#111827]">Password</span>
             <input
               type="password"
-              className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+              className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#111827] outline-none transition placeholder-gray-400 focus:border-[#1D4ED8] focus:ring-1 focus:ring-[#1D4ED8]"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
@@ -97,13 +97,13 @@ export default function LoginPage() {
           </label>
 
           {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
               {error}
             </div>
           )}
 
           {notice && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">
               {notice}
             </div>
           )}
@@ -111,15 +111,15 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-md bg-[#2F80ED] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1f6fd6] disabled:cursor-not-allowed disabled:opacity-70"
+            className="w-full rounded-md bg-[#111827] px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? "Signing in..." : "Sign In"}
           </button>
         </form>
 
-        <p className="mt-5 text-center text-sm text-[#6B7280]">
+        <p className="mt-5 text-center text-sm font-medium text-[#4B5563]">
           Need an account?{" "}
-          <Link to="/register" className="font-semibold text-[#111827] hover:text-[#2F80ED]">
+          <Link to="/register" className="font-semibold text-[#111827] hover:text-[#1D4ED8]">
             Register
           </Link>
         </p>

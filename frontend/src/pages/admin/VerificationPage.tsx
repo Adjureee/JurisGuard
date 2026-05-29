@@ -19,7 +19,7 @@ const statusLabel: Record<ApprovalStatus, string> = {
 
 const statusClass: Record<ApprovalStatus, string> = {
   pending: "bg-amber-100 text-amber-800 ring-amber-200",
-  under_review: "bg-[#F3F4F6] text-[#374151] ring-[#D1D5DB]",
+  under_review: "bg-[#F3F4F6] text-[#4B5563] ring-slate-700",
   approved: "bg-[#DCFCE7] text-[#166534] ring-[#15803D]/25",
   rejected: "bg-[#FEE2E2] text-[#991B1B] ring-[#DC2626]/20",
   suspended: "bg-[#E5E7EB] text-[#111827] ring-[#9CA3AF]/30",
@@ -46,7 +46,7 @@ function formatDate(value: string | null) {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">{label}</p>
       <p className="mt-1 break-words text-sm font-semibold text-[#111827]">{value}</p>
     </div>
   );
@@ -178,26 +178,26 @@ export default function VerificationPage() {
     <MainLayout>
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#2F80ED]">Application Review</p>
+          <p className="text-sm font-semibold text-[#1D4ED8]">Application Review</p>
           <h1 className="text-2xl font-semibold text-[#111827]">User Verification</h1>
         </div>
         <div className="flex items-center gap-2">
           <select
             value={filter}
             onChange={(event) => setFilter(event.target.value as ApprovalStatus | "all")}
-            className="h-10 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+            className="h-10 rounded-md border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] outline-none transition focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/20"
           >
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
           </select>
-          <span className="rounded-full bg-[#111827] px-3 py-1 text-xs font-semibold text-white">
+          <span className="rounded-full bg-[#1D4ED8] px-3 py-1 text-xs font-semibold text-white">
             {requestCount}
           </span>
         </div>
       </div>
 
-      <section className="rounded-lg border border-[#E5E7EB] bg-white shadow-sm shadow-[#111827]/10">
+      <section className="rounded-lg border border-[#E5E7EB] bg-white shadow-sm shadow-gray-200/60">
         <div className="border-b border-[#E5E7EB] bg-white px-5 py-4">
           <h2 className="text-base font-semibold text-[#111827]">Account Requests</h2>
         </div>
@@ -210,7 +210,7 @@ export default function VerificationPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
-            <thead className="sticky top-0 z-10 border-b border-[#E5E7EB] bg-[#F3F4F6] text-xs uppercase tracking-wide text-[#374151]">
+            <thead className="sticky top-0 z-10 border-b border-[#E5E7EB] bg-[#F3F4F6] text-xs uppercase tracking-wide text-[#4B5563]">
               <tr>
                 <th className="px-5 py-3 text-left font-semibold">Applicant</th>
                 <th className="px-5 py-3 text-left font-semibold">Role</th>
@@ -222,29 +222,29 @@ export default function VerificationPage() {
             <tbody className="divide-y divide-[#E5E7EB]">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-[#6B7280]">
+                  <td colSpan={5} className="px-5 py-10 text-center text-[#4B5563]">
                     Loading applications...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-[#6B7280]">
+                  <td colSpan={5} className="px-5 py-10 text-center text-[#4B5563]">
                     No applications found.
                   </td>
                 </tr>
               ) : (
                 users.map((user) => (
-                  <tr key={user.user_id} className="bg-white transition duration-200 hover:bg-gray-50">
+                  <tr key={user.user_id} className="bg-white transition duration-200 hover:bg-[#F3F4F6]">
                     <td className="px-5 py-4">
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#111827] text-sm font-semibold text-white">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1D4ED8] text-sm font-semibold text-white">
                           {initials(user.full_name, user.email)}
                         </div>
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-[#111827]">
                             {user.full_name || "Name not provided"}
                           </p>
-                          <p className="mt-1 truncate text-[#6B7280]">{user.email}</p>
+                          <p className="mt-1 truncate text-[#4B5563]">{user.email}</p>
                         </div>
                       </div>
                     </td>
@@ -260,7 +260,7 @@ export default function VerificationPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedUser(user)}
-                          className="rounded-md border border-[#111827] bg-white px-3 py-1.5 text-xs font-semibold text-[#111827] transition hover:bg-[#111827] hover:text-white"
+                          className="rounded-md border border-[#1D4ED8] bg-white px-3 py-1.5 text-xs font-semibold text-[#1D4ED8] transition hover:bg-[#1D4ED8] hover:text-white"
                         >
                           {isFinalStatus(user.approval_status) ? "View Details" : "View"}
                         </button>
@@ -295,11 +295,11 @@ export default function VerificationPage() {
       </section>
 
       {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/45 px-4 py-6 backdrop-blur-sm">
-          <div className="max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-2xl shadow-[#111827]/20">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+          <div className="max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-2xl shadow-gray-200/70">
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-white/95 px-6 py-4 backdrop-blur">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-[#2F80ED]">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#1D4ED8]">
                   Account Request
                 </p>
                 <h2 className="mt-1 text-lg font-semibold text-[#111827]">
@@ -309,7 +309,7 @@ export default function VerificationPage() {
               <button
                 type="button"
                 onClick={() => setSelectedUser(null)}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-sm font-semibold text-[#6B7280] transition duration-200 hover:bg-[#F3F4F6] hover:text-[#111827]"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-sm font-semibold text-[#4B5563] transition duration-200 hover:bg-[#F3F4F6] hover:text-[#111827]"
                 aria-label="Close verification details"
               >
                 x
@@ -359,7 +359,7 @@ export default function VerificationPage() {
                         />
                       </button>
                     ) : (
-                      <div className="flex h-64 items-center justify-center px-4 text-center text-sm text-[#6B7280]">
+                      <div className="flex h-64 items-center justify-center px-4 text-center text-sm text-[#4B5563]">
                         Employer ID image is not available for preview.
                       </div>
                     )}
@@ -368,7 +368,7 @@ export default function VerificationPage() {
                     type="button"
                     onClick={() => employerIdImage && setPreviewImage(employerIdImage)}
                     disabled={!employerIdImage}
-                    className="mt-4 w-full rounded-md bg-[#111827] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#374151] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-4 w-full rounded-md bg-[#1D4ED8] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1E40AF] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Preview ID
                   </button>
@@ -379,7 +379,7 @@ export default function VerificationPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedUser(null)}
-                  className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-medium text-[#6B7280] transition duration-200 hover:bg-gray-50"
+                  className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#F3F4F6]"
                 >
                   Close
                 </button>
