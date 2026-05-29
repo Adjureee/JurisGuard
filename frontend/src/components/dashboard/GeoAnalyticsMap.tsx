@@ -106,19 +106,37 @@ export default function GeoAnalyticsMap({
   selectedBarangay,
   onSelectBarangay,
 }: GeoAnalyticsMapProps) {
-  const safeCenter = Number.isFinite(center.lat) && Number.isFinite(center.lng)
+  const safeCenter = center && Number.isFinite(center.lat) && Number.isFinite(center.lng)
     ? center
     : { lat: 7.3081, lng: 125.6841 };
-  const mappedBarangays = useMemo(
-    () => barangays.filter((item) => item.latitude !== null && item.longitude !== null),
+  const safePoints = useMemo(
+    () =>
+      (Array.isArray(points) ? points : []).filter(
+        (point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude)
+      ),
+    [points]
+  );
+  const safeBarangays = useMemo(
+    () => (Array.isArray(barangays) ? barangays : []),
     [barangays]
+  );
+  const mappedBarangays = useMemo(
+    () =>
+      safeBarangays.filter(
+        (item) =>
+          typeof item.latitude === "number" &&
+          typeof item.longitude === "number" &&
+          Number.isFinite(item.latitude) &&
+          Number.isFinite(item.longitude)
+      ),
+    [safeBarangays]
   );
   const selectedPoints = useMemo(
     () =>
       selectedBarangay
-        ? points.filter((point) => point.barangay === selectedBarangay)
-        : points,
-    [points, selectedBarangay]
+        ? safePoints.filter((point) => point.barangay === selectedBarangay)
+        : safePoints,
+    [safePoints, selectedBarangay]
   );
 
   return (
@@ -135,7 +153,7 @@ export default function GeoAnalyticsMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <HeatLayer points={selectedPoints} />
-          <FocusBarangay barangay={selectedBarangay} stats={barangays} />
+          <FocusBarangay barangay={selectedBarangay} stats={safeBarangays} />
           {mappedBarangays.map((barangay) => (
             <Marker
               key={barangay.barangay}

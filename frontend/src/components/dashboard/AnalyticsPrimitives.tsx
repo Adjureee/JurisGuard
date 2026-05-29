@@ -1,5 +1,3 @@
-import CountUp from "react-countup";
-import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import ErrorBoundary from "../ErrorBoundary";
@@ -16,10 +14,7 @@ export function AnalyticsPanel({
   className?: string;
 }) {
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
+    <section
       className={`rounded-xl border border-[#E5E7EB] bg-white shadow-sm shadow-[#111827]/10 ${className}`}
     >
       <div className="border-b border-[#E5E7EB] px-5 py-4">
@@ -31,7 +26,7 @@ export function AnalyticsPanel({
           {children}
         </ErrorBoundary>
       </div>
-    </motion.section>
+    </section>
   );
 }
 
@@ -52,6 +47,8 @@ export function IntelligenceMetricCard({
   trend?: string;
   positive?: boolean;
 }) {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const formattedValue = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(safeValue);
   const tones = {
     blue: "from-[#1D4ED8] to-[#60A5FA]",
     green: "from-[#047857] to-[#34D399]",
@@ -61,16 +58,15 @@ export function IntelligenceMetricCard({
     dark: "from-[#111827] to-[#4B5563]",
   };
   return (
-    <motion.div
-      whileHover={{ y: -3 }}
-      className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${tones[tone]} p-5 text-white shadow-lg shadow-[#111827]/15`}
+    <div
+      className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${tones[tone]} p-5 text-white shadow-lg shadow-[#111827]/15 transition duration-200 hover:-translate-y-0.5`}
     >
       <div className="absolute right-0 top-0 h-24 w-24 rounded-bl-[80px] bg-white/10" />
       <div className="relative flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-white/75">{label}</p>
           <h3 className="mt-2 text-3xl font-bold">
-            <CountUp end={value} duration={1.2} separator="," preserveValue />
+            {formattedValue}
           </h3>
         </div>
         <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/15 text-white shadow-inner">
@@ -84,7 +80,7 @@ export function IntelligenceMetricCard({
           {trend}
         </span>
       </div>
-    </motion.div>
+    </div>
   );
 }
 

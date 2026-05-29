@@ -24,6 +24,33 @@ function DetailField({ label, value }: { label: string; value: string | number |
   );
 }
 
+type TerminatedSortColumn = "client" | "title" | "reason" | "date" | "status";
+
+function SortHeader({
+  column,
+  label,
+  sortBy,
+  sortDirection,
+  onSort,
+}: {
+  column: TerminatedSortColumn;
+  label: string;
+  sortBy: TerminatedSortColumn;
+  sortDirection: "asc" | "desc";
+  onSort: (column: TerminatedSortColumn) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(column)}
+      className="inline-flex items-center gap-1 font-semibold text-[#374151] hover:text-[#111827]"
+    >
+      {label}
+      <span className="text-[10px]">{sortBy === column ? (sortDirection === "asc" ? "UP" : "DOWN") : ""}</span>
+    </button>
+  );
+}
+
 export default function TerminatedCasesPage() {
   const [cases, setCases] = useState<CriminalCaseRecord[]>([]);
   const [clients, setClients] = useState<ClientRecord[]>([]);
@@ -31,7 +58,7 @@ export default function TerminatedCasesPage() {
   const [resolutionFilter, setResolutionFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [selectedRecord, setSelectedRecord] = useState<CriminalCaseRecord | null>(null);
-  const [sortBy, setSortBy] = useState<"client" | "title" | "reason" | "date" | "status">("date");
+  const [sortBy, setSortBy] = useState<TerminatedSortColumn>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const pageSize = 8;
 
@@ -148,21 +175,10 @@ export default function TerminatedCasesPage() {
     URL.revokeObjectURL(url);
   };
 
-  const changeSort = (column: typeof sortBy) => {
+  const changeSort = (column: TerminatedSortColumn) => {
     setSortBy(column);
     setSortDirection((current) => (sortBy === column && current === "asc" ? "desc" : "asc"));
   };
-
-  const SortHeader = ({ column, label }: { column: typeof sortBy; label: string }) => (
-    <button
-      type="button"
-      onClick={() => changeSort(column)}
-      className="inline-flex items-center gap-1 font-semibold text-[#374151] hover:text-[#111827]"
-    >
-      {label}
-      <span className="text-[10px]">{sortBy === column ? (sortDirection === "asc" ? "UP" : "DOWN") : ""}</span>
-    </button>
-  );
 
   return (
     <MainLayout>
@@ -211,12 +227,12 @@ export default function TerminatedCasesPage() {
           <table className="w-full min-w-[980px] text-sm">
             <thead className="border-b border-[#E5E7EB] bg-[#F3F4F6] text-[#374151]">
               <tr>
-                <th className="px-5 py-3 text-left"><SortHeader column="client" label="Client Name" /></th>
-                <th className="px-5 py-3 text-left"><SortHeader column="title" label="Case Title" /></th>
-                <th className="px-5 py-3 text-left"><SortHeader column="reason" label="Termination Reason" /></th>
-                <th className="px-5 py-3 text-left"><SortHeader column="date" label="Date Terminated" /></th>
+                <th className="px-5 py-3 text-left"><SortHeader column="client" label="Client Name" sortBy={sortBy} sortDirection={sortDirection} onSort={changeSort} /></th>
+                <th className="px-5 py-3 text-left"><SortHeader column="title" label="Case Title" sortBy={sortBy} sortDirection={sortDirection} onSort={changeSort} /></th>
+                <th className="px-5 py-3 text-left"><SortHeader column="reason" label="Termination Reason" sortBy={sortBy} sortDirection={sortDirection} onSort={changeSort} /></th>
+                <th className="px-5 py-3 text-left"><SortHeader column="date" label="Date Terminated" sortBy={sortBy} sortDirection={sortDirection} onSort={changeSort} /></th>
                 <th className="px-5 py-3 text-left font-semibold">Terminated By</th>
-                <th className="px-5 py-3 text-left"><SortHeader column="status" label="Status" /></th>
+                <th className="px-5 py-3 text-left"><SortHeader column="status" label="Status" sortBy={sortBy} sortDirection={sortDirection} onSort={changeSort} /></th>
                 <th className="px-5 py-3 text-right font-semibold">Action</th>
               </tr>
             </thead>

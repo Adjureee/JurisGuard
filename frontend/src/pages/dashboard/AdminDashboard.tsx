@@ -8,7 +8,6 @@ import {
   CalendarClock,
   FileScan,
   FolderCheck,
-  MapPinned,
   Scale,
   ShieldCheck,
   Users,
@@ -104,8 +103,73 @@ function getSettledValue<T>(result: PromiseSettledResult<T>, fallback: T, label:
   if (result.status === "fulfilled" && result.value !== null && result.value !== undefined) {
     return result.value;
   }
-  void label;
+  if (result.status === "rejected") {
+    console.warn(`Dashboard widget request failed: ${label}`, result.reason);
+  }
   return fallback;
+}
+
+function safeArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function safeHeatmap(value: unknown): HeatmapResponse | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<HeatmapResponse>;
+  const center = candidate.center;
+  if (
+    !center ||
+    typeof center.lat !== "number" ||
+    typeof center.lng !== "number" ||
+    !Number.isFinite(center.lat) ||
+    !Number.isFinite(center.lng)
+  ) {
+    return null;
+  }
+  return {
+    center,
+    points: safeArray<HeatmapResponse["points"][number]>(candidate.points).filter(
+      (point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude)
+    ),
+    barangays: safeArray<BarangayStat>(candidate.barangays),
+  };
+}
+
+function safeIntakeLoad(value: unknown): IntakeLoadAnalytics {
+  if (!value || typeof value !== "object") return emptyIntakeLoad;
+  const candidate = value as Partial<IntakeLoadAnalytics>;
+  return {
+    weekly: safeArray<IntakeLoadAnalytics["weekly"][number]>(candidate.weekly),
+    hourly: safeArray<IntakeLoadAnalytics["hourly"][number]>(candidate.hourly),
+    busiest_day: candidate.busiest_day ?? null,
+    busiest_hour: candidate.busiest_hour ?? null,
+  };
+}
+
+function safeTerminatedStats(value: unknown): TerminatedDashboardStats {
+  if (!value || typeof value !== "object") return emptyTerminatedStats;
+  const candidate = value as Partial<TerminatedDashboardStats>;
+  return {
+    total: typeof candidate.total === "number" && Number.isFinite(candidate.total) ? candidate.total : 0,
+    by_reason: safeArray<TerminatedDashboardStats["by_reason"][number]>(candidate.by_reason),
+    monthly: safeArray<MonthlyTrend>(candidate.monthly),
+  };
+}
+
+function safeOcrAnalytics(value: unknown): OcrAnalytics {
+  if (!value || typeof value !== "object") return emptyOcrAnalytics;
+  const candidate = value as Partial<OcrAnalytics>;
+  return {
+    total_scans: typeof candidate.total_scans === "number" && Number.isFinite(candidate.total_scans) ? candidate.total_scans : 0,
+    successful_extractions:
+      typeof candidate.successful_extractions === "number" && Number.isFinite(candidate.successful_extractions)
+        ? candidate.successful_extractions
+        : 0,
+    failed_scans: typeof candidate.failed_scans === "number" && Number.isFinite(candidate.failed_scans) ? candidate.failed_scans : 0,
+    document_types: safeArray<OcrAnalytics["document_types"][number]>(candidate.document_types),
+    trends: safeArray<OcrAnalytics["trends"][number]>(candidate.trends),
+    recent: safeArray<OcrAnalytics["recent"][number]>(candidate.recent),
+  };
 }
 
 function formatDateTime(value: string) {
@@ -197,14 +261,14 @@ export default function AdminDashboard() {
           ocrResult,
         ] = results;
         setOverview(getSettledValue(overviewResult, emptyOverview, "overview"));
-        setMonthlyTrends(getSettledValue(monthlyResult, [], "monthly trends"));
-        setCaseCategories(getSettledValue(categoryResult, [], "case categories"));
-        setBarangays(getSettledValue(barangayResult, [], "barangay stats"));
-        setHeatmap(getSettledValue(heatmapResult, null, "heatmap"));
-        setTerminatedStats(getSettledValue(terminatedResult, emptyTerminatedStats, "terminated cases"));
-        setActivities(getSettledValue(activityResult, [], "recent activities"));
-        setIntakeLoad(getSettledValue(intakeLoadResult, emptyIntakeLoad, "intake load"));
-        setOcrAnalytics(getSettledValue(ocrResult, emptyOcrAnalytics, "OCR analytics"));
+        setMonthlyTrends(safeArray<MonthlyTrend>(getSettledValue(monthlyResult, [], "monthly trends")));
+        setCaseCategories(safeArray<CaseCategoryStat>(getSettledValue(categoryResult, [], "case categories")));
+        setBarangays(safeArray<BarangayStat>(getSettledValue(barangayResult, [], "barangay stats")));
+        setHeatmap(safeHeatmap(getSettledValue(heatmapResult, null, "heatmap")));
+        setTerminatedStats(safeTerminatedStats(getSettledValue(terminatedResult, emptyTerminatedStats, "terminated cases")));
+        setActivities(safeArray<RecentActivity>(getSettledValue(activityResult, [], "recent activities")));
+        setIntakeLoad(safeIntakeLoad(getSettledValue(intakeLoadResult, emptyIntakeLoad, "intake load")));
+        setOcrAnalytics(safeOcrAnalytics(getSettledValue(ocrResult, emptyOcrAnalytics, "OCR analytics")));
         if (results.some((result) => result.status === "rejected")) {
           toast.error("Some dashboard widgets could not refresh.");
         }

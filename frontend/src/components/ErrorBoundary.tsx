@@ -1,4 +1,4 @@
-import { Component, type ReactNode } from "react";
+import { Component, type ErrorInfo, type ReactNode } from "react";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -14,6 +14,10 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 
   static getDerivedStateFromError() {
     return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("JurisGuard dashboard boundary caught an error", error, info.componentStack);
   }
 
   render() {
