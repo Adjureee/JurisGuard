@@ -59,13 +59,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F3F4F6] px-4 py-10">
-      <div className="w-full max-w-md rounded-2xl border border-[#E5E7EB] bg-white p-8 shadow-lg shadow-gray-200/70">
+    <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 py-10">
+      <div className="w-full max-w-md rounded-2xl border border-[#E5E7EB] bg-white p-8 shadow-md ">
         <div className="mb-8 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#1D4ED8]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#4A7FB0]">
             JurisGuard
           </p>
-          <h1 className="mt-2 text-2xl font-bold text-[#111827]">Sign In</h1>
+          <h1 className="mt-2 text-2xl font-bold text-[#2B3642]">Sign In</h1>
           <p className="mt-2 text-sm font-medium text-[#4B5563]">
             Sign in with your approved JurisGuard account.
           </p>
@@ -73,10 +73,10 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <label className="block">
-            <span className="text-sm font-medium text-[#111827]">Email</span>
+            <span className="text-sm font-medium text-[#2B3642]">Email</span>
             <input
               type="email"
-              className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#111827] outline-none transition placeholder-gray-400 focus:border-[#1D4ED8] focus:ring-1 focus:ring-[#1D4ED8]"
+              className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition placeholder-gray-400 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
@@ -85,10 +85,10 @@ export default function LoginPage() {
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-[#111827]">Password</span>
+            <span className="text-sm font-medium text-[#2B3642]">Password</span>
             <input
               type="password"
-              className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#111827] outline-none transition placeholder-gray-400 focus:border-[#1D4ED8] focus:ring-1 focus:ring-[#1D4ED8]"
+              className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition placeholder-gray-400 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
@@ -111,7 +111,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-md bg-[#111827] px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-70"
+            className="w-full rounded-md bg-[#2B3642] px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? "Signing in..." : "Sign In"}
           </button>
@@ -119,7 +119,7 @@ export default function LoginPage() {
 
         <p className="mt-5 text-center text-sm font-medium text-[#4B5563]">
           Need an account?{" "}
-          <Link to="/register" className="font-semibold text-[#111827] hover:text-[#1D4ED8]">
+          <Link to="/register" className="font-semibold text-[#2B3642] hover:text-[#4A7FB0]">
             Register
           </Link>
         </p>

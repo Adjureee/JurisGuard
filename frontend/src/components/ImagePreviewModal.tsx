@@ -33,15 +33,15 @@ export default function ImagePreviewModal({
       aria-label={title}
     >
       <div
-        className="relative max-h-[92vh] w-full max-w-4xl animate-[modalIn_180ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-2xl shadow-gray-200/70"
+        className="relative max-h-[92vh] w-full max-w-4xl animate-[modalIn_180ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-xl "
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-[#111827]">{title}</h2>
+          <h2 className="text-base font-semibold text-[#2B3642]">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-[#F3F4F6] text-lg font-semibold leading-none text-[#4B5563] transition hover:bg-[#E5E7EB] hover:text-[#111827]"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-[#F8FAFC] text-lg font-semibold leading-none text-[#4B5563] transition hover:bg-[#E5E7EB] hover:text-[#2B3642]"
             aria-label="Close preview"
           >
             x
@@ -50,7 +50,7 @@ export default function ImagePreviewModal({
         <img
           src={image}
           alt={alt}
-          className="max-h-[78vh] w-full rounded-xl bg-[#F3F4F6] object-contain"
+          className="max-h-[78vh] w-full rounded-xl bg-[#F8FAFC] object-contain"
         />
       </div>
     </div>

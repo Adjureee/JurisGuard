@@ -14,6 +14,11 @@ export const criminalCaseExportFilterSchema = z.object({
   date_from: z.string().optional(),
   date_to: z.string().optional(),
   location_type: z.enum(["All", "Urban", "Rural"]).default("All"),
+  barangay: z.string().optional(),
+  case_category: z.string().optional(),
+  staff: z.string().optional(),
+  ocr_status: z.string().optional(),
+  termination_status: z.string().optional(),
 });
 
 export type CriminalCaseExportFilterDto = z.infer<typeof criminalCaseExportFilterSchema>;
@@ -89,6 +94,21 @@ export function filterCriminalCaseRows(
     const matchesStatus = status === "All" || record.cases.status_of_case === status;
     const matchesLocation =
       locationType === "All" || record.cases.location_type === locationType;
+    const barangay = filters.barangay ?? "All";
+    const category = filters.case_category ?? "All";
+    const staff = filters.staff ?? "All";
+    const terminationStatus = filters.termination_status ?? "All";
+    const matchesBarangay = barangay === "All" || (record.cases.incident_barangay ?? "") === barangay;
+    const rowCategory = record.cases.cause_of_action || record.intake_record.nature_of_case;
+    const matchesCategory = category === "All" || rowCategory === category;
+    const rowStaff = record.created_by_user_id === null ? "Unassigned" : `User #${record.created_by_user_id}`;
+    const matchesStaff = staff === "All" || rowStaff === staff;
+    const rowTerminationStatus =
+      record.cases.is_terminated || record.cases.status_of_case === "Terminated"
+        ? "Terminated"
+        : "Active";
+    const matchesTerminationStatus =
+      terminationStatus === "All" || rowTerminationStatus === terminationStatus;
     const date = recordDate(record);
     const matchesDateFrom = !filters.date_from || date >= filters.date_from;
     const matchesDateTo = !filters.date_to || date <= filters.date_to;
@@ -98,6 +118,10 @@ export function filterCriminalCaseRows(
       matchesTableFilter &&
       matchesStatus &&
       matchesLocation &&
+      matchesBarangay &&
+      matchesCategory &&
+      matchesStaff &&
+      matchesTerminationStatus &&
       matchesDateFrom &&
       matchesDateTo
     );

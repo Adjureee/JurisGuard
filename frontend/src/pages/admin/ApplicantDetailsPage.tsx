@@ -27,7 +27,7 @@ function Field({ label, value }: { label: string; value: string | null | undefin
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">{label}</p>
-      <p className="mt-1 text-sm font-medium text-[#111827]">{value || "Not provided"}</p>
+      <p className="mt-1 text-sm font-medium text-[#2B3642]">{value || "Not provided"}</p>
     </div>
   );
 }
@@ -116,13 +116,13 @@ export default function ApplicantDetailsPage() {
     <MainLayout>
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-[#111827]">Applicant Details</h1>
+          <h1 className="text-2xl font-semibold text-[#2B3642]">Applicant Details</h1>
           <nav className="mt-1 flex items-center gap-2 text-sm text-[#4B5563]">
-            <Link to="/dashboard" className="hover:text-[#1D4ED8]">Dashboard</Link>
+            <Link to="/dashboard" className="hover:text-[#4A7FB0]">Dashboard</Link>
             <span>/</span>
-            <Link to="/admin/verification" className="hover:text-[#1D4ED8]">Verification</Link>
+            <Link to="/admin/verification" className="hover:text-[#4A7FB0]">Verification</Link>
             <span>/</span>
-            <span className="text-[#111827]">{applicant?.full_name || "Applicant"}</span>
+            <span className="text-[#2B3642]">{applicant?.full_name || "Applicant"}</span>
           </nav>
         </div>
       </div>
@@ -140,9 +140,9 @@ export default function ApplicantDetailsPage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4">
-            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-gray-200/70">
+            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm ">
               <div className="mb-4 flex items-center justify-between border-b border-[#E5E7EB] pb-4">
-                <h2 className="text-base font-semibold text-[#111827]">Account Info</h2>
+                <h2 className="text-base font-semibold text-[#2B3642]">Account Info</h2>
                 <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass[applicant.approval_status]}`}>
                   {applicant.approval_status.replace("_", " ")}
                 </span>
@@ -155,8 +155,8 @@ export default function ApplicantDetailsPage() {
               </div>
             </section>
 
-            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-gray-200/70">
-              <h2 className="mb-4 border-b border-[#E5E7EB] pb-4 text-base font-semibold text-[#111827]">
+            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm ">
+              <h2 className="mb-4 border-b border-[#E5E7EB] pb-4 text-base font-semibold text-[#2B3642]">
                 Profile Info
               </h2>
               <div className="grid gap-4 md:grid-cols-2">
@@ -171,8 +171,8 @@ export default function ApplicantDetailsPage() {
             </section>
           </div>
 
-          <aside className="h-fit rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-gray-200/70">
-            <h2 className="text-base font-semibold text-[#111827]">Actions</h2>
+          <aside className="h-fit rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm ">
+            <h2 className="text-base font-semibold text-[#2B3642]">Actions</h2>
             {isFinalStatus(applicant.approval_status) ? (
               <p className="mt-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm text-[#4B5563]">
                 This application is finalized and available for viewing only.

@@ -15,10 +15,10 @@ export function AnalyticsPanel({
 }) {
   return (
     <section
-      className={`rounded-xl border border-[#E5E7EB] bg-white shadow-sm shadow-gray-200/60 ${className}`}
+      className={`rounded-xl border border-[#E5E7EB] bg-white shadow-sm  ${className}`}
     >
       <div className="border-b border-[#E5E7EB] px-5 py-4">
-        <h3 className="text-base font-bold text-[#111827]">{title}</h3>
+        <h3 className="text-base font-bold text-[#2B3642]">{title}</h3>
         {subtitle && <p className="mt-1 text-sm font-medium leading-6 text-[#4B5563]">{subtitle}</p>}
       </div>
       <div className="p-5">
@@ -55,7 +55,7 @@ export function IntelligenceMetricCard({
     red: "border-[#FECACA] text-[#9F1239]",
     yellow: "border-[#FEF3C7] text-[#92400E]",
     purple: "border-[#DDD6FE] text-[#5B21B6]",
-    dark: "border-[#D1D5DB] text-[#111827]",
+    dark: "border-[#D1D5DB] text-[#2B3642]",
   };
   const iconTones = {
     blue: "bg-[#EFF6FF] text-[#1D4ED8]",
@@ -63,11 +63,11 @@ export function IntelligenceMetricCard({
     red: "bg-[#FFF1F2] text-[#9F1239]",
     yellow: "bg-[#FFFBEB] text-[#92400E]",
     purple: "bg-[#F5F3FF] text-[#5B21B6]",
-    dark: "bg-[#F3F4F6] text-[#111827]",
+    dark: "bg-[#F8FAFC] text-[#2B3642]",
   };
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border bg-white ${tones[tone]} p-5 shadow-sm shadow-gray-200/60 transition duration-200 hover:-translate-y-0.5`}
+      className={`relative overflow-hidden rounded-xl border bg-white ${tones[tone]} p-5 shadow-sm  transition duration-200 hover:-translate-y-0.5`}
     >
       <div className="absolute right-0 top-0 h-24 w-24 rounded-bl-[80px] bg-[#F9FAFB]" />
       <div className="relative flex items-start justify-between gap-3">

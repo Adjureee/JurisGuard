@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
@@ -320,10 +320,71 @@ def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
 
 
 def admin_user(user: models.User = Depends(current_user)) -> models.User:
-    role_name = user.role.role_name if user.role else ""
+    role_name = (user.role.role_name if user.role else "").lower()
     if role_name != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
+
+
+def is_admin(user: models.User) -> bool:
+    return (user.role.role_name if user.role else "").lower() == "admin"
+
+
+def scoped_case_query(db: Session, user: models.User):
+    query = db.query(models.Case).outerjoin(models.IntakeRecord)
+    if is_admin(user):
+        return query
+    return query.filter(models.IntakeRecord.interviewer_id == user.user_id)
+
+
+def staff_client_ids(db: Session, user: models.User) -> set[int]:
+    intake_ids = {
+        row[0]
+        for row in db.query(models.IntakeRecord.client_id)
+        .filter(models.IntakeRecord.interviewer_id == user.user_id)
+        .all()
+        if row[0] is not None
+    }
+    audit_ids: set[int] = set()
+    for row in (
+        db.query(models.AuditLog.entity_id)
+        .filter(models.AuditLog.user_id == user.user_id, models.AuditLog.action == "Create Client")
+        .all()
+    ):
+        try:
+            if row[0]:
+                audit_ids.add(int(row[0]))
+        except (TypeError, ValueError):
+            continue
+    return intake_ids | audit_ids
+
+
+def scoped_client_query(db: Session, user: models.User):
+    query = db.query(models.Client).filter(models.Client.deleted_at.is_(None))
+    if is_admin(user):
+        return query
+    ids = staff_client_ids(db, user)
+    if not ids:
+        return query.filter(models.Client.client_id == -1)
+    return query.filter(models.Client.client_id.in_(ids))
+
+
+def ensure_case_access(record: models.Case | None, user: models.User) -> models.Case:
+    if not record:
+        raise HTTPException(status_code=404, detail="Case not found")
+    if is_admin(user):
+        return record
+    if not record.intake or record.intake.interviewer_id != user.user_id:
+        raise HTTPException(status_code=403, detail="Record access denied")
+    return record
+
+
+def ensure_client_access(client: models.Client | None, user: models.User, db: Session) -> models.Client:
+    if not client or client.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Client not found")
+    if is_admin(user) or client.client_id in staff_client_ids(db, user):
+        return client
+    raise HTTPException(status_code=403, detail="Record access denied")
 
 
 def role_id(db: Session, name: str) -> int:
@@ -784,8 +845,8 @@ def build_barangay_stats(records: list[models.Case]) -> list[dict[str, Any]]:
     return sorted(stats, key=lambda row: row["total_cases"], reverse=True)
 
 
-def dashboard_records(db: Session) -> list[models.Case]:
-    return db.query(models.Case).outerjoin(models.IntakeRecord).all()
+def dashboard_records(db: Session, user: models.User) -> list[models.Case]:
+    return scoped_case_query(db, user).all()
 
 
 @app.get("/")
@@ -803,30 +864,26 @@ def health_check(db: Session = Depends(get_db)):
 
 
 @app.get("/api/dashboard/overview")
-def dashboard_overview(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def dashboard_overview(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     now = datetime.now()
     month_start = datetime(now.year, now.month, 1)
-    total_clients = db.query(func.count(models.Client.client_id)).filter(models.Client.deleted_at.is_(None)).scalar() or 0
-    total_cases = db.query(func.count(models.Case.case_id)).scalar() or 0
+    total_clients = scoped_client_query(db, user).count()
+    case_query = scoped_case_query(db, user)
+    total_cases = case_query.count()
     terminated_cases = (
-        db.query(func.count(models.Case.case_id))
+        scoped_case_query(db, user)
         .filter((models.Case.is_terminated.is_(True)) | (models.Case.status_of_case == "Terminated"))
-        .scalar()
-        or 0
+        .count()
     )
     cases_this_month = (
-        db.query(func.count(models.Case.case_id))
-        .join(models.IntakeRecord, models.Case.intake_id == models.IntakeRecord.intake_id, isouter=True)
+        scoped_case_query(db, user)
         .filter(func.coalesce(models.IntakeRecord.form_date, models.Case.last_updated) >= month_start)
-        .scalar()
-        or 0
+        .count()
     )
-    ocr_scanned_documents = (
-        db.query(func.count(models.Document.document_id))
-        .filter(models.Document.ocr_status == "COMPLETED")
-        .scalar()
-        or 0
-    )
+    ocr_query = db.query(models.Document).filter(models.Document.ocr_status == "COMPLETED")
+    if not is_admin(user):
+        ocr_query = ocr_query.filter(models.Document.uploaded_by == user.user_id)
+    ocr_scanned_documents = ocr_query.count()
     return {
         "total_clients": total_clients,
         "total_cases": total_cases,
@@ -838,13 +895,13 @@ def dashboard_overview(_: models.User = Depends(current_user), db: Session = Dep
 
 
 @app.get("/api/dashboard/monthly-trends")
-def dashboard_monthly_trends(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def dashboard_monthly_trends(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     rows = (
-        db.query(
+        scoped_case_query(db, user)
+        .with_entities(
             func.to_char(func.coalesce(models.IntakeRecord.form_date, models.Case.last_updated), "YYYY-MM").label("month"),
             func.count(models.Case.case_id).label("total_cases"),
         )
-        .join(models.IntakeRecord, models.Case.intake_id == models.IntakeRecord.intake_id, isouter=True)
         .group_by("month")
         .order_by("month")
         .all()
@@ -853,22 +910,22 @@ def dashboard_monthly_trends(_: models.User = Depends(current_user), db: Session
 
 
 @app.get("/api/dashboard/intake-load")
-def dashboard_intake_load(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def dashboard_intake_load(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     weekday_rows = (
-        db.query(
+        scoped_case_query(db, user)
+        .with_entities(
             func.extract("dow", func.coalesce(models.IntakeRecord.form_date, models.Case.last_updated)).label("weekday"),
             func.count(models.Case.case_id).label("total_cases"),
         )
-        .join(models.IntakeRecord, models.Case.intake_id == models.IntakeRecord.intake_id, isouter=True)
         .group_by("weekday")
         .all()
     )
     hour_rows = (
-        db.query(
+        scoped_case_query(db, user)
+        .with_entities(
             func.extract("hour", func.coalesce(models.IntakeRecord.form_date, models.Case.last_updated)).label("hour"),
             func.count(models.Case.case_id).label("total_cases"),
         )
-        .join(models.IntakeRecord, models.Case.intake_id == models.IntakeRecord.intake_id, isouter=True)
         .group_by("hour")
         .all()
     )
@@ -894,15 +951,15 @@ def dashboard_intake_load(_: models.User = Depends(current_user), db: Session = 
 
 
 @app.get("/api/dashboard/case-categories")
-def dashboard_case_categories(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def dashboard_case_categories(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     rows = (
-        db.query(models.IntakeRecord.nature_of_case, func.count(models.Case.case_id).label("total_cases"))
-        .join(models.Case, models.Case.intake_id == models.IntakeRecord.intake_id)
+        scoped_case_query(db, user)
+        .with_entities(models.IntakeRecord.nature_of_case, func.count(models.Case.case_id).label("total_cases"))
         .group_by(models.IntakeRecord.nature_of_case)
         .order_by(func.count(models.Case.case_id).desc())
         .all()
     )
-    uncategorized = db.query(func.count(models.Case.case_id)).filter(models.Case.intake_id.is_(None)).scalar() or 0
+    uncategorized = scoped_case_query(db, user).filter(models.Case.intake_id.is_(None)).count()
     categories = [
         {"category": row.nature_of_case or "Uncategorized", "total_cases": row.total_cases}
         for row in rows
@@ -913,13 +970,13 @@ def dashboard_case_categories(_: models.User = Depends(current_user), db: Sessio
 
 
 @app.get("/api/dashboard/barangay-stats")
-def dashboard_barangay_stats(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    return build_barangay_stats(dashboard_records(db))
+def dashboard_barangay_stats(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    return build_barangay_stats(dashboard_records(db, user))
 
 
 @app.get("/api/dashboard/heatmap")
-def dashboard_heatmap(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    records = dashboard_records(db)
+def dashboard_heatmap(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    records = dashboard_records(db, user)
     points: list[dict[str, Any]] = []
     for record in records:
         lat = parse_float(record.latitude)
@@ -947,10 +1004,9 @@ def dashboard_heatmap(_: models.User = Depends(current_user), db: Session = Depe
 
 
 @app.get("/api/dashboard/terminated-cases")
-def dashboard_terminated_cases(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def dashboard_terminated_cases(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     records = (
-        db.query(models.Case)
-        .outerjoin(models.IntakeRecord)
+        scoped_case_query(db, user)
         .filter((models.Case.is_terminated.is_(True)) | (models.Case.status_of_case == "Terminated"))
         .all()
     )
@@ -976,8 +1032,11 @@ def dashboard_terminated_cases(_: models.User = Depends(current_user), db: Sessi
 
 
 @app.get("/api/dashboard/recent-activities")
-def dashboard_recent_activities(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    rows = db.query(models.AuditLog).outerjoin(models.User).order_by(models.AuditLog.timestamp.desc()).limit(12).all()
+def dashboard_recent_activities(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    query = db.query(models.AuditLog).outerjoin(models.User)
+    if not is_admin(user):
+        query = query.filter(models.AuditLog.user_id == user.user_id)
+    rows = query.order_by(models.AuditLog.timestamp.desc()).limit(12).all()
     return [
         {
             "id": str(row.log_id),
@@ -993,8 +1052,11 @@ def dashboard_recent_activities(_: models.User = Depends(current_user), db: Sess
 
 
 @app.get("/api/dashboard/ocr-analytics")
-def dashboard_ocr_analytics(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    rows = db.query(models.Document).order_by(models.Document.uploaded_at.desc()).all()
+def dashboard_ocr_analytics(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    query = db.query(models.Document)
+    if not is_admin(user):
+        query = query.filter(models.Document.uploaded_by == user.user_id)
+    rows = query.order_by(models.Document.uploaded_at.desc()).all()
     total = len(rows)
     successful = len([row for row in rows if row.ocr_status == "COMPLETED"])
     failed = len([row for row in rows if row.ocr_status == "FAILED"])
@@ -1233,25 +1295,22 @@ def update_applicant_approval(
 
 
 @app.get("/api/clients/")
-def list_clients(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    clients = db.query(models.Client).filter(models.Client.deleted_at.is_(None)).order_by(models.Client.created_at.desc()).all()
+def list_clients(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    clients = scoped_client_query(db, user).order_by(models.Client.created_at.desc()).all()
     return [get_client_payload(client) for client in clients]
 
 
 @app.get("/api/clients/{client_id}")
-def get_client(client_id: int, _: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    client = db.get(models.Client, client_id)
-    if not client or client.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Client not found")
+def get_client(client_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    client = ensure_client_access(db.get(models.Client, client_id), user, db)
     return get_client_payload(client)
 
 
 @app.get("/api/clients/{client_id}/cases")
-def get_client_cases(client_id: int, _: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    if not db.get(models.Client, client_id):
-        raise HTTPException(status_code=404, detail="Client not found")
+def get_client_cases(client_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    ensure_client_access(db.get(models.Client, client_id), user, db)
     records = (
-        db.query(models.Case)
+        scoped_case_query(db, user)
         .filter(models.Case.client_id == client_id)
         .order_by(models.Case.last_updated.desc())
         .all()
@@ -1345,9 +1404,7 @@ def update_client(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    client = db.get(models.Client, client_id)
-    if not client or client.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Client not found")
+    client = ensure_client_access(db.get(models.Client, client_id), user, db)
     apply_client_payload(client, payload)
     write_audit(db, user.user_id, "Update Client", "client", f"{user.full_name or user.email or user.username} updated client {client.name}", str(client.client_id), request)
     db.commit()
@@ -1356,15 +1413,15 @@ def update_client(
 
 
 @app.get("/api/cases/")
-def list_cases(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    records = db.query(models.Case).order_by(models.Case.last_updated.desc()).all()
+def list_cases(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    records = scoped_case_query(db, user).order_by(models.Case.last_updated.desc()).all()
     return [get_case_payload(record) for record in records]
 
 
 @app.get("/api/cases/terminated")
-def list_terminated_cases(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def list_terminated_cases(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     records = (
-        db.query(models.Case)
+        scoped_case_query(db, user)
         .filter((models.Case.is_terminated.is_(True)) | (models.Case.status_of_case == "Terminated"))
         .order_by(models.Case.terminated_at.desc().nullslast(), models.Case.last_updated.desc())
         .all()
@@ -1373,14 +1430,12 @@ def list_terminated_cases(_: models.User = Depends(current_user), db: Session = 
 
 
 @app.get("/api/printable-intake/{case_id}")
-def get_printable_intake(case_id: int, _: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    record = db.get(models.Case, case_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Case not found")
+def get_printable_intake(case_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    record = ensure_case_access(db.get(models.Case, case_id), user)
     if not record.client:
         raise HTTPException(status_code=404, detail="Case client not found")
     cases = (
-        db.query(models.Case)
+        scoped_case_query(db, user)
         .filter(models.Case.client_id == record.client_id)
         .order_by(models.Case.last_updated.desc())
         .all()
@@ -1404,8 +1459,7 @@ def create_case(
     db: Session = Depends(get_db),
 ):
     client_id = int(payload.client_id)
-    if not db.get(models.Client, client_id):
-        raise HTTPException(status_code=404, detail="Client not found")
+    ensure_client_access(db.get(models.Client, client_id), user, db)
 
     intake_data = payload.intake_record
     rep_data = payload.representative
@@ -1495,9 +1549,7 @@ def update_case(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    record = db.get(models.Case, case_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Case not found")
+    record = ensure_case_access(db.get(models.Case, case_id), user)
     apply_case_payload(record, payload)
     write_audit(db, user.user_id, "Update Case", "case", f"{user.full_name or user.email or user.username} updated Criminal Case #{record.case_id}", str(record.case_id), request)
     db.commit()
@@ -1513,9 +1565,7 @@ def terminate_case(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    record = db.get(models.Case, case_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Case not found")
+    record = ensure_case_access(db.get(models.Case, case_id), user)
     terminated_at = parse_date(payload.date_terminated, datetime.now()) or datetime.now()
     record.status_of_case = "Terminated"
     record.case_status = "Terminated"
@@ -1538,8 +1588,16 @@ def terminate_case(
 
 
 @app.get("/api/audit-logs/")
-def list_audit_logs(_: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    rows = db.query(models.AuditLog).outerjoin(models.User).order_by(models.AuditLog.timestamp.desc()).limit(100).all()
+def list_audit_logs(
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+    limit: int = Query(100, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    query = db.query(models.AuditLog).outerjoin(models.User)
+    if not is_admin(user):
+        query = query.filter(models.AuditLog.user_id == user.user_id)
+    rows = query.order_by(models.AuditLog.timestamp.desc(), models.AuditLog.log_id.desc()).offset(offset).limit(limit).all()
     module_labels = {
         "user": "Admin",
         "client": "Clients",
@@ -1581,14 +1639,20 @@ def create_audit_log(
 @app.post("/api/upload-document/")
 async def upload_document(
     request: Request,
-    user_id: int,
+    user_id: int | None = None,
     file: UploadFile = File(...),
     case_id: int | None = None,
     intake_id: int | None = None,
+    user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     new_document = None
     try:
+        if user_id is not None and user_id != user.user_id and not is_admin(user):
+            raise HTTPException(status_code=403, detail="Cannot upload OCR documents for another user")
+        effective_user_id = user_id if is_admin(user) and user_id is not None else user.user_id
+        if case_id is not None:
+            ensure_case_access(db.get(models.Case, case_id), user)
         original_name = Path(file.filename or "uploaded-document").name
         extension = Path(original_name).suffix.lower()
         if extension not in ALLOWED_EXTENSIONS or file.content_type not in ALLOWED_CONTENT_TYPES:
@@ -1603,7 +1667,7 @@ async def upload_document(
         new_document = models.Document(
             case_id=case_id,
             intake_id=intake_id,
-            uploaded_by=user_id,
+            uploaded_by=effective_user_id,
             document_type=file.content_type,
             encrypted_file_path=str(file_location),
             ocr_status="PROCESSING",
@@ -1629,10 +1693,10 @@ async def upload_document(
         new_document.ocr_status = "COMPLETED"
         write_audit(
             db,
-            user_id,
+            effective_user_id,
             "OCR Scan",
             "ocr",
-            f"User {user_id} scanned document #{new_document.document_id}",
+            f"{user.full_name or user.email or user.username} scanned document #{new_document.document_id}",
             str(new_document.document_id),
             request,
         )

@@ -13,6 +13,7 @@ import TerminatedCasesPage from "../pages/TerminatedCases";
 import UserProfilePage from "../pages/UserProfilePage";
 
 const AnalyticsPage = lazy(() => import("../pages/AnalyticsPage"));
+const StaffAnalyticsPage = lazy(() => import("../pages/StaffAnalyticsPage"));
 
 function RouteLoadingFallback() {
   return (
@@ -42,6 +43,16 @@ export default function AppRoutes() {
             <ProtectedRoute requiredRole="admin">
               <Suspense fallback={<RouteLoadingFallback />}>
                 <AnalyticsPage />
+              </Suspense>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff/analytics"
+          element={
+            <ProtectedRoute requiredRole="staff">
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <StaffAnalyticsPage />
               </Suspense>
             </ProtectedRoute>
           }

@@ -137,13 +137,13 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#E5E7EB] bg-white text-[#111827] transition duration-200 hover:-translate-y-px hover:bg-[#F3F4F6] md:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#E5E7EB] bg-white text-[#2B3642] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC] md:hidden"
             aria-label="Toggle sidebar"
           >
             <MenuIcon />
           </button>
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-bold text-[#111827]">JurisGuard</h1>
+            <h1 className="truncate text-lg font-bold text-[#2B3642]">JurisGuard</h1>
           </div>
         </div>
 
@@ -155,7 +155,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                 setNotificationsOpen((current) => !current);
                 setProfileOpen(false);
               }}
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#E5E7EB] bg-white text-[#111827] transition duration-200 hover:-translate-y-px hover:bg-[#F3F4F6]"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#E5E7EB] bg-white text-[#2B3642] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
               aria-label="Open notifications"
             >
               <BellIcon />
@@ -167,16 +167,16 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
             </button>
 
             {notificationsOpen && (
-              <div className="absolute right-0 z-[9999] mt-2 w-80 rounded-lg border border-[#E5E7EB] bg-white shadow-2xl shadow-gray-200/70">
+              <div className="absolute right-0 z-[9999] mt-2 w-80 rounded-xl border border-[#E5E7EB] bg-white shadow-xl">
                 <div className="border-b border-[#E5E7EB] bg-white px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-bold text-[#111827]">Notifications</p>
+                    <p className="text-sm font-bold text-[#2B3642]">Notifications</p>
                     {visibleNotifications.length > 0 && (
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => markAllRead(visibleNotificationIds)}
-                          className="text-xs font-semibold text-[#1D4ED8] hover:text-[#1D4ED8]"
+                          className="text-xs font-semibold text-[#4A7FB0] hover:text-[#4A7FB0]"
                         >
                           Mark all read
                         </button>
@@ -199,14 +199,14 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                       <div
                         key={notification.id}
                         className={`flex gap-3 px-4 py-3 transition ${
-                          notification.isRead ? "bg-white text-[#4B5563]" : "bg-[#EFF6FF] text-[#111827]"
+                          notification.isRead ? "bg-white text-[#4B5563]" : "bg-[#EFF6FF] text-[#2B3642]"
                         }`}
                       >
                         <span
                           className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
                             notification.isRead
-                              ? "bg-[#F3F4F6] text-[#6B7280]"
-                              : "bg-[#1D4ED8]/10 text-[#1D4ED8]"
+                              ? "bg-[#F8FAFC] text-[#6B7280]"
+                              : "bg-[#4A7FB0]/10 text-[#4A7FB0]"
                           }`}
                         >
                           {notificationSymbol(notification.type)}
@@ -219,14 +219,14 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                           >
                             <span className="flex items-start gap-2">
                               {!notification.isRead && (
-                                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#1D4ED8]" />
+                                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#4A7FB0]" />
                               )}
                               <span className="min-w-0">
                                 <span
                                   className={`block text-sm ${
                                     notification.isRead
                                       ? "font-medium text-[#4B5563]"
-                                      : "font-bold text-[#111827]"
+                                      : "font-bold text-[#2B3642]"
                                   }`}
                                 >
                                   {notification.title}
@@ -245,7 +245,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                               <button
                                 type="button"
                                 onClick={() => markRead(notification.id)}
-                                className="text-xs font-semibold text-[#1D4ED8] hover:text-[#1D4ED8]"
+                                className="text-xs font-semibold text-[#4A7FB0] hover:text-[#4A7FB0]"
                               >
                                 Mark as Read
                               </button>
@@ -267,7 +267,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                 </div>
                 <button
                   type="button"
-                  className="w-full border-t border-[#E5E7EB] bg-white px-4 py-3 text-center text-sm font-semibold text-[#1D4ED8] transition duration-200 hover:bg-[#F3F4F6]"
+                  className="w-full border-t border-[#E5E7EB] bg-white px-4 py-3 text-center text-sm font-semibold text-[#4A7FB0] transition duration-200 hover:bg-[#F8FAFC]"
                 >
                   View all notifications
                 </button>
@@ -282,9 +282,9 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                 setProfileOpen((current) => !current);
                 setNotificationsOpen(false);
               }}
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-[#E5E7EB] bg-white px-2 text-[#111827] transition duration-200 hover:-translate-y-px hover:bg-[#F3F4F6] sm:px-3"
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-[#E5E7EB] bg-white px-2 text-[#2B3642] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC] sm:px-3"
             >
-              <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#1D4ED8] text-xs font-semibold text-white">
+              <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#4A7FB0] text-xs font-semibold text-white">
                 {profileImageSrc ? (
                   <img src={profileImageSrc} alt="" className="h-full w-full object-cover" />
                 ) : (
@@ -298,18 +298,18 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
             </button>
 
             {profileOpen && (
-              <div className="absolute right-0 z-[9999] mt-2 w-56 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white py-2 shadow-2xl shadow-gray-200/70">
+              <div className="absolute right-0 z-[9999] mt-2 w-56 overflow-hidden rounded-xl border border-[#E5E7EB] bg-white py-2 shadow-xl">
                 <Link
                   to="/profile"
                   onClick={() => setProfileOpen(false)}
-                  className="block px-4 py-2.5 text-sm font-medium text-[#111827] transition duration-200 hover:bg-[#F3F4F6] hover:text-[#111827]"
+                  className="block px-4 py-2.5 text-sm font-medium text-[#2B3642] transition duration-200 hover:bg-[#F8FAFC] hover:text-[#2B3642]"
                 >
                   Profile
                 </Link>
                 <Link
                   to="/profile#security"
                   onClick={() => setProfileOpen(false)}
-                  className="block px-4 py-2.5 text-sm font-medium text-[#111827] transition duration-200 hover:bg-[#F3F4F6] hover:text-[#111827]"
+                  className="block px-4 py-2.5 text-sm font-medium text-[#2B3642] transition duration-200 hover:bg-[#F8FAFC] hover:text-[#2B3642]"
                 >
                   Settings
                 </Link>

@@ -187,7 +187,7 @@ function TextInput({
       <input
         type={type}
         {...registration}
-        className="mt-1 w-full rounded-md border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#1D4ED8] focus:ring-1 focus:ring-[#1D4ED8]"
+        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
       />
       <FieldError message={error} />
     </label>
@@ -214,7 +214,7 @@ function TextArea({
       <textarea
         {...registration}
         rows={4}
-        className="mt-1 w-full rounded-md border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#1D4ED8] focus:ring-1 focus:ring-[#1D4ED8]"
+        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
       />
       <FieldError message={error} />
     </label>
@@ -257,16 +257,16 @@ function MethodCard({
     <button
       type="button"
       onClick={() => onSelect(value)}
-      className={`rounded-lg border bg-white p-5 text-left shadow-sm shadow-gray-200/60 transition duration-200 hover:-translate-y-px hover:shadow-md ${
+      className={`rounded-lg border bg-white p-5 text-left shadow-sm  transition duration-200 hover:-translate-y-px hover:shadow-md ${
         selected
-          ? "border-[#1D4ED8] shadow-[#1D4ED8]/20"
-          : "border-[#E5E7EB] hover:border-[#1D4ED8]"
+          ? "border-[#4A7FB0] shadow-[#4A7FB0]/20"
+          : "border-[#E5E7EB] hover:border-[#4A7FB0]"
       }`}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1D4ED8]/10 text-[#1D4ED8]">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#4A7FB0]/10 text-[#4A7FB0]">
         <i className={`fa-solid ${icon}`} aria-hidden="true" />
       </div>
-      <p className="mt-4 text-base font-semibold text-[#111827]">{title}</p>
+      <p className="mt-4 text-base font-semibold text-[#2B3642]">{title}</p>
       <p className="mt-2 text-sm leading-6 text-[#4B5563]">{description}</p>
     </button>
   );
@@ -284,18 +284,18 @@ function SelectedClientCard({
   onRemove?: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-sm shadow-gray-200/60">
+    <div className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-sm ">
       {locked && (
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#1D4ED8]">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#4A7FB0]">
           Client selected automatically
         </p>
       )}
       <div className="flex items-start gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#1D4ED8] text-sm font-semibold text-white">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#4A7FB0] text-sm font-semibold text-white">
           {initials(client.client.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-semibold text-[#111827]">{client.client.name}</p>
+          <p className="truncate text-base font-semibold text-[#2B3642]">{client.client.name}</p>
           <div className="mt-2 grid gap-2 text-sm text-[#4B5563] sm:grid-cols-2">
             <span>Sex: {client.client.sex || "-"}</span>
             <span>Age: {client.client.age || "-"}</span>
@@ -308,14 +308,14 @@ function SelectedClientCard({
           <button
             type="button"
             onClick={onChange}
-            className="rounded-md border border-[#1D4ED8] bg-white px-3 py-1.5 text-xs font-semibold text-[#1D4ED8] transition duration-200 hover:-translate-y-px hover:bg-[#1D4ED8] hover:text-white"
+            className="rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition duration-200 hover:-translate-y-px hover:bg-[#4A7FB0] hover:text-white"
           >
             Change Client
           </button>
           <button
             type="button"
             onClick={onRemove}
-            className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F3F4F6]"
+            className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
           >
             Remove Selection
           </button>
@@ -565,7 +565,7 @@ export function CaseWorkflow({
                   onChange={(event) => setQuery(event.target.value)}
                   onKeyDown={handleClientSearchKeyDown}
                   placeholder="Search by name or client id"
-                  className="mt-1 w-full rounded-md border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#1D4ED8] focus:ring-1 focus:ring-[#1D4ED8]"
+                  className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
                   aria-label="Search existing clients"
                 />
               </label>
@@ -578,7 +578,7 @@ export function CaseWorkflow({
                 <button
                   type="button"
                   onClick={clearClient}
-                  className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#E5E7EB] hover:text-[#111827]"
+                  className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#E5E7EB] hover:text-[#2B3642]"
                 >
                   Cancel Selection
                 </button>
@@ -597,7 +597,7 @@ export function CaseWorkflow({
             </div>
 
             <div className="overflow-hidden rounded-lg border border-[#E5E7EB]">
-              <div className="sticky top-0 border-b border-[#E5E7EB] bg-[#F3F4F6] px-4 py-3 text-sm font-semibold text-[#4B5563]">
+              <div className="sticky top-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3 text-sm font-semibold text-[#4B5563]">
                 Existing Clients
               </div>
               <div className="max-h-96 divide-y divide-[#E5E7EB] overflow-y-auto">
@@ -615,7 +615,7 @@ export function CaseWorkflow({
                       type="button"
                       key={client.client_id}
                       onClick={() => selectClient(client)}
-                      className={`block w-full px-4 py-3 text-left transition duration-200 hover:bg-[#F3F4F6] ${
+                      className={`block w-full px-4 py-3 text-left transition duration-200 hover:bg-[#F8FAFC] ${
                         selectedClientId === client.client_id || activeClientIndex === index
                           ? "bg-[#EFF6FF]"
                           : "bg-white"
@@ -623,7 +623,7 @@ export function CaseWorkflow({
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold text-[#111827]">
+                          <p className="text-sm font-semibold text-[#2B3642]">
                             {client.client.name}
                           </p>
                           <p className="mt-1 text-xs text-[#4B5563]">{client.client_id}</p>
@@ -666,21 +666,21 @@ export function CaseWorkflow({
           <div className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
               <div>
-                <p className="text-sm font-semibold text-[#111827]">
+                <p className="text-sm font-semibold text-[#2B3642]">
                   {lockedClient ? "Client selected automatically" : selectedClient?.client.name || "No client selected"}
                 </p>
-                {lockedClient && <p className="text-sm text-[#111827]">{lockedClient.client.name}</p>}
+                {lockedClient && <p className="text-sm text-[#2B3642]">{lockedClient.client.name}</p>}
                 <p className="text-xs text-[#4B5563]">
                   Method: {method === "manual" ? "Manual Entry" : method === "camera" ? "Live OCR Scan" : "Upload Document"}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {!lockedClient && (
-                  <button type="button" onClick={() => setStep(0)} className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F3F4F6]">
+                  <button type="button" onClick={() => setStep(0)} className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]">
                     Change Client
                   </button>
                 )}
-                <button type="button" onClick={() => setStep(lockedClient ? 0 : 1)} className="rounded-md border border-[#1D4ED8] bg-white px-3 py-1.5 text-xs font-semibold text-[#1D4ED8] transition duration-200 hover:-translate-y-px hover:bg-[#1D4ED8] hover:text-white">
+                <button type="button" onClick={() => setStep(lockedClient ? 0 : 1)} className="rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition duration-200 hover:-translate-y-px hover:bg-[#4A7FB0] hover:text-white">
                   Change Method
                 </button>
               </div>
@@ -692,11 +692,11 @@ export function CaseWorkflow({
                   type="checkbox"
                   checked={replaceExistingWithOcr}
                   onChange={(event) => setReplaceExistingWithOcr(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-[#1D4ED8] text-[#1D4ED8] focus:ring-[#1D4ED8]"
+                  className="mt-0.5 h-4 w-4 rounded border-[#4A7FB0] text-[#4A7FB0] focus:ring-[#4A7FB0]"
                 />
                 <span>
                   <span className="block font-semibold">Replace existing fields with scanned values</span>
-                  <span className="mt-1 block text-[#1E40AF]">
+                  <span className="mt-1 block text-[#3E6D97]">
                     Leave this off to fill only blank fields. Form Date is always updated from Petsa when the scan finds it.
                   </span>
                 </span>
@@ -708,9 +708,9 @@ export function CaseWorkflow({
                 <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
                   <video ref={videoRef} muted playsInline className="aspect-video w-full rounded-md border border-[#E5E7EB] bg-white object-cover" />
                   <div className="space-y-3">
-                    <button type="button" onClick={startCamera} className="w-full rounded-md bg-[#1D4ED8] px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:bg-[#1E40AF]">Start Camera</button>
-                    <button type="button" onClick={stopCamera} className="w-full rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] transition duration-200 hover:bg-[#F3F4F6]">Stop Camera</button>
-                    <button type="button" disabled={!isCameraActive || isExtracting} onClick={handleCapture} className="w-full rounded-md border border-[#1D4ED8] bg-white px-4 py-2 text-sm font-semibold text-[#1D4ED8] transition duration-200 hover:bg-[#1D4ED8] hover:text-white disabled:opacity-50">
+                    <button type="button" onClick={startCamera} className="w-full rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:bg-[#3E6D97]">Start Camera</button>
+                    <button type="button" onClick={stopCamera} className="w-full rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] transition duration-200 hover:bg-[#F8FAFC]">Stop Camera</button>
+                    <button type="button" disabled={!isCameraActive || isExtracting} onClick={handleCapture} className="w-full rounded-md border border-[#4A7FB0] bg-white px-4 py-2 text-sm font-semibold text-[#4A7FB0] transition duration-200 hover:bg-[#4A7FB0] hover:text-white disabled:opacity-50">
                       {isExtracting ? "Extracting..." : "Capture Case Fields"}
                     </button>
                     {cameraError && <p className="text-sm text-red-600">{cameraError}</p>}
@@ -723,7 +723,7 @@ export function CaseWorkflow({
               <div className="rounded-lg border border-dashed border-[#E5E7EB] bg-[#F9FAFB] p-4">
                 <label className="block">
                   <span className="text-sm font-semibold text-[#4B5563]">Upload case document image</span>
-                  <input type="file" accept="image/*" onChange={handleUpload} className="mt-3 block w-full text-sm text-[#4B5563] file:mr-4 file:rounded-md file:border-0 file:bg-[#1D4ED8] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white" />
+                  <input type="file" accept="image/*" onChange={handleUpload} className="mt-3 block w-full text-sm text-[#4B5563] file:mr-4 file:rounded-md file:border-0 file:bg-[#4A7FB0] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white" />
                 </label>
               </div>
             )}
@@ -747,7 +747,7 @@ export function CaseWorkflow({
             )}
 
             <section className="border-t border-[#E5E7EB] pt-4 first:border-t-0 first:pt-0">
-              <h3 className="text-sm font-semibold text-[#111827]">Case Identification</h3>
+              <h3 className="text-sm font-semibold text-[#2B3642]">Case Identification</h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <TextInput label="Control No." registration={register("intake_record.control_no")} error={errors.intake_record?.control_no?.message} status={indicators["intake_record.control_no"]} />
                 <TextInput label="Form Date" registration={register("intake_record.form_date")} error={errors.intake_record?.form_date?.message} status={indicators["intake_record.form_date"]} />
@@ -760,7 +760,7 @@ export function CaseWorkflow({
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#111827]">VIII Applicant Case Involvement</h3>
+              <h3 className="text-sm font-semibold text-[#2B3642]">VIII Applicant Case Involvement</h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {[
                   "Plaintiff",
@@ -777,7 +777,7 @@ export function CaseWorkflow({
                       type="radio"
                       value={role}
                       {...register("intake_record.applicant_role")}
-                      className="h-4 w-4 border-[#E5E7EB] text-[#1D4ED8] focus:ring-[#1D4ED8]"
+                      className="h-4 w-4 border-[#E5E7EB] text-[#4A7FB0] focus:ring-[#4A7FB0]"
                     />
                     {role}
                   </label>
@@ -794,7 +794,7 @@ export function CaseWorkflow({
             <section className="border-t border-[#E5E7EB] pt-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-[#111827]">Representative</h3>
+                  <h3 className="text-sm font-semibold text-[#2B3642]">Representative</h3>
                   {lockedClient && useClientRepresentative && (
                     <p className="mt-1 text-sm text-[#4B5563]">
                       Using representative details already saved on the client record.
@@ -807,7 +807,7 @@ export function CaseWorkflow({
                       type="checkbox"
                       checked={!useClientRepresentative}
                       onChange={(event) => setUseClientRepresentative(!event.target.checked)}
-                      className="h-4 w-4 rounded border-[#E5E7EB] text-[#1D4ED8] focus:ring-[#1D4ED8]"
+                      className="h-4 w-4 rounded border-[#E5E7EB] text-[#4A7FB0] focus:ring-[#4A7FB0]"
                     />
                     Use Different Representative
                   </label>
@@ -829,7 +829,7 @@ export function CaseWorkflow({
                   <p className="text-sm font-semibold text-[#1E3A8A]">
                     {selectedClient?.client_details.representative_name || selectedClient?.client.name || "Client representative"}
                   </p>
-                  <p className="mt-1 text-sm text-[#1E40AF]">
+                  <p className="mt-1 text-sm text-[#3E6D97]">
                     {selectedClient?.client_details.representative_relationship || "Representative details will be copied into this case."}
                   </p>
                 </div>
@@ -837,7 +837,7 @@ export function CaseWorkflow({
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#111827]">VIII-A Adverse Party</h3>
+              <h3 className="text-sm font-semibold text-[#2B3642]">VIII-A Adverse Party</h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2">
                 <TextInput label="Adverse Party Role" registration={register("adverse_party.role")} error={errors.adverse_party?.role?.message} />
                 <TextInput label="Adverse Party Name" registration={register("adverse_party.name")} error={errors.adverse_party?.name?.message} />
@@ -848,14 +848,14 @@ export function CaseWorkflow({
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#111827]">Case Status</h3>
+              <h3 className="text-sm font-semibold text-[#2B3642]">Case Status</h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <label className="block">
                   <span className="text-sm font-medium text-[#4B5563]">
                     Status of Case
                     <FieldStatus status={indicators["cases.status_of_case"]} />
                   </span>
-                  <select {...register("cases.status_of_case")} className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/15">
+                  <select {...register("cases.status_of_case")} className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20">
                     <option>Pending</option>
                     <option>Ongoing</option>
                     <option>Active</option>
@@ -868,14 +868,14 @@ export function CaseWorkflow({
                 <TextInput label="Place of Detention" registration={register("cases.place_of_detention")} />
                 <label className="block">
                   <span className="text-sm font-medium text-[#4B5563]">Location Type</span>
-                  <select {...register("cases.location_type")} className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/15">
+                  <select {...register("cases.location_type")} className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20">
                     <option value="">Select</option>
                     <option>Urban</option>
                     <option>Rural</option>
                   </select>
                 </label>
                 <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
-                  <input type="checkbox" {...register("cases.pending_in_court")} className="h-4 w-4 rounded border-[#E5E7EB] text-[#1D4ED8] focus:ring-[#1D4ED8]" />
+                  <input type="checkbox" {...register("cases.pending_in_court")} className="h-4 w-4 rounded border-[#E5E7EB] text-[#4A7FB0] focus:ring-[#4A7FB0]" />
                   Pending in Court?
                 </label>
                 <div className="md:col-span-2 lg:col-span-3">
@@ -886,7 +886,7 @@ export function CaseWorkflow({
                 </div>
                 {pendingInCourt && (
                   <div className="md:col-span-2 lg:col-span-3">
-                    <h4 className="mb-3 text-sm font-semibold text-[#111827]">VIII-D Pending Court Details</h4>
+                    <h4 className="mb-3 text-sm font-semibold text-[#2B3642]">VIII-D Pending Court Details</h4>
                     <div className="grid gap-4 md:grid-cols-3">
                       <TextInput label="Title of Case" registration={register("cases.title_of_case")} error={errors.cases?.title_of_case?.message} status={indicators["cases.title_of_case"]} />
                       <TextInput label="Docket Number" registration={register("cases.case_no")} error={errors.cases?.case_no?.message} status={indicators["cases.case_no"]} />
@@ -904,11 +904,11 @@ export function CaseWorkflow({
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#111827]">Incident Location</h3>
+              <h3 className="text-sm font-semibold text-[#2B3642]">Incident Location</h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <label className="block">
                   <span className="text-sm font-medium text-[#4B5563]">Barangay</span>
-                  <select {...register("cases.incident_barangay")} className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/15">
+                  <select {...register("cases.incident_barangay")} className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20">
                     <option value="">Select barangay</option>
                     {panaboBarangays.map((barangay) => (
                       <option key={barangay}>{barangay}</option>
@@ -932,34 +932,34 @@ export function CaseWorkflow({
           type="button"
           onClick={() => setStep((current) => Math.max(current - 1, 0))}
           disabled={step === 0}
-          className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#2B3642] disabled:cursor-not-allowed disabled:opacity-50"
         >
           Back
         </button>
 
         <div className="flex flex-wrap justify-end gap-2">
           {!lockedClient && step > 0 && (
-            <button type="button" onClick={() => setStep(0)} className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#111827]">
+            <button type="button" onClick={() => setStep(0)} className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#2B3642]">
               Change Client
             </button>
           )}
           {isCaseFormStep && (
-            <button type="button" onClick={() => setStep(lockedClient ? 0 : 1)} className="rounded-md border border-[#1D4ED8] bg-white px-4 py-2 text-sm font-semibold text-[#1D4ED8] transition duration-200 hover:bg-[#1D4ED8] hover:text-white">
+            <button type="button" onClick={() => setStep(lockedClient ? 0 : 1)} className="rounded-md border border-[#4A7FB0] bg-white px-4 py-2 text-sm font-semibold text-[#4A7FB0] transition duration-200 hover:bg-[#4A7FB0] hover:text-white">
               Change Method
             </button>
           )}
           {!lockedClient && step === 0 && (
-            <button type="button" onClick={continueFromClient} className="rounded-md bg-[#1D4ED8] px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-gray-200/70 transition duration-200 hover:bg-[#1E40AF]">
+            <button type="button" onClick={continueFromClient} className="rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#3E6D97]">
               Continue
             </button>
           )}
           {isMethodStep && (
-            <button type="button" onClick={continueFromMethod} disabled={!method} className="rounded-md bg-[#1D4ED8] px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-gray-200/70 transition duration-200 hover:bg-[#1E40AF] disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={continueFromMethod} disabled={!method} className="rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#3E6D97] disabled:cursor-not-allowed disabled:opacity-50">
               Continue
             </button>
           )}
           {isCaseFormStep && (
-            <button type="submit" className="rounded-md bg-[#1D4ED8] px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-gray-200/70 transition duration-200 hover:bg-[#1E40AF]">
+            <button type="submit" className="rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#3E6D97]">
               {submitLabel}
             </button>
           )}

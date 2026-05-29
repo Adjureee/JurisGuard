@@ -47,7 +47,7 @@ export default function AdminDashboard() {
 
   return (
     <MainLayout>
-      <div className="relative mb-6 overflow-hidden rounded-2xl border border-[#111827] border-l-4 border-l-[#2563EB] bg-[#111827] px-6 py-6 text-white shadow-xl shadow-gray-200/70">
+      <div className="relative mb-6 overflow-hidden rounded-2xl border border-[#2B3642] border-l-4 border-l-[#4A7FB0] bg-[#2B3642] px-6 py-6 text-white shadow-md">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-[#93C5FD]">PAO Panabo Command Center</p>
@@ -59,6 +59,9 @@ export default function AdminDashboard() {
           <div className="rounded-xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
             <p className="text-xs uppercase tracking-wide text-gray-300">Operational posture</p>
             <p className="mt-1 text-lg font-bold">Live legal intelligence</p>
+            <Link to="/analytics" className="mt-3 inline-flex text-sm font-semibold text-white underline-offset-4 hover:underline">
+              Open analytics workspace
+            </Link>
           </div>
         </div>
       </div>
@@ -83,7 +86,7 @@ export default function AdminDashboard() {
           <div className="grid gap-3 md:grid-cols-2">
             {insights.map((insight) => (
               <div key={insight} className={`rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm ${["border-l-4 border-emerald-500", "border-l-4 border-amber-500", "border-l-4 border-blue-500"][insights.indexOf(insight) % 3]}`}>
-                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-[#EFF6FF] text-[#1D4ED8]">
+                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-[#EFF6FF] text-[#4A7FB0]">
                   <Brain className="h-4 w-4" />
                 </div>
                 <p className="text-sm font-medium leading-6 text-[#4B5563]">{insight}</p>
@@ -92,17 +95,17 @@ export default function AdminDashboard() {
           </div>
         </AnalyticsPanel>
 
-        <section className="flex flex-col justify-between rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-gray-200/60">
+        <section className="flex flex-col justify-between rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm ">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#1D4ED8]">Deep analytics</p>
-            <h2 className="mt-2 text-xl font-bold text-[#111827]">Charts, map, OCR, audit, and export tools</h2>
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#4A7FB0]">Deep analytics</p>
+            <h2 className="mt-2 text-xl font-bold text-[#2B3642]">Charts, map, OCR, audit, and export tools</h2>
             <p className="mt-3 text-sm font-medium leading-6 text-[#4B5563]">
               Open the dedicated analytics workspace when you need detailed barangay hotspots, intake trends, category distribution, staff activity, or export-ready datasets.
             </p>
           </div>
           <Link
             to="/analytics"
-            className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#111827] px-4 text-sm font-bold text-white shadow-sm transition-all hover:bg-gray-800"
+            className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#4A7FB0] px-4 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#3E6D97]"
           >
             Go to Deep Analytics & Export
             <ArrowRight className="h-4 w-4" />

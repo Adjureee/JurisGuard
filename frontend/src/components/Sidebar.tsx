@@ -65,19 +65,31 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const location = useLocation();
   const { user } = useAuth();
 
-  const visibleNavigation = user?.role === "admin"
+  const primaryNavigation = user?.role === "admin"
     ? [
         navigation[0],
         { label: "Analytics", path: "/analytics", icon: <AnalyticsIcon /> },
-        ...navigation.slice(1),
-        { label: "Verification", path: "/admin/verification", icon: <ShieldIcon /> },
       ]
-    : navigation;
+    : [
+        navigation[0],
+        { label: "Analytics & Reports", path: "/staff/analytics", icon: <AnalyticsIcon /> },
+      ];
+  const manageNavigation = [
+    navigation[1],
+    navigation[2],
+    ...(user?.role === "admin" ? [{ label: "Verification", path: "/admin/verification", icon: <ShieldIcon /> }] : []),
+  ];
+  const recordsNavigation = [navigation[3]];
+  const navigationSections = [
+    { label: "Overview", items: primaryNavigation },
+    { label: "Manage", items: manageNavigation },
+    { label: "Records", items: recordsNavigation },
+  ];
 
   const itemClass = (path: string) =>
     location.pathname === path || (path !== "/dashboard" && location.pathname.startsWith(path))
-      ? "border-l-4 border-[#2563EB] bg-white/10 font-semibold text-white shadow-sm"
-      : "border-l-4 border-transparent text-gray-400 hover:-translate-y-px hover:bg-white/5 hover:text-white hover:shadow-sm";
+      ? "border-l-4 border-[#2563EB] bg-[#EFF6FF] font-semibold text-[#2563EB] shadow-sm"
+      : "border-l-4 border-transparent text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#111827]";
 
   return (
     <>
@@ -89,30 +101,43 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           className="fixed inset-0 z-30 bg-black/60 md:hidden"
         />
       )}
-      <aside className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-[#E5E7EB] bg-[#111827] px-5 py-5 text-white transition duration-200 md:translate-x-0 ${
+      <aside className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-[#E5E7EB] bg-white px-5 py-5 text-[#111827] transition duration-200 md:translate-x-0 ${
         isOpen ? "translate-x-0" : "-translate-x-full"
       }`}>
-      <div className="mb-5 flex justify-center">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/10 shadow-sm shadow-gray-200/70">
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7 text-white">
+      <div className="mb-7 flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E5E7EB] bg-[#F8FAFC] shadow-sm">
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6 text-[#2563EB]">
             <path fill="currentColor" d="M12 3 4 6v5c0 5 3.4 8.3 8 10 4.6-1.7 8-5 8-10V6l-8-3Zm0 3.2 5 1.9V11c0 3.4-2 5.8-5 7.2-3-1.4-5-3.8-5-7.2V8.1l5-1.9ZM9 10h6v2H9v-2Zm1 3h4v2h-4v-2Z" />
           </svg>
         </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold tracking-wide text-[#111827]">JurisGuard</p>
+          <p className="truncate text-[11px] font-medium uppercase tracking-[0.15em] text-[#9CA3AF]">PAO Panabo</p>
+        </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-0 overflow-y-auto">
-        {visibleNavigation.map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            onClick={onClose}
-            className={`mb-1.5 flex h-[42px] items-center gap-2 whitespace-nowrap rounded-[10px] px-3.5 text-sm font-medium transition duration-200 ${itemClass(item.path)}`}
-          >
-            <span className="shrink-0">
-              {item.icon}
-            </span>
-            {item.label}
-          </Link>
+      <nav className="flex flex-1 flex-col gap-5 overflow-y-auto">
+        {navigationSections.map((section) => (
+          <div key={section.label}>
+            <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#9CA3AF]">
+              {section.label}
+            </p>
+            <div className="space-y-1.5">
+              {section.items.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  onClick={onClose}
+                  className={`flex h-[40px] items-center gap-2.5 whitespace-nowrap rounded-lg px-3 text-sm font-medium transition duration-150 ${itemClass(item.path)}`}
+                >
+                  <span className="shrink-0">
+                    {item.icon}
+                  </span>
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
     </aside>

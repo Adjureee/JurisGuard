@@ -45,6 +45,8 @@ const IMPORTANT_ACTIONS = new Set([
   "OCR Scan",
   "Edit Case",
   "Export CSV",
+  "Export Excel",
+  "Export PDF",
   "Approve User",
   "Reject User",
   "Approved Registration",

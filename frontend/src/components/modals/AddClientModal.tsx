@@ -128,7 +128,7 @@ function TextInput({
       <input
         type={type}
         {...registration}
-        className="mt-1 w-full rounded-md border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#1D4ED8] focus:ring-1 focus:ring-[#1D4ED8]"
+        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
       />
       <FieldError message={error} />
     </label>
@@ -156,7 +156,7 @@ function SelectInput({
       </span>
       <select
         {...registration}
-        className="mt-1 w-full rounded-md border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#1D4ED8] focus:ring-1 focus:ring-[#1D4ED8]"
+        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20"
       >
         <option value="">Select</option>
         {options.map((option) => (
@@ -195,16 +195,16 @@ function MethodCard({
       type="button"
       key={value}
       onClick={() => onSelect(value)}
-      className={`rounded-lg border bg-white p-5 text-left shadow-sm shadow-gray-200/60 transition duration-200 hover:-translate-y-px hover:shadow-md ${
+      className={`rounded-lg border bg-white p-5 text-left shadow-sm  transition duration-200 hover:-translate-y-px hover:shadow-md ${
         selected
-          ? "border-[#1D4ED8] shadow-[#1D4ED8]/20"
-          : "border-[#E5E7EB] hover:border-[#1D4ED8]"
+          ? "border-[#4A7FB0] shadow-[#4A7FB0]/20"
+          : "border-[#E5E7EB] hover:border-[#4A7FB0]"
       }`}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1D4ED8]/10 text-[#1D4ED8]">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#4A7FB0]/10 text-[#4A7FB0]">
         <i className={`fa-solid ${icon}`} aria-hidden="true" />
       </div>
-      <p className="mt-4 text-base font-semibold text-[#111827]">{title}</p>
+      <p className="mt-4 text-base font-semibold text-[#2B3642]">{title}</p>
       <p className="mt-2 text-sm leading-6 text-[#4B5563]">{description}</p>
     </button>
   );
@@ -450,11 +450,11 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
-      <div className="max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-2xl shadow-gray-200/70">
-        <div className="border-b border-[#E5E7EB] bg-white px-6 py-4">
+      <div className="max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+        <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-[#111827]">Add Client</h2>
+              <h2 className="text-lg font-semibold text-[#2B3642]">Add Client</h2>
               <p className="mt-1 text-sm text-[#4B5563]">
                 {phase === "client" ? "Create client record first." : "Attach criminal case to the new client."}
               </p>
@@ -462,7 +462,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
             <button
               type="button"
               onClick={closeModal}
-              className="rounded-md px-3 py-1.5 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#111827]"
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#2B3642]"
             >
               Close
             </button>
@@ -519,7 +519,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
             <div className="flex-1 overflow-y-auto bg-white px-6 py-5">
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-white px-4 py-3">
                 <div>
-                  <p className="text-sm font-semibold text-[#111827]">
+                  <p className="text-sm font-semibold text-[#2B3642]">
                     Method: {method === "manual" ? "Manual Entry" : method === "camera" ? "Live Camera OCR" : "Upload Document OCR"}
                   </p>
                   <p className="text-xs text-[#4B5563]">Switch methods anytime without clearing entered fields.</p>
@@ -527,7 +527,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                 <button
                   type="button"
                   onClick={() => setMethod(null)}
-                  className="rounded-md border border-[#1D4ED8] bg-white px-3 py-1.5 text-xs font-semibold text-[#1D4ED8] transition duration-200 hover:-translate-y-px hover:bg-[#1D4ED8] hover:text-white"
+                  className="rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition duration-200 hover:-translate-y-px hover:bg-[#4A7FB0] hover:text-white"
                 >
                   Change Method
                 </button>
@@ -543,13 +543,13 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                       className="aspect-video w-full rounded-md border border-[#E5E7EB] bg-[#F9FAFB] object-cover"
                     />
                     <div className="space-y-3">
-                      <button type="button" onClick={startCamera} className="w-full rounded-md bg-[#1D4ED8] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1E40AF]">
+                      <button type="button" onClick={startCamera} className="w-full rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3E6D97]">
                         Start Camera
                       </button>
                       <button type="button" onClick={stopCamera} className="w-full rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] hover:bg-[#F9FAFB]">
                         Stop Camera
                       </button>
-                      <button type="button" disabled={!isCameraActive || isExtracting} onClick={handleCapture} className="w-full rounded-md border border-[#1D4ED8] bg-white px-4 py-2 text-sm font-semibold text-[#1D4ED8] hover:bg-[#1D4ED8] hover:text-white disabled:opacity-50">
+                      <button type="button" disabled={!isCameraActive || isExtracting} onClick={handleCapture} className="w-full rounded-md border border-[#4A7FB0] bg-white px-4 py-2 text-sm font-semibold text-[#4A7FB0] hover:bg-[#4A7FB0] hover:text-white disabled:opacity-50">
                         {isExtracting ? "Extracting..." : "Capture"}
                       </button>
                       {cameraError && <p className="text-sm text-red-600">{cameraError}</p>}
@@ -566,7 +566,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                       type="file"
                       accept="image/*"
                       onChange={handleUpload}
-                      className="mt-3 block w-full text-sm text-[#4B5563] file:mr-4 file:rounded-md file:border-0 file:bg-[#1D4ED8] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
+                      className="mt-3 block w-full text-sm text-[#4B5563] file:mr-4 file:rounded-md file:border-0 file:bg-[#4A7FB0] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
                     />
                   </label>
                 </div>
@@ -625,7 +625,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                   <TextInput label="Relationship to Applicant" registration={register("client_details.representative_relationship")} status={indicators["client_details.representative_relationship"]} />
                   <TextInput label="Representative Email" type="email" registration={register("client_details.representative_email")} error={errors.client_details?.representative_email?.message} status={indicators["client_details.representative_email"]} />
                   <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
-                    <input type="checkbox" {...register("client_details.detained")} className="h-4 w-4 rounded border-[#E5E7EB] text-[#1D4ED8]" />
+                    <input type="checkbox" {...register("client_details.detained")} className="h-4 w-4 rounded border-[#E5E7EB] text-[#4A7FB0]" />
                     Detained
                     <FieldStatus status={indicators["client_details.detained"]} />
                   </label>
@@ -637,7 +637,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
               {step === 2 && (
                 <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
                   <div>
-                  <h3 className="text-base font-semibold text-[#111827]">Classification</h3>
+                  <h3 className="text-base font-semibold text-[#2B3642]">Classification</h3>
                     <p className="mt-1 text-sm text-[#6B7280]">Include all classification fields before saving.</p>
                     <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {classificationOptions.map(([name, label]) => (
@@ -645,7 +645,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                           <input
                             type="checkbox"
                             {...register(`client_classification.${name as keyof ClientFormValues["client_classification"]}`)}
-                            className="h-4 w-4 rounded border-[#E5E7EB] text-[#1D4ED8]"
+                            className="h-4 w-4 rounded border-[#E5E7EB] text-[#4A7FB0]"
                           />
                           {label}
                           <FieldStatus status={indicators[`client_classification.${name}`]} />
@@ -658,31 +658,31 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                   </div>
 
                   <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-                    <h3 className="text-sm font-semibold text-[#111827]">Review client information before saving.</h3>
+                    <h3 className="text-sm font-semibold text-[#2B3642]">Review client information before saving.</h3>
                     <dl className="mt-3 space-y-2 text-sm">
                       <div>
                         <dt className="text-[#6B7280]">Client</dt>
-                        <dd className="font-medium text-[#111827]">{values.client.name || "Not provided"}</dd>
+                        <dd className="font-medium text-[#2B3642]">{values.client.name || "Not provided"}</dd>
                       </div>
                       <div>
                         <dt className="text-[#6B7280]">Contact</dt>
-                        <dd className="font-medium text-[#111827]">{values.client_details.contact_no || "Not provided"}</dd>
+                        <dd className="font-medium text-[#2B3642]">{values.client_details.contact_no || "Not provided"}</dd>
                       </div>
                       <div>
                         <dt className="text-[#6B7280]">Address</dt>
-                        <dd className="font-medium text-[#111827]">{values.client_details.address || "Not provided"}</dd>
+                        <dd className="font-medium text-[#2B3642]">{values.client_details.address || "Not provided"}</dd>
                       </div>
                       <div>
                         <dt className="text-[#6B7280]">Representative</dt>
-                        <dd className="font-medium text-[#111827]">{values.client_details.representative_name || "Not provided"}</dd>
+                        <dd className="font-medium text-[#2B3642]">{values.client_details.representative_name || "Not provided"}</dd>
                       </div>
                       <div>
                         <dt className="text-[#6B7280]">Relationship</dt>
-                        <dd className="font-medium text-[#111827]">{values.client_details.representative_relationship || "Not provided"}</dd>
+                        <dd className="font-medium text-[#2B3642]">{values.client_details.representative_relationship || "Not provided"}</dd>
                       </div>
                       <div>
                         <dt className="text-[#6B7280]">Classifications</dt>
-                        <dd className="font-medium text-[#111827]">
+                        <dd className="font-medium text-[#2B3642]">
                           {classificationOptions
                             .filter(([name]) => values.client_classification[name])
                             .map(([, label]) => label)
@@ -699,7 +699,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
               <button
                 type="button"
                 onClick={() => (step === 0 ? setMethod(null) : setStep((current) => Math.max(current - 1, 0)))}
-                className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#111827]"
+                className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#2B3642]"
               >
                 Back
               </button>
@@ -708,16 +708,16 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                 <button
                   type="button"
                   onClick={() => setMethod(null)}
-                  className="rounded-md border border-[#1D4ED8] bg-white px-4 py-2 text-sm font-semibold text-[#1D4ED8] transition duration-200 hover:bg-[#1D4ED8] hover:text-white"
+                  className="rounded-md border border-[#4A7FB0] bg-white px-4 py-2 text-sm font-semibold text-[#4A7FB0] transition duration-200 hover:bg-[#4A7FB0] hover:text-white"
                 >
                   Change Method
                 </button>
                 {step < steps.length - 1 ? (
-                  <button type="button" onClick={nextStep} className="rounded-md bg-[#1D4ED8] px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-gray-200/70 transition hover:bg-[#1E40AF]">
+                  <button type="button" onClick={nextStep} className="rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white shadow-md  transition hover:bg-[#3E6D97]">
                     Continue
                   </button>
                 ) : (
-                  <button type="submit" className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-700">
+                  <button type="submit" className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-emerald-500/20 transition hover:bg-emerald-700">
                     Create Client & Attach Case
                   </button>
                 )}
