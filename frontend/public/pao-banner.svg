@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 854 129" role="img" aria-label="Public Attorney's Office banner">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f3f31"/>
+      <stop offset="0.45" stop-color="#2f7a39"/>
+      <stop offset="1" stop-color="#102f2b"/>
+    </linearGradient>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3d889"/>
+      <stop offset="1" stop-color="#93693d"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-color="#10210c" flood-opacity=".75"/>
+    </filter>
+  </defs>
+  <rect width="854" height="112" rx="0" fill="url(#sky)"/>
+  <path d="M0 0h245L0 90Z" fill="#fff"/>
+  <path d="M0 0h255L0 110Z" fill="#c81f25" opacity=".86"/>
+  <circle cx="37" cy="31" r="15" fill="#f3c515"/>
+  <g stroke="#f3c515" stroke-width="5" stroke-linecap="round">
+    <path d="M37 7v-7M37 62v-7M13 31H5M69 31h-8M20 14l-6-6M59 53l6 6M20 48l-6 6M59 9l6-6"/>
+  </g>
+  <path d="M0 87c105-15 187-12 260-1 94 14 184 14 277-7 111-25 217-30 317 1v49H0Z" fill="url(#floor)" opacity=".78"/>
+  <g opacity=".5">
+    <circle cx="226" cy="58" r="21" fill="#203b29"/>
+    <rect x="211" y="80" width="33" height="31" rx="15" fill="#203b29"/>
+    <circle cx="478" cy="38" r="22" fill="#f2c9a5"/>
+    <rect x="456" y="58" width="48" height="52" rx="14" fill="#1f9a7b"/>
+    <circle cx="571" cy="52" r="16" fill="#efc2a1"/>
+    <rect x="551" y="67" width="43" height="40" rx="13" fill="#f6d35d"/>
+    <circle cx="633" cy="43" r="19" fill="#efc2a1"/>
+    <rect x="610" y="61" width="47" height="47" rx="14" fill="#268158"/>
+    <circle cx="705" cy="51" r="15" fill="#efc2a1"/>
+    <rect x="687" y="67" width="40" height="40" rx="12" fill="#f3df83"/>
+  </g>
+  <text x="190" y="83" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="40" font-weight="800" fill="#ffffff" stroke="#1b7a25" stroke-width="7" paint-order="stroke" filter="url(#shadow)">Public Attorney's Office</text>
+  <g transform="translate(742 13)">
+    <circle cx="51" cy="51" r="48" fill="#fff" stroke="#1f2937" stroke-width="3"/>
+    <circle cx="51" cy="51" r="39" fill="#f7fafc" stroke="#166534" stroke-width="2"/>
+    <path d="M51 23l24 42H27Z" fill="#e5e7eb" stroke="#1f2937" stroke-width="2"/>
+    <path d="M51 22v56" stroke="#7c2d12" stroke-width="5" stroke-linecap="round"/>
+    <path d="M36 47h30M41 59h20" stroke="#1f2937" stroke-width="3" stroke-linecap="round"/>
+    <text x="51" y="13" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" font-weight="700" fill="#111827">PUBLIC ATTORNEY'S OFFICE</text>
+    <text x="51" y="92" text-anchor="middle" font-family="Arial, sans-serif" font-size="7" font-weight="700" fill="#111827">DEPARTMENT OF JUSTICE</text>
+  </g>
+  <rect y="105" width="854" height="17" fill="#404040"/>
+  <path d="M0 122h854v7H8c-4 0-8-3-8-7Z" fill="#686868"/>
+</svg>

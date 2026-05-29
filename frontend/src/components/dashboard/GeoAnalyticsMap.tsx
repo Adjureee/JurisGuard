@@ -140,13 +140,13 @@ export default function GeoAnalyticsMap({
   );
 
   return (
-    <div className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white">
-      <div className="h-[460px]">
+    <div className="relative z-0 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white">
+      <div className="relative z-0 h-[460px]">
         <MapContainer
           center={[safeCenter.lat, safeCenter.lng]}
           zoom={11}
           scrollWheelZoom
-          className="h-full w-full"
+          className="z-0 h-full w-full"
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
+import { createAuditLog } from "../../services/auditService";
 import {
   buildCriminalCasesCsv,
   downloadCsv,
@@ -83,7 +84,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
     setFilters((current) => ({ ...current, [key]: value }));
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (exportRows.length === 0) {
       toast.error("No records match the selected export filters.");
       return;
@@ -91,6 +92,16 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
     const toastId = toast.loading("Preparing report export...");
     try {
       const stamp = new Date().toISOString().slice(0, 10);
+      const action = exportType === "csv" ? "Export CSV" : exportType === "excel" ? "Export Excel" : "Export PDF";
+      const description = `${user?.full_name || user?.email || "User"} exported ${exportRows.length} criminal case record${exportRows.length === 1 ? "" : "s"} as ${exportType.toUpperCase()}`;
+      const entityId = new Date().toISOString();
+      await createAuditLog({
+        action,
+        module: "Export",
+        description,
+        entity_type: "criminal_case_export",
+        entity_id: entityId,
+      });
       if (exportType === "csv") {
         const csv = buildCriminalCasesCsv(rows, filters);
         downloadCsv(`jurisguard-criminal-cases_${stamp}.csv`, csv);
@@ -107,11 +118,11 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
       addLog({
         userId: user?.user_id,
         user: user?.full_name || user?.email,
-        action: exportType === "csv" ? "Export CSV" : exportType === "excel" ? "Export Excel" : "Export PDF",
+        action,
         module: "Export",
-        description: `${user?.full_name || user?.email || "User"} exported ${exportRows.length} criminal case record${exportRows.length === 1 ? "" : "s"} as ${exportType.toUpperCase()}`,
+        description,
         entityType: "criminal_case_export",
-        entityId: new Date().toISOString(),
+        entityId,
       });
       addNotification({
         type: "export_completed",
@@ -120,7 +131,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
         message: `${exportType.toUpperCase()} exported`,
         redirectTo: "/criminal-cases",
         entityType: "criminal_case_export",
-        entityId: new Date().toISOString(),
+        entityId,
       });
       toast.success("Report exported", { id: toastId });
       onClose();
@@ -130,7 +141,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
       <div className="w-full max-w-3xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div>
@@ -157,7 +168,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
                 onClick={() => setExportType(type)}
                 className={`rounded-lg border px-3 py-2 text-sm font-semibold uppercase ${
                   exportType === type
-                    ? "border-[#4A7FB0] bg-[#4A7FB0] text-white"
+                    ? "border-[#2563EB] bg-[#2563EB] text-white"
                     : "border-[#D1D5DB] bg-white text-[#2B3642] hover:bg-[#F3F7FB]"
                 }`}
               >
@@ -264,7 +275,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
           <button
             type="button"
             onClick={handleExport}
-            className="rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#3E6D97]"
+            className="rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#1D4ED8]"
           >
             Export {exportType.toUpperCase()}
           </button>

@@ -12,6 +12,7 @@ import {
   getTerminatedCaseStats,
   type BarangayStat,
   type CaseCategoryStat,
+  type DashboardDateRange,
   type DashboardOverview,
   type HeatmapResponse,
   type IntakeLoadAnalytics,
@@ -45,6 +46,8 @@ export const emptyIntakeLoad: IntakeLoadAnalytics = {
 
 export const emptyTerminatedStats: TerminatedDashboardStats = {
   total: 0,
+  closure_rate: 0,
+  most_common_reason: null,
   by_reason: [],
   monthly: [],
 };
@@ -102,6 +105,14 @@ function safeIntakeLoad(value: unknown): IntakeLoadAnalytics {
     hourly: safeArray<IntakeLoadAnalytics["hourly"][number]>(candidate.hourly),
     busiest_day: candidate.busiest_day ?? null,
     busiest_hour: candidate.busiest_hour ?? null,
+    average_daily_intake:
+      typeof candidate.average_daily_intake === "number" && Number.isFinite(candidate.average_daily_intake)
+        ? candidate.average_daily_intake
+        : 0,
+    total_weekly_cases:
+      typeof candidate.total_weekly_cases === "number" && Number.isFinite(candidate.total_weekly_cases)
+        ? candidate.total_weekly_cases
+        : safeArray<IntakeLoadAnalytics["weekly"][number]>(candidate.weekly).reduce((sum, row) => sum + row.total_cases, 0),
   };
 }
 
@@ -110,6 +121,9 @@ function safeTerminatedStats(value: unknown): TerminatedDashboardStats {
   const candidate = value as Partial<TerminatedDashboardStats>;
   return {
     total: typeof candidate.total === "number" && Number.isFinite(candidate.total) ? candidate.total : 0,
+    closure_rate:
+      typeof candidate.closure_rate === "number" && Number.isFinite(candidate.closure_rate) ? candidate.closure_rate : 0,
+    most_common_reason: candidate.most_common_reason ?? null,
     by_reason: safeArray<TerminatedDashboardStats["by_reason"][number]>(candidate.by_reason),
     monthly: safeArray<MonthlyTrend>(candidate.monthly),
   };
@@ -131,7 +145,7 @@ function safeOcrAnalytics(value: unknown): OcrAnalytics {
   };
 }
 
-export function useDashboardAnalytics({ deep = true }: { deep?: boolean } = {}) {
+export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boolean; dateRange?: DashboardDateRange } = {}) {
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [monthlyTrends, setMonthlyTrends] = useState<MonthlyTrend[]>([]);
   const [caseCategories, setCaseCategories] = useState<CaseCategoryStat[]>([]);
@@ -174,14 +188,14 @@ export function useDashboardAnalytics({ deep = true }: { deep?: boolean } = {}) 
       }
 
       const results = await Promise.allSettled([
-        getDashboardOverview(),
-        getMonthlyTrends(),
+        getDashboardOverview(dateRange),
+        getMonthlyTrends(dateRange),
         getCaseCategories(),
         getBarangayStats(),
         getHeatmap(),
-        getTerminatedCaseStats(),
+        getTerminatedCaseStats(dateRange),
         getRecentActivities(),
-        getIntakeLoadAnalytics(),
+        getIntakeLoadAnalytics(dateRange),
         getOcrAnalytics(),
       ]);
       if (cancelled) return;
@@ -214,7 +228,7 @@ export function useDashboardAnalytics({ deep = true }: { deep?: boolean } = {}) 
     return () => {
       cancelled = true;
     };
-  }, [deep]);
+  }, [dateRange, deep]);
 
   return {
     activities,

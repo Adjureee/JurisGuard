@@ -1,8 +1,33 @@
 import { apiClient } from "../api/client";
 import type { AuditLogEntry } from "../features/auditLogs/auditLogStore";
+import type { AuthUser } from "../types/auth";
 
-export async function listAuditLogs(): Promise<AuditLogEntry[]> {
-  const response = await apiClient.get<AuditLogEntry[]>("/audit-logs/");
+export interface ListAuditLogsParams {
+  limit?: number;
+  offset?: number;
+  action?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  userId?: number | string;
+  search?: string;
+  currentUser?: AuthUser;
+}
+
+export async function listAuditLogs(params: ListAuditLogsParams = {}): Promise<AuditLogEntry[]> {
+  const response = await apiClient.get<AuditLogEntry[]>("/audit-logs/", {
+    params: {
+      limit: params.limit,
+      offset: params.offset,
+      action: params.action,
+      date_from: params.dateFrom,
+      date_to: params.dateTo,
+      user_id: params.userId,
+      search: params.search,
+    },
+  });
+  if (params.currentUser?.role === "staff") {
+    return response.data.filter((log) => log.userId === params.currentUser?.user_id || log.user_id === params.currentUser?.user_id);
+  }
   return response.data;
 }
 

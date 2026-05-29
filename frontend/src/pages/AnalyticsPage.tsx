@@ -37,6 +37,24 @@ import type { RecentActivity } from "../services/dashboardService";
 const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsMap"));
 
 const COLORS = ["#4A7FB0", "#15803D", "#F59E0B", "#DC2626", "#7C3AED", "#0F766E"];
+type DatePreset = "last7" | "last30" | "month" | "year" | "custom";
+
+function isoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function presetRange(preset: DatePreset) {
+  const now = new Date();
+  const start = new Date(now);
+  if (preset === "last7") start.setDate(now.getDate() - 6);
+  if (preset === "last30") start.setDate(now.getDate() - 29);
+  if (preset === "month") start.setDate(1);
+  if (preset === "year") {
+    start.setMonth(0);
+    start.setDate(1);
+  }
+  return { dateFrom: isoDate(start), dateTo: isoDate(now) };
+}
 
 function formatDateTime(value: string) {
   if (!value) return "-";
@@ -95,6 +113,8 @@ function StaffActivityFeed({ activities }: { activities: RecentActivity[] }) {
 }
 
 export default function AnalyticsPage() {
+  const [datePreset, setDatePreset] = useState<DatePreset>("last30");
+  const [dateRange, setDateRange] = useState(() => presetRange("last30"));
   const {
     activities,
     barangays,
@@ -104,11 +124,19 @@ export default function AnalyticsPage() {
     isLoading,
     monthlyTrends,
     ocrAnalytics,
+    overview,
     terminatedStats,
-  } = useDashboardAnalytics();
+  } = useDashboardAnalytics({ dateRange });
   const [selectedBarangay, setSelectedBarangay] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
 
+  const intakeTotal = useMemo(() => monthlyTrends.reduce((sum, row) => sum + row.total_cases, 0), [monthlyTrends]);
+  const intakePeak = useMemo(
+    () => monthlyTrends.reduce<typeof monthlyTrends[number] | null>((best, row) => (!best || row.total_cases > best.total_cases ? row : best), null),
+    [monthlyTrends]
+  );
+  const mostCommonReason = terminatedStats?.most_common_reason ?? terminatedStats?.by_reason[0]?.reason ?? "No closures in range";
+  const averageDailyIntake = intakeLoad?.average_daily_intake ?? 0;
   const topBarangays = useMemo(() => barangays.slice(0, 10), [barangays]);
   const categoryPie = useMemo(() => caseCategories.slice(0, 7), [caseCategories]);
   const exportRows = useMemo<ReportExportRow[]>(() => {
@@ -213,6 +241,11 @@ export default function AnalyticsPage() {
     return [...monthlyRows, ...weeklyRows, ...hourlyRows, ...categoryRows, ...barangayRows, ...terminatedRows, ...ocrRows];
   }, [barangays, caseCategories, intakeLoad, monthlyTrends, ocrAnalytics, terminatedStats]);
 
+  const applyPreset = (preset: DatePreset) => {
+    setDatePreset(preset);
+    if (preset !== "custom") setDateRange(presetRange(preset));
+  };
+
   return (
     <MainLayout>
       <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] bg-white px-6 py-5 shadow-sm  lg:flex-row lg:items-center lg:justify-between">
@@ -231,6 +264,63 @@ export default function AnalyticsPage() {
         >
           Advanced Report Export
         </button>
+      </div>
+
+      <div className="mb-6 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-sm font-bold text-[#111827]">Analytics Date Range</p>
+            <p className="mt-1 text-xs font-medium text-[#6B7280]">Trends, intake load, and closure analytics refresh from this range.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {([
+              ["last7", "Last 7 Days"],
+              ["last30", "Last 30 Days"],
+              ["month", "This Month"],
+              ["year", "This Year"],
+              ["custom", "Custom Range"],
+            ] as Array<[DatePreset, string]>).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => applyPreset(value)}
+                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                  datePreset === value
+                    ? "border-[#2563EB] bg-[#EFF6FF] text-[#2563EB]"
+                    : "border-[#D1D5DB] bg-white text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#111827]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Start Date</span>
+            <input
+              type="date"
+              value={dateRange.dateFrom}
+              onChange={(event) => {
+                setDatePreset("custom");
+                setDateRange((current) => ({ ...current, dateFrom: event.target.value }));
+              }}
+              className="mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">End Date</span>
+            <input
+              type="date"
+              value={dateRange.dateTo}
+              onChange={(event) => {
+                setDatePreset("custom");
+                setDateRange((current) => ({ ...current, dateTo: event.target.value }));
+              }}
+              className="mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20"
+            />
+          </label>
+        </div>
       </div>
 
       {isLoading ? (
@@ -284,20 +374,50 @@ export default function AnalyticsPage() {
 
           <div className="mt-6 grid gap-6 xl:grid-cols-2">
             <AnalyticsPanel title="Monthly Intake Trends" subtitle="Case growth and intake spikes by month.">
+              <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Intake Volume</p>
+                  <p className="mt-1 text-xl font-bold text-[#111827]">{intakeTotal}</p>
+                </div>
+                <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Client Growth</p>
+                  <p className="mt-1 text-xl font-bold text-[#111827]">{overview?.clients_in_range ?? 0}</p>
+                </div>
+                <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Peak Spike</p>
+                  <p className="mt-1 truncate text-xl font-bold text-[#111827]">{intakePeak ? `${intakePeak.month}: ${intakePeak.total_cases}` : "-"}</p>
+                </div>
+              </div>
               <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthlyTrends}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                    <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
-                    <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Line type="monotone" dataKey="total_cases" name="Cases" stroke="#4A7FB0" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 7 }} />
-                  </LineChart>
-                </ResponsiveContainer>
+                {monthlyTrends.length === 0 ? <EmptyState message="No intake records match the selected date range." /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={monthlyTrends}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                      <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
+                      <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Line type="monotone" dataKey="total_cases" name="Cases" stroke="#2563EB" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 7 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </AnalyticsPanel>
 
             <AnalyticsPanel title="Weekly Volume Distribution" subtitle="Which days carry the heaviest client and case intake.">
+              <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg bg-[#EFF6FF] p-3 text-[#2563EB]">
+                  <p className="text-xs font-semibold uppercase tracking-wide">Most Crowded</p>
+                  <p className="mt-1 text-lg font-bold">{intakeLoad?.busiest_day?.day ?? "-"}</p>
+                </div>
+                <div className="rounded-lg bg-[#F9FAFB] p-3 text-[#111827]">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Average Daily</p>
+                  <p className="mt-1 text-lg font-bold">{averageDailyIntake}</p>
+                </div>
+                <div className="rounded-lg bg-[#F9FAFB] p-3 text-[#111827]">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Range Cases</p>
+                  <p className="mt-1 text-lg font-bold">{intakeLoad?.total_weekly_cases ?? 0}</p>
+                </div>
+              </div>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={intakeLoad?.weekly ?? []}>
@@ -305,7 +425,7 @@ export default function AnalyticsPage() {
                     <XAxis dataKey="day" stroke="#6B7280" fontSize={11} />
                     <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
                     <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill="#15803D" />
+                    <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill="#2563EB" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -362,11 +482,21 @@ export default function AnalyticsPage() {
             </AnalyticsPanel>
 
             <AnalyticsPanel title="Terminated Case Analytics" subtitle="Archive movement and closure reasons." className="border-[#FECACA]">
-              <div className="mb-4 flex items-center gap-3 rounded-xl bg-[#FEF2F2] p-4 text-[#991B1B]">
+              <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                <div className="flex items-center gap-3 rounded-xl bg-[#FEF2F2] p-4 text-[#991B1B] sm:col-span-1">
                 <FolderCheck className="h-6 w-6" />
                 <div>
                   <p className="text-2xl font-bold">{terminatedStats?.total ?? 0}</p>
                   <p className="text-xs font-semibold uppercase tracking-wide">Archived closures</p>
+                </div>
+                </div>
+                <div className="rounded-xl border border-[#FECACA] bg-white p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#991B1B]">Common Reason</p>
+                  <p className="mt-1 truncate text-sm font-bold text-[#111827]">{mostCommonReason}</p>
+                </div>
+                <div className="rounded-xl border border-[#FECACA] bg-white p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#991B1B]">Closure Rate</p>
+                  <p className="mt-1 text-sm font-bold text-[#111827]">{terminatedStats?.closure_rate ?? 0}%</p>
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={220}>

@@ -9,6 +9,8 @@ export interface AuditLogEntry {
   createdBy: number | null;
   user_id: number | null;
   user: string;
+  userRole?: "admin" | "staff" | string | null;
+  user_role?: "admin" | "staff" | string | null;
   action: string;
   module: AuditModule;
   description: string;
@@ -29,11 +31,17 @@ interface AddAuditLogInput {
 interface AuditLogState {
   logs: AuditLogEntry[];
   setLogs: (logs: AuditLogEntry[]) => void;
+  setLogsForViewer: (logs: AuditLogEntry[], viewer: AuditLogViewer) => void;
+  scopeToViewer: (viewer: AuditLogViewer) => void;
   addLog: (entry: AddAuditLogInput) => AuditLogEntry;
   clearLogs: () => void;
 }
 
 const STORAGE_KEY = "jurisguard_audit_logs";
+export interface AuditLogViewer {
+  user_id: number;
+  role: "admin" | "staff";
+}
 const IMPORTANT_ACTIONS = new Set([
   "Login",
   "Logout",
@@ -55,11 +63,14 @@ const IMPORTANT_ACTIONS = new Set([
 
 function normalizeLog(raw: AuditLogEntry) {
   const userId = raw.userId ?? raw.user_id ?? null;
+  const userRole = raw.userRole ?? raw.user_role ?? null;
   return {
     ...raw,
     userId,
     createdBy: raw.createdBy ?? userId,
     user_id: userId,
+    userRole,
+    user_role: userRole,
   };
 }
 
@@ -83,12 +94,28 @@ function persistLogs(logs: AuditLogEntry[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(logs.slice(0, 100)));
 }
 
+function scopedLogsForViewer(logs: AuditLogEntry[], viewer: AuditLogViewer) {
+  const normalized = logs.map(normalizeLog);
+  if (viewer.role === "admin") return normalized;
+  return normalized.filter((log) => log.userId === viewer.user_id);
+}
+
 export const useAuditLogStore = create<AuditLogState>((set, get) => ({
   logs: readStoredLogs(),
   setLogs: (logs) => {
     const normalized = logs.map(normalizeLog);
     persistLogs(normalized);
     set({ logs: normalized });
+  },
+  setLogsForViewer: (logs, viewer) => {
+    const scoped = scopedLogsForViewer(logs, viewer);
+    persistLogs(scoped);
+    set({ logs: scoped });
+  },
+  scopeToViewer: (viewer) => {
+    const scoped = scopedLogsForViewer(get().logs, viewer);
+    persistLogs(scoped);
+    set({ logs: scoped });
   },
   addLog: (entry) => {
     if (!IMPORTANT_ACTIONS.has(entry.action)) {
@@ -99,6 +126,8 @@ export const useAuditLogStore = create<AuditLogState>((set, get) => ({
         createdBy: entry.userId ?? null,
         user_id: entry.userId ?? null,
         user: entry.user || "System",
+        userRole: null,
+        user_role: null,
         action: entry.action,
         module: entry.module,
         description: entry.description,
@@ -113,6 +142,8 @@ export const useAuditLogStore = create<AuditLogState>((set, get) => ({
       createdBy: entry.userId ?? null,
       user_id: entry.userId ?? null,
       user: entry.user || "System",
+      userRole: null,
+      user_role: null,
       action: entry.action,
       module: entry.module,
       description: entry.description,

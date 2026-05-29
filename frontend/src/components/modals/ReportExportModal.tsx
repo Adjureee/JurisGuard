@@ -234,11 +234,11 @@ export default function ReportExportModal({
     }
   };
 
-  const selectClass = "mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#4A7FB0] focus:ring-2 focus:ring-[#4A7FB0]/20";
+  const selectClass = "mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20";
   const labelClass = "text-xs font-semibold uppercase tracking-wide text-[#2B3642]";
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-sm">
       <div className="max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div>
@@ -259,7 +259,7 @@ export default function ReportExportModal({
                 onClick={() => setExportType(type)}
                 className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold capitalize transition ${
                   exportType === type
-                    ? "border-[#4A7FB0] bg-[#4A7FB0] text-white"
+                    ? "border-[#2563EB] bg-[#2563EB] text-white"
                     : "border-[#D1D5DB] bg-white text-[#2B3642] hover:bg-[#F3F7FB]"
                 }`}
               >
@@ -347,7 +347,7 @@ export default function ReportExportModal({
           <button type="button" onClick={() => setFilters(initialFilters)} className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-semibold text-[#2B3642] hover:bg-[#F3F7FB]">
             Reset Filters
           </button>
-          <button type="button" onClick={handleExport} className="rounded-md bg-[#4A7FB0] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#3E6D97]">
+          <button type="button" onClick={handleExport} className="rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#1D4ED8]">
             Export Report
           </button>
         </div>

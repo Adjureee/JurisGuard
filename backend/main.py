@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import func, text
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
 import models
@@ -849,6 +849,39 @@ def dashboard_records(db: Session, user: models.User) -> list[models.Case]:
     return scoped_case_query(db, user).all()
 
 
+def case_date_column():
+    return func.coalesce(models.IntakeRecord.form_date, models.Case.last_updated)
+
+
+def apply_case_date_filters(query, date_from: str | None = None, date_to: str | None = None):
+    from_date = parse_date(date_from)
+    if from_date:
+        query = query.filter(case_date_column() >= from_date)
+    to_date = parse_date(date_to)
+    if to_date:
+        query = query.filter(case_date_column() < to_date + timedelta(days=1))
+    return query
+
+
+def apply_termination_date_filters(query, date_from: str | None = None, date_to: str | None = None):
+    termination_date = func.coalesce(models.Case.terminated_at, models.Case.date_of_termination, models.Case.last_updated)
+    from_date = parse_date(date_from)
+    if from_date:
+        query = query.filter(termination_date >= from_date)
+    to_date = parse_date(date_to)
+    if to_date:
+        query = query.filter(termination_date < to_date + timedelta(days=1))
+    return query
+
+
+def trend_bucket_format(date_from: str | None = None, date_to: str | None = None) -> str:
+    from_date = parse_date(date_from)
+    to_date = parse_date(date_to)
+    if from_date and to_date and (to_date - from_date).days <= 45:
+        return "YYYY-MM-DD"
+    return "YYYY-MM"
+
+
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the JurisGuard AI Backend"}
@@ -864,7 +897,12 @@ def health_check(db: Session = Depends(get_db)):
 
 
 @app.get("/api/dashboard/overview")
-def dashboard_overview(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def dashboard_overview(
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+):
     now = datetime.now()
     month_start = datetime(now.year, now.month, 1)
     total_clients = scoped_client_query(db, user).count()
@@ -880,6 +918,15 @@ def dashboard_overview(user: models.User = Depends(current_user), db: Session = 
         .filter(func.coalesce(models.IntakeRecord.form_date, models.Case.last_updated) >= month_start)
         .count()
     )
+    cases_in_range = apply_case_date_filters(scoped_case_query(db, user), date_from, date_to).count()
+    client_range_query = scoped_client_query(db, user)
+    client_from = parse_date(date_from)
+    if client_from:
+        client_range_query = client_range_query.filter(models.Client.created_at >= client_from)
+    client_to = parse_date(date_to)
+    if client_to:
+        client_range_query = client_range_query.filter(models.Client.created_at < client_to + timedelta(days=1))
+    clients_in_range = client_range_query.count()
     ocr_query = db.query(models.Document).filter(models.Document.ocr_status == "COMPLETED")
     if not is_admin(user):
         ocr_query = ocr_query.filter(models.Document.uploaded_by == user.user_id)
@@ -890,16 +937,24 @@ def dashboard_overview(user: models.User = Depends(current_user), db: Session = 
         "active_cases": max(total_cases - terminated_cases, 0),
         "terminated_cases": terminated_cases,
         "cases_this_month": cases_this_month,
+        "cases_in_range": cases_in_range,
+        "clients_in_range": clients_in_range,
         "ocr_scanned_documents": ocr_scanned_documents,
     }
 
 
 @app.get("/api/dashboard/monthly-trends")
-def dashboard_monthly_trends(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def dashboard_monthly_trends(
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+):
+    bucket_format = trend_bucket_format(date_from, date_to)
     rows = (
-        scoped_case_query(db, user)
+        apply_case_date_filters(scoped_case_query(db, user), date_from, date_to)
         .with_entities(
-            func.to_char(func.coalesce(models.IntakeRecord.form_date, models.Case.last_updated), "YYYY-MM").label("month"),
+            func.to_char(case_date_column(), bucket_format).label("month"),
             func.count(models.Case.case_id).label("total_cases"),
         )
         .group_by("month")
@@ -910,20 +965,25 @@ def dashboard_monthly_trends(user: models.User = Depends(current_user), db: Sess
 
 
 @app.get("/api/dashboard/intake-load")
-def dashboard_intake_load(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def dashboard_intake_load(
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+):
     weekday_rows = (
-        scoped_case_query(db, user)
+        apply_case_date_filters(scoped_case_query(db, user), date_from, date_to)
         .with_entities(
-            func.extract("dow", func.coalesce(models.IntakeRecord.form_date, models.Case.last_updated)).label("weekday"),
+            func.extract("dow", case_date_column()).label("weekday"),
             func.count(models.Case.case_id).label("total_cases"),
         )
         .group_by("weekday")
         .all()
     )
     hour_rows = (
-        scoped_case_query(db, user)
+        apply_case_date_filters(scoped_case_query(db, user), date_from, date_to)
         .with_entities(
-            func.extract("hour", func.coalesce(models.IntakeRecord.form_date, models.Case.last_updated)).label("hour"),
+            func.extract("hour", case_date_column()).label("hour"),
             func.count(models.Case.case_id).label("total_cases"),
         )
         .group_by("hour")
@@ -947,7 +1007,15 @@ def dashboard_intake_load(user: models.User = Depends(current_user), db: Session
         entry["total_cases"] = hour_lookup.get(hour, 0)
     busiest_day = max(weekly, key=lambda item: item["total_cases"]) if weekly else None
     busiest_hour = max(hourly, key=lambda item: item["total_cases"]) if hourly else None
-    return {"weekly": weekly, "hourly": hourly, "busiest_day": busiest_day, "busiest_hour": busiest_hour}
+    total_weekly = sum(item["total_cases"] for item in weekly)
+    return {
+        "weekly": weekly,
+        "hourly": hourly,
+        "busiest_day": busiest_day,
+        "busiest_hour": busiest_hour,
+        "average_daily_intake": round(total_weekly / 7, 2),
+        "total_weekly_cases": total_weekly,
+    }
 
 
 @app.get("/api/dashboard/case-categories")
@@ -1004,9 +1072,14 @@ def dashboard_heatmap(user: models.User = Depends(current_user), db: Session = D
 
 
 @app.get("/api/dashboard/terminated-cases")
-def dashboard_terminated_cases(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def dashboard_terminated_cases(
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+):
     records = (
-        scoped_case_query(db, user)
+        apply_termination_date_filters(scoped_case_query(db, user), date_from, date_to)
         .filter((models.Case.is_terminated.is_(True)) | (models.Case.status_of_case == "Terminated"))
         .all()
     )
@@ -1018,8 +1091,12 @@ def dashboard_terminated_cases(user: models.User = Depends(current_user), db: Se
         date_value = record.terminated_at or record.date_of_termination or record.last_updated
         month = date_value.strftime("%Y-%m") if date_value else "Unscheduled"
         monthly_counts[month] = monthly_counts.get(month, 0) + 1
+    total_in_range = apply_case_date_filters(scoped_case_query(db, user), date_from, date_to).count()
+    most_common_reason = max(reason_counts.items(), key=lambda item: item[1])[0] if reason_counts else None
     return {
         "total": len(records),
+        "closure_rate": round((len(records) / total_in_range) * 100, 2) if total_in_range else 0,
+        "most_common_reason": most_common_reason,
         "by_reason": [
             {"reason": reason, "total_cases": total}
             for reason, total in sorted(reason_counts.items(), key=lambda item: item[1], reverse=True)
@@ -1593,10 +1670,38 @@ def list_audit_logs(
     db: Session = Depends(get_db),
     limit: int = Query(100, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    action: str | None = Query(None),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+    user_id: int | None = Query(None),
+    search: str | None = Query(None),
 ):
     query = db.query(models.AuditLog).outerjoin(models.User)
-    if not is_admin(user):
+    if is_admin(user):
+        if user_id is not None:
+            query = query.filter(models.AuditLog.user_id == user_id)
+    else:
         query = query.filter(models.AuditLog.user_id == user.user_id)
+    if action and action.lower() != "all":
+        query = query.filter(models.AuditLog.action == action)
+    from_date = parse_date(date_from)
+    if from_date:
+        query = query.filter(models.AuditLog.timestamp >= from_date)
+    to_date = parse_date(date_to)
+    if to_date:
+        query = query.filter(models.AuditLog.timestamp < to_date + timedelta(days=1))
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                models.AuditLog.action.ilike(term),
+                models.AuditLog.description.ilike(term),
+                models.AuditLog.target_entity.ilike(term),
+                models.User.full_name.ilike(term),
+                models.User.email.ilike(term),
+                models.User.username.ilike(term),
+            )
+        )
     rows = query.order_by(models.AuditLog.timestamp.desc(), models.AuditLog.log_id.desc()).offset(offset).limit(limit).all()
     module_labels = {
         "user": "Admin",
@@ -1606,22 +1711,29 @@ def list_audit_logs(
         "export": "Export",
         "Authentication": "Authentication",
     }
-    return [
-        {
-            "id": str(row.log_id),
-            "timestamp": row.timestamp.isoformat() if row.timestamp else "",
-            "userId": row.user_id,
-            "createdBy": row.user_id,
-            "user_id": row.user_id,
-            "user": row.user.full_name or row.user.email or row.user.username if row.user else "System",
-            "action": row.action,
-            "module": module_labels.get(row.target_entity or "", row.target_entity or "Admin"),
-            "description": row.description or "",
-            "entity_type": row.target_entity,
-            "entity_id": row.entity_id,
-        }
-        for row in rows
-    ]
+    payload = []
+    for row in rows:
+        target = row.target_entity or ""
+        target_key = target.lower()
+        module = "Export" if "export" in target_key else module_labels.get(target_key, target or "Admin")
+        payload.append(
+            {
+                "id": str(row.log_id),
+                "timestamp": row.timestamp.isoformat() if row.timestamp else "",
+                "userId": row.user_id,
+                "createdBy": row.user_id,
+                "user_id": row.user_id,
+                "user": row.user.full_name or row.user.email or row.user.username if row.user else "System",
+                "userRole": row.user.role.role_name if row.user and row.user.role else None,
+                "user_role": row.user.role.role_name if row.user and row.user.role else None,
+                "action": row.action,
+                "module": module,
+                "description": row.description or "",
+                "entity_type": row.target_entity,
+                "entity_id": row.entity_id,
+            }
+        )
+    return payload
 
 
 @app.post("/api/audit-logs/")
@@ -1631,7 +1743,10 @@ def create_audit_log(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    write_audit(db, user.user_id, payload.action, payload.entity_type or payload.module, payload.description, payload.entity_id, request)
+    target = payload.entity_type or payload.module
+    if payload.module == "Export" and not target:
+        target = "export"
+    write_audit(db, user.user_id, payload.action, target, payload.description, payload.entity_id, request)
     db.commit()
     return {"message": "Audit log saved"}
 
@@ -1653,6 +1768,10 @@ async def upload_document(
         effective_user_id = user_id if is_admin(user) and user_id is not None else user.user_id
         if case_id is not None:
             ensure_case_access(db.get(models.Case, case_id), user)
+        if intake_id is not None and not is_admin(user):
+            intake = db.get(models.IntakeRecord, intake_id)
+            if not intake or intake.interviewer_id != user.user_id:
+                raise HTTPException(status_code=403, detail="Record access denied")
         original_name = Path(file.filename or "uploaded-document").name
         extension = Path(original_name).suffix.lower()
         if extension not in ALLOWED_EXTENSIONS or file.content_type not in ALLOWED_CONTENT_TYPES:

@@ -27,10 +27,21 @@ function ModuleBadge({ module }: { module: AuditLogEntry["module"] }) {
   );
 }
 
+function UserTypeBadge({ role }: { role?: string | null }) {
+  const label = role ? role.charAt(0).toUpperCase() + role.slice(1) : "System";
+  const className = role === "admin"
+    ? "bg-[#EFF6FF] text-[#2563EB]"
+    : role === "staff"
+      ? "bg-[#ECFDF5] text-[#047857]"
+      : "bg-[#F3F4F6] text-[#4B5563]";
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{label}</span>;
+}
+
 export default function AuditLogsPage() {
   const { user } = useAuth();
   const logs = useAuditLogStore((state) => state.logs);
-  const setLogs = useAuditLogStore((state) => state.setLogs);
+  const setLogsForViewer = useAuditLogStore((state) => state.setLogsForViewer);
+  const scopeToViewer = useAuditLogStore((state) => state.scopeToViewer);
   const [selectedUserId, setSelectedUserId] = useState("all");
   const [actionType, setActionType] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -41,15 +52,13 @@ export default function AuditLogsPage() {
 
     let cancelled = false;
     const currentUser = user;
+    scopeToViewer(currentUser);
     async function loadAuditLogs() {
       try {
-        const rows = await listAuditLogs();
-        const scopedRows = currentUser.role === "admin"
-          ? rows
-          : rows.filter((log) => log.userId === currentUser.user_id || log.user_id === currentUser.user_id);
-        if (!cancelled) setLogs(scopedRows);
+        const rows = await listAuditLogs({ currentUser });
+        if (!cancelled) setLogsForViewer(rows, currentUser);
       } catch {
-        // Keep locally captured logs visible if the backend is unavailable.
+        if (!cancelled) scopeToViewer(currentUser);
       }
     }
 
@@ -58,7 +67,7 @@ export default function AuditLogsPage() {
     return () => {
       cancelled = true;
     };
-  }, [setLogs, user]);
+  }, [scopeToViewer, setLogsForViewer, user]);
   const userOptions = useMemo(
     () =>
       Array.from(
@@ -158,10 +167,11 @@ export default function AuditLogsPage() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-sm">
-            <thead className="sticky top-0 z-10 border-b border-[#D6DEE7] bg-[#E9EEF3] text-xs uppercase tracking-wide text-[#2B3642]">
+            <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
               <tr>
                 <th className="px-5 py-3 text-left font-semibold">Timestamp</th>
                 <th className="px-5 py-3 text-left font-semibold">User</th>
+                <th className="px-5 py-3 text-left font-semibold">User Type</th>
                 <th className="px-5 py-3 text-left font-semibold">Module</th>
                 <th className="px-5 py-3 text-left font-semibold">Action</th>
                 <th className="px-5 py-3 text-left font-semibold">Description</th>
@@ -170,7 +180,7 @@ export default function AuditLogsPage() {
             <tbody className="divide-y divide-[#E5E7EB]">
               {visibleLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-[#4B5563]">
+                  <td colSpan={6} className="px-5 py-10 text-center text-[#4B5563]">
                     No audit logs recorded yet.
                   </td>
                 </tr>
@@ -179,6 +189,9 @@ export default function AuditLogsPage() {
                   <tr key={log.id} className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]">
                     <td className="px-5 py-4 text-[#2B3642]">{formatDate(log.timestamp)}</td>
                     <td className="px-5 py-4 text-[#4B5563]">{log.user}</td>
+                    <td className="px-5 py-4">
+                      <UserTypeBadge role={log.userRole ?? log.user_role} />
+                    </td>
                     <td className="px-5 py-4">
                       <ModuleBadge module={log.module} />
                     </td>

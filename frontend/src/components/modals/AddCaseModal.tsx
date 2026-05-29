@@ -29,9 +29,9 @@ export default function AddCaseModal({ isOpen, onClose }: AddCaseModalProps) {
         );
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
-      <div className="max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-        <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
+      <div className="flex max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+        <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-lg font-semibold text-[#2B3642]">Add Criminal Case</h2>
             <button
@@ -44,33 +44,35 @@ export default function AddCaseModal({ isOpen, onClose }: AddCaseModalProps) {
           </div>
         </div>
 
-        <CaseWorkflow
-          clients={visibleClients}
-          onSubmit={async (values) => {
-            const record = await createCaseRecord(values);
-            upsertCase(record);
-            addLog({
-              userId: user?.user_id,
-              user: user?.full_name || user?.email,
-              action: "Create Case",
-              module: "Cases",
-              description: `Case ${record.intake_record.control_no} attached to existing client`,
-              entityType: "case",
-              entityId: record.case_id,
-            });
-            addNotification({
-              type: "case_created",
-              userId: user?.user_id,
-              title: "Case Update",
-              message: "Case attached",
-              redirectTo: `/criminal-cases?case=${encodeURIComponent(record.case_id)}`,
-              entityType: "case",
-              entityId: record.case_id,
-            });
-            toast.success("Case attached");
-            onClose();
-          }}
-        />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <CaseWorkflow
+            clients={visibleClients}
+            onSubmit={async (values) => {
+              const record = await createCaseRecord(values);
+              upsertCase(record);
+              addLog({
+                userId: user?.user_id,
+                user: user?.full_name || user?.email,
+                action: "Create Case",
+                module: "Cases",
+                description: `Case ${record.intake_record.control_no} attached to existing client`,
+                entityType: "case",
+                entityId: record.case_id,
+              });
+              addNotification({
+                type: "case_created",
+                userId: user?.user_id,
+                title: "Case Update",
+                message: "Case attached",
+                redirectTo: `/criminal-cases?case=${encodeURIComponent(record.case_id)}`,
+                entityType: "case",
+                entityId: record.case_id,
+              });
+              toast.success("Case attached");
+              onClose();
+            }}
+          />
+        </div>
       </div>
     </div>
   );

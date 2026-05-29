@@ -6,6 +6,8 @@ export interface DashboardOverview {
   active_cases: number;
   terminated_cases: number;
   cases_this_month: number;
+  cases_in_range?: number;
+  clients_in_range?: number;
   ocr_scanned_documents: number;
 }
 
@@ -49,6 +51,8 @@ export interface HeatmapResponse {
 
 export interface TerminatedDashboardStats {
   total: number;
+  closure_rate?: number;
+  most_common_reason?: string | null;
   by_reason: Array<{ reason: string; total_cases: number }>;
   monthly: MonthlyTrend[];
 }
@@ -68,6 +72,8 @@ export interface IntakeLoadAnalytics {
   hourly: Array<{ hour: string; total_cases: number }>;
   busiest_day: { day: string; total_cases: number } | null;
   busiest_hour: { hour: string; total_cases: number } | null;
+  average_daily_intake?: number;
+  total_weekly_cases?: number;
 }
 
 export interface OcrAnalytics {
@@ -109,13 +115,25 @@ export interface StaffWorkload {
   }>;
 }
 
-export async function getDashboardOverview() {
-  const response = await apiClient.get<DashboardOverview>("/dashboard/overview");
+export interface DashboardDateRange {
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+function dateRangeParams(range?: DashboardDateRange) {
+  return {
+    date_from: range?.dateFrom || undefined,
+    date_to: range?.dateTo || undefined,
+  };
+}
+
+export async function getDashboardOverview(range?: DashboardDateRange) {
+  const response = await apiClient.get<DashboardOverview>("/dashboard/overview", { params: dateRangeParams(range) });
   return response.data;
 }
 
-export async function getMonthlyTrends() {
-  const response = await apiClient.get<MonthlyTrend[]>("/dashboard/monthly-trends");
+export async function getMonthlyTrends(range?: DashboardDateRange) {
+  const response = await apiClient.get<MonthlyTrend[]>("/dashboard/monthly-trends", { params: dateRangeParams(range) });
   return response.data;
 }
 
@@ -124,8 +142,8 @@ export async function getCaseCategories() {
   return response.data;
 }
 
-export async function getIntakeLoadAnalytics() {
-  const response = await apiClient.get<IntakeLoadAnalytics>("/dashboard/intake-load");
+export async function getIntakeLoadAnalytics(range?: DashboardDateRange) {
+  const response = await apiClient.get<IntakeLoadAnalytics>("/dashboard/intake-load", { params: dateRangeParams(range) });
   return response.data;
 }
 
@@ -139,8 +157,8 @@ export async function getHeatmap() {
   return response.data;
 }
 
-export async function getTerminatedCaseStats() {
-  const response = await apiClient.get<TerminatedDashboardStats>("/dashboard/terminated-cases");
+export async function getTerminatedCaseStats(range?: DashboardDateRange) {
+  const response = await apiClient.get<TerminatedDashboardStats>("/dashboard/terminated-cases", { params: dateRangeParams(range) });
   return response.data;
 }
 

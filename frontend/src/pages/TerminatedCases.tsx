@@ -225,7 +225,7 @@ export default function TerminatedCasesPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-sm">
-            <thead className="border-b border-[#D6DEE7] bg-[#E9EEF3] text-xs uppercase tracking-wide text-[#2B3642]">
+            <thead className="border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
               <tr>
                 <th className="px-5 py-3 text-left"><SortHeader column="client" label="Client Name" sortBy={sortBy} sortDirection={sortDirection} onSort={changeSort} /></th>
                 <th className="px-5 py-3 text-left"><SortHeader column="title" label="Case Title" sortBy={sortBy} sortDirection={sortDirection} onSort={changeSort} /></th>

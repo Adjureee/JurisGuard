@@ -47,19 +47,19 @@ export default function AdminDashboard() {
 
   return (
     <MainLayout>
-      <div className="relative mb-6 overflow-hidden rounded-2xl border border-[#2B3642] border-l-4 border-l-[#4A7FB0] bg-[#2B3642] px-6 py-6 text-white shadow-md">
+      <div className="relative mb-6 overflow-hidden rounded-xl border border-[#E5E7EB] border-l-4 border-l-[#2563EB] bg-white px-6 py-6 shadow-sm">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#93C5FD]">PAO Panabo Command Center</p>
-            <h1 className="mt-2 text-3xl font-bold">Executive Operations Dashboard</h1>
-            <p className="mt-3 max-w-3xl text-sm font-medium leading-6 text-gray-300">
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#2563EB]">PAO Panabo Command Center</p>
+            <h1 className="mt-2 text-3xl font-bold text-[#111827]">Executive Operations Dashboard</h1>
+            <p className="mt-3 max-w-3xl text-sm font-medium leading-6 text-[#6B7280]">
               A focused command snapshot for client volume, active workload, closures, monthly intake, and OCR digitization from the live JurisGuard database.
             </p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
-            <p className="text-xs uppercase tracking-wide text-gray-300">Operational posture</p>
-            <p className="mt-1 text-lg font-bold">Live legal intelligence</p>
-            <Link to="/analytics" className="mt-3 inline-flex text-sm font-semibold text-white underline-offset-4 hover:underline">
+          <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Operational posture</p>
+            <p className="mt-1 text-lg font-bold text-[#111827]">Live legal intelligence</p>
+            <Link to="/analytics" className="mt-3 inline-flex text-sm font-semibold text-[#2563EB] underline-offset-4 hover:underline">
               Open analytics workspace
             </Link>
           </div>
@@ -105,7 +105,7 @@ export default function AdminDashboard() {
           </div>
           <Link
             to="/analytics"
-            className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#4A7FB0] px-4 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#3E6D97]"
+            className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-4 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#1D4ED8]"
           >
             Go to Deep Analytics & Export
             <ArrowRight className="h-4 w-4" />

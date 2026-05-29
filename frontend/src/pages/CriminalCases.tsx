@@ -38,7 +38,6 @@ const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
   { value: "rural", label: "Rural" },
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
-  { value: "terminated", label: "Terminated" },
 ];
 
 const panaboBarangays = [
@@ -648,37 +647,44 @@ function ClientRecordModal({
                 <div key={record.case_id} className="rounded-[10px] border border-[#E5E7EB] bg-white">
                   <CaseAccordion record={record} />
                   <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/criminal-cases/form-view/${record.case_id}`)}
-                      className="rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition hover:bg-[#4A7FB0] hover:text-white"
-                    >
-                      View Form
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/criminal-cases/form-view/${record.case_id}?print=1`)}
-                      className="rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition hover:bg-[#4A7FB0] hover:text-white"
-                    >
-                      Print Form
-                    </button>
+                    {mode === "view" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/criminal-cases/form-view/${record.case_id}`)}
+                          className="rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition hover:bg-[#4A7FB0] hover:text-white"
+                        >
+                          View Form
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/criminal-cases/form-view/${record.case_id}?print=1`)}
+                          className="rounded-md border border-[#4A7FB0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4A7FB0] transition hover:bg-[#4A7FB0] hover:text-white"
+                        >
+                          Print Form
+                        </button>
+                      </>
+                    )}
                     {mode === "update" && (
                       <>
-                      <button
-                        type="button"
-                        onClick={() => setCaseUpdateRecord(record)}
-                        className="rounded-md bg-[#4A7FB0] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#3E6D97]"
-                      >
-                        Update Case
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTerminationRecord(record)}
-                        disabled={record.cases.is_terminated || record.cases.status_of_case === "Terminated"}
-                        className="rounded-md border border-[#DC2626] bg-white px-3 py-1.5 text-xs font-semibold text-[#B91C1C] transition hover:bg-[#DC2626] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Terminate
-                      </button>
+                        {!(record.cases.is_terminated || record.cases.status_of_case === "Terminated") && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setCaseUpdateRecord(record)}
+                              className="rounded-md bg-[#4A7FB0] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#3E6D97]"
+                            >
+                              Update Case
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTerminationRecord(record)}
+                              className="rounded-md border border-[#DC2626] bg-white px-3 py-1.5 text-xs font-semibold text-[#B91C1C] transition hover:bg-[#DC2626] hover:text-white"
+                            >
+                              Terminate
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
@@ -775,10 +781,14 @@ export default function CriminalCasesPage() {
           ),
     [cases, user]
   );
+  const activeVisibleCases = useMemo(
+    () => visibleCases.filter((record) => !(record.cases.is_terminated || record.cases.status_of_case === "Terminated")),
+    [visibleCases]
+  );
 
   const rows = useMemo<CriminalCaseRow[]>(
     () =>
-      visibleCases.map((record) => {
+      activeVisibleCases.map((record) => {
         const client = visibleClients.find((item) => item.client_id === record.client_id);
         return {
           record,
@@ -786,7 +796,7 @@ export default function CriminalCasesPage() {
           clientName: client?.client.name ?? "Unknown client",
         };
       }),
-    [visibleCases, visibleClients]
+    [activeVisibleCases, visibleClients]
   );
 
   const filteredRows = useMemo(
@@ -864,7 +874,7 @@ export default function CriminalCasesPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1040px] text-sm">
-            <thead className="sticky top-0 z-10 border-b border-[#D6DEE7] bg-[#E9EEF3] text-xs uppercase tracking-wide text-[#2B3642]">
+            <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
               <tr>
                 <th className="px-3 py-3 text-left font-semibold">Control No.</th>
                 <th className="px-3 py-3 text-left font-semibold">Party Represented</th>

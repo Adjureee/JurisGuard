@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { TOKEN_STORAGE_KEY } from "../api/client";
+import { useAuditLogStore } from "../features/auditLogs/auditLogStore";
 import * as authService from "../services/authService";
 import type { AuthUser, LoginPayload, RegisterPayload, RegisterResponse } from "../types/auth";
 
@@ -37,6 +38,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(() => {
     authService.logout();
+    useAuditLogStore.getState().clearLogs();
     setToken(null);
     setUser(null);
   }, []);
@@ -49,6 +51,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     try {
       const currentUser = await authService.getMe();
+      useAuditLogStore.getState().scopeToViewer(currentUser);
       setUser(currentUser);
       return currentUser;
     } catch {
@@ -93,6 +96,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setToken(response.access_token);
 
         const currentUser = await authService.getMe();
+        useAuditLogStore.getState().scopeToViewer(currentUser);
         setUser(currentUser);
         return currentUser;
       },
