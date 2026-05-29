@@ -17,6 +17,14 @@ function GavelIcon() {
   );
 }
 
+function AnalyticsIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
+      <path fill="currentColor" d="M3 16.5h14V18H3v-1.5ZM5 9h2.5v6H5V9Zm4 3h2.5v3H9v-3Zm4-7h2.5v10H13V5Zm-8.5-.5h5v1.8h-5V4.5Zm7 0h4v1.8h-4V4.5Z" />
+    </svg>
+  );
+}
+
 function ShieldIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
@@ -59,7 +67,9 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   const visibleNavigation = user?.role === "admin"
     ? [
-        ...navigation,
+        navigation[0],
+        { label: "Analytics", path: "/analytics", icon: <AnalyticsIcon /> },
+        ...navigation.slice(1),
         { label: "Verification", path: "/admin/verification", icon: <ShieldIcon /> },
       ]
     : navigation;

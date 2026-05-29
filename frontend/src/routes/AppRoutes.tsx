@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "../components/auth/ProtectedRoute";
 import ApplicantDetailsPage from "../pages/admin/ApplicantDetailsPage";
@@ -11,6 +12,16 @@ import FormViewPage from "../pages/FormViewPage";
 import TerminatedCasesPage from "../pages/TerminatedCases";
 import UserProfilePage from "../pages/UserProfilePage";
 
+const AnalyticsPage = lazy(() => import("../pages/AnalyticsPage"));
+
+function RouteLoadingFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] text-sm font-semibold text-[#6B7280]">
+      Loading analytics workspace...
+    </div>
+  );
+}
+
 export default function AppRoutes() {
   return (
     <BrowserRouter>
@@ -22,6 +33,16 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <AnalyticsPage />
+              </Suspense>
             </ProtectedRoute>
           }
         />
