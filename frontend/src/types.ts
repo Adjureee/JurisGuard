@@ -100,6 +100,12 @@ export interface CaseDetails {
   case_no: string;
   court_body: string;
   status_of_case: CaseStatus;
+  case_status?: string;
+  incident_barangay?: string;
+  incident_city?: string;
+  incident_address?: string;
+  latitude?: string;
+  longitude?: string;
   last_action_taken: string;
   date_of_confinement: string;
   place_of_detention: string;
@@ -109,6 +115,18 @@ export interface CaseDetails {
   pending_in_court: boolean;
   cause_of_termination: string;
   date_of_termination: string;
+  is_terminated?: boolean;
+  terminated_at?: string;
+  termination_reason?: string;
+  termination_remarks?: string;
+  resolution_type?: string;
+  terminated_by?: number | null;
+  handled_by?: string;
+  supporting_document_path?: string;
+  assigned_pao?: string;
+  filing_date?: string;
+  hearing_schedule?: string;
+  remarks?: string;
 }
 
 export interface CriminalCaseRecord {

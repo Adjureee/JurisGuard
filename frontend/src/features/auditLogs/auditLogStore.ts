@@ -38,11 +38,17 @@ const IMPORTANT_ACTIONS = new Set([
   "Login",
   "Logout",
   "Create Client",
+  "Update Client",
   "Create Case",
+  "Update Case",
+  "Terminate Case",
+  "OCR Scan",
   "Edit Case",
   "Export CSV",
   "Approve User",
   "Reject User",
+  "Approved Registration",
+  "Rejected Registration",
 ]);
 
 function normalizeLog(raw: AuditLogEntry) {

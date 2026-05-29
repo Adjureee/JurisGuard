@@ -7,6 +7,8 @@ import RegisterPage from "../pages/auth/RegisterPage";
 import AuditLogsPage from "../pages/AuditLogsPage";
 import CriminalCases from "../pages/CriminalCases";
 import Dashboard from "../pages/Dashboard";
+import FormViewPage from "../pages/FormViewPage";
+import TerminatedCasesPage from "../pages/TerminatedCases";
 import UserProfilePage from "../pages/UserProfilePage";
 
 export default function AppRoutes() {
@@ -36,6 +38,22 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <CriminalCases />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/criminal-cases/form-view/:caseId"
+          element={
+            <ProtectedRoute>
+              <FormViewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/terminated-cases"
+          element={
+            <ProtectedRoute>
+              <TerminatedCasesPage />
             </ProtectedRoute>
           }
         />

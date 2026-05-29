@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import MainLayout from "../layouts/MainLayout";
 import AddCaseModal from "../components/modals/AddCaseModal";
@@ -12,8 +13,16 @@ import {
   type CaseTableFilter,
   type CriminalCaseRow,
 } from "../services/exportService";
-import { listCaseRecords, listClientRecords } from "../services/recordService";
+import {
+  listCaseRecords,
+  listClientRecords,
+  terminateCaseRecord,
+  updateCaseRecord,
+  updateClientRecord,
+  type TerminationPayload,
+} from "../services/recordService";
 import type { CaseStatus, ClientRecord, CriminalCaseRecord } from "../types";
+import type { CaseFormValues, ClientFormValues } from "../features/criminalCases/schemas";
 
 const accordionBorderClass: Record<CaseStatus, string> = {
   Pending: "border-l-amber-400",
@@ -30,6 +39,47 @@ const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
   { value: "terminated", label: "Terminated" },
+];
+
+const panaboBarangays = [
+  "A. O. Floirendo",
+  "Cacao",
+  "Cagangohan",
+  "Consolacion",
+  "Dapco",
+  "Gredu",
+  "J. P. Laurel",
+  "Kasilak",
+  "Katipunan",
+  "Katualan",
+  "Kauswagan",
+  "Kiotoy",
+  "Little Panay",
+  "Lower Panaga",
+  "Mabunao",
+  "Maduao",
+  "Malativas",
+  "Manay",
+  "Nanyo",
+  "New Malaga",
+  "New Malitbog",
+  "New Pandan",
+  "New Visayas",
+  "Quezon",
+  "Salvacion",
+  "San Francisco",
+  "San Nicolas",
+  "San Pedro",
+  "San Roque",
+  "San Vicente",
+  "Santa Cruz",
+  "Santo Nino",
+  "Sindaton",
+  "Southern Davao",
+  "Tagpore",
+  "Tibungol",
+  "Upper Licanan",
+  "Waterfall",
 ];
 
 function PlusIcon() {
@@ -70,6 +120,82 @@ function InfoTile({ label, value }: { label: string; value: string | number }) {
       <p className="text-xs font-medium uppercase tracking-wide text-[#111827]/60">{label}</p>
       <p className="mt-1 text-sm font-semibold text-[#111827]">{value || "-"}</p>
     </div>
+  );
+}
+
+function toClientFormValues(client: ClientRecord): ClientFormValues {
+  return {
+    client: { ...client.client },
+    client_details: { ...client.client_details },
+    client_classification: { ...client.client_classification },
+  };
+}
+
+function toCaseFormValues(record: CriminalCaseRecord): CaseFormValues {
+  return {
+    client_id: record.client_id,
+    intake_record: { ...record.intake_record },
+    representative: { ...record.representative },
+    adverse_party: { ...record.adverse_party },
+    cases: {
+      ...record.cases,
+      case_status: record.cases.case_status ?? record.cases.status_of_case,
+      incident_barangay: record.cases.incident_barangay ?? "",
+      incident_city: record.cases.incident_city ?? "Panabo City",
+      incident_address: record.cases.incident_address ?? "",
+      latitude: record.cases.latitude ?? "",
+      longitude: record.cases.longitude ?? "",
+      assigned_pao: record.cases.assigned_pao ?? "",
+      filing_date: record.cases.filing_date ?? "",
+      hearing_schedule: record.cases.hearing_schedule ?? "",
+      remarks: record.cases.remarks ?? "",
+    },
+  };
+}
+
+function TextField({
+  label,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  value: string | number;
+  onChange: (value: string) => void;
+  type?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 h-10 w-full rounded-md border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+      />
+    </label>
+  );
+}
+
+function TextAreaField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">{label}</span>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={3}
+        className="mt-1 w-full rounded-md border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15"
+      />
+    </label>
   );
 }
 
@@ -148,6 +274,9 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
             <h4 className="text-sm font-semibold text-[#111827]">Detention & Location</h4>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
               <InfoTile label="Urban/Rural" value={record.cases.location_type} />
+              <InfoTile label="Incident Barangay" value={record.cases.incident_barangay ?? ""} />
+              <InfoTile label="Incident City" value={record.cases.incident_city ?? "Panabo City"} />
+              <InfoTile label="Incident Address" value={record.cases.incident_address ?? ""} />
               <InfoTile label="Date Confined" value={record.cases.date_of_confinement} />
               <InfoTile label="Place of Detention" value={record.cases.place_of_detention} />
             </div>
@@ -172,17 +301,290 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
   );
 }
 
+function UpdateClientInfoModal({
+  client,
+  onClose,
+  onSaved,
+}: {
+  client: ClientRecord;
+  onClose: () => void;
+  onSaved: (client: ClientRecord) => void;
+}) {
+  const [values, setValues] = useState<ClientFormValues>(() => toClientFormValues(client));
+  const [saving, setSaving] = useState(false);
+
+  const updateClient = (field: keyof ClientFormValues["client"], value: string) => {
+    setValues((current) => ({
+      ...current,
+      client: {
+        ...current.client,
+        [field]: field === "age" ? Number(value) : value,
+      },
+    }));
+  };
+  const updateDetails = (field: keyof ClientFormValues["client_details"], value: string) => {
+    setValues((current) => ({
+      ...current,
+      client_details: {
+        ...current.client_details,
+        [field]: field === "representative_age" ? Number(value) : value,
+      },
+    }));
+  };
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      const updated = await updateClientRecord(client.client_id, values);
+      onSaved(updated);
+      toast.success("Client information updated");
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to update client");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#111827]/50 px-4 py-6 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+          <h3 className="text-base font-semibold text-[#111827]">Update Client Info</h3>
+          <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#6B7280] hover:bg-[#F3F4F6]">
+            Close
+          </button>
+        </div>
+        <div className="max-h-[calc(90vh-140px)] overflow-y-auto p-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <TextField label="Full Name" value={values.client.name} onChange={(value) => updateClient("name", value)} />
+            <TextField label="Age" type="number" value={values.client.age} onChange={(value) => updateClient("age", value)} />
+            <TextField label="Gender" value={values.client.sex} onChange={(value) => updateClient("sex", value)} />
+            <TextField label="Civil Status" value={values.client.civil_status} onChange={(value) => updateClient("civil_status", value)} />
+            <TextField label="Contact" value={values.client_details.contact_no} onChange={(value) => updateDetails("contact_no", value)} />
+            <TextField label="Email" value={values.client_details.email} onChange={(value) => updateDetails("email", value)} />
+            <div className="md:col-span-2">
+              <TextAreaField label="Address" value={values.client_details.address} onChange={(value) => updateDetails("address", value)} />
+            </div>
+            <div className="md:col-span-2">
+              <TextAreaField label="Notes" value={values.client_classification.classification_notes} onChange={(value) => setValues((current) => ({ ...current, client_classification: { ...current.client_classification, classification_notes: value } }))} />
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F3F4F6] px-5 py-4">
+          <button type="button" onClick={onClose} className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-medium text-[#6B7280] hover:bg-gray-50">
+            Cancel
+          </button>
+          <button type="button" onClick={submit} disabled={saving} className="rounded-md bg-[#2F80ED] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1f6fd6] disabled:opacity-60">
+            {saving ? "Saving..." : "Save Client Info"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UpdateCaseModal({
+  record,
+  onClose,
+  onSaved,
+}: {
+  record: CriminalCaseRecord;
+  onClose: () => void;
+  onSaved: (record: CriminalCaseRecord) => void;
+}) {
+  const [values, setValues] = useState<CaseFormValues>(() => toCaseFormValues(record));
+  const [saving, setSaving] = useState(false);
+  const updateCase = (field: keyof CaseFormValues["cases"], value: string | boolean) => {
+    setValues((current) => ({
+      ...current,
+      cases: {
+        ...current.cases,
+        [field]: value,
+      },
+    }));
+  };
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      const updated = await updateCaseRecord(record.case_id, {
+        ...values,
+        cases: {
+          ...values.cases,
+          case_status: values.cases.status_of_case,
+          incident_city: values.cases.incident_city || "Panabo City",
+        },
+      });
+      onSaved(updated);
+      toast.success("Case updated");
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to update case");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#111827]/50 px-4 py-6 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+          <h3 className="text-base font-semibold text-[#111827]">Update Case</h3>
+          <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#6B7280] hover:bg-[#F3F4F6]">
+            Close
+          </button>
+        </div>
+        <div className="max-h-[calc(90vh-140px)] overflow-y-auto p-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <TextField label="Case Title" value={values.cases.title_of_case} onChange={(value) => updateCase("title_of_case", value)} />
+            <TextField label="Case Number" value={values.cases.case_no} onChange={(value) => updateCase("case_no", value)} />
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Case Status</span>
+              <select value={values.cases.status_of_case} onChange={(event) => updateCase("status_of_case", event.target.value as CaseStatus)} className="mt-1 h-10 w-full rounded-md border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15">
+                <option>Pending</option>
+                <option>Ongoing</option>
+                <option>Active</option>
+                <option>Archived</option>
+              </select>
+            </label>
+            <TextField label="Assigned PAO" value={values.cases.assigned_pao ?? ""} onChange={(value) => updateCase("assigned_pao", value)} />
+            <TextField label="Filing Date" type="date" value={values.cases.filing_date ?? values.intake_record.form_date} onChange={(value) => setValues((current) => ({ ...current, intake_record: { ...current.intake_record, form_date: value }, cases: { ...current.cases, filing_date: value } }))} />
+            <TextField label="Hearing Schedule" value={values.cases.hearing_schedule ?? ""} onChange={(value) => updateCase("hearing_schedule", value)} />
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Barangay</span>
+              <select value={values.cases.incident_barangay ?? ""} onChange={(event) => updateCase("incident_barangay", event.target.value)} className="mt-1 h-10 w-full rounded-md border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15">
+                <option value="">Select barangay</option>
+                {panaboBarangays.map((barangay) => (
+                  <option key={barangay}>{barangay}</option>
+                ))}
+              </select>
+            </label>
+            <TextField label="City" value={values.cases.incident_city ?? "Panabo City"} onChange={(value) => updateCase("incident_city", value)} />
+            <TextField label="Latitude" value={values.cases.latitude ?? ""} onChange={(value) => updateCase("latitude", value)} />
+            <TextField label="Longitude" value={values.cases.longitude ?? ""} onChange={(value) => updateCase("longitude", value)} />
+            <div className="md:col-span-2">
+              <TextAreaField label="Incident Address" value={values.cases.incident_address ?? ""} onChange={(value) => updateCase("incident_address", value)} />
+            </div>
+            <div className="md:col-span-2">
+              <TextAreaField label="Remarks" value={values.cases.remarks ?? values.cases.last_action_taken} onChange={(value) => setValues((current) => ({ ...current, cases: { ...current.cases, remarks: value, last_action_taken: value } }))} />
+            </div>
+            <div className="md:col-span-2">
+              <TextAreaField label="Facts of Case" value={values.cases.facts_of_case} onChange={(value) => updateCase("facts_of_case", value)} />
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F3F4F6] px-5 py-4">
+          <button type="button" onClick={onClose} className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-medium text-[#6B7280] hover:bg-gray-50">
+            Cancel
+          </button>
+          <button type="button" onClick={submit} disabled={saving} className="rounded-md bg-[#2F80ED] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1f6fd6] disabled:opacity-60">
+            {saving ? "Saving..." : "Save Case"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TerminationModal({
+  record,
+  onClose,
+  onTerminated,
+}: {
+  record: CriminalCaseRecord;
+  onClose: () => void;
+  onTerminated: (record: CriminalCaseRecord) => void;
+}) {
+  const [values, setValues] = useState<TerminationPayload>({
+    termination_reason: "",
+    resolution_type: "",
+    date_terminated: new Date().toISOString().slice(0, 10),
+    final_remarks: "",
+    handled_by: "",
+    supporting_document_path: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!values.termination_reason.trim()) {
+      toast.error("Termination reason is required");
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await terminateCaseRecord(record.case_id, values);
+      onTerminated(updated);
+      toast.success("Case terminated");
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to terminate case");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[65] flex items-center justify-center bg-[#111827]/55 px-4 py-6 backdrop-blur-sm">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+          <h3 className="text-base font-semibold text-[#111827]">Terminate Case</h3>
+          <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#6B7280] hover:bg-[#F3F4F6]">
+            Close
+          </button>
+        </div>
+        <div className="space-y-4 p-5">
+          <TextAreaField label="Reason" value={values.termination_reason} onChange={(value) => setValues((current) => ({ ...current, termination_reason: value }))} />
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Resolution Type</span>
+            <select value={values.resolution_type} onChange={(event) => setValues((current) => ({ ...current, resolution_type: event.target.value }))} className="mt-1 h-10 w-full rounded-md border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15">
+              <option value="">Select resolution</option>
+              <option>Dismissed</option>
+              <option>Resolved</option>
+              <option>Withdrawn</option>
+              <option>Referred</option>
+              <option>Closed after assistance</option>
+            </select>
+          </label>
+          <TextField label="Date Terminated" type="date" value={values.date_terminated} onChange={(value) => setValues((current) => ({ ...current, date_terminated: value }))} />
+          <TextAreaField label="Final Remarks" value={values.final_remarks} onChange={(value) => setValues((current) => ({ ...current, final_remarks: value }))} />
+          <TextField label="Handled By" value={values.handled_by} onChange={(value) => setValues((current) => ({ ...current, handled_by: value }))} />
+          <TextField label="Supporting Document Reference" value={values.supporting_document_path} onChange={(value) => setValues((current) => ({ ...current, supporting_document_path: value }))} />
+        </div>
+        <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F3F4F6] px-5 py-4">
+          <button type="button" onClick={onClose} className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-medium text-[#6B7280] hover:bg-gray-50">
+            Cancel
+          </button>
+          <button type="button" onClick={submit} disabled={saving} className="rounded-md bg-[#DC2626] px-4 py-2 text-sm font-semibold text-white hover:bg-[#B91C1C] disabled:opacity-60">
+            {saving ? "Terminating..." : "Confirm Termination"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ClientRecordModal({
   client,
   cases,
   mode,
   onClose,
+  onClientUpdated,
+  onCaseUpdated,
+  onCaseTerminated,
 }: {
   client: ClientRecord | null;
   cases: CriminalCaseRecord[];
-  mode: "view" | "edit";
+  mode: "view" | "update";
   onClose: () => void;
+  onClientUpdated: (client: ClientRecord) => void;
+  onCaseUpdated: (record: CriminalCaseRecord) => void;
+  onCaseTerminated: (record: CriminalCaseRecord) => void;
 }) {
+  const navigate = useNavigate();
+  const [clientUpdateOpen, setClientUpdateOpen] = useState(false);
+  const [caseUpdateRecord, setCaseUpdateRecord] = useState<CriminalCaseRecord | null>(null);
+  const [terminationRecord, setTerminationRecord] = useState<CriminalCaseRecord | null>(null);
   if (!client) return null;
 
   return (
@@ -191,7 +593,7 @@ function ClientRecordModal({
         <div className="flex items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F3F4F6] px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-[#111827]">
-              {mode === "view" ? "Criminal Case Record" : "Edit Record"}
+              {mode === "view" ? "Criminal Case Record" : "Update Record"}
             </h2>
             <nav className="mt-1 flex items-center gap-2 text-sm text-[#6b7280]">
               <span>Dashboard</span>
@@ -212,13 +614,26 @@ function ClientRecordModal({
 
         <div className="max-h-[calc(92vh-90px)] overflow-y-auto bg-white px-6 py-5">
           <section className="rounded-[14px] border border-[#e5e7eb] bg-white p-5 shadow-sm shadow-[#111827]/5">
-            <h3 className="text-base font-semibold text-[#111827]">Person Information</h3>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-base font-semibold text-[#111827]">Person Information</h3>
+              {mode === "update" && (
+                <button
+                  type="button"
+                  onClick={() => setClientUpdateOpen(true)}
+                  className="rounded-md bg-[#2F80ED] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#1f6fd6]"
+                >
+                  Update Client Info
+                </button>
+              )}
+            </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
               <InfoTile label="Full Name" value={client.client.name} />
               <InfoTile label="Gender" value={client.client.sex} />
               <InfoTile label="Age" value={client.client.age} />
               <InfoTile label="Contact" value={client.client_details.contact_no} />
               <InfoTile label="Address" value={client.client_details.address} />
+              <InfoTile label="Status" value={cases.some((record) => record.cases.is_terminated || record.cases.status_of_case === "Terminated") ? "Has terminated case" : "Active"} />
+              <InfoTile label="Notes" value={client.client_classification.classification_notes} />
             </div>
           </section>
 
@@ -230,13 +645,71 @@ function ClientRecordModal({
 
             <div className="space-y-3">
               {cases.map((record) => (
-                <CaseAccordion key={record.case_id} record={record} />
+                <div key={record.case_id} className="rounded-[10px] border border-[#E5E7EB] bg-white">
+                  <CaseAccordion record={record} />
+                  <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/criminal-cases/form-view/${record.case_id}`)}
+                      className="rounded-md border border-[#111827] bg-white px-3 py-1.5 text-xs font-semibold text-[#111827] transition hover:bg-[#111827] hover:text-white"
+                    >
+                      View Form
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/criminal-cases/form-view/${record.case_id}?print=1`)}
+                      className="rounded-md border border-[#2F80ED] bg-white px-3 py-1.5 text-xs font-semibold text-[#2F80ED] transition hover:bg-[#2F80ED] hover:text-white"
+                    >
+                      Print Form
+                    </button>
+                    {mode === "update" && (
+                      <>
+                      <button
+                        type="button"
+                        onClick={() => setCaseUpdateRecord(record)}
+                        className="rounded-md bg-[#2F80ED] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#1f6fd6]"
+                      >
+                        Update Case
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTerminationRecord(record)}
+                        disabled={record.cases.is_terminated || record.cases.status_of_case === "Terminated"}
+                        className="rounded-md border border-[#DC2626] bg-white px-3 py-1.5 text-xs font-semibold text-[#B91C1C] transition hover:bg-[#DC2626] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Terminate
+                      </button>
+                      </>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           </section>
 
         </div>
       </div>
+      {clientUpdateOpen && (
+        <UpdateClientInfoModal
+          client={client}
+          onClose={() => setClientUpdateOpen(false)}
+          onSaved={onClientUpdated}
+        />
+      )}
+      {caseUpdateRecord && (
+        <UpdateCaseModal
+          record={caseUpdateRecord}
+          onClose={() => setCaseUpdateRecord(null)}
+          onSaved={onCaseUpdated}
+        />
+      )}
+      {terminationRecord && (
+        <TerminationModal
+          record={terminationRecord}
+          onClose={() => setTerminationRecord(null)}
+          onTerminated={onCaseTerminated}
+        />
+      )}
     </div>
   );
 }
@@ -247,13 +720,15 @@ export default function CriminalCasesPage() {
   const cases = useCriminalCasesStore((state) => state.cases);
   const setClients = useCriminalCasesStore((state) => state.setClients);
   const setCases = useCriminalCasesStore((state) => state.setCases);
+  const upsertClient = useCriminalCasesStore((state) => state.upsertClient);
+  const upsertCase = useCriminalCasesStore((state) => state.upsertCase);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<CaseTableFilter>("all");
   const [showCaseModal, setShowCaseModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
-  const [actionMode, setActionMode] = useState<"view" | "edit">("view");
+  const [actionMode, setActionMode] = useState<"view" | "update">("view");
 
   useEffect(() => {
     if (!user) return;
@@ -322,7 +797,7 @@ export default function CriminalCasesPage() {
   const activeClient = visibleClients.find((client) => client.client_id === activeClientId) ?? null;
   const activeCases = visibleCases.filter((record) => record.client_id === activeClientId);
 
-  const openRecord = (record: CriminalCaseRecord, mode: "view" | "edit") => {
+  const openRecord = (record: CriminalCaseRecord, mode: "view" | "update") => {
     setActiveClientId(record.client_id);
     setActionMode(mode);
   };
@@ -430,10 +905,10 @@ export default function CriminalCasesPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => openRecord(record, "edit")}
+                          onClick={() => openRecord(record, "update")}
                           className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#6B7280] transition duration-200 hover:-translate-y-px hover:bg-gray-50"
                         >
-                          Edit
+                          Update
                         </button>
                       </div>
                     </td>
@@ -457,6 +932,9 @@ export default function CriminalCasesPage() {
         client={activeClient}
         cases={activeCases}
         onClose={() => setActiveClientId(null)}
+        onClientUpdated={upsertClient}
+        onCaseUpdated={upsertCase}
+        onCaseTerminated={upsertCase}
       />
     </MainLayout>
   );

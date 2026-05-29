@@ -21,7 +21,7 @@ export interface OperationalNotification {
   isRead: boolean;
   createdAt: string;
   user_id: number | null;
-  target_role?: "admin" | "user";
+  target_role?: "admin" | "staff";
   entity_type?: string;
   entity_id?: string;
 }
@@ -29,7 +29,7 @@ export interface OperationalNotification {
 interface AddNotificationInput {
   type: NotificationType;
   userId?: number | null;
-  targetRole?: "admin" | "user";
+  targetRole?: "admin" | "staff";
   title?: string;
   message: string;
   redirectTo?: string;

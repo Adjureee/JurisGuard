@@ -4,6 +4,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
 import MainLayout from "../../layouts/MainLayout";
+import ImagePreviewModal from "../../components/ImagePreviewModal";
+import { API_ORIGIN } from "../../api/client";
 import { listApplicants, updateApplicantApproval } from "../../services/adminService";
 import type { AdminUserListItem, ApprovalStatus } from "../../types/auth";
 
@@ -64,6 +66,7 @@ export default function VerificationPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,6 +165,14 @@ export default function VerificationPage() {
       setUpdatingId(null);
     }
   };
+
+  const employerIdImage = selectedUser?.profile_picture_path
+    ? selectedUser.profile_picture_path.startsWith("/uploads")
+      ? `${API_ORIGIN}${selectedUser.profile_picture_path}`
+      : selectedUser.profile_picture_path.startsWith("data:")
+        ? selectedUser.profile_picture_path
+        : ""
+    : "";
 
   return (
     <MainLayout>
@@ -285,8 +296,8 @@ export default function VerificationPage() {
 
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/45 px-4 py-6 backdrop-blur-sm">
-          <div className="w-full max-w-lg animate-[modalIn_200ms_ease-out] overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-2xl shadow-[#111827]/20">
-            <div className="flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-[#F3F4F6] px-5 py-4">
+          <div className="max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-2xl shadow-[#111827]/20">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-white/95 px-6 py-4 backdrop-blur">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-[#2F80ED]">
                   Account Request
@@ -298,26 +309,73 @@ export default function VerificationPage() {
               <button
                 type="button"
                 onClick={() => setSelectedUser(null)}
-                className="rounded-md px-2 py-1 text-sm font-semibold text-[#6B7280] transition duration-200 hover:bg-white hover:text-[#111827]"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-sm font-semibold text-[#6B7280] transition duration-200 hover:bg-[#F3F4F6] hover:text-[#111827]"
+                aria-label="Close verification details"
               >
-                Close
+                x
               </button>
             </div>
 
-            <div className="space-y-5 bg-white p-5">
-              <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClass[selectedUser.approval_status]}`}>
-                {statusLabel[selectedUser.approval_status]}
-              </span>
+            <div className="max-h-[calc(92vh-74px)] overflow-y-auto bg-white">
+              <div className="grid gap-6 p-6 lg:grid-cols-[1fr_340px]">
+                <div className="space-y-5">
+                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClass[selectedUser.approval_status]}`}>
+                    {statusLabel[selectedUser.approval_status]}
+                  </span>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Full Name" value={selectedUser.full_name || "Not provided"} />
-                <Field label="Email" value={selectedUser.email} />
-                <Field label="Uploaded Employee ID" value={selectedUser.profile_picture_path ? "Uploaded file available" : "Not uploaded"} />
-                <Field label="Submitted Date" value={formatDate(selectedUser.created_at)} />
-                <Field label="Verification Status" value={statusLabel[selectedUser.approval_status]} />
+                  <section className="rounded-xl border border-[#E5E7EB] p-4">
+                    <h3 className="text-sm font-semibold text-[#111827]">Personal Information</h3>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <Field label="Full Name" value={selectedUser.full_name || "Not provided"} />
+                      <Field label="Email" value={selectedUser.email} />
+                    </div>
+                  </section>
+
+                  <section className="rounded-xl border border-[#E5E7EB] p-4">
+                    <h3 className="text-sm font-semibold text-[#111827]">Account Information</h3>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <Field label="Role" value={selectedUser.role} />
+                      <Field label="Submitted Date" value={formatDate(selectedUser.created_at)} />
+                      <Field label="Verification Status" value={statusLabel[selectedUser.approval_status]} />
+                      <Field label="Last Login" value={formatDate(selectedUser.last_login_at)} />
+                    </div>
+                  </section>
+                </div>
+
+                <aside className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                  <h3 className="text-sm font-semibold text-[#111827]">Employer ID</h3>
+                  <div className="mt-4 overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
+                    {employerIdImage ? (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImage(employerIdImage)}
+                        className="block w-full"
+                        aria-label="Preview employer ID"
+                      >
+                        <img
+                          src={employerIdImage}
+                          alt="Employer ID"
+                          className="h-64 w-full object-contain"
+                        />
+                      </button>
+                    ) : (
+                      <div className="flex h-64 items-center justify-center px-4 text-center text-sm text-[#6B7280]">
+                        Employer ID image is not available for preview.
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => employerIdImage && setPreviewImage(employerIdImage)}
+                    disabled={!employerIdImage}
+                    className="mt-4 w-full rounded-md bg-[#111827] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#374151] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Preview ID
+                  </button>
+                </aside>
               </div>
 
-              <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] bg-[#F3F4F6] px-5 py-4 -mx-5 -mb-5">
+              <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] bg-[#F3F4F6] px-6 py-4">
                 <button
                   type="button"
                   onClick={() => setSelectedUser(null)}
@@ -350,6 +408,12 @@ export default function VerificationPage() {
           </div>
         </div>
       )}
+      <ImagePreviewModal
+        image={previewImage}
+        alt="Employer ID enlarged preview"
+        title="Employer ID Preview"
+        onClose={() => setPreviewImage(null)}
+      />
     </MainLayout>
   );
 }

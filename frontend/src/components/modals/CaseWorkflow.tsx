@@ -62,6 +62,12 @@ const createDefaultValues = (clientId = ""): CaseFormValues => ({
     case_no: "",
     court_body: "",
     status_of_case: "Pending",
+    case_status: "Pending",
+    incident_barangay: "",
+    incident_city: "Panabo City",
+    incident_address: "",
+    latitude: "",
+    longitude: "",
     last_action_taken: "",
     date_of_confinement: "",
     place_of_detention: "",
@@ -71,6 +77,10 @@ const createDefaultValues = (clientId = ""): CaseFormValues => ({
     pending_in_court: false,
     cause_of_termination: "",
     date_of_termination: "",
+    assigned_pao: "",
+    filing_date: "",
+    hearing_schedule: "",
+    remarks: "",
   },
 });
 
@@ -108,6 +118,47 @@ const caseOcrFields = [
 const overwriteDefaultOcrFields = new Set<FieldPath<CaseFormValues>>([
   "intake_record.form_date",
 ]);
+
+const panaboBarangays = [
+  "A. O. Floirendo",
+  "Cacao",
+  "Cagangohan",
+  "Consolacion",
+  "Dapco",
+  "Gredu",
+  "J. P. Laurel",
+  "Kasilak",
+  "Katipunan",
+  "Katualan",
+  "Kauswagan",
+  "Kiotoy",
+  "Little Panay",
+  "Lower Panaga",
+  "Mabunao",
+  "Maduao",
+  "Malativas",
+  "Manay",
+  "Nanyo",
+  "New Malaga",
+  "New Malitbog",
+  "New Pandan",
+  "New Visayas",
+  "Quezon",
+  "Salvacion",
+  "San Francisco",
+  "San Nicolas",
+  "San Pedro",
+  "San Roque",
+  "San Vicente",
+  "Santa Cruz",
+  "Santo Nino",
+  "Sindaton",
+  "Southern Davao",
+  "Tagpore",
+  "Tibungol",
+  "Upper Licanan",
+  "Waterfall",
+];
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
@@ -291,6 +342,7 @@ export function CaseWorkflow({
   const [indicators, setIndicators] = useState<ExtractionMap>({});
   const [isExtracting, setIsExtracting] = useState(false);
   const [replaceExistingWithOcr, setReplaceExistingWithOcr] = useState(false);
+  const [useClientRepresentative, setUseClientRepresentative] = useState(Boolean(lockedClient));
   const {
     videoRef,
     isCameraActive,
@@ -344,6 +396,17 @@ export function CaseWorkflow({
       setValue("client_id", lockedClient.client_id, { shouldValidate: true });
     }
   }, [lockedClient, setValue]);
+
+  useEffect(() => {
+    if (!selectedClient || !useClientRepresentative) return;
+    setValue("representative.rep_name", selectedClient.client_details.representative_name || "Not applicable", { shouldDirty: true, shouldValidate: true });
+    setValue("representative.rep_age", selectedClient.client_details.representative_age || 0, { shouldDirty: true, shouldValidate: true });
+    setValue("representative.rep_sex", selectedClient.client_details.representative_sex || selectedClient.client.sex || "", { shouldDirty: true, shouldValidate: true });
+    setValue("representative.civil_status", selectedClient.client_details.representative_civil_status || "", { shouldDirty: true, shouldValidate: true });
+    setValue("representative.rep_address", selectedClient.client_details.representative_address || selectedClient.client_details.address || "", { shouldDirty: true, shouldValidate: true });
+    setValue("representative.rep_contact_no", selectedClient.client_details.representative_contact_no || selectedClient.client_details.contact_no || "", { shouldDirty: true, shouldValidate: true });
+    setValue("representative.relationship_to_applicant", selectedClient.client_details.representative_relationship || "Client representative", { shouldDirty: true, shouldValidate: true });
+  }, [selectedClient, setValue, useClientRepresentative]);
 
   useEffect(() => () => stopCamera(), [stopCamera]);
 
@@ -466,7 +529,14 @@ export function CaseWorkflow({
 
   const submitCase = async (values: CaseFormValues) => {
     try {
-      await onSubmit(values);
+      await onSubmit({
+        ...values,
+        cases: {
+          ...values.cases,
+          case_status: values.cases.status_of_case,
+          incident_city: values.cases.incident_city || "Panabo City",
+        },
+      });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save case");
     }
@@ -722,16 +792,48 @@ export function CaseWorkflow({
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#111827]">Representative</h3>
-              <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <TextInput label="Representative Name" registration={register("representative.rep_name")} error={errors.representative?.rep_name?.message} />
-                <TextInput label="Representative Age" type="number" registration={register("representative.rep_age", { valueAsNumber: true })} error={errors.representative?.rep_age?.message} />
-                <TextInput label="Representative Sex" registration={register("representative.rep_sex")} error={errors.representative?.rep_sex?.message} />
-                <TextInput label="Civil Status" registration={register("representative.civil_status")} error={errors.representative?.civil_status?.message} />
-                <TextInput label="Representative Address" registration={register("representative.rep_address")} error={errors.representative?.rep_address?.message} />
-                <TextInput label="Representative Contact No." registration={register("representative.rep_contact_no")} error={errors.representative?.rep_contact_no?.message} />
-                <TextInput label="Relationship to Applicant" registration={register("representative.relationship_to_applicant")} error={errors.representative?.relationship_to_applicant?.message} />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#111827]">Representative</h3>
+                  {lockedClient && useClientRepresentative && (
+                    <p className="mt-1 text-sm text-[#6B7280]">
+                      Using representative details already saved on the client record.
+                    </p>
+                  )}
+                </div>
+                {lockedClient && (
+                  <label className="flex items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm font-semibold text-[#374151]">
+                    <input
+                      type="checkbox"
+                      checked={!useClientRepresentative}
+                      onChange={(event) => setUseClientRepresentative(!event.target.checked)}
+                      className="h-4 w-4 rounded border-[#D1D5DB] text-[#2F80ED] focus:ring-[#2F80ED]"
+                    />
+                    Use Different Representative
+                  </label>
+                )}
               </div>
+
+              {(!lockedClient || !useClientRepresentative) ? (
+                <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  <TextInput label="Representative Name" registration={register("representative.rep_name")} error={errors.representative?.rep_name?.message} />
+                  <TextInput label="Representative Age" type="number" registration={register("representative.rep_age", { valueAsNumber: true })} error={errors.representative?.rep_age?.message} />
+                  <TextInput label="Representative Sex" registration={register("representative.rep_sex")} error={errors.representative?.rep_sex?.message} />
+                  <TextInput label="Civil Status" registration={register("representative.civil_status")} error={errors.representative?.civil_status?.message} />
+                  <TextInput label="Representative Address" registration={register("representative.rep_address")} error={errors.representative?.rep_address?.message} />
+                  <TextInput label="Representative Contact No." registration={register("representative.rep_contact_no")} error={errors.representative?.rep_contact_no?.message} />
+                  <TextInput label="Relationship to Applicant" registration={register("representative.relationship_to_applicant")} error={errors.representative?.relationship_to_applicant?.message} />
+                </div>
+              ) : (
+                <div className="mt-3 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] p-4">
+                  <p className="text-sm font-semibold text-[#1E3A8A]">
+                    {selectedClient?.client_details.representative_name || selectedClient?.client.name || "Client representative"}
+                  </p>
+                  <p className="mt-1 text-sm text-[#1E40AF]">
+                    {selectedClient?.client_details.representative_relationship || "Representative details will be copied into this case."}
+                  </p>
+                </div>
+              )}
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
@@ -798,6 +900,27 @@ export function CaseWorkflow({
                     <TextInput label="Date of Termination" type="date" registration={register("cases.date_of_termination")} status={indicators["cases.date_of_termination"]} />
                   </>
                 )}
+              </div>
+            </section>
+
+            <section className="border-t border-[#E5E7EB] pt-4">
+              <h3 className="text-sm font-semibold text-[#111827]">Incident Location</h3>
+              <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <label className="block">
+                  <span className="text-sm font-medium text-[#111827]/80">Barangay</span>
+                  <select {...register("cases.incident_barangay")} className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition duration-200 focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/15">
+                    <option value="">Select barangay</option>
+                    {panaboBarangays.map((barangay) => (
+                      <option key={barangay}>{barangay}</option>
+                    ))}
+                  </select>
+                </label>
+                <TextInput label="City" registration={register("cases.incident_city")} />
+                <div className="lg:col-span-3">
+                  <TextInput label="Incident Address" registration={register("cases.incident_address")} />
+                </div>
+                <TextInput label="Latitude (optional)" registration={register("cases.latitude")} />
+                <TextInput label="Longitude (optional)" registration={register("cases.longitude")} />
               </div>
             </section>
           </div>

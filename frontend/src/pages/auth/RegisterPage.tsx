@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import ImagePreviewModal from "../../components/ImagePreviewModal";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
 
@@ -12,6 +13,7 @@ export default function RegisterPage() {
   const [employeeIdFileName, setEmployeeIdFileName] = useState("");
   const [employeeIdPreview, setEmployeeIdPreview] = useState("");
   const [employeeIdReference, setEmployeeIdReference] = useState("");
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -68,7 +70,7 @@ export default function RegisterPage() {
         full_name: fullName,
         email,
         password,
-        employee_id_path: employeeIdReference,
+        employee_id_path: employeeIdPreview || employeeIdReference,
       });
       setSuccess(response.message);
       addNotification({
@@ -138,11 +140,18 @@ export default function RegisterPage() {
             <div className="mt-1 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] p-3">
               {employeeIdPreview ? (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <img
-                    src={employeeIdPreview}
-                    alt="Employee ID preview"
-                    className="h-24 w-36 rounded-md border border-[#E5E7EB] bg-white object-cover"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setPreviewImage(employeeIdPreview)}
+                    className="group rounded-md text-left outline-none focus:ring-2 focus:ring-[#2F80ED]/30"
+                    aria-label="Open employee ID preview"
+                  >
+                    <img
+                      src={employeeIdPreview}
+                      alt="Employee ID preview"
+                      className="h-24 w-36 rounded-md border border-[#E5E7EB] bg-white object-cover transition duration-200 group-hover:brightness-95"
+                    />
+                  </button>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-[#111827]">
                       {employeeIdFileName}
@@ -245,6 +254,12 @@ export default function RegisterPage() {
           </Link>
         </p>
       </div>
+      <ImagePreviewModal
+        image={previewImage}
+        alt="Employee ID enlarged preview"
+        title="Employee ID Preview"
+        onClose={() => setPreviewImage(null)}
+      />
     </div>
   );
 }

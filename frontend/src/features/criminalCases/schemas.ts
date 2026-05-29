@@ -91,6 +91,12 @@ export const caseFormSchema = z.object({
     case_no: optionalText,
     court_body: optionalText,
     status_of_case: z.enum(["Pending", "Ongoing", "Active", "Terminated", "Archived"]),
+    case_status: optionalText,
+    incident_barangay: optionalText,
+    incident_city: optionalText,
+    incident_address: optionalText,
+    latitude: optionalText,
+    longitude: optionalText,
     last_action_taken: requiredText("Last action taken"),
     date_of_confinement: optionalText,
     place_of_detention: optionalText,
@@ -100,6 +106,10 @@ export const caseFormSchema = z.object({
     pending_in_court: z.boolean(),
     cause_of_termination: optionalText,
     date_of_termination: optionalText,
+    assigned_pao: optionalText,
+    filing_date: optionalText,
+    hearing_schedule: optionalText,
+    remarks: optionalText,
   }),
 }).superRefine((data, ctx) => {
   if (data.intake_record.applicant_role === "Others" && !data.intake_record.applicant_role_other.trim()) {

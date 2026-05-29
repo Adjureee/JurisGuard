@@ -33,9 +33,18 @@ function AuditIcon() {
   );
 }
 
+function ArchiveIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
+      <path fill="currentColor" d="M3 4h14v4H3V4Zm1.5 5h11v7.5A1.5 1.5 0 0 1 14 18H6a1.5 1.5 0 0 1-1.5-1.5V9ZM8 11v2h4v-2H8Z" />
+    </svg>
+  );
+}
+
 const navigation = [
   { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
   { label: "Criminal Cases", path: "/cases", icon: <GavelIcon /> },
+  { label: "Terminated Cases", path: "/terminated-cases", icon: <ArchiveIcon /> },
   { label: "Audit Logs", path: "/audit-logs", icon: <AuditIcon /> },
 ];
 

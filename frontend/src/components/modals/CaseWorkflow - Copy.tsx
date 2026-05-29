@@ -62,6 +62,12 @@ const createDefaultValues = (clientId = ""): CaseFormValues => ({
     case_no: "",
     court_body: "",
     status_of_case: "Pending",
+    case_status: "Pending",
+    incident_barangay: "",
+    incident_city: "Panabo City",
+    incident_address: "",
+    latitude: "",
+    longitude: "",
     last_action_taken: "",
     date_of_confinement: "",
     place_of_detention: "",
@@ -71,6 +77,10 @@ const createDefaultValues = (clientId = ""): CaseFormValues => ({
     pending_in_court: false,
     cause_of_termination: "",
     date_of_termination: "",
+    assigned_pao: "",
+    filing_date: "",
+    hearing_schedule: "",
+    remarks: "",
   },
 });
 

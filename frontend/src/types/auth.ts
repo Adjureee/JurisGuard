@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "user";
+export type UserRole = "admin" | "staff";
 export type ApprovalStatus = "pending" | "under_review" | "approved" | "rejected" | "suspended";
 
 export interface AuthUser {
