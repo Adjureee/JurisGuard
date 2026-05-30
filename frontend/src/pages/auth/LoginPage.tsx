@@ -23,7 +23,8 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [showMfaCode, setShowMfaCode] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(unauthorizedMessage);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,7 +36,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const user = await login({ email, password });
+      const user = await login({ email, password, otpCode });
       addLog({
         userId: user.user_id,
         user: user.full_name || user.email,
@@ -53,6 +54,11 @@ export default function LoginPage() {
         message === "Could not validate credentials"
           ? "Account is unavailable or credentials are invalid."
           : message;
+      if (message === "MFA code required") {
+        setShowMfaCode(true);
+        setError("Enter your 6-digit authenticator code to continue.");
+        return;
+      }
       setError(displayMessage);
       setNotice("");
     } finally {
@@ -74,7 +80,9 @@ export default function LoginPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#704389]">
                 JurisGuard
               </p>
-              <h1 className="mt-3 text-3xl font-bold text-[#111827]">Welcome back</h1>
+              <h1 className="mt-3 text-3xl font-bold text-[#111827]">
+                Welcome back
+              </h1>
               <p className="mt-3 text-sm font-medium leading-6 text-[#6B7280]">
                 Sign in with your approved PAO Panabo account.
               </p>
@@ -82,7 +90,9 @@ export default function LoginPage() {
 
             <form onSubmit={handleLogin} className="space-y-4">
               <label className="block">
-                <span className="text-sm font-medium text-[#111827]">Email</span>
+                <span className="text-sm font-medium text-[#111827]">
+                  Email
+                </span>
                 <input
                   type="email"
                   className="mt-1.5 h-11 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none transition placeholder-gray-400 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/15"
@@ -94,7 +104,9 @@ export default function LoginPage() {
               </label>
 
               <label className="block">
-                <span className="text-sm font-medium text-[#111827]">Password</span>
+                <span className="text-sm font-medium text-[#111827]">
+                  Password
+                </span>
                 <input
                   type={showPassword ? "text" : "password"}
                   className="mt-1.5 h-11 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none transition placeholder-gray-400 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/15"
@@ -138,7 +150,10 @@ export default function LoginPage() {
 
             <p className="mt-6 text-center text-sm font-medium text-[#6B7280]">
               Need an account?{" "}
-              <Link to="/register" className="font-semibold text-[#704389] hover:text-[#5F3675]">
+              <Link
+                to="/register"
+                className="font-semibold text-[#704389] hover:text-[#5F3675]"
+              >
                 Register
               </Link>
             </p>
@@ -148,4 +163,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

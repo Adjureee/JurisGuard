@@ -24,6 +24,7 @@ class User(Base):
     username = Column(String(30), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     mfa_enabled = Column(Boolean, default=False)
+    mfa_secret = Column(String(64))
     created_at = Column(DateTime, nullable=False, server_default=func.now())
 
     # Practical UI/account fields used by the current React application.
@@ -144,6 +145,24 @@ class IntakeRecord(Base):
     applicant_role_other = Column(String(255))
     nature_of_request = Column(Text)
     nature_of_case = Column(String(50))
+    coi_agree_different_office = Column(Boolean, default=False)
+    coi_agree_same_dept_appeal = Column(Boolean, default=False)
+    coi_waive_right_to_complain = Column(Boolean, default=False)
+    coi_trust_assigned_counsel = Column(Boolean, default=False)
+    proof_submission_deadline = Column(DateTime)
+    proof_itr_date = Column(DateTime)
+    proof_brgy_date = Column(DateTime)
+    proof_dswd_date = Column(DateTime)
+    proof_others_details = Column(Text)
+    proof_others_date = Column(DateTime)
+    inv_plaintiff = Column(Boolean, default=False)
+    inv_defendant = Column(Boolean, default=False)
+    inv_oppositor = Column(Boolean, default=False)
+    inv_petitioner = Column(Boolean, default=False)
+    inv_respondent = Column(Boolean, default=False)
+    inv_complainant = Column(Boolean, default=False)
+    inv_accused = Column(Boolean, default=False)
+    inv_others = Column(Text)
 
     client = relationship("Client", back_populates="intakes")
     cases = relationship("Case", back_populates="intake")
@@ -208,6 +227,22 @@ class Case(Base):
     intake = relationship("IntakeRecord", back_populates="cases")
     client = relationship("Client", back_populates="cases")
     documents = relationship("Document", back_populates="case")
+    history = relationship("CaseHistory", back_populates="case")
+
+
+class CaseHistory(Base):
+    __tablename__ = "case_history"
+
+    history_id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, ForeignKey("case.case_id"), nullable=False)
+    updated_by = Column(Integer, ForeignKey("user.user_id"), nullable=False)
+    previous_status = Column(String(20))
+    new_status = Column(String(20), nullable=False)
+    action_taken = Column(Text, nullable=False)
+    remarks = Column(Text)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    case = relationship("Case", back_populates="history")
 
 
 class Representative(Base):
@@ -277,8 +312,10 @@ class AuditLog(Base):
     action = Column(String(50), nullable=False)
     target_entity = Column(String(50))
     timestamp = Column(DateTime, nullable=False, server_default=func.now())
-    ip_address = Column(String(20))
+    ip_address = Column(String(45))
     description = Column(Text)
     entity_id = Column(String(100))
-
-    user = relationship("User")
+    extraction_mode = Column(String(30))
+    fallback_reason = Column(Text)
+    previous_hash = Column(Text)
+    current_hash = Column(Text)

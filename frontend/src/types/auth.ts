@@ -7,6 +7,7 @@ export interface AuthUser {
   role: UserRole;
   approval_status: ApprovalStatus;
   full_name: string;
+  mfa_enabled: boolean;
   profile_image_path: string | null;
   profile_picture_path: string | null;
   profile_completed: boolean;
@@ -26,6 +27,7 @@ export interface RegisterResponse {
 export interface LoginPayload {
   email: string;
   password: string;
+  otpCode?: string;
 }
 
 export interface TokenResponse {

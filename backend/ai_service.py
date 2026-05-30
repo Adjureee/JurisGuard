@@ -7,12 +7,19 @@ import tempfile
 import time
 import traceback
 import re
+import importlib.util
 from pathlib import Path
 from requests import exceptions as requests_exceptions
 import cv2
 import numpy as np
 from PIL import Image
-from paddleocr import PaddleOCR
+try:
+    from paddleocr import PaddleOCR
+except Exception as exc:
+    PaddleOCR = None
+    PADDLEOCR_IMPORT_ERROR = exc
+else:
+    PADDLEOCR_IMPORT_ERROR = None
 import spacy
 from spacy.matcher import Matcher
 from dotenv import load_dotenv
@@ -103,6 +110,27 @@ def line_after_label(lines: list[str], label_pattern: str, stop_pattern: str | N
         if values:
             return clean_ocr_value(" ".join(values))
     return None
+
+def lines_between(
+    lines: list[str],
+    start_pattern: str,
+    end_pattern: str | None = None,
+) -> list[str]:
+    start_re = re.compile(start_pattern, re.IGNORECASE)
+    end_re = re.compile(end_pattern, re.IGNORECASE) if end_pattern else None
+    start_index = next((index for index, line in enumerate(lines) if start_re.search(line)), -1)
+    if start_index < 0:
+        return []
+    end_index = len(lines)
+    if end_re:
+        for index in range(start_index + 1, len(lines)):
+            if end_re.search(lines[index]):
+                end_index = index
+                break
+    return lines[start_index:end_index]
+
+def section_text(lines: list[str]) -> str:
+    return " ".join(lines)
 
 def normalize_year(year_text: str) -> str:
     year = year_text.upper().replace("O", "0").replace("R", "2").replace("I", "1").replace("L", "1")
@@ -310,10 +338,281 @@ COMMON_STOP_LABELS = (
     r"\brehiyon\b|\bdistrict\s*office\b|\bpetsa\b|\bcontrol\s*no\b|\bginawang\s+aksyon\b|"
     r"\bini[-\s]?atas\b|\bmananayam\b|\bini[-\s]?refer\b|\binindorso\b|\baprobado\b|"
     r"\bpangalan\b|\bedad\b|\bsex\b|\bcivil\s*status\b|\btirahan\b|\bcontact\s*no\b|"
-    r"\be[-\s]?mail\b|\brelasyon\b|\buri\s+ng\s+kaso\b|\bsektor\b|\bproof\s+of\s+indigency\b|"
+    r"\be[-\s]?mail\b|\brelihiyon\b|\bpagkamamamayan\b|\bnaabot\s+na\s+pag[-\s]?aaral\b|"
+    r"\bcitizenship\b|\breligion\b|\beducational\s+attainment\b|\blanguage\s*/?\s*dialect\b|"
+    r"\bsalita\s*/?\s*di(?:a|ya)lekto\b|\bspouse\b|\basawa\b|\bindividual\s+monthly\s+income\b|"
+    r"\baddress\s+of\s+spouse\b|\btirahan\s+ng\s+asawa\b|\bcontact\s*no\.?\s+of\s+spouse\b|"
+    r"\bcontact\s*no\.?\s+ng\s+asawa\b|\bnakakulong\b|\bdetained\b|\bdetained\s+since\b|"
+    r"\bpetsa\s+ng\s+pag[ak]*akulong\b|\blugar\s+ng\s+detention\b|\bplace\s+of\s+detention\b|"
+    r"\brelasyon\b|\buri\s+ng\s+kaso\b|\bsektor\b|\bproof\s+of\s+indigency\b|"
     r"\bkinalaman\b|\bkatunggali\b|\bimpormasyon\s+sa\s+kaso\b|\bcause\s+of\s+action\b|"
     r"\bpamagat\b|\bcourt\b"
 )
+
+PROXIMITY_STOP_LABELS = COMMON_STOP_LABELS
+
+def label_contexts(lines: list[str], label_pattern: str, radius: int = 1) -> list[tuple[int, str]]:
+    label_re = re.compile(label_pattern, re.IGNORECASE)
+    contexts: list[tuple[int, str]] = []
+    seen: set[int] = set()
+    for index, line in enumerate(lines):
+        if not label_re.search(line):
+            continue
+        for nearby_index in range(max(0, index - radius), min(len(lines), index + radius + 1)):
+            if nearby_index not in seen:
+                contexts.append((nearby_index, lines[nearby_index]))
+                seen.add(nearby_index)
+    return contexts
+
+def split_around_first_label(line: str, label_pattern: str) -> tuple[str, str, tuple[int, int] | None]:
+    match = re.search(label_pattern, line, re.IGNORECASE)
+    if not match:
+        return "", "", None
+    return line[: match.start()], line[match.end() :], match.span()
+
+def nearest_segment_before_label(text_before_label: str, stop_pattern: str = PROXIMITY_STOP_LABELS) -> str | None:
+    pieces = [
+        clean_ocr_value(piece)
+        for piece in re.split(stop_pattern, text_before_label, flags=re.IGNORECASE)
+        if clean_ocr_value(piece)
+    ]
+    return pieces[-1] if pieces else None
+
+def nearest_segment_after_label(text_after_label: str, stop_pattern: str = PROXIMITY_STOP_LABELS) -> str | None:
+    piece = re.split(stop_pattern, text_after_label, maxsplit=1, flags=re.IGNORECASE)[0]
+    piece = clean_ocr_value(piece)
+    return piece or None
+
+def bidirectional_label_value(
+    lines: list[str],
+    label_pattern: str,
+    stop_pattern: str = PROXIMITY_STOP_LABELS,
+    *,
+    prefer_before: bool = False,
+    radius: int = 0,
+) -> str | None:
+    for _, line in label_contexts(lines, label_pattern, radius):
+        before, after, span = split_around_first_label(line, label_pattern)
+        if span is None:
+            continue
+        before_value = nearest_segment_before_label(before, stop_pattern)
+        after_value = nearest_segment_after_label(after, stop_pattern)
+        ordered = (before_value, after_value) if prefer_before else (after_value, before_value)
+        for value in ordered:
+            if value and not re.fullmatch(r"[_\-\s.]+", value):
+                return value
+    return None
+
+def find_nearest_regex_to_label(
+    lines: list[str],
+    label_pattern: str,
+    value_pattern: str,
+    *,
+    radius: int = 0,
+    exclude_pattern: str | None = None,
+) -> str | None:
+    label_re = re.compile(label_pattern, re.IGNORECASE)
+    value_re = re.compile(value_pattern, re.IGNORECASE)
+    exclude_re = re.compile(exclude_pattern, re.IGNORECASE) if exclude_pattern else None
+    best: tuple[int, str] | None = None
+
+    for _, line in label_contexts(lines, label_pattern, radius):
+        label_matches = list(label_re.finditer(line))
+        if not label_matches:
+            continue
+        for value_match in value_re.finditer(line):
+            value = clean_ocr_value(value_match.group(0))
+            if not value:
+                continue
+            if exclude_re and exclude_re.search(value):
+                continue
+            distance = min(
+                abs(value_match.start() - label_match.start())
+                for label_match in label_matches
+            )
+            if best is None or distance < best[0]:
+                best = (distance, value)
+
+    return best[1] if best else None
+
+def extract_age_near_label(lines: list[str], label_pattern: str = r"\bedad\b") -> str | None:
+    value = find_nearest_regex_to_label(
+        lines,
+        label_pattern,
+        r"\b(?:[1-9][0-9]?|1[01][0-9]|120)\b",
+        radius=0,
+    )
+    if not value:
+        return None
+    age = int(value)
+    return str(age) if 1 <= age <= 120 else None
+
+def extract_sex_near_label(lines: list[str], label_pattern: str = r"\bsex\b") -> str | None:
+    value = find_nearest_regex_to_label(
+        lines,
+        label_pattern,
+        r"\b(?:male|female|m|f)\b",
+        radius=0,
+        exclude_pattern=r"civil|status|single|married",
+    )
+    return normalize_sex_value(value)
+
+def extract_email_near_label(lines: list[str], label_pattern: str = r"\be[-\s]?mail\b") -> str | None:
+    return find_nearest_regex_to_label(
+        lines,
+        label_pattern,
+        r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}",
+        radius=1,
+    )
+
+def extract_title_words_near_label(lines: list[str], label_pattern: str) -> str | None:
+    candidate = bidirectional_label_value(lines, label_pattern, prefer_before=True, radius=0)
+    if not candidate:
+        candidate = bidirectional_label_value(lines, label_pattern, prefer_before=False, radius=0)
+    if not candidate:
+        return None
+    match = re.search(r"\b[A-Z][a-zA-Z]{2,}(?:\s+[A-Z][a-zA-Z]{2,}){0,3}\b", candidate)
+    if not match:
+        return None
+    value = clean_ocr_value(match.group(0))
+    if re.search(PROXIMITY_STOP_LABELS, value, re.IGNORECASE):
+        return None
+    return value
+
+def extract_text_near_label(
+    lines: list[str],
+    label_pattern: str,
+    *,
+    stop_pattern: str = PROXIMITY_STOP_LABELS,
+    prefer_before: bool = False,
+    radius: int = 0,
+) -> str | None:
+    value = bidirectional_label_value(
+        lines,
+        label_pattern,
+        stop_pattern=stop_pattern,
+        prefer_before=prefer_before,
+        radius=radius,
+    )
+    if not value or has_mixed_form_labels(value):
+        return None
+    return value
+
+def extract_text_after_label(
+    lines: list[str],
+    label_pattern: str,
+    *,
+    stop_pattern: str = PROXIMITY_STOP_LABELS,
+    radius: int = 0,
+) -> str | None:
+    for _, line in label_contexts(lines, label_pattern, radius):
+        _, after, span = split_around_first_label(line, label_pattern)
+        if span is None:
+            continue
+        value = nearest_segment_after_label(after, stop_pattern)
+        if value and not has_mixed_form_labels(value):
+            return value
+    return None
+
+def clean_detention_place_candidate(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = clean_ocr_value(value)
+    cleaned = re.sub(r"\bnakakulong\s*[:.]?\s*", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\bdetained\s*[:.]?\s*", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\b(?:oo|yes)\s*(?:hindi|no)\b", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\b(?:oo|yes|hindi|no)\b", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = clean_ocr_value(cleaned)
+    if not cleaned or has_mixed_form_labels(cleaned):
+        return None
+    if len(cleaned) < 3:
+        return None
+    return cleaned
+
+def extract_money_near_label(lines: list[str], label_pattern: str) -> str | None:
+    for _, line in label_contexts(lines, label_pattern, radius=0):
+        _, after, span = split_around_first_label(line, label_pattern)
+        if span is None:
+            continue
+        after_value = nearest_segment_after_label(after, PROXIMITY_STOP_LABELS)
+        if not after_value:
+            continue
+        match = re.search(r"(?:P|₱|PHP)?\s*[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|(?:P|₱|PHP)?\s*[0-9]+", after_value, re.IGNORECASE)
+        if match:
+            return clean_ocr_value(match.group(0))
+    return None
+
+def extract_detention_date_near_label(lines: list[str]) -> str | None:
+    for label_pattern in [r"\bdetained\s+since\b", r"\bpetsa\s+ng\s+pag[ak]*akulong\b"]:
+        value = bidirectional_label_value(lines, label_pattern, prefer_before=False, radius=0)
+        if value:
+            date_value = extract_date(value)
+            if date_value:
+                return date_value
+            numeric_date = re.search(r"\b[0-9]{1,2}[/-][0-9]{1,2}[/-](?:19|20)?[0-9]{2}\b", value)
+            if numeric_date:
+                return numeric_date.group(0)
+    return None
+
+def extract_civil_status_near_label(lines: list[str]) -> str | None:
+    for _, line in label_contexts(lines, r"\bcivil\s*status\b", radius=0):
+        before, after, span = split_around_first_label(line, r"\bcivil\s*status\b")
+        if span is None:
+            continue
+        nearby = " ".join(
+            value for value in [
+                nearest_segment_before_label(before),
+                nearest_segment_after_label(after),
+                line,
+            ]
+            if value
+        )
+        status = normalize_civil_status_value(nearby)
+        if status:
+            return status
+    value = find_nearest_regex_to_label(
+        lines,
+        r"\bcivil\s*status\b",
+        r"\b(?:single|sing|sngle|ing|married|widowed|widow|separated)\b",
+        radius=0,
+    )
+    if value:
+        return normalize_civil_status_value(value)
+    return None
+
+def extract_squashed_binary_choice(
+    lines: list[str],
+    label_pattern: str,
+    true_pattern: str = r"oo|yes",
+    false_pattern: str = r"hindi|no",
+) -> bool | None:
+    label_re = re.compile(label_pattern, re.IGNORECASE)
+    true_re = re.compile(true_pattern, re.IGNORECASE)
+    false_re = re.compile(false_pattern, re.IGNORECASE)
+    mark_re = re.compile(r"(?:☑|☒|✓|✔|\[[xX/]\]|\([xX/]\)|■|▣)")
+
+    for line in lines:
+        if not label_re.search(line):
+            continue
+        compact = re.sub(r"\s+", "", line)
+        true_match = true_re.search(compact)
+        false_match = false_re.search(compact)
+
+        if true_match:
+            true_window = compact[max(0, true_match.start() - 4): true_match.end() + 4]
+            if mark_re.search(true_window):
+                return True
+        if false_match:
+            false_window = compact[max(0, false_match.start() - 4): false_match.end() + 4]
+            if mark_re.search(false_window):
+                return False
+
+        if true_match and not false_match:
+            return True
+        if false_match and not true_match:
+            return False
+
+    return None
 
 STRING_FIELD_PATTERNS = {
     "assigned_to": r"\bini[-\s]?atas\s+kay\b",
@@ -321,13 +620,6 @@ STRING_FIELD_PATTERNS = {
     "approved_by": r"\baprobado\s+ang\s+aksyon\s+ni\b",
     "action_legal_service_text": r"\bibinigay\s+na\s+serbisyong[-\s]?legal\b",
     "action_other_text": r"\biba\s+pa\b",
-    "rep_name": r"\bii[-\s]?a\b.*\bpangalan\b|\brepresentative\b.*\bpangalan\b",
-    "rep_address": r"\btirahan\b",
-    "rep_contact": r"\bcontact\s*no\b",
-    "rep_relation": r"\brelasyon\s+sa\s+aplikante\b",
-    "rep_email": r"\be[-\s]?mail\b",
-    "adversary_name": r"\bkatunggali\s+sa\s+kaso\b.*\bpangalan\b|\bpangalan\b",
-    "adversary_address": r"\bkatunggali\s+sa\s+kaso\b.*\btirahan\b|\btirahan\b",
     "case_information": r"\bimpormasyon\s+sa\s+kaso\b",
     "cause_of_action": r"\bcause\s+of\s+action\b|\buri\s+ng\s+offense\b",
     "case_docket_title": r"\bpamagat\s+at\s+docket\s+no\.?\s+ng\s+kaso\b|\bpamagat\s+at\s+docket\s+no\b",
@@ -458,11 +750,11 @@ def spacy_extract_pao_fields(raw_text: str, empty_schema: dict) -> dict:
                     break
 
     extracted["rehiyon"] = extract_region(normalize_lines(raw_text))
-    extracted = remove_printed_template_leaks(extracted)
+    extracted = apply_quality_filters(remove_printed_template_leaks(extracted))
     return extracted
 
 def extract_value_by_label(lines: list[str], label_pattern: str) -> str | None:
-    value = line_after_label(lines, label_pattern, stop_pattern=COMMON_STOP_LABELS)
+    value = bidirectional_label_value(lines, label_pattern, stop_pattern=COMMON_STOP_LABELS)
     if not value:
         return None
     value = re.sub(r"^/+\s*", "", value)
@@ -479,6 +771,197 @@ def apply_string_field_patterns(extracted: dict, lines: list[str]) -> None:
         value = extract_value_by_label(lines, label_pattern)
         if value:
             extracted[field_name] = value
+
+def extract_inline_value(text: str, label_pattern: str, stop_pattern: str | None = None) -> str | None:
+    pattern = label_pattern + r"\s*[:.]?\s*(.+)"
+    match = re.search(pattern, text, re.IGNORECASE)
+    if not match:
+        return None
+    value = match.group(1)
+    if stop_pattern:
+        value = re.split(stop_pattern, value, maxsplit=1, flags=re.IGNORECASE)[0]
+    value = clean_ocr_value(value)
+    return value or None
+
+def extract_section_value(lines: list[str], label_pattern: str, stop_pattern: str | None = None) -> str | None:
+    value = bidirectional_label_value(lines, label_pattern, stop_pattern=stop_pattern or COMMON_STOP_LABELS)
+    if value:
+        return value
+    return extract_inline_value(section_text(lines), label_pattern, stop_pattern or COMMON_STOP_LABELS)
+
+def apply_applicant_section_fields(extracted: dict, lines: list[str]) -> None:
+    applicant_lines = lines_between(
+        lines,
+        r"impormasyon\s+ukol\s+sa\s+aplikante|information\s+.*applicant",
+        r"ii[-\s]?a|impormasyon\s+ukol\s+sa\s+representative|uri\s+ng\s+kaso|sektor\s+na\s+kabilang",
+    )
+    if not applicant_lines:
+        return
+
+    name = bidirectional_label_value(
+        applicant_lines,
+        r"\bpangalan\b",
+        r"\bedad\b|\bsex\b|\bcivil\s*status\b|\brelihiyon\b|\bpagkamamamayan\b|\btirahan\b|\be[-\s]?mail\b",
+        prefer_before=True,
+    )
+    if name and not re.search(r"impormasyon|aplikante|representative", name, re.IGNORECASE):
+        extracted["applicant_name"] = name
+
+    age = extract_age_near_label(applicant_lines)
+    if age:
+        extracted["applicant_age"] = age
+
+    sex = extract_sex_near_label(applicant_lines)
+    if sex:
+        extracted["applicant_sex"] = sex
+
+    civil_status = extract_civil_status_near_label(applicant_lines)
+    if civil_status:
+        extracted["applicant_civil_status"] = civil_status
+
+    religion = extract_title_words_near_label(applicant_lines, r"\brelihiyon\b")
+    if not religion:
+        religion = extract_title_words_near_label(applicant_lines, r"\breligion\b")
+    if religion:
+        extracted["applicant_religion"] = religion
+
+    email = extract_email_near_label(applicant_lines)
+    if email:
+        extracted["applicant_email"] = email
+
+    address = extract_text_near_label(
+        applicant_lines,
+        r"\btirahan\b(?!\s+ng\s+asawa)|\baddress\b(?!\s+of\s+spouse)",
+        stop_pattern=r"\be[-\s]?mail\b|\bspouse\b|\basawa\b|\bindividual\s+monthly\s+income\b|\bcontact\b|\bnakakulong\b|\bdetained\b",
+    )
+    if address:
+        extracted["applicant_address"] = address
+
+    education = extract_text_after_label(
+        applicant_lines,
+        r"\bnaabot\s+na\s+pag[-\s]?aaral\b|\beducational\s+attainment\b",
+        stop_pattern=r"\brelihiyon\b|\breligion\b|\bsalita\s*/?\s*di(?:a|ya)lekto\b|\blanguage\s*/?\s*dialect\b|\bcontact\b|\bspouse\b|\basawa\b",
+    )
+    if education:
+        extracted["applicant_educational_attainment"] = education
+
+    citizenship = extract_text_after_label(
+        applicant_lines,
+        r"\bpagkamamamayan\b|\bcitizenship\b",
+        stop_pattern=r"\btirahan\b|\baddress\b|\be[-\s]?mail\b|\bcontact\b",
+    )
+    if citizenship:
+        extracted["applicant_citizenship"] = citizenship
+
+    language = extract_text_after_label(
+        applicant_lines,
+        r"\bsalita\s*/?\s*di(?:a|ya)lekto\b|\blanguage\s*/?\s*dialect\b",
+        stop_pattern=r"\bcontact\b|\bspouse\b|\basawa\b|\bindividual\s+monthly\s+income\b",
+    )
+    if language:
+        extracted["applicant_language_dialect"] = language
+
+    spouse = extract_text_near_label(
+        applicant_lines,
+        r"\basawa\s*[:.]|\bspouse\s*[:.]",
+        stop_pattern=r"\btirahan\s+ng\s+asawa\b|\baddress\s+of\s+spouse\b|\bcontact\s*no\b|\bnakakulong\b|\bdetained\b",
+    )
+    if spouse:
+        extracted["spouse_name"] = spouse
+
+    monthly_income = extract_money_near_label(applicant_lines, r"\bindividual\s+monthly\s+income\b")
+    if monthly_income:
+        extracted["individual_monthly_income"] = monthly_income
+
+    spouse_address = extract_text_near_label(
+        applicant_lines,
+        r"\btirahan\s+ng\s+asawa\b|\baddress\s+of\s+spouse\b",
+        stop_pattern=r"\bcontact\s*no\b|\bnakakulong\b|\bdetained\b|\blugar\s+ng\s+detention\b|\bplace\s+of\s+detention\b",
+    )
+    if spouse_address:
+        extracted["spouse_address"] = spouse_address
+
+    spouse_contact = extract_text_near_label(
+        applicant_lines,
+        r"\bcontact\s*no\.?\s+ng\s+asawa\b|\bcontact\s*no\.?\s+of\s+spouse\b",
+        stop_pattern=r"\bnakakulong\b|\bdetained\b|\blugar\s+ng\s+detention\b|\bplace\s+of\s+detention\b",
+    )
+    if spouse_contact:
+        extracted["spouse_contact"] = spouse_contact
+
+    contact = extract_section_value(
+        applicant_lines,
+        r"\bcontact\s*no\.?\b",
+        r"\basawa\b|\btirahan\s+ng\s+asawa\b|\bcontact\s*no\.\s*ng\s*asawa\b|\blugar\s+ng\s+detention\b",
+    )
+    if contact and not re.search(r"asawa|detention|petsa", contact, re.IGNORECASE):
+        extracted["applicant_contact"] = contact
+
+    detained = extract_squashed_binary_choice(applicant_lines, r"\bnakakulong\b")
+    if detained is None:
+        detained = extract_squashed_binary_choice(applicant_lines, r"\bdetained\b")
+    if detained is not None:
+        extracted["is_detained"] = detained
+
+    detained_since = extract_detention_date_near_label(applicant_lines)
+    if detained_since:
+        extracted["detained_since"] = detained_since
+
+    place_of_detention = clean_detention_place_candidate(extract_text_near_label(
+        applicant_lines,
+        r"\blugar\s+ng\s+detention\b|\bplace\s+of\s+detention\b",
+        stop_pattern=r"\bpetsa\s+ng\s+pag[ak]*akulong\b|\bdetained\s+since\b|\buri\s+ng\s+kaso\b|\bii[-\s]?a\b|\brepresentative\b",
+        prefer_before=True,
+    ))
+    if place_of_detention:
+        extracted["place_of_detention"] = place_of_detention
+
+def apply_representative_section_fields(extracted: dict, lines: list[str]) -> None:
+    representative_lines = lines_between(
+        lines,
+        r"ii[-\s]?a\s+impormasyon|impormasyon\s+ukol\s+sa\s+representative",
+        r"uri\s+ng\s+kaso|sektor\s+na\s+kabilang|affidavit",
+    )
+    if not representative_lines:
+        return
+    representative_compact = section_text(representative_lines)
+
+    field_specs = {
+        "rep_name": (r"\bpangalan\b", r"\bedad\b|\bsex\b|\bcivil\s*status\b|\btirahan\b|\bcontact\b|\be[-\s]?mail\b"),
+        "rep_address": (r"\btirahan\b", r"\brelasyon\b|\bcontact\b|\be[-\s]?mail\b"),
+        "rep_contact": (r"\bcontact\s*no\.?\b", r"\be[-\s]?mail\b|\brelasyon\b"),
+        "rep_relation": (r"\brelasyon\s+sa\s+aplikante\b", r"\bcontact\b|\be[-\s]?mail\b|\buri\s+ng\s+kaso\b"),
+        "rep_email": (r"\be[-\s]?mail\b", r"\buri\s+ng\s+kaso\b|\bsektor\b"),
+    }
+    for field_name, (label_pattern, stop_pattern) in field_specs.items():
+        value = extract_section_value(representative_lines, label_pattern, stop_pattern)
+        if value and not re.search(r"representative|pupunan|aplikante", value, re.IGNORECASE):
+            extracted[field_name] = value
+
+    age_match = re.search(r"\bedad\s*[:.]?\s*([0-9]{1,3})\b", representative_compact, re.IGNORECASE)
+    if age_match:
+        extracted["rep_age"] = age_match.group(1)
+    sex_match = re.search(r"\bsex\s*[:.]?\s*([A-Za-z]+)\b", representative_compact, re.IGNORECASE)
+    if sex_match:
+        extracted["rep_sex"] = clean_ocr_value(sex_match.group(1))
+    civil_status = extract_inline_value(representative_compact, r"\bcivil\s*status\b", r"\bcontact\b|\be[-\s]?mail\b")
+    if civil_status:
+        extracted["rep_civil_status"] = civil_status
+
+def apply_adversary_section_fields(extracted: dict, lines: list[str]) -> None:
+    adversary_lines = lines_between(
+        lines,
+        r"katunggali\s+sa\s+kaso|adverse\s+party|kalabang\s+partido",
+        r"impormasyon\s+sa\s+kaso|pamagat\s+at\s+docket|court/body|cause\s+of\s+action",
+    )
+    if not adversary_lines:
+        return
+    name = extract_section_value(adversary_lines, r"\bpangalan\b", r"\btirahan\b|\bimpormasyon\b|\bpamagat\b")
+    address = extract_section_value(adversary_lines, r"\btirahan\b", r"\bimpormasyon\b|\bpamagat\b|\bcourt\b")
+    if name:
+        extracted["adversary_name"] = name
+    if address:
+        extracted["adversary_address"] = address
 
 def apply_visible_or_checked_patterns(
     extracted: dict,
@@ -526,13 +1009,18 @@ PRINTED_TEMPLATE_PATTERNS = [
     r"\blagda\b.*\bpublic\s+attorney\b",
     r"\bpangalan\b.*\blagda\b",
     r"\bpublic\s+attorney\b",
+    r"\blawyer\b",
+    r"\bang\s+aksyon\s+ni\b",
     r"\bsignature\s+of\s+affiant\b",
     r"\bparty/representative\b",
+    r"\bdpa/rpa/oic\b",
 ]
 
 def remove_printed_template_leaks(extracted_data: dict) -> dict:
     cleaned = dict(extracted_data)
     for field_name, value in list(cleaned.items()):
+        if field_name == "raw_text":
+            continue
         if not isinstance(value, str):
             continue
         normalized = clean_ocr_value(value).lower()
@@ -541,6 +1029,179 @@ def remove_printed_template_leaks(extracted_data: dict) -> dict:
             re.search(pattern, normalized, re.IGNORECASE) for pattern in PRINTED_TEMPLATE_PATTERNS
         ):
             cleaned[field_name] = None
+    return cleaned
+
+def has_mixed_form_labels(value: str) -> bool:
+    label_hits = re.findall(
+        r"\b(pangalan|edad|sex|civil\s*status|relihiyon|tirahan|contact|asawa|detention|relasyon|e[-\s]?mail)\b",
+        value,
+        flags=re.IGNORECASE,
+    )
+    return len(label_hits) >= 2
+
+def looks_like_ocr_noise(value: str) -> bool:
+    cleaned = clean_ocr_value(value)
+    if not cleaned:
+        return True
+    if len(cleaned) <= 2:
+        return True
+    letters = re.findall(r"[A-Za-z]", cleaned)
+    if len(letters) >= 6:
+        vowels = re.findall(r"[AEIOUaeiou]", cleaned)
+        if len(vowels) / len(letters) < 0.18:
+            return True
+    if re.search(r"[a-z]{2,}[A-Z]{2,}[a-z]{1,}|[A-Z]{3,}[a-z]{2,}[A-Z]", cleaned):
+        return True
+    return False
+
+def clean_person_name_candidate(value: str | None) -> str | None:
+    if not value:
+        return None
+    candidate = clean_ocr_value(value)
+    if re.search(r"\bedad\b", candidate, re.IGNORECASE):
+        parts = re.split(r"\bedad\s*[:.]?", candidate, maxsplit=1, flags=re.IGNORECASE)
+        candidate = parts[-1]
+    candidate = re.sub(r"\b(sex|civil\s*status|pangalan)\b\s*[:.]?", " ", candidate, flags=re.IGNORECASE)
+    candidate = re.sub(r"\b(male|female|single|married|widow(?:ed)?|separated|m|f)\b", " ", candidate, flags=re.IGNORECASE)
+    candidate = clean_ocr_value(candidate)
+    if not candidate or len(candidate) < 3:
+        return None
+    if has_mixed_form_labels(candidate):
+        return None
+    return candidate
+
+def normalize_sex_value(value: str | None) -> str | None:
+    if not value:
+        return None
+    compact = clean_ocr_value(value).lower()
+    if re.fullmatch(r"m|male", compact):
+        return "Male"
+    if re.fullmatch(r"f|female", compact):
+        return "Female"
+    return None
+
+def normalize_civil_status_value(value: str | None) -> str | None:
+    if not value:
+        return None
+    compact = clean_ocr_value(value).lower()
+    if compact in {"sing", "sngle", "ing"}:
+        return "Single"
+    for status in ["single", "married", "widowed", "widow", "separated"]:
+        if re.search(rf"\b{status}\b", compact):
+            return "Widowed" if status == "widow" else status.title()
+    return None
+
+RELIGION_TERMS = {
+    "catholic",
+    "roman catholic",
+    "christian",
+    "islam",
+    "muslim",
+    "iglesia ni cristo",
+    "inc",
+    "born again",
+    "baptist",
+    "adventist",
+    "protestant",
+}
+
+ADDRESS_SIGNAL_PATTERN = (
+    r"\b(?:street|st\.?|road|rd\.?|avenue|ave\.?|barangay|brgy\.?|purok|sitio|subdivision|"
+    r"village|zone|block|blk\.?|lot|phase|city|municipality|province|davao|panabo|tagum|"
+    r"del\s+norte|del\s+sur)\b|#|\d"
+)
+
+def normalize_simple_text(value: str | None) -> str:
+    if not value:
+        return ""
+    return re.sub(r"\s+", " ", clean_ocr_value(value).lower()).strip(" .,:;")
+
+def is_religion_like(value: str | None) -> bool:
+    normalized = normalize_simple_text(value)
+    return normalized in RELIGION_TERMS
+
+def clean_education_candidate(value: str | None, religion: str | None = None) -> str | None:
+    if not value:
+        return None
+    candidate = clean_ocr_value(value)
+    if not candidate or has_mixed_form_labels(candidate) or looks_like_ocr_noise(candidate):
+        return None
+    if normalize_simple_text(candidate) == normalize_simple_text(religion):
+        return None
+    if is_religion_like(candidate):
+        return None
+    return candidate
+
+def clean_address_candidate(value: str | None) -> str | None:
+    if not value:
+        return None
+    candidate = clean_ocr_value(value)
+    if not candidate or has_mixed_form_labels(candidate) or looks_like_ocr_noise(candidate):
+        return None
+    words = re.findall(r"[A-Za-z]+", candidate)
+    has_address_signal = bool(re.search(ADDRESS_SIGNAL_PATTERN, candidate, re.IGNORECASE))
+    if len(words) <= 1 and not has_address_signal:
+        return None
+    if candidate.isupper() and len(candidate) <= 8 and not has_address_signal:
+        return None
+    return candidate
+
+def apply_quality_filters(extracted: dict) -> dict:
+    cleaned = dict(extracted)
+    cleaned["applicant_name"] = clean_person_name_candidate(cleaned.get("applicant_name"))
+    cleaned["rep_name"] = clean_person_name_candidate(cleaned.get("rep_name"))
+    cleaned["adversary_name"] = clean_person_name_candidate(cleaned.get("adversary_name"))
+    cleaned["applicant_sex"] = normalize_sex_value(cleaned.get("applicant_sex"))
+    cleaned["rep_sex"] = normalize_sex_value(cleaned.get("rep_sex"))
+    cleaned["applicant_civil_status"] = normalize_civil_status_value(cleaned.get("applicant_civil_status"))
+    cleaned["rep_civil_status"] = normalize_civil_status_value(cleaned.get("rep_civil_status"))
+    cleaned["applicant_educational_attainment"] = clean_education_candidate(
+        cleaned.get("applicant_educational_attainment"),
+        cleaned.get("applicant_religion"),
+    )
+
+    for field_name in [
+        "referred_by",
+        "approved_by",
+        "applicant_citizenship",
+        "applicant_language_dialect",
+        "spouse_name",
+        "spouse_contact",
+    ]:
+        value = cleaned.get(field_name)
+        if isinstance(value, str) and (
+            has_mixed_form_labels(value)
+            or re.search(PROXIMITY_STOP_LABELS, value, re.IGNORECASE)
+            or looks_like_ocr_noise(value)
+            or re.search(r"\blawyer\b|\bang\s+aksyon\s+ni\b|\bdpa/rpa/oic\b", value, re.IGNORECASE)
+        ):
+            cleaned[field_name] = None
+
+    for field_name in ["applicant_address", "spouse_address", "rep_address", "adversary_address"]:
+        cleaned[field_name] = clean_address_candidate(cleaned.get(field_name))
+
+    value = cleaned.get("individual_monthly_income")
+    if isinstance(value, str) and not re.search(r"[0-9]", value):
+        cleaned["individual_monthly_income"] = None
+
+    value = cleaned.get("detained_since")
+    if isinstance(value, str) and not re.search(r"(?:19|20)?[0-9]{2}|january|february|march|april|may|june|july|august|september|october|november|december|enero|pebrero|marso|abril|mayo|hunyo|hulyo|agosto|setyembre|oktubre|nobyembre|disyembre", value, re.IGNORECASE):
+        cleaned["detained_since"] = None
+
+    value = cleaned.get("place_of_detention")
+    if isinstance(value, str):
+        cleaned["place_of_detention"] = clean_detention_place_candidate(value)
+
+    for field_name in ["applicant_contact", "rep_contact"]:
+        value = cleaned.get(field_name)
+        if isinstance(value, str) and not re.search(r"\d{5,}|@", value):
+            cleaned[field_name] = None
+
+    for field_name in ["case_information", "cause_of_action"]:
+        value = cleaned.get(field_name)
+        if isinstance(value, str) and has_mixed_form_labels(value):
+            cleaned[field_name] = None
+
     return cleaned
 
 def extract_affidavit_fields(extracted: dict, lines: list[str], compact: str) -> None:
@@ -608,6 +1269,9 @@ def extract_offline_fields(raw_text: str, empty_schema: dict) -> dict:
     extracted["district_office"] = extract_district_office(lines)
     extracted["mananayam"] = extract_interviewer(lines)
     apply_string_field_patterns(extracted, lines)
+    apply_applicant_section_fields(extracted, lines)
+    apply_representative_section_fields(extracted, lines)
+    apply_adversary_section_fields(extracted, lines)
 
     checkbox_mode = get_str_env("PAO_CHECKBOX_MODE", "strict")
     apply_visible_or_checked_patterns(extracted, lines, compact, ACTION_PATTERNS, checkbox_mode)
@@ -641,8 +1305,7 @@ def extract_offline_fields(raw_text: str, empty_schema: dict) -> dict:
     apply_visible_or_checked_patterns(extracted, lines, compact, PROOF_PATTERNS, checkbox_mode)
 
     for field_name, pattern in SECTOR_PATTERNS.items():
-        if has_visible_option(compact, pattern):
-            extracted[field_name] = "VISIBLE"
+        extracted[field_name] = is_checked_option(lines, pattern)
 
     applicant_role = extract_selected_option(
         lines,
@@ -680,15 +1343,17 @@ def extract_offline_fields(raw_text: str, empty_schema: dict) -> dict:
     extracted["rehiyon"] = extract_region(lines)
     extracted["is_filed_in_court"] = extract_court_filing_status(compact)
 
-    return remove_printed_template_leaks(extracted)
+    return apply_quality_filters(remove_printed_template_leaks(extracted))
 
 # ==========================================
 # 1. IMAGE PRE-PROCESSING HELPERS
 # ==========================================
-def compress_image_for_vlm(original_path: str, max_size_mb: int = 2):
+def compress_image_for_vlm(original_path: str, max_size_mb: int | None = None):
     """Only used for the Cloud Mistral API to save bandwidth."""
+    max_size_mb = max_size_mb or get_int_env("VLM_MAX_IMAGE_MB", 4)
     file_size_mb = os.path.getsize(original_path) / (1024 * 1024)
-    max_dimension = 1600 
+    max_dimension = get_int_env("VLM_MAX_IMAGE_DIMENSION", 2200)
+    jpeg_quality = get_int_env("VLM_JPEG_QUALITY", 92)
     
     with Image.open(original_path) as img:
         if max(img.size) > max_dimension or file_size_mb > max_size_mb:
@@ -699,7 +1364,7 @@ def compress_image_for_vlm(original_path: str, max_size_mb: int = 2):
             img.thumbnail((max_dimension, max_dimension), resample_filter)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
                 temp_path = temp_file.name
-            img.save(temp_path, "JPEG", optimize=True, quality=85)
+            img.save(temp_path, "JPEG", optimize=True, quality=jpeg_quality)
             return temp_path
     return original_path
 
@@ -752,6 +1417,27 @@ def fast_prepare_ocr_image(image: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray = cv2.equalizeHist(gray)
     return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+
+def crop_document_region(image: np.ndarray) -> np.ndarray:
+    """Remove obvious camera background so OCR scans fewer pixels."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    _, mask = cv2.threshold(gray, 70, 255, cv2.THRESH_BINARY)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return image
+    h, w = image.shape[:2]
+    contour = max(contours, key=cv2.contourArea)
+    x, y, cw, ch = cv2.boundingRect(contour)
+    if cw * ch < (w * h * 0.45):
+        return image
+    pad = 12
+    x1 = max(0, x - pad)
+    y1 = max(0, y - pad)
+    x2 = min(w, x + cw + pad)
+    y2 = min(h, y + ch + pad)
+    return image[y1:y2, x1:x2]
 
 def group_ocr_lines(ocr_results: list) -> str:
     """
@@ -831,8 +1517,8 @@ class JurisGuardExtractionEngine:
     def __init__(self):
         print("[JurisGuard] Booting up Enterprise Orchestrator...")
         self.mistral_api_key = os.getenv("MISTRAL_API_KEY")
-        self.ocr_max_dimension = get_int_env("PADDLEOCR_MAX_DIMENSION", 1600)
-        self.ocr_det_limit_side_len = get_int_env("PADDLEOCR_DET_LIMIT_SIDE_LEN", 960)
+        self.ocr_max_dimension = get_int_env("PADDLEOCR_MAX_DIMENSION", 1280)
+        self.ocr_det_limit_side_len = get_int_env("PADDLEOCR_DET_LIMIT_SIDE_LEN", 736)
         self.ocr_det_model_name = os.getenv("PADDLEOCR_DET_MODEL_NAME", "PP-OCRv4_mobile_det")
         self.ocr_rec_model_name = os.getenv("PADDLEOCR_REC_MODEL_NAME", "en_PP-OCRv4_mobile_rec")
         self.ocr_enable_angle_cls = get_bool_env("PADDLEOCR_ENABLE_ANGLE_CLS", False)
@@ -841,14 +1527,14 @@ class JurisGuardExtractionEngine:
         self.ocr_enable_mkldnn = get_bool_env("PADDLEOCR_ENABLE_MKLDNN", False)
         self.ocr_use_gpu = get_bool_env("PADDLEOCR_USE_GPU", False)
         self.ocr_device = "gpu" if self.ocr_use_gpu else "cpu"
+        self.mistral_connect_timeout = get_int_env("MISTRAL_CONNECT_TIMEOUT_SECONDS", 10)
+        self.mistral_read_timeout = get_int_env("MISTRAL_READ_TIMEOUT_SECONDS", 60)
+        self.mistral_model = os.getenv("MISTRAL_MODEL", "pixtral-12b-2409")
         
-        print("[JurisGuard] Booting up Offline Eyes (PaddleOCR)...")
+        print("[JurisGuard] Offline Eyes (PaddleOCR) will initialize only when local OCR is needed.")
         import logging
         logging.getLogger('ppocr').setLevel(logging.ERROR)
-        self.local_ocr = self._create_ocr_engine(
-            enable_mkldnn=self.ocr_enable_mkldnn,
-            engine="paddle_static",
-        )
+        self.local_ocr = None
         self.safe_ocr = None
         print(
             "[JurisGuard] PaddleOCR config: "
@@ -857,6 +1543,12 @@ class JurisGuardExtractionEngine:
         )
 
     def _create_ocr_engine(self, enable_mkldnn: bool, engine: str):
+        if PaddleOCR is None:
+            raise RuntimeError(f"PaddleOCR is not available: {PADDLEOCR_IMPORT_ERROR}")
+        if importlib.util.find_spec("paddle") is None:
+            raise RuntimeError(
+                "Offline OCR dependency is missing: install paddlepaddle in the backend virtual environment."
+            )
         return PaddleOCR(
             use_angle_cls=self.ocr_enable_angle_cls,
             text_detection_model_name=self.ocr_det_model_name,
@@ -873,6 +1565,11 @@ class JurisGuardExtractionEngine:
 
     def _run_paddleocr(self, image: np.ndarray):
         try:
+            if self.local_ocr is None:
+                self.local_ocr = self._create_ocr_engine(
+                    enable_mkldnn=self.ocr_enable_mkldnn,
+                    engine="paddle_static",
+                )
             return self.local_ocr.ocr(image)
         except Exception as exc:
             print(f"[Warning] Fast PaddleOCR engine failed ({exc}). Retrying with safe CPU engine...")
@@ -887,8 +1584,10 @@ class JurisGuardExtractionEngine:
                 raise
 
     def _check_network_heartbeat(self) -> bool:
+        if not self.mistral_api_key:
+            return False
         try:
-            socket.create_connection(("api.mistral.ai", 443), timeout=3.0)
+            socket.create_connection(("api.mistral.ai", 443), timeout=0.75)
             return True
         except OSError:
             return False
@@ -899,7 +1598,11 @@ class JurisGuardExtractionEngine:
             "referred_by": None, "assigned_to": None, "approved_by": None,
             "action_merit_test": False, "action_representation": False, "action_legal_service_text": None, "action_other_text": None,
             "req_legal_doc": False, "req_oath": False, "req_court_rep": False, "req_inquest": False, "req_mediation": False, "req_other_text": None,
-            "applicant_name": None, "applicant_age": None, "applicant_sex": None, "applicant_civil_status": None, "applicant_contact": None, "is_detained": False,
+            "applicant_name": None, "applicant_age": None, "applicant_sex": None, "applicant_civil_status": None,
+            "applicant_religion": None, "applicant_educational_attainment": None, "applicant_citizenship": None,
+            "applicant_language_dialect": None, "applicant_address": None, "applicant_email": None, "applicant_contact": None,
+            "spouse_name": None, "spouse_address": None, "spouse_contact": None, "individual_monthly_income": None,
+            "is_detained": False, "detained_since": None, "place_of_detention": None,
             "rep_name": None, "rep_age": None, "rep_sex": None, "rep_civil_status": None, "rep_address": None, "rep_contact": None, "rep_relation": None, "rep_email": None,
             "case_type_criminal": False, "case_type_civil": False, "case_type_labor": False, "case_type_admin": False, "case_type_appealed": False,
             "sector_foreign_national": None, "sector_urban_poor": None, "sector_rural_poor": None, "sector_indigenous": None, "sector_pwd": None,
@@ -912,6 +1615,375 @@ class JurisGuardExtractionEngine:
             "extraction_mode": None, "raw_text": None
         }
 
+    def _get_sectioned_schema(self) -> dict:
+        return {
+            "header": {
+                "time_in_service_office": None,
+                "region": None,
+                "district_office": None,
+                "date": None,
+                "control_no": None,
+                "action_taken": None,
+                "assigned_to": None,
+                "interviewer": None,
+                "referred_by_indorsed_by": None,
+                "action_approved_by": None,
+                "time_in_lawyer": None,
+                "time_out_lawyer": None,
+            },
+            "nature_of_request": {
+                "legal_documentation": False,
+                "administration_of_oath": False,
+                "representation_in_court_or_quasi_judicial_bodies": False,
+                "inquest_legal_assistance": False,
+                "mediation_conciliation": False,
+                "others": False,
+                "others_text": None,
+            },
+            "applicant_personal_circumstances": {
+                "name": None,
+                "age": None,
+                "sex": None,
+                "civil_status": None,
+                "religion": None,
+                "educational_attainment": None,
+                "citizenship": None,
+                "language_dialect": None,
+                "address": None,
+                "contact_no": None,
+                "email": None,
+                "spouse": None,
+                "individual_monthly_income": None,
+                "address_of_spouse": None,
+                "contact_no_of_spouse": None,
+                "detained": False,
+                "detained_since": None,
+                "place_of_detention": None,
+            },
+            "representative_personal_circumstances": {
+                "name": None,
+                "age": None,
+                "sex": None,
+                "civil_status": None,
+                "address": None,
+                "contact_no": None,
+                "relationship_to_applicant": None,
+                "email": None,
+            },
+            "nature_of_case": {
+                "criminal": False,
+                "civil": False,
+                "labor": False,
+                "administrative": False,
+                "appealed": False,
+            },
+            "applicant_classification": {
+                "child_in_conflict_with_the_law": False,
+                "senior_citizen": False,
+                "foreign_national": False,
+                "foreign_national_details": None,
+                "woman": False,
+                "vawc_victim": False,
+                "refugee_evacuee": False,
+                "urban_poor": False,
+                "urban_poor_details": None,
+                "law_enforcer": False,
+                "drug_related_duty": False,
+                "tenant_in_agrarian_case": False,
+                "rural_poor": False,
+                "rural_poor_details": None,
+                "ofw_land_based": False,
+                "ofw_sea_based": False,
+                "arrested_for_terrorism": False,
+                "indigenous_people": False,
+                "indigenous_people_details": None,
+                "pwd": False,
+                "pwd_disability_type": None,
+                "victim_of_torture": False,
+                "victim_of_trafficking": False,
+                "former_rebel_or_fve": False,
+                "petitioner_for_voluntary_rehabilitation_drugs": False,
+            },
+            "affidavit_of_indigency": {
+                "affiant_name": None,
+                "civil_status_single": False,
+                "civil_status_married": False,
+                "civil_status_widow_widower": False,
+                "spouse_name": None,
+                "residing_at": None,
+                "monthly_net_salary_income": None,
+                "signature_date": None,
+                "signature_place": None,
+                "subscribed_sworn_date": None,
+                "subscribed_sworn_place": None,
+                "administering_public_attorney": None,
+            },
+            "conflict_of_interest_representation": {
+                "agree_different_district_office": False,
+                "agree_same_pao_department_appeal": False,
+                "waives_right_to_complain": False,
+                "trusts_assigned_public_attorney": False,
+                "party_representative_signature": None,
+            },
+            "proof_of_indigency": {
+                "for_submission": False,
+                "submission_deadline": None,
+                "income_tax_return": False,
+                "income_tax_return_date": None,
+                "barangay_certification": False,
+                "barangay_certification_date": None,
+                "dswd_certification": False,
+                "dswd_certification_date": None,
+                "others": False,
+                "others_text": None,
+                "party_representative_signature": None,
+            },
+            "applicant_case_involvement": {
+                "plaintiff": False,
+                "defendant": False,
+                "oppositor": False,
+                "petitioner": False,
+                "respondent": False,
+                "complainant": False,
+                "accused": False,
+                "others": False,
+                "others_text": None,
+            },
+            "adverse_party": {
+                "plaintiff_complainant": False,
+                "oppositor_others": False,
+                "defendant_respondent_accused": False,
+                "name": None,
+                "address": None,
+            },
+            "case_details": {
+                "facts_of_the_case": None,
+                "cause_of_action_nature_of_offense": None,
+                "pending_in_court": False,
+                "title_of_case_and_docket_no": None,
+                "court_body_tribunal_where_pending": None,
+            },
+        }
+
+    def _sectioned_from_flat(self, flat: dict) -> dict:
+        sectioned = self._get_sectioned_schema()
+        sectioned["header"].update({
+            "region": flat.get("rehiyon"),
+            "district_office": flat.get("district_office"),
+            "date": flat.get("petsa"),
+            "control_no": flat.get("control_no"),
+            "assigned_to": flat.get("assigned_to"),
+            "interviewer": flat.get("mananayam"),
+            "referred_by_indorsed_by": flat.get("referred_by"),
+            "action_approved_by": flat.get("approved_by"),
+        })
+        sectioned["nature_of_request"].update({
+            "legal_documentation": bool(flat.get("req_legal_doc")),
+            "administration_of_oath": bool(flat.get("req_oath")),
+            "representation_in_court_or_quasi_judicial_bodies": bool(flat.get("req_court_rep")),
+            "inquest_legal_assistance": bool(flat.get("req_inquest")),
+            "mediation_conciliation": bool(flat.get("req_mediation")),
+            "others": bool(flat.get("req_other_text")),
+            "others_text": flat.get("req_other_text"),
+        })
+        sectioned["applicant_personal_circumstances"].update({
+            "name": flat.get("applicant_name"),
+            "age": flat.get("applicant_age"),
+            "sex": flat.get("applicant_sex"),
+            "civil_status": flat.get("applicant_civil_status"),
+            "religion": flat.get("applicant_religion"),
+            "educational_attainment": flat.get("applicant_educational_attainment"),
+            "citizenship": flat.get("applicant_citizenship"),
+            "language_dialect": flat.get("applicant_language_dialect"),
+            "address": flat.get("applicant_address"),
+            "contact_no": flat.get("applicant_contact"),
+            "email": flat.get("applicant_email"),
+            "spouse": flat.get("spouse_name"),
+            "individual_monthly_income": flat.get("individual_monthly_income"),
+            "address_of_spouse": flat.get("spouse_address"),
+            "contact_no_of_spouse": flat.get("spouse_contact"),
+            "detained": bool(flat.get("is_detained")),
+            "detained_since": flat.get("detained_since"),
+            "place_of_detention": flat.get("place_of_detention"),
+        })
+        sectioned["representative_personal_circumstances"].update({
+            "name": flat.get("rep_name"),
+            "age": flat.get("rep_age"),
+            "sex": flat.get("rep_sex"),
+            "civil_status": flat.get("rep_civil_status"),
+            "address": flat.get("rep_address"),
+            "contact_no": flat.get("rep_contact"),
+            "relationship_to_applicant": flat.get("rep_relation"),
+            "email": flat.get("rep_email"),
+        })
+        sectioned["nature_of_case"].update({
+            "criminal": bool(flat.get("case_type_criminal")),
+            "civil": bool(flat.get("case_type_civil")),
+            "labor": bool(flat.get("case_type_labor")),
+            "administrative": bool(flat.get("case_type_admin")),
+            "appealed": bool(flat.get("case_type_appealed")),
+        })
+        sectioned["applicant_classification"].update({
+            "foreign_national": bool(flat.get("sector_foreign_national")),
+            "urban_poor": bool(flat.get("sector_urban_poor")),
+            "rural_poor": bool(flat.get("sector_rural_poor")),
+            "indigenous_people": bool(flat.get("sector_indigenous")),
+            "pwd": bool(flat.get("sector_pwd")),
+        })
+        sectioned["affidavit_of_indigency"].update({
+            "affiant_name": flat.get("affidavit_name"),
+            "monthly_net_salary_income": flat.get("affidavit_income"),
+            "signature_date": flat.get("affidavit_date"),
+            "signature_place": flat.get("affidavit_location"),
+            "administering_public_attorney": flat.get("administering_attorney"),
+        })
+        sectioned["conflict_of_interest_representation"].update({
+            "agree_different_district_office": bool(flat.get("consent_other_district")),
+            "agree_same_pao_department_appeal": bool(flat.get("consent_appeals_unit")),
+            "waives_right_to_complain": bool(flat.get("understood_no_complaint")),
+            "trusts_assigned_public_attorney": bool(flat.get("trusts_pao_fairness")),
+        })
+        sectioned["proof_of_indigency"].update({
+            "for_submission": bool(flat.get("has_proof_submit_later")),
+            "submission_deadline": flat.get("proof_submit_date"),
+            "income_tax_return": bool(flat.get("has_proof_itr")),
+            "income_tax_return_date": flat.get("proof_itr_date"),
+            "barangay_certification": bool(flat.get("has_proof_brgy")),
+            "barangay_certification_date": flat.get("proof_brgy_date"),
+            "dswd_certification": bool(flat.get("has_proof_dswd")),
+            "dswd_certification_date": flat.get("proof_dswd_date"),
+            "others": bool(flat.get("has_proof_other")),
+            "others_text": flat.get("proof_other_text"),
+        })
+        role = (flat.get("applicant_role") or "").strip().lower()
+        if role in {"plaintiff", "defendant", "oppositor", "petitioner", "respondent", "complainant", "accused"}:
+            sectioned["applicant_case_involvement"][role] = True
+        sectioned["adverse_party"].update({
+            "name": flat.get("adversary_name"),
+            "address": flat.get("adversary_address"),
+        })
+        adverse_role = (flat.get("adversary_role") or "").strip().lower()
+        if "plaintiff" in adverse_role or "complainant" in adverse_role:
+            sectioned["adverse_party"]["plaintiff_complainant"] = True
+        if "oppositor" in adverse_role:
+            sectioned["adverse_party"]["oppositor_others"] = True
+        if "defendant" in adverse_role or "respondent" in adverse_role or "accused" in adverse_role:
+            sectioned["adverse_party"]["defendant_respondent_accused"] = True
+        sectioned["case_details"].update({
+            "facts_of_the_case": flat.get("case_information"),
+            "cause_of_action_nature_of_offense": flat.get("cause_of_action"),
+            "pending_in_court": bool(flat.get("is_filed_in_court")),
+            "title_of_case_and_docket_no": flat.get("case_docket_title"),
+            "court_body_tribunal_where_pending": flat.get("court_body"),
+        })
+        return sectioned
+
+    def _flat_from_sectioned(self, sectioned: dict) -> dict:
+        flat = self._get_empty_schema()
+        header = sectioned.get("header", {})
+        request = sectioned.get("nature_of_request", {})
+        applicant = sectioned.get("applicant_personal_circumstances", {})
+        representative = sectioned.get("representative_personal_circumstances", {})
+        nature = sectioned.get("nature_of_case", {})
+        classification = sectioned.get("applicant_classification", {})
+        affidavit = sectioned.get("affidavit_of_indigency", {})
+        conflict = sectioned.get("conflict_of_interest_representation", {})
+        proof = sectioned.get("proof_of_indigency", {})
+        involvement = sectioned.get("applicant_case_involvement", {})
+        adverse = sectioned.get("adverse_party", {})
+        case_details = sectioned.get("case_details", {})
+
+        flat.update({
+            "rehiyon": header.get("region"),
+            "district_office": header.get("district_office"),
+            "petsa": header.get("date"),
+            "control_no": header.get("control_no"),
+            "assigned_to": header.get("assigned_to"),
+            "mananayam": header.get("interviewer"),
+            "referred_by": header.get("referred_by_indorsed_by"),
+            "approved_by": header.get("action_approved_by"),
+            "req_legal_doc": bool(request.get("legal_documentation")),
+            "req_oath": bool(request.get("administration_of_oath")),
+            "req_court_rep": bool(request.get("representation_in_court_or_quasi_judicial_bodies")),
+            "req_inquest": bool(request.get("inquest_legal_assistance")),
+            "req_mediation": bool(request.get("mediation_conciliation")),
+            "req_other_text": request.get("others_text"),
+            "applicant_name": applicant.get("name"),
+            "applicant_age": applicant.get("age"),
+            "applicant_sex": applicant.get("sex"),
+            "applicant_civil_status": applicant.get("civil_status"),
+            "applicant_religion": applicant.get("religion"),
+            "applicant_educational_attainment": applicant.get("educational_attainment"),
+            "applicant_citizenship": applicant.get("citizenship"),
+            "applicant_language_dialect": applicant.get("language_dialect"),
+            "applicant_address": applicant.get("address"),
+            "applicant_contact": applicant.get("contact_no"),
+            "applicant_email": applicant.get("email"),
+            "spouse_name": applicant.get("spouse"),
+            "individual_monthly_income": applicant.get("individual_monthly_income"),
+            "spouse_address": applicant.get("address_of_spouse"),
+            "spouse_contact": applicant.get("contact_no_of_spouse"),
+            "is_detained": bool(applicant.get("detained")),
+            "detained_since": applicant.get("detained_since"),
+            "place_of_detention": applicant.get("place_of_detention"),
+            "rep_name": representative.get("name"),
+            "rep_age": representative.get("age"),
+            "rep_sex": representative.get("sex"),
+            "rep_civil_status": representative.get("civil_status"),
+            "rep_address": representative.get("address"),
+            "rep_contact": representative.get("contact_no"),
+            "rep_relation": representative.get("relationship_to_applicant"),
+            "rep_email": representative.get("email"),
+            "case_type_criminal": bool(nature.get("criminal")),
+            "case_type_civil": bool(nature.get("civil")),
+            "case_type_labor": bool(nature.get("labor")),
+            "case_type_admin": bool(nature.get("administrative")),
+            "case_type_appealed": bool(nature.get("appealed")),
+            "sector_foreign_national": bool(classification.get("foreign_national")),
+            "sector_urban_poor": bool(classification.get("urban_poor")),
+            "sector_rural_poor": bool(classification.get("rural_poor")),
+            "sector_indigenous": bool(classification.get("indigenous_people")),
+            "sector_pwd": bool(classification.get("pwd")),
+            "affidavit_name": affidavit.get("affiant_name"),
+            "affidavit_income": affidavit.get("monthly_net_salary_income"),
+            "affidavit_date": affidavit.get("signature_date"),
+            "affidavit_location": affidavit.get("signature_place"),
+            "administering_attorney": affidavit.get("administering_public_attorney"),
+            "consent_other_district": bool(conflict.get("agree_different_district_office")),
+            "consent_appeals_unit": bool(conflict.get("agree_same_pao_department_appeal")),
+            "understood_no_complaint": bool(conflict.get("waives_right_to_complain")),
+            "trusts_pao_fairness": bool(conflict.get("trusts_assigned_public_attorney")),
+            "has_proof_submit_later": bool(proof.get("for_submission")),
+            "proof_submit_date": proof.get("submission_deadline"),
+            "has_proof_itr": bool(proof.get("income_tax_return")),
+            "proof_itr_date": proof.get("income_tax_return_date"),
+            "has_proof_brgy": bool(proof.get("barangay_certification")),
+            "proof_brgy_date": proof.get("barangay_certification_date"),
+            "has_proof_dswd": bool(proof.get("dswd_certification")),
+            "proof_dswd_date": proof.get("dswd_certification_date"),
+            "has_proof_other": bool(proof.get("others")),
+            "proof_other_text": proof.get("others_text"),
+            "adversary_name": adverse.get("name"),
+            "adversary_address": adverse.get("address"),
+            "case_information": case_details.get("facts_of_the_case"),
+            "cause_of_action": case_details.get("cause_of_action_nature_of_offense"),
+            "is_filed_in_court": bool(case_details.get("pending_in_court")),
+            "case_docket_title": case_details.get("title_of_case_and_docket_no"),
+            "court_body": case_details.get("court_body_tribunal_where_pending"),
+        })
+        selected_roles = [
+            role for role in ["plaintiff", "defendant", "oppositor", "petitioner", "respondent", "complainant", "accused"]
+            if involvement.get(role)
+        ]
+        flat["applicant_role"] = selected_roles[0].title() if selected_roles else None
+        if adverse.get("plaintiff_complainant"):
+            flat["adversary_role"] = "Plaintiff/Complainant"
+        elif adverse.get("oppositor_others"):
+            flat["adversary_role"] = "Oppositor/Iba pa"
+        elif adverse.get("defendant_respondent_accused"):
+            flat["adversary_role"] = "Defendant/Respondent/Accused"
+        return flat
+
     def _run_online_pipeline(self, base64_image: str) -> dict:
         """Primary Mode: Mistral Vision AI (Cloud)"""
         if not self.mistral_api_key:
@@ -919,62 +1991,82 @@ class JurisGuardExtractionEngine:
 
         print("[System] Network Healthy. Routing to Cloud Pipeline (Mistral)...")
         system_prompt = f"""
-        You are JurisGuard's PAO interview-sheet extraction engine.
+    You are JurisGuard's legal-document vision extraction engine for Philippine Public Attorney's Office
+    interview sheets. Your behavior must be STRICTLY LITERAL, EVIDENCE-ONLY, and NON-INFERENTIAL.
 
         TASK:
-        Extract ONLY user-entered information from a photographed/scanned Philippine Public Attorney's Office
-        interview sheet. Return one minified JSON object matching this schema exactly:
-        {json.dumps(self._get_empty_schema())}
+        Extract only visible user-entered marks/text from the image. Return one minified JSON object matching
+        this standardized English section-based schema exactly:
+        {json.dumps(self._get_sectioned_schema())}
 
-        FIGURE/GROUND SEPARATION POLICY:
-        - Treat the printed form template as background, not data.
-        - User-entered data is usually handwriting, typed overlay, checked boxes, or text written on blank lines.
-        - Printed labels, captions, section titles, helper text, and parenthetical instructions are NOT field values.
-        - If a blank line has no handwriting/typed entry on or near it, return null for string fields.
-        - If a checkbox is visibly empty, return false. Return true only when the box has a check, X, filled mark,
-          or clear handwritten/typed selection mark.
-        - Do not infer a value simply because a printed option label is visible.
+        LEGAL EVIDENCE STANDARD:
+        - This is legal document extraction, not form interpretation.
+        - Do not reason about what the user probably meant.
+        - Do not complete missing fields.
+        - Do not correct user mistakes.
+        - Do not infer facts from related fields.
+        - Do not use surrounding fields to fill a blank field.
+        - Do not copy a value from one labeled line into a different labeled line.
+        - Do not infer a checkbox state from nearby handwriting, typed text, labels, or context.
+        - If visual evidence is absent, ambiguous, cropped, hidden, blank, or uncertain, output null for strings
+        and false for booleans.
 
-        PRINTED TEXT THAT MUST NEVER BE USED AS A VALUE:
-        - "(Pangalan at Lagda) Public Attorney"
-        - "Pangalan at Lagda ng DPA/RPA/OIC"
-        - "Signature of Affiant"
-        - "Buong Pangalan at Lagda ng Party/Representative"
-        - Section headers such as "I. URI NG INIHIHINGI NG TULONG", "II. IMPORMASYON UKOL SA APLIKANTE",
-          "AFFIDAVIT OF INDIGENCY", and "PROOF OF INDIGENCY"
+        STRICT CHECKBOX RULES:
+        - A checkbox field may be true ONLY if there is a distinct physical mark inside the specific box,
+        touching the specific box, or directly drawn over that specific box.
+        - Valid checkbox marks include visible ink checkmarks, X marks, filled boxes, dots, scribbles, or other
+        unmistakable marks physically located in/on the target box.
+        - If the box is empty, output false.
+        - If text is written on a related line but the checkbox is empty, output false.
+        - If "Lugar ng Detention" has text but "Nakakulong: Oo" is unmarked, output "is_detained": false.
+        - If only the printed words "Oo", "Hindi", "Criminal", "Civil", "PWD", etc. are visible, output false.
+        - Never choose a checkbox based on semantic consistency, surrounding text, field labels, or common sense.
+        - For paired choices such as Oo/Hindi, return true only for the option whose own box is visibly marked.
 
-        SPATIAL REASONING RULES:
-        - For a label followed by an underline, read the handwritten/typed ink on that underline as the value.
-        - For "Petsa", "Control No.", "Mananayam", "Ini-atas kay", "Ini-refer ni/Inindorso ng", and
-          "APROBADO ang AKSYON ni", use only the ink immediately to the right of or above the corresponding line.
-        - For "Rehiyon", return a value only if there is visible handwriting/typed text on the Rehiyon line itself.
-          Do not infer "rehiyon" from the prefix of "control_no".
-        - If the only visible text near a field is printed helper text, leave the value null.
-        - If only part of the page is visible, extract only visible filled fields and leave all non-visible sections null/false.
-        - Do not hallucinate missing applicant, representative, affidavit, court, or adversary details.
+        FIGURE/GROUND SEPARATION:
+        - Printed form template text is background, not data.
+        - Extract handwriting, typed overlays, stamps, or marks only when they are visibly user-entered.
+        - Blank underlines, empty boxes, and unfilled spaces must remain null or false.
 
-        FIELD SEMANTICS:
-        - Filipino labels map to English JSON keys.
+        FIELD EXTRACTION RULES:
+        - Extract exactly what the client wrote, preserving spelling, capitalization, abbreviations, and apparent errors.
+        - Do not translate, summarize, normalize, repair, or autocorrect handwritten values.
+        - If a field area contains no visible user-entered text, output null.
+        - If multiple possible values exist and the correct one is unclear, output null.
+        - For each text field, first locate its printed label, then read only the answer area/underline/box belonging
+          to that label. Stop at the next printed label, column boundary, or section divider.
+        - Treat left-column and right-column fields as separate zones even when they share the same horizontal row.
+        - For dense two-column rows, never read across the page from one label into another label's answer area.
+        - If the answer line beside a label is visually blank, output null even if another line nearby has handwriting.
+        - If a candidate value appears closer to another label than to the target label, do not use it for the target field.
+        - Educational attainment must come only from the "Naabot na pag-aaral" / "Educational Attainment" answer line.
+          Never copy religion, citizenship, name, or any neighboring value into educational attainment.
+        - Address fields must contain visible handwriting in the address answer line. Do not invent an address from faint
+          background bleed-through, printed text, noise, or unrelated representative/case sections.
+        - Single unclear OCR-like tokens without address evidence must be null for address fields.
+        - Email must contain a visible @ and domain dot; otherwise null.
+        - Age must be a visible 1-3 digit number in the age answer area; otherwise null.
+        - Sex must be a visible value or mark in the sex answer area only; otherwise null.
+
+        FILIPINO/ENGLISH LABEL MAPPING:
         - "Petsa" -> "petsa"; "Control No." -> "control_no"; "Rehiyon" -> "rehiyon";
-          "District Office" -> "district_office"; "Mananayam" -> "mananayam";
-          "Ini-refer ni/Inindorso ng" -> "referred_by"; "Ini-atas kay" -> "assigned_to";
-          "APROBADO ang AKSYON ni" -> "approved_by".
-        - "Pangalan" in applicant section -> "applicant_name"; in representative section -> "rep_name";
-          in adversary section -> "adversary_name".
-        - "Tirahan" in representative section -> "rep_address"; in adversary section -> "adversary_address".
-        - Printed helper text such as "(Pangalan at Lagda) Public Attorney" is never a party, applicant,
-          representative, interviewer, approver, or attorney name.
-        - Keep unknown strings as null and unknown booleans as false.
-
-        NORMALIZATION RULES:
-        - Preserve Filipino names and addresses as written.
-        - Normalize obvious OCR confusions only when context is strong: "X1" at the start of a control number may be "XI";
-          "20r4" in a date may be "2024".
-        - Do not convert uncertain handwriting into a confident value.
+          "District Office" -> "district_office"; "Mananayam" -> "mananayam".
+        - "Pangalan" / "Name" in applicant section -> "applicant_name".
+        - "Relihiyon" / "Religion" -> "applicant_religion".
+        - "Naabot na pag-aaral" / "Educational Attainment" -> "applicant_educational_attainment".
+        - "Pagkamamamayan" / "Citizenship" -> "applicant_citizenship".
+        - "Salita/Dialekto" / "Language/Dialect" -> "applicant_language_dialect".
+        - "Tirahan" / "Address" in applicant section -> "applicant_address".
+        - "Asawa" / "Spouse" -> "spouse_name".
+        - "Tirahan ng asawa" / "Address of Spouse" -> "spouse_address".
+        - "Contact No. ng asawa" / "Contact No. of Spouse" -> "spouse_contact".
+        - "Petsa ng pagakakulong" / "Detained Since" -> "detained_since".
+        - "Lugar ng Detention" / "Place of Detention" -> "place_of_detention".
 
         OUTPUT RULES:
-        - Output ONLY valid minified JSON.
-        - Use exactly the schema keys and JSON types shown above.
+        - Output only valid minified JSON.
+        - Use exactly the section names, field keys, and JSON types shown above.
+        - Keep Filipino source labels normalized to the English JSON keys.
         - Do not include markdown, explanations, confidence scores, or extra keys.
         """
         
@@ -983,7 +2075,7 @@ class JurisGuardExtractionEngine:
             "Authorization": f"Bearer {self.mistral_api_key}"
         }
         payload = {
-            "model": "pixtral-12b-2409",
+            "model": self.mistral_model,
             "messages": [
                 {"role": "user", "content": [
                     {"type": "text", "text": system_prompt},
@@ -994,12 +2086,24 @@ class JurisGuardExtractionEngine:
             "response_format": {"type": "json_object"}
         }
 
-        response = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=payload, timeout=20)
+        response = requests.post(
+            "https://api.mistral.ai/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=(self.mistral_connect_timeout, self.mistral_read_timeout),
+        )
         response.raise_for_status()
         
         clean_json_text = response.json()['choices'][0]['message']['content'].strip().replace("```json", "").replace("```", "").strip()
         extracted_data = json.loads(clean_json_text)
-        extracted_data = remove_printed_template_leaks(extracted_data)
+        if isinstance(extracted_data, dict) and "header" in extracted_data:
+            sectioned_data = extracted_data
+            extracted_data = self._flat_from_sectioned(sectioned_data)
+            extracted_data = apply_quality_filters(remove_printed_template_leaks(extracted_data))
+            extracted_data["sections"] = self._sectioned_from_flat(extracted_data)
+        else:
+            extracted_data = apply_quality_filters(remove_printed_template_leaks(extracted_data))
+            extracted_data["sections"] = self._sectioned_from_flat(extracted_data)
         extracted_data["extraction_mode"] = "ONLINE_MISTRAL"
         extracted_data["raw_text"] = "Processed via Mistral Cloud Vision"
         return extracted_data
@@ -1018,6 +2122,7 @@ class JurisGuardExtractionEngine:
         pil_img = Image.open(image_path)
         pil_img = ImageOps.exif_transpose(pil_img) 
         img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR) 
+        img = crop_document_region(img)
         print(f"[Timing] Image load: {time.perf_counter() - load_started:.2f}s")
         
         # Step B: Smart Downscaling (balance quality vs speed)
@@ -1078,23 +2183,61 @@ class JurisGuardExtractionEngine:
         print(f"[Timing] Offline pipeline total: {time.perf_counter() - pipeline_started:.2f}s")
         return extracted_data
 
-    def execute_extraction(self, file_path: str) -> dict:
-        final_data = self._get_empty_schema()
+    def _cloud_failure_payload(self, exc: Exception) -> dict:
+        fallback_data = self._get_empty_schema()
+        if isinstance(exc, requests_exceptions.Timeout):
+            fallback_data["extraction_mode"] = "ONLINE_MISTRAL_TIMEOUT"
+            fallback_data["raw_text"] = (
+                "Mistral Cloud Vision timed out. "
+                f"Increase MISTRAL_READ_TIMEOUT_SECONDS if the image is large or the connection is slow. Details: {exc}"
+            )
+        else:
+            fallback_data["extraction_mode"] = "ONLINE_MISTRAL_FAILED"
+            fallback_data["raw_text"] = f"Mistral Cloud Vision failed: {exc}"
+        return fallback_data
 
-        if self._check_network_heartbeat():
+    def _run_cloud_then_offline_fallback(self, file_path: str, compressed_file_path: str) -> dict:
+        try:
+            base64_image = encode_image_to_base64(compressed_file_path)
+            return self._run_online_pipeline(base64_image)
+        except Exception as exc:
+            print(f"[Warning] Cloud extraction failed ({exc}). Executing local failover...")
             try:
-                compressed_file_path = compress_image_for_vlm(file_path)
-                base64_image = encode_image_to_base64(compressed_file_path)
-                final_data.update(self._run_online_pipeline(base64_image))
+                offline_data = self._run_offline_pipeline(file_path)
+                offline_data["extraction_mode"] = "CLOUD_FAILED_OFFLINE_FALLBACK"
+                offline_raw_text = offline_data.get("raw_text") or ""
+                offline_data["raw_text"] = f"Cloud failure: {exc}\n\nOffline OCR raw text:\n{offline_raw_text}"
+                return offline_data
+            except Exception as offline_exc:
+                print(f"[Error] Offline fallback also failed ({offline_exc}).")
+                fallback_data = self._cloud_failure_payload(exc)
+                fallback_data["fallback_reason"] = f"Offline fallback failed: {offline_exc}"
+                return fallback_data
+
+    def execute_extraction(self, file_path: str, extraction_mode: str = "auto") -> dict:
+        final_data = self._get_empty_schema()
+        mode = (extraction_mode or "auto").strip().lower()
+
+        if mode == "offline":
+            final_data.update(self._run_offline_pipeline(file_path))
+        elif mode == "cloud":
+            compressed_file_path = compress_image_for_vlm(file_path)
+            try:
+                final_data.update(self._run_cloud_then_offline_fallback(file_path, compressed_file_path))
+            finally:
                 if compressed_file_path != file_path and os.path.exists(compressed_file_path):
                     os.remove(compressed_file_path)
-            except Exception as e:
-                print(f"[Warning] Online extraction failed ({e}). Executing local failover...")
-                # Pass the HIGH-RES original image to PaddleOCR!
-                final_data.update(self._run_offline_pipeline(file_path)) 
+        elif self._check_network_heartbeat():
+            compressed_file_path = compress_image_for_vlm(file_path)
+            try:
+                final_data.update(self._run_cloud_then_offline_fallback(file_path, compressed_file_path))
+            finally:
+                if compressed_file_path != file_path and os.path.exists(compressed_file_path):
+                    os.remove(compressed_file_path)
         else:
             final_data.update(self._run_offline_pipeline(file_path))
 
+        final_data["sections"] = self._sectioned_from_flat(final_data)
         return final_data
 
 # ==========================================
@@ -1102,7 +2245,7 @@ class JurisGuardExtractionEngine:
 # ==========================================
 _engine_instance = None
 
-def process_document(file_path: str):
+def process_document(file_path: str, extraction_mode: str = "auto"):
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Image not found at {file_path}")
 
@@ -1110,4 +2253,4 @@ def process_document(file_path: str):
     if _engine_instance is None:
         _engine_instance = JurisGuardExtractionEngine()
 
-    return _engine_instance.execute_extraction(file_path=file_path)
+    return _engine_instance.execute_extraction(file_path=file_path, extraction_mode=extraction_mode)
