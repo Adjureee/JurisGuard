@@ -22,7 +22,10 @@ import {
   type TerminationPayload,
 } from "../services/recordService";
 import type { CaseStatus, ClientRecord, CriminalCaseRecord } from "../types";
-import type { CaseFormValues, ClientFormValues } from "../features/criminalCases/schemas";
+import type {
+  CaseFormValues,
+  ClientFormValues,
+} from "../features/criminalCases/schemas";
 
 const accordionBorderClass: Record<CaseStatus, string> = {
   Pending: "border-amber-200",
@@ -94,7 +97,10 @@ function PlusIcon() {
 function UserPlusIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path fill="currentColor" d="M8 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0 2c3.3 0 6 1.6 6 3.5V17H2v-1.5C2 13.6 4.7 12 8 12Zm7-6h2v3h3v2h-3v3h-2v-3h-3V9h3V6Z" />
+      <path
+        fill="currentColor"
+        d="M8 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0 2c3.3 0 6 1.6 6 3.5V17H2v-1.5C2 13.6 4.7 12 8 12Zm7-6h2v3h3v2h-3v3h-2v-3h-3V9h3V6Z"
+      />
     </svg>
   );
 }
@@ -102,7 +108,10 @@ function UserPlusIcon() {
 function SlidersIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path fill="currentColor" d="M3 5h8v2H3V5Zm10-1h2v1h2v2h-2v1h-2V4ZM3 13h2v-1h2v4H5v-1H3v-2Zm6 0h8v2H9v-2Z" />
+      <path
+        fill="currentColor"
+        d="M3 5h8v2H3V5Zm10-1h2v1h2v2h-2v1h-2V4ZM3 13h2v-1h2v4H5v-1H3v-2Zm6 0h8v2H9v-2Z"
+      />
     </svg>
   );
 }
@@ -110,7 +119,10 @@ function SlidersIcon() {
 function EyeIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path fill="currentColor" d="M10 4C5.8 4 2.7 7.1 1.5 10c1.2 2.9 4.3 6 8.5 6s7.3-3.1 8.5-6C17.3 7.1 14.2 4 10 4Zm0 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2.1a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z" />
+      <path
+        fill="currentColor"
+        d="M10 4C5.8 4 2.7 7.1 1.5 10c1.2 2.9 4.3 6 8.5 6s7.3-3.1 8.5-6C17.3 7.1 14.2 4 10 4Zm0 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2.1a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"
+      />
     </svg>
   );
 }
@@ -118,8 +130,12 @@ function EyeIcon() {
 function InfoTile({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-md border border-[#E5E7EB] bg-white p-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-[#6B7280]">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-[#2B3642]">{value || "-"}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-[#6B7280]">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-[#2B3642]">
+        {value || "-"}
+      </p>
     </div>
   );
 }
@@ -167,7 +183,9 @@ function TextField({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">{label}</span>
+      <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+        {label}
+      </span>
       <input
         type={type}
         value={value}
@@ -189,7 +207,9 @@ function TextAreaField({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">{label}</span>
+      <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+        {label}
+      </span>
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -207,7 +227,8 @@ function CaseFilterSelect({
   value: CaseTableFilter;
   onChange: (value: CaseTableFilter) => void;
 }) {
-  const selected = filterOptions.find((option) => option.value === value) ?? filterOptions[0];
+  const selected =
+    filterOptions.find((option) => option.value === value) ?? filterOptions[0];
 
   return (
     <div className="flex h-10 items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-3 text-[#2B3642]">
@@ -235,15 +256,21 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className={`rounded-[10px] border bg-white ${accordionBorderClass[record.cases.status_of_case]}`}>
+    <div
+      className={`rounded-[10px] border bg-white ${accordionBorderClass[record.cases.status_of_case]}`}
+    >
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#F9FAFB]"
       >
         <div>
-          <p className="text-sm font-semibold text-[#2B3642]">{record.intake_record.control_no}</p>
-          <p className="mt-1 text-xs text-[#6B7280]">{record.cases.title_of_case}</p>
+          <p className="text-sm font-semibold text-[#2B3642]">
+            {record.intake_record.control_no}
+          </p>
+          <p className="mt-1 text-xs text-[#6B7280]">
+            {record.cases.title_of_case}
+          </p>
         </div>
         <StatusBadge status={record.cases.status_of_case} />
       </button>
@@ -251,19 +278,36 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
       {open && (
         <div className="space-y-5 border-t border-[#E5E7EB] px-4 py-4">
           <section>
-            <h4 className="text-sm font-semibold text-[#2B3642]">Case Identification</h4>
+            <h4 className="text-sm font-semibold text-[#2B3642]">
+              Case Identification
+            </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <InfoTile label="Applicant Role" value={record.intake_record.applicant_role === "Others" ? record.intake_record.applicant_role_other : record.intake_record.applicant_role} />
+              <InfoTile
+                label="Applicant Role"
+                value={
+                  record.intake_record.applicant_role === "Others"
+                    ? record.intake_record.applicant_role_other
+                    : record.intake_record.applicant_role
+                }
+              />
               <InfoTile label="Case No" value={record.cases.case_no} />
               <InfoTile label="Court" value={record.cases.court_body} />
               <InfoTile label="Title" value={record.cases.title_of_case} />
-              <InfoTile label="Cause of Action" value={record.cases.cause_of_action} />
-              <InfoTile label="Pending in Court" value={record.cases.pending_in_court ? "Yes" : "No"} />
+              <InfoTile
+                label="Cause of Action"
+                value={record.cases.cause_of_action}
+              />
+              <InfoTile
+                label="Pending in Court"
+                value={record.cases.pending_in_court ? "Yes" : "No"}
+              />
             </div>
           </section>
 
           <section>
-            <h4 className="text-sm font-semibold text-[#2B3642]">Adverse Party</h4>
+            <h4 className="text-sm font-semibold text-[#2B3642]">
+              Adverse Party
+            </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
               <InfoTile label="Role" value={record.adverse_party.role} />
               <InfoTile label="Name" value={record.adverse_party.name} />
@@ -272,26 +316,60 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
           </section>
 
           <section>
-            <h4 className="text-sm font-semibold text-[#2B3642]">Detention & Location</h4>
+            <h4 className="text-sm font-semibold text-[#2B3642]">
+              Detention & Location
+            </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <InfoTile label="Urban/Rural" value={record.cases.location_type} />
-              <InfoTile label="Incident Barangay" value={record.cases.incident_barangay ?? ""} />
-              <InfoTile label="Incident City" value={record.cases.incident_city ?? "Panabo City"} />
-              <InfoTile label="Incident Address" value={record.cases.incident_address ?? ""} />
-              <InfoTile label="Date Confined" value={record.cases.date_of_confinement} />
-              <InfoTile label="Place of Detention" value={record.cases.place_of_detention} />
+              <InfoTile
+                label="Urban/Rural"
+                value={record.cases.location_type}
+              />
+              <InfoTile
+                label="Incident Barangay"
+                value={record.cases.incident_barangay ?? ""}
+              />
+              <InfoTile
+                label="Incident City"
+                value={record.cases.incident_city ?? "Panabo City"}
+              />
+              <InfoTile
+                label="Incident Address"
+                value={record.cases.incident_address ?? ""}
+              />
+              <InfoTile
+                label="Date Confined"
+                value={record.cases.date_of_confinement}
+              />
+              <InfoTile
+                label="Place of Detention"
+                value={record.cases.place_of_detention}
+              />
             </div>
           </section>
 
           <section>
-            <h4 className="text-sm font-semibold text-[#2B3642]">Case Status</h4>
+            <h4 className="text-sm font-semibold text-[#2B3642]">
+              Case Status
+            </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <InfoTile label="Last Action Taken" value={record.cases.last_action_taken} />
-              <InfoTile label="Facts of Case" value={record.cases.facts_of_case} />
+              <InfoTile
+                label="Last Action Taken"
+                value={record.cases.last_action_taken}
+              />
+              <InfoTile
+                label="Facts of Case"
+                value={record.cases.facts_of_case}
+              />
               {record.cases.status_of_case === "Terminated" && (
                 <>
-                  <InfoTile label="Cause of Termination" value={record.cases.cause_of_termination} />
-                  <InfoTile label="Date of Termination" value={record.cases.date_of_termination} />
+                  <InfoTile
+                    label="Cause of Termination"
+                    value={record.cases.cause_of_termination}
+                  />
+                  <InfoTile
+                    label="Date of Termination"
+                    value={record.cases.date_of_termination}
+                  />
                 </>
               )}
             </div>
@@ -311,10 +389,15 @@ function UpdateClientInfoModal({
   onClose: () => void;
   onSaved: (client: ClientRecord) => void;
 }) {
-  const [values, setValues] = useState<ClientFormValues>(() => toClientFormValues(client));
+  const [values, setValues] = useState<ClientFormValues>(() =>
+    toClientFormValues(client),
+  );
   const [saving, setSaving] = useState(false);
 
-  const updateClient = (field: keyof ClientFormValues["client"], value: string) => {
+  const updateClient = (
+    field: keyof ClientFormValues["client"],
+    value: string,
+  ) => {
     setValues((current) => ({
       ...current,
       client: {
@@ -323,7 +406,10 @@ function UpdateClientInfoModal({
       },
     }));
   };
-  const updateDetails = (field: keyof ClientFormValues["client_details"], value: string) => {
+  const updateDetails = (
+    field: keyof ClientFormValues["client_details"],
+    value: string,
+  ) => {
     setValues((current) => ({
       ...current,
       client_details: {
@@ -341,7 +427,9 @@ function UpdateClientInfoModal({
       toast.success("Client information updated");
       onClose();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to update client");
+      toast.error(
+        error instanceof Error ? error.message : "Unable to update client",
+      );
     } finally {
       setSaving(false);
     }
@@ -351,32 +439,88 @@ function UpdateClientInfoModal({
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
       <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <h3 className="text-base font-bold text-[#2B3642]">Update Client Info</h3>
-          <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]">
+          <h3 className="text-base font-bold text-[#2B3642]">
+            Update Client Info
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]"
+          >
             Close
           </button>
         </div>
         <div className="max-h-[calc(90vh-140px)] overflow-y-auto p-5">
           <div className="grid gap-4 md:grid-cols-2">
-            <TextField label="Full Name" value={values.client.name} onChange={(value) => updateClient("name", value)} />
-            <TextField label="Age" type="number" value={values.client.age} onChange={(value) => updateClient("age", value)} />
-            <TextField label="Gender" value={values.client.sex} onChange={(value) => updateClient("sex", value)} />
-            <TextField label="Civil Status" value={values.client.civil_status} onChange={(value) => updateClient("civil_status", value)} />
-            <TextField label="Contact" value={values.client_details.contact_no} onChange={(value) => updateDetails("contact_no", value)} />
-            <TextField label="Email" value={values.client_details.email} onChange={(value) => updateDetails("email", value)} />
+            <TextField
+              label="Full Name"
+              value={values.client.name}
+              onChange={(value) => updateClient("name", value)}
+            />
+            <TextField
+              label="Age"
+              type="number"
+              value={values.client.age}
+              onChange={(value) => updateClient("age", value)}
+            />
+            <TextField
+              label="Gender"
+              value={values.client.sex}
+              onChange={(value) => updateClient("sex", value)}
+            />
+            <TextField
+              label="Civil Status"
+              value={values.client.civil_status}
+              onChange={(value) => updateClient("civil_status", value)}
+            />
+            <TextField
+              label="Contact"
+              value={values.client_details.contact_no}
+              onChange={(value) => updateDetails("contact_no", value)}
+            />
+            <TextField
+              label="Email"
+              value={values.client_details.email}
+              onChange={(value) => updateDetails("email", value)}
+            />
             <div className="md:col-span-2">
-              <TextAreaField label="Address" value={values.client_details.address} onChange={(value) => updateDetails("address", value)} />
+              <TextAreaField
+                label="Address"
+                value={values.client_details.address}
+                onChange={(value) => updateDetails("address", value)}
+              />
             </div>
             <div className="md:col-span-2">
-              <TextAreaField label="Notes" value={values.client_classification.classification_notes} onChange={(value) => setValues((current) => ({ ...current, client_classification: { ...current.client_classification, classification_notes: value } }))} />
+              <TextAreaField
+                label="Notes"
+                value={values.client_classification.classification_notes}
+                onChange={(value) =>
+                  setValues((current) => ({
+                    ...current,
+                    client_classification: {
+                      ...current.client_classification,
+                      classification_notes: value,
+                    },
+                  }))
+                }
+              />
             </div>
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <button type="button" onClick={onClose} className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]"
+          >
             Cancel
           </button>
-          <button type="button" onClick={submit} disabled={saving} className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:opacity-60">
+          <button
+            type="button"
+            onClick={submit}
+            disabled={saving}
+            className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:opacity-60"
+          >
             {saving ? "Saving..." : "Save Client Info"}
           </button>
         </div>
@@ -394,9 +538,14 @@ function UpdateCaseModal({
   onClose: () => void;
   onSaved: (record: CriminalCaseRecord) => void;
 }) {
-  const [values, setValues] = useState<CaseFormValues>(() => toCaseFormValues(record));
+  const [values, setValues] = useState<CaseFormValues>(() =>
+    toCaseFormValues(record),
+  );
   const [saving, setSaving] = useState(false);
-  const updateCase = (field: keyof CaseFormValues["cases"], value: string | boolean) => {
+  const updateCase = (
+    field: keyof CaseFormValues["cases"],
+    value: string | boolean,
+  ) => {
     setValues((current) => ({
       ...current,
       cases: {
@@ -421,7 +570,9 @@ function UpdateCaseModal({
       toast.success("Case updated");
       onClose();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to update case");
+      toast.error(
+        error instanceof Error ? error.message : "Unable to update case",
+      );
     } finally {
       setSaving(false);
     }
@@ -432,54 +583,143 @@ function UpdateCaseModal({
       <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h3 className="text-base font-bold text-[#2B3642]">Update Case</h3>
-          <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]"
+          >
             Close
           </button>
         </div>
         <div className="max-h-[calc(90vh-140px)] overflow-y-auto p-5">
           <div className="grid gap-4 md:grid-cols-2">
-            <TextField label="Case Title" value={values.cases.title_of_case} onChange={(value) => updateCase("title_of_case", value)} />
-            <TextField label="Case Number" value={values.cases.case_no} onChange={(value) => updateCase("case_no", value)} />
+            <TextField
+              label="Case Title"
+              value={values.cases.title_of_case}
+              onChange={(value) => updateCase("title_of_case", value)}
+            />
+            <TextField
+              label="Case Number"
+              value={values.cases.case_no}
+              onChange={(value) => updateCase("case_no", value)}
+            />
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Case Status</span>
-              <select value={values.cases.status_of_case} onChange={(event) => updateCase("status_of_case", event.target.value as CaseStatus)} className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+                Case Status
+              </span>
+              <select
+                value={values.cases.status_of_case}
+                onChange={(event) =>
+                  updateCase("status_of_case", event.target.value as CaseStatus)
+                }
+                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              >
                 <option>Pending</option>
                 <option>Ongoing</option>
                 <option>Active</option>
                 <option>Archived</option>
               </select>
             </label>
-            <TextField label="Assigned PAO" value={values.cases.assigned_pao ?? ""} onChange={(value) => updateCase("assigned_pao", value)} />
-            <TextField label="Filing Date" type="date" value={values.cases.filing_date ?? values.intake_record.form_date} onChange={(value) => setValues((current) => ({ ...current, intake_record: { ...current.intake_record, form_date: value }, cases: { ...current.cases, filing_date: value } }))} />
-            <TextField label="Hearing Schedule" value={values.cases.hearing_schedule ?? ""} onChange={(value) => updateCase("hearing_schedule", value)} />
+            <TextField
+              label="Assigned PAO"
+              value={values.cases.assigned_pao ?? ""}
+              onChange={(value) => updateCase("assigned_pao", value)}
+            />
+            <TextField
+              label="Filing Date"
+              type="date"
+              value={values.cases.filing_date ?? values.intake_record.form_date}
+              onChange={(value) =>
+                setValues((current) => ({
+                  ...current,
+                  intake_record: { ...current.intake_record, form_date: value },
+                  cases: { ...current.cases, filing_date: value },
+                }))
+              }
+            />
+            <TextField
+              label="Hearing Schedule"
+              value={values.cases.hearing_schedule ?? ""}
+              onChange={(value) => updateCase("hearing_schedule", value)}
+            />
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Barangay</span>
-              <select value={values.cases.incident_barangay ?? ""} onChange={(event) => updateCase("incident_barangay", event.target.value)} className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+                Barangay
+              </span>
+              <select
+                value={values.cases.incident_barangay ?? ""}
+                onChange={(event) =>
+                  updateCase("incident_barangay", event.target.value)
+                }
+                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              >
                 <option value="">Select barangay</option>
                 {panaboBarangays.map((barangay) => (
                   <option key={barangay}>{barangay}</option>
                 ))}
               </select>
             </label>
-            <TextField label="City" value={values.cases.incident_city ?? "Panabo City"} onChange={(value) => updateCase("incident_city", value)} />
-            <TextField label="Latitude" value={values.cases.latitude ?? ""} onChange={(value) => updateCase("latitude", value)} />
-            <TextField label="Longitude" value={values.cases.longitude ?? ""} onChange={(value) => updateCase("longitude", value)} />
+            <TextField
+              label="City"
+              value={values.cases.incident_city ?? "Panabo City"}
+              onChange={(value) => updateCase("incident_city", value)}
+            />
+            <TextField
+              label="Latitude"
+              value={values.cases.latitude ?? ""}
+              onChange={(value) => updateCase("latitude", value)}
+            />
+            <TextField
+              label="Longitude"
+              value={values.cases.longitude ?? ""}
+              onChange={(value) => updateCase("longitude", value)}
+            />
             <div className="md:col-span-2">
-              <TextAreaField label="Incident Address" value={values.cases.incident_address ?? ""} onChange={(value) => updateCase("incident_address", value)} />
+              <TextAreaField
+                label="Incident Address"
+                value={values.cases.incident_address ?? ""}
+                onChange={(value) => updateCase("incident_address", value)}
+              />
             </div>
             <div className="md:col-span-2">
-              <TextAreaField label="Remarks" value={values.cases.remarks ?? values.cases.last_action_taken} onChange={(value) => setValues((current) => ({ ...current, cases: { ...current.cases, remarks: value, last_action_taken: value } }))} />
+              <TextAreaField
+                label="Remarks"
+                value={values.cases.remarks ?? values.cases.last_action_taken}
+                onChange={(value) =>
+                  setValues((current) => ({
+                    ...current,
+                    cases: {
+                      ...current.cases,
+                      remarks: value,
+                      last_action_taken: value,
+                    },
+                  }))
+                }
+              />
             </div>
             <div className="md:col-span-2">
-              <TextAreaField label="Facts of Case" value={values.cases.facts_of_case} onChange={(value) => updateCase("facts_of_case", value)} />
+              <TextAreaField
+                label="Facts of Case"
+                value={values.cases.facts_of_case}
+                onChange={(value) => updateCase("facts_of_case", value)}
+              />
             </div>
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <button type="button" onClick={onClose} className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]"
+          >
             Cancel
           </button>
-          <button type="button" onClick={submit} disabled={saving} className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:opacity-60">
+          <button
+            type="button"
+            onClick={submit}
+            disabled={saving}
+            className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:opacity-60"
+          >
             {saving ? "Saving..." : "Save Case"}
           </button>
         </div>
@@ -519,7 +759,9 @@ function TerminationModal({
       toast.success("Case terminated");
       onClose();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to terminate case");
+      toast.error(
+        error instanceof Error ? error.message : "Unable to terminate case",
+      );
     } finally {
       setSaving(false);
     }
@@ -530,15 +772,39 @@ function TerminationModal({
       <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h3 className="text-base font-bold text-[#2B3642]">Terminate Case</h3>
-          <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]"
+          >
             Close
           </button>
         </div>
         <div className="space-y-4 p-5">
-          <TextAreaField label="Reason" value={values.termination_reason} onChange={(value) => setValues((current) => ({ ...current, termination_reason: value }))} />
+          <TextAreaField
+            label="Reason"
+            value={values.termination_reason}
+            onChange={(value) =>
+              setValues((current) => ({
+                ...current,
+                termination_reason: value,
+              }))
+            }
+          />
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Resolution Type</span>
-            <select value={values.resolution_type} onChange={(event) => setValues((current) => ({ ...current, resolution_type: event.target.value }))} className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+              Resolution Type
+            </span>
+            <select
+              value={values.resolution_type}
+              onChange={(event) =>
+                setValues((current) => ({
+                  ...current,
+                  resolution_type: event.target.value,
+                }))
+              }
+              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+            >
               <option value="">Select resolution</option>
               <option>Dismissed</option>
               <option>Resolved</option>
@@ -547,16 +813,53 @@ function TerminationModal({
               <option>Closed after assistance</option>
             </select>
           </label>
-          <TextField label="Date Terminated" type="date" value={values.date_terminated} onChange={(value) => setValues((current) => ({ ...current, date_terminated: value }))} />
-          <TextAreaField label="Final Remarks" value={values.final_remarks} onChange={(value) => setValues((current) => ({ ...current, final_remarks: value }))} />
-          <TextField label="Handled By" value={values.handled_by} onChange={(value) => setValues((current) => ({ ...current, handled_by: value }))} />
-          <TextField label="Supporting Document Reference" value={values.supporting_document_path} onChange={(value) => setValues((current) => ({ ...current, supporting_document_path: value }))} />
+          <TextField
+            label="Date Terminated"
+            type="date"
+            value={values.date_terminated}
+            onChange={(value) =>
+              setValues((current) => ({ ...current, date_terminated: value }))
+            }
+          />
+          <TextAreaField
+            label="Final Remarks"
+            value={values.final_remarks}
+            onChange={(value) =>
+              setValues((current) => ({ ...current, final_remarks: value }))
+            }
+          />
+          <TextField
+            label="Handled By"
+            value={values.handled_by}
+            onChange={(value) =>
+              setValues((current) => ({ ...current, handled_by: value }))
+            }
+          />
+          <TextField
+            label="Supporting Document Reference"
+            value={values.supporting_document_path}
+            onChange={(value) =>
+              setValues((current) => ({
+                ...current,
+                supporting_document_path: value,
+              }))
+            }
+          />
         </div>
         <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <button type="button" onClick={onClose} className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]"
+          >
             Cancel
           </button>
-          <button type="button" onClick={submit} disabled={saving} className="rounded-md bg-[#DC2626] px-4 py-2 text-sm font-semibold text-white hover:bg-[#B91C1C] disabled:opacity-60">
+          <button
+            type="button"
+            onClick={submit}
+            disabled={saving}
+            className="rounded-md bg-[#DC2626] px-4 py-2 text-sm font-semibold text-white hover:bg-[#B91C1C] disabled:opacity-60"
+          >
             {saving ? "Terminating..." : "Confirm Termination"}
           </button>
         </div>
@@ -584,10 +887,16 @@ function ClientRecordModal({
 }) {
   const navigate = useNavigate();
   const [clientUpdateOpen, setClientUpdateOpen] = useState(false);
-  const [caseUpdateRecord, setCaseUpdateRecord] = useState<CriminalCaseRecord | null>(null);
-  const [terminationRecord, setTerminationRecord] = useState<CriminalCaseRecord | null>(null);
+  const [caseUpdateRecord, setCaseUpdateRecord] =
+    useState<CriminalCaseRecord | null>(null);
+  const [terminationRecord, setTerminationRecord] =
+    useState<CriminalCaseRecord | null>(null);
   if (!client) return null;
-  const terminatedCount = cases.filter((record) => record.cases.is_terminated || record.cases.status_of_case === "Terminated").length;
+  const terminatedCount = cases.filter(
+    (record) =>
+      record.cases.is_terminated ||
+      record.cases.status_of_case === "Terminated",
+  ).length;
   const activeCount = Math.max(cases.length - terminatedCount, 0);
 
   return (
@@ -603,13 +912,21 @@ function ClientRecordModal({
             <h2 className="mt-2 text-xl font-bold text-[#2B3642]">
               {mode === "view" ? "Criminal Case Record" : "Update Record"}
             </h2>
-            <p className="mt-1 truncate text-sm font-semibold text-[#704389]">{client.client.name}</p>
+            <p className="mt-1 truncate text-sm font-semibold text-[#704389]">
+              {client.client.name}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden gap-2 sm:flex">
-              <span className="rounded-full bg-[#F7F0FA] px-3 py-1 text-xs font-bold text-[#704389]">{cases.length} case(s)</span>
-              <span className="rounded-full bg-[#ECFDF5] px-3 py-1 text-xs font-bold text-[#065F46]">{activeCount} active</span>
-              <span className="rounded-full bg-[#FFF1F2] px-3 py-1 text-xs font-bold text-[#9F1239]">{terminatedCount} closed</span>
+              <span className="rounded-full bg-[#F7F0FA] px-3 py-1 text-xs font-bold text-[#704389]">
+                {cases.length} case(s)
+              </span>
+              <span className="rounded-full bg-[#ECFDF5] px-3 py-1 text-xs font-bold text-[#065F46]">
+                {activeCount} active
+              </span>
+              <span className="rounded-full bg-[#FFF1F2] px-3 py-1 text-xs font-bold text-[#9F1239]">
+                {terminatedCount} closed
+              </span>
             </div>
             <button
               type="button"
@@ -624,7 +941,9 @@ function ClientRecordModal({
         <div className="max-h-[calc(92vh-90px)] overflow-y-auto bg-white px-6 py-5">
           <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm ">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-base font-semibold text-[#2B3642]">Person Information</h3>
+              <h3 className="text-base font-semibold text-[#2B3642]">
+                Person Information
+              </h3>
               {mode === "update" && (
                 <button
                   type="button"
@@ -639,36 +958,64 @@ function ClientRecordModal({
               <InfoTile label="Full Name" value={client.client.name} />
               <InfoTile label="Gender" value={client.client.sex} />
               <InfoTile label="Age" value={client.client.age} />
-              <InfoTile label="Contact" value={client.client_details.contact_no} />
+              <InfoTile
+                label="Contact"
+                value={client.client_details.contact_no}
+              />
               <InfoTile label="Address" value={client.client_details.address} />
-              <InfoTile label="Status" value={cases.some((record) => record.cases.is_terminated || record.cases.status_of_case === "Terminated") ? "Has terminated case" : "Active"} />
-              <InfoTile label="Notes" value={client.client_classification.classification_notes} />
+              <InfoTile
+                label="Status"
+                value={
+                  cases.some(
+                    (record) =>
+                      record.cases.is_terminated ||
+                      record.cases.status_of_case === "Terminated",
+                  )
+                    ? "Has terminated case"
+                    : "Active"
+                }
+              />
+              <InfoTile
+                label="Notes"
+                value={client.client_classification.classification_notes}
+              />
             </div>
           </section>
 
           <section className="mt-5">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-[#2B3642]">Criminal Cases</h3>
+              <h3 className="text-base font-semibold text-[#2B3642]">
+                Criminal Cases
+              </h3>
               <p className="text-sm text-[#6B7280]">{cases.length} records</p>
             </div>
 
             <div className="space-y-3">
               {cases.map((record) => (
-                <div key={record.case_id} className="rounded-[10px] border border-[#E5E7EB] bg-white">
+                <div
+                  key={record.case_id}
+                  className="rounded-[10px] border border-[#E5E7EB] bg-white"
+                >
                   <CaseAccordion record={record} />
                   <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
                     {mode === "view" && (
                       <>
                         <button
                           type="button"
-                          onClick={() => navigate(`/criminal-cases/form-view/${record.case_id}`)}
+                          onClick={() =>
+                            navigate(`/criminal-cases/form-view/${record.case_id}`)
+                          }
                           className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
                         >
                           View Form
                         </button>
                         <button
                           type="button"
-                          onClick={() => navigate(`/criminal-cases/form-view/${record.case_id}?print=1`)}
+                          onClick={() =>
+                            navigate(
+                              `/criminal-cases/form-view/${record.case_id}?autoPrint=1`,
+                            )
+                          }
                           className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
                         >
                           Print Form
@@ -677,7 +1024,10 @@ function ClientRecordModal({
                     )}
                     {mode === "update" && (
                       <>
-                        {!(record.cases.is_terminated || record.cases.status_of_case === "Terminated") && (
+                        {!(
+                          record.cases.is_terminated ||
+                          record.cases.status_of_case === "Terminated"
+                        ) && (
                           <>
                             <button
                               type="button"
@@ -702,7 +1052,6 @@ function ClientRecordModal({
               ))}
             </div>
           </section>
-
         </div>
       </div>
       {clientUpdateOpen && (
@@ -752,14 +1101,19 @@ export default function CriminalCasesPage() {
     let cancelled = false;
     async function loadRecords() {
       try {
-        const [clientRows, caseRows] = await Promise.all([listClientRecords(), listCaseRecords()]);
+        const [clientRows, caseRows] = await Promise.all([
+          listClientRecords(),
+          listCaseRecords(),
+        ]);
         if (!cancelled) {
           setClients(clientRows);
           setCases(caseRows);
         }
       } catch (error) {
         if (!cancelled) {
-          toast.error(error instanceof Error ? error.message : "Unable to load records");
+          toast.error(
+            error instanceof Error ? error.message : "Unable to load records",
+          );
         }
       }
     }
@@ -777,9 +1131,10 @@ export default function CriminalCasesPage() {
         ? clients
         : clients.filter(
             (client) =>
-              client.created_by_user_id === null || client.created_by_user_id === user?.user_id
+              client.created_by_user_id === null ||
+              client.created_by_user_id === user?.user_id,
           ),
-    [clients, user]
+    [clients, user],
   );
   const visibleCases = useMemo(
     () =>
@@ -787,35 +1142,49 @@ export default function CriminalCasesPage() {
         ? cases
         : cases.filter(
             (record) =>
-              record.created_by_user_id === null || record.created_by_user_id === user?.user_id
+              record.created_by_user_id === null ||
+              record.created_by_user_id === user?.user_id,
           ),
-    [cases, user]
+    [cases, user],
   );
   const activeVisibleCases = useMemo(
-    () => visibleCases.filter((record) => !(record.cases.is_terminated || record.cases.status_of_case === "Terminated")),
-    [visibleCases]
+    () =>
+      visibleCases.filter(
+        (record) =>
+          !(
+            record.cases.is_terminated ||
+            record.cases.status_of_case === "Terminated"
+          ),
+      ),
+    [visibleCases],
   );
 
   const rows = useMemo<CriminalCaseRow[]>(
     () =>
       activeVisibleCases.map((record) => {
-        const client = visibleClients.find((item) => item.client_id === record.client_id);
+        const client = visibleClients.find(
+          (item) => item.client_id === record.client_id,
+        );
         return {
           record,
           client,
           clientName: client?.client.name ?? "Unknown client",
         };
       }),
-    [activeVisibleCases, visibleClients]
+    [activeVisibleCases, visibleClients],
   );
 
   const filteredRows = useMemo(
     () => filterCriminalCaseRows(rows, { search, table_filter: filter }),
-    [filter, rows, search]
+    [filter, rows, search],
   );
 
-  const activeClient = visibleClients.find((client) => client.client_id === activeClientId) ?? null;
-  const activeCases = visibleCases.filter((record) => record.client_id === activeClientId);
+  const activeClient =
+    visibleClients.find((client) => client.client_id === activeClientId) ??
+    null;
+  const activeCases = visibleCases.filter(
+    (record) => record.client_id === activeClientId,
+  );
 
   const openRecord = (record: CriminalCaseRecord, mode: "view" | "update") => {
     setActiveClientId(record.client_id);
@@ -826,7 +1195,9 @@ export default function CriminalCasesPage() {
     <MainLayout>
       <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h2 className="text-3xl font-semibold text-[#2B3642]">Criminal Cases</h2>
+          <h2 className="text-3xl font-semibold text-[#2B3642]">
+            Criminal Cases
+          </h2>
           <nav className="mt-1 flex items-center gap-2 text-sm text-[#4B5563]">
             <span>Dashboard</span>
             <span>/</span>
@@ -886,9 +1257,15 @@ export default function CriminalCasesPage() {
           <table className="w-full min-w-[1040px] text-sm">
             <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
               <tr>
-                <th className="px-3 py-3 text-left font-semibold">Control No.</th>
-                <th className="px-3 py-3 text-left font-semibold">Party Represented</th>
-                <th className="px-3 py-3 text-left font-semibold">Gender / Sex</th>
+                <th className="px-3 py-3 text-left font-semibold">
+                  Control No.
+                </th>
+                <th className="px-3 py-3 text-left font-semibold">
+                  Party Represented
+                </th>
+                <th className="px-3 py-3 text-left font-semibold">
+                  Gender / Sex
+                </th>
                 <th className="px-3 py-3 text-left font-semibold">Title</th>
                 <th className="px-5 py-3 text-left font-semibold">Status</th>
                 <th className="px-3 py-3 text-left font-semibold">Person</th>
@@ -898,17 +1275,31 @@ export default function CriminalCasesPage() {
             <tbody className="divide-y divide-[#E5E7EB]">
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-[#2B3642]/50">
+                  <td
+                    colSpan={7}
+                    className="px-5 py-10 text-center text-[#2B3642]/50"
+                  >
                     No criminal cases found.
                   </td>
                 </tr>
               ) : (
                 filteredRows.map(({ record, client, clientName }) => (
-                  <tr key={record.case_id} className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]">
-                    <td className="px-3 py-4 text-[#2B3642]">{record.intake_record.control_no}</td>
-                    <td className="px-3 py-4 text-[#4B5563]">{record.intake_record.party_represented}</td>
-                    <td className="px-3 py-4 text-[#4B5563]">{client?.client.sex ?? "-"}</td>
-                    <td className="px-3 py-4 text-[#4B5563]">{record.cases.title_of_case}</td>
+                  <tr
+                    key={record.case_id}
+                    className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]"
+                  >
+                    <td className="px-3 py-4 text-[#2B3642]">
+                      {record.intake_record.control_no}
+                    </td>
+                    <td className="px-3 py-4 text-[#4B5563]">
+                      {record.intake_record.party_represented}
+                    </td>
+                    <td className="px-3 py-4 text-[#4B5563]">
+                      {client?.client.sex ?? "-"}
+                    </td>
+                    <td className="px-3 py-4 text-[#4B5563]">
+                      {record.cases.title_of_case}
+                    </td>
                     <td className="px-5 py-4">
                       <StatusBadge status={record.cases.status_of_case} />
                     </td>
@@ -940,8 +1331,14 @@ export default function CriminalCasesPage() {
         </div>
       </div>
 
-      <AddClientModal isOpen={showClientModal} onClose={() => setShowClientModal(false)} />
-      <AddCaseModal isOpen={showCaseModal} onClose={() => setShowCaseModal(false)} />
+      <AddClientModal
+        isOpen={showClientModal}
+        onClose={() => setShowClientModal(false)}
+      />
+      <AddCaseModal
+        isOpen={showCaseModal}
+        onClose={() => setShowCaseModal(false)}
+      />
       <ExportCsvModal
         isOpen={showExportModal}
         rows={filteredRows}
@@ -959,4 +1356,3 @@ export default function CriminalCasesPage() {
     </MainLayout>
   );
 }
-

@@ -48,6 +48,13 @@ function injectPrintSafety(doc: Document) {
   doc.head.appendChild(style);
 }
 
+function normalizeTemplateAssets(doc: Document) {
+  const header = doc.querySelector("img[src='/paoheader.png']") as HTMLImageElement | null;
+  if (header) {
+    header.src = `${window.location.origin}/paoheader.png`;
+  }
+}
+
 function hydrateEnglish(doc: Document, data: PrintableFormData) {
   const inputs = Array.from(doc.querySelectorAll("input[type='text'], input[type='email'], input[type='number'], input[type='date']")) as HTMLInputElement[];
   const textareas = Array.from(doc.querySelectorAll("textarea")) as HTMLTextAreaElement[];
@@ -209,6 +216,7 @@ export function hydrateOfficialTemplate(
 ) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(template, "text/html");
+  normalizeTemplateAssets(doc);
   injectPrintSafety(doc);
   if (language === "english") hydrateEnglish(doc, data);
   else hydrateFilipino(doc, data);

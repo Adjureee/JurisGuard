@@ -67,22 +67,6 @@ function getSettledValue<T>(result: PromiseSettledResult<T>, fallback: T, label:
   return fallback;
 }
 
-function logDashboardFailures(results: PromiseSettledResult<unknown>[], context: string) {
-  const failed = results
-    .map((result, index) => ({ result, index }))
-    .filter(({ result }) => result.status === "rejected");
-
-  if (failed.length > 0) {
-    console.warn(
-      `${context}: ${failed.length} dashboard request(s) failed and were replaced with safe fallback data.`,
-      failed.map(({ result, index }) => ({
-        index,
-        reason: result.status === "rejected" ? result.reason : null,
-      }))
-    );
-  }
-}
-
 function safeArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? value : [];
 }
@@ -192,7 +176,6 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
         setActivities([]);
         setIntakeLoad(safeIntakeLoad(getSettledValue(intakeLoadResult, emptyIntakeLoad, "intake load")));
         setOcrAnalytics(safeOcrAnalytics(getSettledValue(ocrResult, emptyOcrAnalytics, "OCR analytics")));
-        logDashboardFailures(results, "Dashboard summary refresh");
         setIsLoading(false);
         return;
       }
@@ -229,7 +212,6 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
       setActivities(safeArray<RecentActivity>(getSettledValue(activityResult, [], "recent activities")));
       setIntakeLoad(safeIntakeLoad(getSettledValue(intakeLoadResult, emptyIntakeLoad, "intake load")));
       setOcrAnalytics(safeOcrAnalytics(getSettledValue(ocrResult, emptyOcrAnalytics, "OCR analytics")));
-      logDashboardFailures(results, "Dashboard analytics refresh");
       setIsLoading(false);
     }
     void loadDashboard();

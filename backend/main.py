@@ -213,6 +213,7 @@ def ensure_schema_compatibility() -> None:
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS address TEXT',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS sex VARCHAR(20)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS birth_date VARCHAR(30)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT false',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(64)',
         'UPDATE "user" SET email = username WHERE email IS NULL',
         "ALTER TABLE document ADD COLUMN IF NOT EXISTS intake_id INTEGER",
@@ -294,21 +295,16 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE case_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS entity_id VARCHAR(100)",
-        "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS extraction_mode VARCHAR(30)",
-        "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS fallback_reason TEXT",
-        "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS previous_hash TEXT",
-        "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS current_hash TEXT",
-        "ALTER TABLE audit_log ALTER COLUMN ip_address TYPE VARCHAR(45)",
         """
         CREATE TABLE IF NOT EXISTS case_submission (
             submission_id SERIAL PRIMARY KEY,
+            parent_submission_id INTEGER REFERENCES case_submission(submission_id),
             staff_id INTEGER NOT NULL REFERENCES "user"(user_id),
-            title VARCHAR(255) NOT NULL,
+            title TEXT NOT NULL,
             date_from TIMESTAMP NOT NULL,
             date_to TIMESTAMP NOT NULL,
-            status VARCHAR(40) NOT NULL DEFAULT 'Draft',
+            status VARCHAR(30) NOT NULL DEFAULT 'Draft',
             version INTEGER NOT NULL DEFAULT 1,
-            parent_submission_id INTEGER REFERENCES case_submission(submission_id),
             notes TEXT,
             submitted_at TIMESTAMP,
             approved_at TIMESTAMP,
@@ -317,45 +313,31 @@ def ensure_schema_compatibility() -> None:
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """,
+        "CREATE INDEX IF NOT EXISTS ix_case_submission_submission_id ON case_submission (submission_id)",
+        "CREATE INDEX IF NOT EXISTS ix_case_submission_staff_id ON case_submission (staff_id)",
+        "CREATE INDEX IF NOT EXISTS ix_case_submission_status ON case_submission (status)",
         """
         CREATE TABLE IF NOT EXISTS case_submission_item (
             submission_item_id SERIAL PRIMARY KEY,
-            submission_id INTEGER NOT NULL REFERENCES case_submission(submission_id) ON DELETE CASCADE,
+            submission_id INTEGER NOT NULL REFERENCES case_submission(submission_id),
             case_id INTEGER NOT NULL REFERENCES "case"(case_id),
-            snapshot_json JSONB NOT NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            snapshot_json JSONB NOT NULL
         )
         """,
+        "CREATE INDEX IF NOT EXISTS ix_case_submission_item_submission_item_id ON case_submission_item (submission_item_id)",
+        "CREATE INDEX IF NOT EXISTS ix_case_submission_item_submission_id ON case_submission_item (submission_id)",
+        "CREATE INDEX IF NOT EXISTS ix_case_submission_item_case_id ON case_submission_item (case_id)",
         """
         CREATE TABLE IF NOT EXISTS submission_feedback (
             feedback_id SERIAL PRIMARY KEY,
-            submission_id INTEGER NOT NULL REFERENCES case_submission(submission_id) ON DELETE CASCADE,
+            submission_id INTEGER NOT NULL REFERENCES case_submission(submission_id),
             reviewer_id INTEGER NOT NULL REFERENCES "user"(user_id),
             comments TEXT NOT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """,
-        "UPDATE case_submission SET status = 'Correction Required' WHERE status = 'Correction Requested'",
-        """
-        CREATE OR REPLACE FUNCTION prevent_audit_log_mutation()
-        RETURNS trigger AS $$
-        BEGIN
-            RAISE EXCEPTION 'audit_log is append-only';
-        END;
-        $$ LANGUAGE plpgsql
-        """,
-        "DROP TRIGGER IF EXISTS audit_log_prevent_update ON audit_log",
-        "DROP TRIGGER IF EXISTS audit_log_prevent_delete ON audit_log",
-        """
-        CREATE TRIGGER audit_log_prevent_update
-        BEFORE UPDATE ON audit_log
-        FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_mutation()
-        """,
-        """
-        CREATE TRIGGER audit_log_prevent_delete
-        BEFORE DELETE ON audit_log
-        FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_mutation()
-        """,
+        "CREATE INDEX IF NOT EXISTS ix_submission_feedback_feedback_id ON submission_feedback (feedback_id)",
+        "CREATE INDEX IF NOT EXISTS ix_submission_feedback_submission_id ON submission_feedback (submission_id)",
     ]
     with engine.begin() as connection:
         for statement in statements:
@@ -505,7 +487,7 @@ def admin_user(user: models.User = Depends(current_user)) -> models.User:
 
 
 def is_admin(user: models.User) -> bool:
-    return (user.role.role_name if user.role else "").lower() == "admin"
+    return is_admin_role(user.role)
 
 
 def display_role_name(user: models.User | None) -> str | None:
@@ -623,11 +605,10 @@ def limit_text(value: Any, max_length: int, fallback: str | None = None) -> str 
 
 
 def user_to_auth(user: models.User) -> dict[str, Any]:
-    role_name = "admin" if is_admin_role(user.role) else "staff"
     return {
         "user_id": user.user_id,
         "email": user.email or user.username,
-        "role": role_name,
+        "role": "admin" if is_admin_role(user.role) else "staff",
         "approval_status": user.approval_status,
         "full_name": user.full_name or "",
         "mfa_enabled": bool(user.mfa_enabled),

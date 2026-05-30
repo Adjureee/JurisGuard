@@ -5,33 +5,32 @@ import MainLayout from "../layouts/MainLayout";
 import PrintableFormEnglish from "../components/printable/PrintableFormEnglish";
 import PrintableFormFilipino from "../components/printable/PrintableFormFilipino";
 import { getPrintableIntake, type PrintableIntakeResponse } from "../services/recordService";
-import type { PrintableFormLanguage } from "../components/printable/officialFormHydrator";
+import {
+  hydrateOfficialTemplate,
+  type PrintableFormLanguage,
+} from "../components/printable/officialFormHydrator";
 
 export default function FormViewPage() {
   const { caseId = "" } = useParams();
   const [searchParams] = useSearchParams();
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const [language, setLanguage] = useState<PrintableFormLanguage>("english");
+  const printRootRef = useRef<HTMLDivElement>(null);
+  const [language, setLanguage] = useState<PrintableFormLanguage>(() => {
+    const requestedLanguage = searchParams.get("language");
+    return requestedLanguage === "english" || requestedLanguage === "filipino"
+      ? requestedLanguage
+      : "english";
+  });
   const [data, setData] = useState<PrintableIntakeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isFrameReady, setIsFrameReady] = useState(false);
-
-  const triggerPrint = useCallback(() => {
-    const printWindow = frameRef.current?.contentWindow;
-    if (!printWindow) {
-      toast.error("Printable form is still loading. Please try again in a moment.");
-      return;
-    }
-    printWindow.focus();
-    printWindow.print();
-  }, []);
+  const autoPrint = searchParams.get("autoPrint") === "1";
+  const autoPrintDoneRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     async function loadPrintableForm() {
       if (!caseId) return;
       setIsLoading(true);
-      setIsFrameReady(false);
       try {
         const response = await getPrintableIntake(caseId);
         if (!cancelled) setData(response);
@@ -47,12 +46,6 @@ export default function FormViewPage() {
     };
   }, [caseId]);
 
-  useEffect(() => {
-    if (!data || !isFrameReady || searchParams.get("print") !== "1") return;
-    const timeout = window.setTimeout(triggerPrint, 150);
-    return () => window.clearTimeout(timeout);
-  }, [data, isFrameReady, searchParams, triggerPrint]);
-
   const printableData = useMemo(() => {
     if (!data) return null;
     return {
@@ -62,23 +55,73 @@ export default function FormViewPage() {
     };
   }, [data]);
 
-  const printForm = () => {
-    if (!isFrameReady) {
-      toast.error("Printable form is still loading. Please try again in a moment.");
+  const activeTemplate = data
+    ? language === "english"
+      ? data.templates.english
+      : data.templates.filipino
+    : "";
+
+  const printMarkup = useMemo(() => {
+    if (!printableData || !activeTemplate) return "";
+    const hydrated = hydrateOfficialTemplate(activeTemplate, printableData, language);
+    const doc = new DOMParser().parseFromString(hydrated, "text/html");
+    const styles = Array.from(doc.head.querySelectorAll("style"))
+      .map((style) => style.outerHTML)
+      .join("\n");
+    return `${styles}\n${doc.body.innerHTML}`;
+  }, [activeTemplate, language, printableData]);
+
+  const waitForPrintAssets = useCallback(async () => {
+    const printRoot = printRootRef.current;
+    if (!printRoot) return;
+
+    const pendingImages = Array.from(printRoot.querySelectorAll("img")).filter(
+      (image) => !image.complete,
+    );
+
+    if (pendingImages.length === 0) return;
+
+    await Promise.race([
+      Promise.all(
+        pendingImages.map(
+          (image) =>
+            new Promise<void>((resolve) => {
+              image.addEventListener("load", () => resolve(), { once: true });
+              image.addEventListener("error", () => resolve(), { once: true });
+            }),
+        ),
+      ),
+      new Promise<void>((resolve) => window.setTimeout(resolve, 1000)),
+    ]);
+  }, []);
+
+  const printPreview = useCallback(async () => {
+    if (!printMarkup) {
+      toast.error("Printable form is still loading. Please try again.");
       return;
     }
-    triggerPrint();
-  };
 
-  const selectLanguage = (nextLanguage: PrintableFormLanguage) => {
-    if (nextLanguage === language) return;
-    setIsFrameReady(false);
-    setLanguage(nextLanguage);
-  };
+    await waitForPrintAssets();
+    window.print();
+  }, [printMarkup, waitForPrintAssets]);
+
+  useEffect(() => {
+    autoPrintDoneRef.current = false;
+  }, [autoPrint, caseId]);
+
+  useEffect(() => {
+    if (!autoPrint || !printMarkup || autoPrintDoneRef.current) return;
+    autoPrintDoneRef.current = true;
+    const timeout = window.setTimeout(() => {
+      void printPreview();
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [autoPrint, printMarkup, printPreview]);
 
   return (
-    <MainLayout>
-      <div className="mb-4 flex flex-col gap-3 print:hidden lg:flex-row lg:items-center lg:justify-between">
+    <>
+      <MainLayout>
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-sm font-semibold text-[#704389]">Official PAO Intake Form</p>
           <h1 className="text-2xl font-bold text-[#2B3642]">
@@ -92,7 +135,7 @@ export default function FormViewPage() {
           <div className="inline-flex rounded-md border border-[#E5E7EB] bg-white p-1">
             <button
               type="button"
-              onClick={() => selectLanguage("english")}
+              onClick={() => setLanguage("english")}
               className={`rounded px-3 py-1.5 text-sm font-semibold ${
                 language === "english" ? "bg-[#704389] text-white" : "text-[#4B5563]"
               }`}
@@ -101,7 +144,7 @@ export default function FormViewPage() {
             </button>
             <button
               type="button"
-              onClick={() => selectLanguage("filipino")}
+              onClick={() => setLanguage("filipino")}
               className={`rounded px-3 py-1.5 text-sm font-semibold ${
                 language === "filipino" ? "bg-[#704389] text-white" : "text-[#4B5563]"
               }`}
@@ -111,11 +154,11 @@ export default function FormViewPage() {
           </div>
           <button
             type="button"
-            onClick={printForm}
-            disabled={!data}
+            onClick={printPreview}
+            disabled={!data || !printMarkup}
             className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#5F3675] disabled:opacity-50"
           >
-            Print Form
+            {printMarkup ? "Print Form" : "Preparing Form..."}
           </button>
           <Link
             to="/criminal-cases"
@@ -134,14 +177,12 @@ export default function FormViewPage() {
             ref={frameRef}
             template={data.templates.english}
             data={printableData}
-            onLoad={() => setIsFrameReady(true)}
           />
         ) : (
           <PrintableFormFilipino
             ref={frameRef}
             template={data.templates.filipino}
             data={printableData}
-            onLoad={() => setIsFrameReady(true)}
           />
         )
       ) : (
@@ -149,7 +190,13 @@ export default function FormViewPage() {
           Printable form data could not be loaded.
         </div>
       )}
-    </MainLayout>
+      </MainLayout>
+      <div
+        ref={printRootRef}
+        className="jurisguard-print-root"
+        dangerouslySetInnerHTML={{ __html: printMarkup }}
+      />
+    </>
   );
 }
 
