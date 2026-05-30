@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
@@ -14,12 +14,24 @@ export default function FormViewPage() {
   const [language, setLanguage] = useState<PrintableFormLanguage>("english");
   const [data, setData] = useState<PrintableIntakeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFrameReady, setIsFrameReady] = useState(false);
+
+  const triggerPrint = useCallback(() => {
+    const printWindow = frameRef.current?.contentWindow;
+    if (!printWindow) {
+      toast.error("Printable form is still loading. Please try again in a moment.");
+      return;
+    }
+    printWindow.focus();
+    printWindow.print();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     async function loadPrintableForm() {
       if (!caseId) return;
       setIsLoading(true);
+      setIsFrameReady(false);
       try {
         const response = await getPrintableIntake(caseId);
         if (!cancelled) setData(response);
@@ -36,13 +48,10 @@ export default function FormViewPage() {
   }, [caseId]);
 
   useEffect(() => {
-    if (!data || searchParams.get("print") !== "1") return;
-    const timeout = window.setTimeout(() => {
-      frameRef.current?.contentWindow?.focus();
-      frameRef.current?.contentWindow?.print();
-    }, 600);
+    if (!data || !isFrameReady || searchParams.get("print") !== "1") return;
+    const timeout = window.setTimeout(triggerPrint, 150);
     return () => window.clearTimeout(timeout);
-  }, [data, language, searchParams]);
+  }, [data, isFrameReady, searchParams, triggerPrint]);
 
   const printableData = useMemo(() => {
     if (!data) return null;
@@ -54,8 +63,17 @@ export default function FormViewPage() {
   }, [data]);
 
   const printForm = () => {
-    frameRef.current?.contentWindow?.focus();
-    frameRef.current?.contentWindow?.print();
+    if (!isFrameReady) {
+      toast.error("Printable form is still loading. Please try again in a moment.");
+      return;
+    }
+    triggerPrint();
+  };
+
+  const selectLanguage = (nextLanguage: PrintableFormLanguage) => {
+    if (nextLanguage === language) return;
+    setIsFrameReady(false);
+    setLanguage(nextLanguage);
   };
 
   return (
@@ -74,7 +92,7 @@ export default function FormViewPage() {
           <div className="inline-flex rounded-md border border-[#E5E7EB] bg-white p-1">
             <button
               type="button"
-              onClick={() => setLanguage("english")}
+              onClick={() => selectLanguage("english")}
               className={`rounded px-3 py-1.5 text-sm font-semibold ${
                 language === "english" ? "bg-[#704389] text-white" : "text-[#4B5563]"
               }`}
@@ -83,7 +101,7 @@ export default function FormViewPage() {
             </button>
             <button
               type="button"
-              onClick={() => setLanguage("filipino")}
+              onClick={() => selectLanguage("filipino")}
               className={`rounded px-3 py-1.5 text-sm font-semibold ${
                 language === "filipino" ? "bg-[#704389] text-white" : "text-[#4B5563]"
               }`}
@@ -116,12 +134,14 @@ export default function FormViewPage() {
             ref={frameRef}
             template={data.templates.english}
             data={printableData}
+            onLoad={() => setIsFrameReady(true)}
           />
         ) : (
           <PrintableFormFilipino
             ref={frameRef}
             template={data.templates.filipino}
             data={printableData}
+            onLoad={() => setIsFrameReady(true)}
           />
         )
       ) : (

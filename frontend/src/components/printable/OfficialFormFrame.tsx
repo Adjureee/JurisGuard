@@ -9,10 +9,11 @@ interface OfficialFormFrameProps {
   template: string;
   data: PrintableFormData;
   language: PrintableFormLanguage;
+  onLoad?: () => void;
 }
 
 const OfficialFormFrame = forwardRef<HTMLIFrameElement, OfficialFormFrameProps>(
-  ({ template, data, language }, ref) => {
+  ({ template, data, language, onLoad }, ref) => {
     const hydratedHtml = useMemo(
       () => hydrateOfficialTemplate(template, data, language),
       [data, language, template]
@@ -23,6 +24,7 @@ const OfficialFormFrame = forwardRef<HTMLIFrameElement, OfficialFormFrameProps>(
         ref={ref}
         title={`PAO intake form ${language}`}
         srcDoc={hydratedHtml}
+        onLoad={onLoad}
         className="h-[calc(100vh-190px)] min-h-[720px] w-full rounded-lg border border-[#D1D5DB] bg-white print:h-screen print:min-h-screen print:border-0"
       />
     );
