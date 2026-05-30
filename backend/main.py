@@ -197,6 +197,7 @@ def ensure_schema_compatibility() -> None:
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS address TEXT',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS sex VARCHAR(20)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS birth_date VARCHAR(30)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT false',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(64)',
         'UPDATE "user" SET email = username WHERE email IS NULL',
         "ALTER TABLE document ADD COLUMN IF NOT EXISTS intake_id INTEGER",
@@ -452,7 +453,7 @@ def admin_user(user: models.User = Depends(current_user)) -> models.User:
 
 
 def is_admin(user: models.User) -> bool:
-    return (user.role.role_name if user.role else "").lower() == "admin"
+    return is_admin_role(user.role)
 
 
 def display_role_name(user: models.User | None) -> str | None:
@@ -573,7 +574,7 @@ def user_to_auth(user: models.User) -> dict[str, Any]:
     return {
         "user_id": user.user_id,
         "email": user.email or user.username,
-        "role": "admin" if role_name == "admin" else "staff",
+        "role": "admin" if is_admin_role(user.role) else "staff",
         "approval_status": user.approval_status,
         "full_name": user.full_name or "",
         "mfa_enabled": bool(user.mfa_enabled),
