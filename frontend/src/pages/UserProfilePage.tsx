@@ -3,8 +3,11 @@ import toast from "react-hot-toast";
 import MainLayout from "../layouts/MainLayout";
 import { useAuth } from "../contexts/AuthContext";
 import {
+  disableMfa,
+  enableMfa,
   removeProfileImage,
   resolveProfileImageUrl,
+  setupMfa,
   uploadProfileImage,
 } from "../services/authService";
 
@@ -34,6 +37,10 @@ export default function UserProfilePage() {
   const [previewSrc, setPreviewSrc] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [mfaSecret, setMfaSecret] = useState("");
+  const [mfaUri, setMfaUri] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [isMfaBusy, setIsMfaBusy] = useState(false);
   const profileImageSrc = previewSrc || resolveProfileImageUrl(user?.profile_image_path);
 
   const handleProfileImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -98,6 +105,50 @@ export default function UserProfilePage() {
       setUploadError(err instanceof Error ? err.message : "Unable to remove profile image.");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleSetupMfa = async () => {
+    setIsMfaBusy(true);
+    try {
+      const setup = await setupMfa();
+      setMfaSecret(setup.secret);
+      setMfaUri(setup.otpauth_uri);
+      toast.success("MFA setup started");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to start MFA setup");
+    } finally {
+      setIsMfaBusy(false);
+    }
+  };
+
+  const handleEnableMfa = async () => {
+    setIsMfaBusy(true);
+    try {
+      await enableMfa(mfaCode);
+      await getCurrentUser();
+      setMfaCode("");
+      setMfaSecret("");
+      setMfaUri("");
+      toast.success("MFA enabled");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to enable MFA");
+    } finally {
+      setIsMfaBusy(false);
+    }
+  };
+
+  const handleDisableMfa = async () => {
+    setIsMfaBusy(true);
+    try {
+      await disableMfa(mfaCode);
+      await getCurrentUser();
+      setMfaCode("");
+      toast.success("MFA disabled");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to disable MFA");
+    } finally {
+      setIsMfaBusy(false);
     }
   };
 
@@ -168,6 +219,69 @@ export default function UserProfilePage() {
 
       <section id="security" className="mt-4 rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-[#111827]/10">
         <h3 className="font-semibold text-[#111827]">Security</h3>
+        <div className="mt-4 rounded-md border border-[#E5E7EB] p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-[#111827]">Multi-Factor Authentication</p>
+              <p className="mt-1 text-sm text-[#6B7280]">
+                Status: {user?.mfa_enabled ? "Enabled" : "Disabled"}
+              </p>
+            </div>
+            {!user?.mfa_enabled && (
+              <button
+                type="button"
+                onClick={handleSetupMfa}
+                disabled={isMfaBusy}
+                className="rounded-md bg-[#2F80ED] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1f6fd6] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Start Setup
+              </button>
+            )}
+          </div>
+
+          {mfaSecret && !user?.mfa_enabled && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Manual Secret</p>
+                <p className="mt-1 break-all rounded-md bg-[#F9FAFB] px-3 py-2 font-mono text-sm text-[#111827]">
+                  {mfaSecret}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Authenticator URI</p>
+                <p className="mt-1 break-all rounded-md bg-[#F9FAFB] px-3 py-2 font-mono text-xs text-[#111827]">
+                  {mfaUri}
+                </p>
+              </div>
+              <p className="text-sm text-[#6B7280]">
+                Add the secret to an authenticator app, then enter the current 6-digit code.
+              </p>
+            </div>
+          )}
+
+          {(mfaSecret || user?.mfa_enabled) && (
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={mfaCode}
+                onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="6-digit code"
+                className="w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20 sm:max-w-48"
+              />
+              <button
+                type="button"
+                onClick={user?.mfa_enabled ? handleDisableMfa : handleEnableMfa}
+                disabled={isMfaBusy || mfaCode.length !== 6}
+                className="rounded-md bg-[#111827] px-3 py-2 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {user?.mfa_enabled ? "Disable MFA" : "Enable MFA"}
+              </button>
+            </div>
+          )}
+        </div>
       </section>
     </MainLayout>
   );

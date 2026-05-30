@@ -11,7 +11,11 @@ import { useCamera } from "../../features/criminalCases/hooks/useCamera";
 import { useCriminalCasesStore } from "../../features/criminalCases/criminalCasesStore";
 import { clientFormSchema, type ClientFormValues } from "../../features/criminalCases/schemas";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
-import { dataUrlToFile, extractClientFromDocument } from "../../services/documentExtractionService";
+import {
+  dataUrlToFile,
+  extractClientFromDocument,
+  type ExtractionEngineMode,
+} from "../../services/documentExtractionService";
 import { createCaseRecord, createClientRecord } from "../../services/recordService";
 import type { ClientRecord, ExtractionMap, ExtractedClientPayload, IntakeMethod } from "../../types";
 import { CaseWorkflow } from "./CaseWorkflow";
@@ -20,6 +24,12 @@ interface AddClientModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+const extractionEngineLabels: Record<ExtractionEngineMode, string> = {
+  auto: "Auto",
+  offline: "Offline PaddleOCR",
+  cloud: "Cloud Vision",
+};
 
 const defaultValues: ClientFormValues = {
   client: {
@@ -247,6 +257,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
   const [documentLabel, setDocumentLabel] = useState("");
   const [indicators, setIndicators] = useState<ExtractionMap>({});
   const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionEngine, setExtractionEngine] = useState<ExtractionEngineMode>("auto");
   const {
     videoRef,
     isCameraActive,
@@ -357,7 +368,10 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
     const toastId = toast.loading("Extracting client fields...");
 
     try {
-      const result = await extractClientFromDocument(file, { userId: user?.user_id });
+      const result = await extractClientFromDocument(file, {
+        userId: user?.user_id,
+        extractionMode: extractionEngine,
+      });
       setIndicators(result.indicators);
       applyExtractedPayload(result.extracted);
       setStep(0);
@@ -532,6 +546,23 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
                   Change Method
                 </button>
               </div>
+
+              {method !== "manual" && (
+                <div className="mb-5 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3">
+                  <label className="block max-w-xs">
+                    <span className="text-xs font-semibold uppercase text-[#1E3A8A]">OCR Engine</span>
+                    <select
+                      value={extractionEngine}
+                      onChange={(event) => setExtractionEngine(event.target.value as ExtractionEngineMode)}
+                      className="mt-1 h-10 w-full rounded-md border border-[#93C5FD] bg-white px-3 text-sm font-semibold text-[#111827] outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+                    >
+                      {Object.entries(extractionEngineLabels).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
 
               {method === "camera" && (
                 <div className="mb-5 rounded-lg border border-[#e5e7eb] bg-[#F9FAFB] p-4">

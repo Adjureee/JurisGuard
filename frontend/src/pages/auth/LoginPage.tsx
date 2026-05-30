@@ -22,6 +22,8 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [showMfaCode, setShowMfaCode] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(unauthorizedMessage);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,7 +35,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const user = await login({ email, password });
+      const user = await login({ email, password, otpCode });
       addLog({
         userId: user.user_id,
         user: user.full_name || user.email,
@@ -51,6 +53,11 @@ export default function LoginPage() {
         message === "Could not validate credentials"
           ? "Account is unavailable or credentials are invalid."
           : message;
+      if (message === "MFA code required") {
+        setShowMfaCode(true);
+        setError("Enter your 6-digit authenticator code to continue.");
+        return;
+      }
       setError(displayMessage);
       setNotice("");
     } finally {
@@ -83,6 +90,23 @@ export default function LoginPage() {
               required
             />
           </label>
+
+          {showMfaCode && (
+            <label className="block">
+              <span className="text-sm font-medium text-[#111827]">Authenticator Code</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+                value={otpCode}
+                onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                autoComplete="one-time-code"
+                required
+              />
+            </label>
+          )}
 
           <label className="block">
             <span className="text-sm font-medium text-[#111827]">Password</span>

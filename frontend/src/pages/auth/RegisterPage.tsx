@@ -105,6 +105,7 @@ export default function RegisterPage() {
           <h1 className="mt-2 text-2xl font-bold text-[#111827]">Create Account</h1>
           <p className="mt-2 text-sm text-[#6B7280]">
             Your account request must be approved by an admin before access is enabled.
+            Rejected applications may be resubmitted with the same email.
           </p>
         </div>
 

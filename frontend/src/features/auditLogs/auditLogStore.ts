@@ -14,6 +14,11 @@ export interface AuditLogEntry {
   description: string;
   entity_type?: string;
   entity_id?: string;
+  ip_address?: string | null;
+  extraction_mode?: string | null;
+  fallback_reason?: string | null;
+  previous_hash?: string | null;
+  current_hash?: string | null;
 }
 
 interface AddAuditLogInput {
@@ -24,6 +29,8 @@ interface AddAuditLogInput {
   description: string;
   entityType?: string;
   entityId?: string;
+  extractionMode?: string | null;
+  fallbackReason?: string | null;
 }
 
 interface AuditLogState {
@@ -96,6 +103,8 @@ export const useAuditLogStore = create<AuditLogState>((set, get) => ({
         description: entry.description,
         entity_type: entry.entityType,
         entity_id: entry.entityId,
+        extraction_mode: entry.extractionMode,
+        fallback_reason: entry.fallbackReason,
       };
     }
     const log: AuditLogEntry = {
@@ -110,6 +119,8 @@ export const useAuditLogStore = create<AuditLogState>((set, get) => ({
       description: entry.description,
       entity_type: entry.entityType,
       entity_id: entry.entityId,
+      extraction_mode: entry.extractionMode,
+      fallback_reason: entry.fallbackReason,
     };
     const logs = [log, ...get().logs].slice(0, 100);
     persistLogs(logs);
