@@ -14,6 +14,7 @@ pillow
 opencv-python
 numpy
 paddleocr
+paddlepaddle
 spacy
 pandas
 openpyxl

@@ -77,6 +77,24 @@ export interface IntakeRecord {
   applicant_role_other: string;
   nature_of_request: string;
   nature_of_case: string;
+  coi_agree_different_office: boolean;
+  coi_agree_same_dept_appeal: boolean;
+  coi_waive_right_to_complain: boolean;
+  coi_trust_assigned_counsel: boolean;
+  proof_submission_deadline: string;
+  proof_itr_date: string;
+  proof_brgy_date: string;
+  proof_dswd_date: string;
+  proof_others_details: string;
+  proof_others_date: string;
+  inv_plaintiff: boolean;
+  inv_defendant: boolean;
+  inv_oppositor: boolean;
+  inv_petitioner: boolean;
+  inv_respondent: boolean;
+  inv_complainant: boolean;
+  inv_accused: boolean;
+  inv_others: string;
 }
 
 export interface Representative {

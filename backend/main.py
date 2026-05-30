@@ -5,13 +5,15 @@ import json
 import os
 import secrets
 import shutil
+import struct
 import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
@@ -117,6 +119,15 @@ class TokenResponse(BaseModel):
     token_type: Literal["bearer"] = "bearer"
 
 
+class MfaSetupResponse(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+class MfaVerifyPayload(BaseModel):
+    code: str
+
+
 class ApprovalUpdatePayload(BaseModel):
     approval_status: Literal["pending", "under_review", "approved", "rejected", "suspended"]
 
@@ -150,6 +161,8 @@ class AuditLogPayload(BaseModel):
     description: str | None = None
     entity_type: str | None = None
     entity_id: str | None = None
+    extraction_mode: str | None = None
+    fallback_reason: str | None = None
 
 
 class SubmissionPreviewPayload(BaseModel):
@@ -200,6 +213,7 @@ def ensure_schema_compatibility() -> None:
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS address TEXT',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS sex VARCHAR(20)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS birth_date VARCHAR(30)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(64)',
         'UPDATE "user" SET email = username WHERE email IS NULL',
         "ALTER TABLE document ADD COLUMN IF NOT EXISTS intake_id INTEGER",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS representative_name TEXT",
@@ -215,6 +229,24 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS applicant_role VARCHAR(100)",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS applicant_role_other VARCHAR(255)",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS nature_of_request TEXT",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS coi_agree_different_office BOOLEAN DEFAULT false",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS coi_agree_same_dept_appeal BOOLEAN DEFAULT false",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS coi_waive_right_to_complain BOOLEAN DEFAULT false",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS coi_trust_assigned_counsel BOOLEAN DEFAULT false",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_submission_deadline TIMESTAMP",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_itr_date TIMESTAMP",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_brgy_date TIMESTAMP",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_dswd_date TIMESTAMP",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_others_details TEXT",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_others_date TIMESTAMP",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS inv_plaintiff BOOLEAN DEFAULT false",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS inv_defendant BOOLEAN DEFAULT false",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS inv_oppositor BOOLEAN DEFAULT false",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS inv_petitioner BOOLEAN DEFAULT false",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS inv_respondent BOOLEAN DEFAULT false",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS inv_complainant BOOLEAN DEFAULT false",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS inv_accused BOOLEAN DEFAULT false",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS inv_others TEXT",
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS court_body VARCHAR(255)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS case_status VARCHAR(30)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS incident_barangay VARCHAR(120)',
@@ -240,45 +272,28 @@ def ensure_schema_compatibility() -> None:
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS supporting_document_path TEXT',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS is_terminated BOOLEAN DEFAULT false',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+        """
+        CREATE TABLE IF NOT EXISTS case_history (
+            history_id SERIAL PRIMARY KEY,
+            case_id INTEGER NOT NULL REFERENCES "case"(case_id),
+            updated_by INTEGER NOT NULL REFERENCES "user"(user_id),
+            previous_status VARCHAR(20),
+            new_status VARCHAR(20) NOT NULL,
+            action_taken TEXT NOT NULL,
+            remarks TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_case_history_history_id ON case_history (history_id)",
+        "ALTER TABLE case_history ADD COLUMN IF NOT EXISTS case_id INTEGER",
+        "ALTER TABLE case_history ADD COLUMN IF NOT EXISTS updated_by INTEGER",
+        "ALTER TABLE case_history ADD COLUMN IF NOT EXISTS previous_status VARCHAR(20)",
+        "ALTER TABLE case_history ADD COLUMN IF NOT EXISTS new_status VARCHAR(20)",
+        "ALTER TABLE case_history ADD COLUMN IF NOT EXISTS action_taken TEXT",
+        "ALTER TABLE case_history ADD COLUMN IF NOT EXISTS remarks TEXT",
+        "ALTER TABLE case_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS entity_id VARCHAR(100)",
-        """
-        CREATE TABLE IF NOT EXISTS case_submission (
-            submission_id SERIAL PRIMARY KEY,
-            staff_id INTEGER NOT NULL REFERENCES "user"(user_id),
-            title VARCHAR(255) NOT NULL,
-            date_from TIMESTAMP NOT NULL,
-            date_to TIMESTAMP NOT NULL,
-            status VARCHAR(40) NOT NULL DEFAULT 'Draft',
-            version INTEGER NOT NULL DEFAULT 1,
-            parent_submission_id INTEGER REFERENCES case_submission(submission_id),
-            notes TEXT,
-            submitted_at TIMESTAMP,
-            approved_at TIMESTAMP,
-            reviewed_by INTEGER REFERENCES "user"(user_id),
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS case_submission_item (
-            submission_item_id SERIAL PRIMARY KEY,
-            submission_id INTEGER NOT NULL REFERENCES case_submission(submission_id) ON DELETE CASCADE,
-            case_id INTEGER NOT NULL REFERENCES "case"(case_id),
-            snapshot_json JSONB NOT NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS submission_feedback (
-            feedback_id SERIAL PRIMARY KEY,
-            submission_id INTEGER NOT NULL REFERENCES case_submission(submission_id) ON DELETE CASCADE,
-            reviewer_id INTEGER NOT NULL REFERENCES "user"(user_id),
-            comments TEXT NOT NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-        "UPDATE case_submission SET status = 'Correction Required' WHERE status = 'Correction Requested'",
     ]
     with engine.begin() as connection:
         for statement in statements:
@@ -328,6 +343,43 @@ def verify_password(password: str, stored_hash: str) -> bool:
     return hmac.compare_digest(digest.hex(), digest_hex)
 
 
+def generate_mfa_secret() -> str:
+    return base64.b32encode(secrets.token_bytes(20)).decode("utf-8").rstrip("=")
+
+
+def _mfa_secret_bytes(secret: str) -> bytes:
+    padded = secret.strip().replace(" ", "").upper()
+    padded += "=" * (-len(padded) % 8)
+    return base64.b32decode(padded)
+
+
+def generate_totp(secret: str, at_time: datetime | None = None, interval: int = 30) -> str:
+    current_time = at_time or datetime.now(timezone.utc)
+    counter = int(current_time.timestamp()) // interval
+    digest = hmac.new(_mfa_secret_bytes(secret), struct.pack(">Q", counter), hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    code_int = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+    return f"{code_int % 1_000_000:06d}"
+
+
+def verify_totp(secret: str | None, code: str | None, window: int = 1) -> bool:
+    if not secret or not code:
+        return False
+    normalized = "".join(ch for ch in code if ch.isdigit())
+    if len(normalized) != 6:
+        return False
+    now = datetime.now(timezone.utc)
+    return any(
+        hmac.compare_digest(generate_totp(secret, now + timedelta(seconds=30 * step)), normalized)
+        for step in range(-window, window + 1)
+    )
+
+
+def mfa_otpauth_uri(user: models.User, secret: str) -> str:
+    label = f"JurisGuard:{user.email or user.username}"
+    return f"otpauth://totp/{quote(label)}?secret={secret}&issuer=JurisGuard&digits=6&period=30"
+
+
 def b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
 
@@ -351,6 +403,14 @@ def make_username(email: str) -> str:
     local_part = email.split("@", 1)[0].lower()
     suffix = hashlib.sha1(email.encode("utf-8")).hexdigest()[:6]
     return f"{local_part[:23]}-{suffix}"[:30]
+
+
+def is_admin_role(role: models.Role | None) -> bool:
+    if not role:
+        return False
+    role_name = (role.role_name or "").strip().lower()
+    permissions = (role.permissions or "").strip().lower()
+    return role_name in {"admin", "system admin"} or permissions == "all_access"
 
 
 def read_access_token(token: str) -> int:
@@ -377,8 +437,7 @@ def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
 
 
 def admin_user(user: models.User = Depends(current_user)) -> models.User:
-    role_name = (user.role.role_name if user.role else "").lower()
-    if role_name != "admin":
+    if not is_admin_role(user.role):
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
@@ -502,13 +561,13 @@ def limit_text(value: Any, max_length: int, fallback: str | None = None) -> str 
 
 
 def user_to_auth(user: models.User) -> dict[str, Any]:
-    role_name = user.role.role_name if user.role else "user"
     return {
         "user_id": user.user_id,
         "email": user.email or user.username,
         "role": "admin" if role_name == "admin" else "staff",
         "approval_status": user.approval_status,
         "full_name": user.full_name or "",
+        "mfa_enabled": bool(user.mfa_enabled),
         "profile_image_path": user.profile_image_path,
         "profile_picture_path": user.profile_picture_path,
         "profile_completed": bool(user.profile_completed),
@@ -626,6 +685,24 @@ def get_case_payload(record: models.Case) -> dict[str, Any]:
             "applicant_role_other": intake.applicant_role_other or "",
             "nature_of_request": intake.nature_of_request or "",
             "nature_of_case": intake.nature_of_case or "",
+            "coi_agree_different_office": bool(intake.coi_agree_different_office),
+            "coi_agree_same_dept_appeal": bool(intake.coi_agree_same_dept_appeal),
+            "coi_waive_right_to_complain": bool(intake.coi_waive_right_to_complain),
+            "coi_trust_assigned_counsel": bool(intake.coi_trust_assigned_counsel),
+            "proof_submission_deadline": format_date(intake.proof_submission_deadline),
+            "proof_itr_date": format_date(intake.proof_itr_date),
+            "proof_brgy_date": format_date(intake.proof_brgy_date),
+            "proof_dswd_date": format_date(intake.proof_dswd_date),
+            "proof_others_details": intake.proof_others_details or "",
+            "proof_others_date": format_date(intake.proof_others_date),
+            "inv_plaintiff": bool(intake.inv_plaintiff),
+            "inv_defendant": bool(intake.inv_defendant),
+            "inv_oppositor": bool(intake.inv_oppositor),
+            "inv_petitioner": bool(intake.inv_petitioner),
+            "inv_respondent": bool(intake.inv_respondent),
+            "inv_complainant": bool(intake.inv_complainant),
+            "inv_accused": bool(intake.inv_accused),
+            "inv_others": intake.inv_others or "",
         },
         "representative": {
             "rep_name": representative.rep_name if representative else "",
@@ -964,17 +1041,59 @@ def write_audit(
     description: str | None = None,
     entity_id: str | None = None,
     request: Request | None = None,
+    extraction_mode: str | None = None,
+    fallback_reason: str | None = None,
 ) -> None:
+    previous_hash = (
+        db.query(models.AuditLog.current_hash)
+        .filter(models.AuditLog.current_hash.isnot(None))
+        .order_by(models.AuditLog.log_id.desc())
+        .limit(1)
+        .scalar()
+    )
+    timestamp = datetime.now(timezone.utc)
+    hash_payload = "|".join(
+        [
+            str(user_id or ""),
+            action[:50],
+            target_entity or "",
+            entity_id or "",
+            description or "",
+            extraction_mode or "",
+            fallback_reason or "",
+            previous_hash or "",
+            timestamp.isoformat(),
+        ]
+    )
+    current_hash = hashlib.sha256(hash_payload.encode("utf-8")).hexdigest()
     db.add(
         models.AuditLog(
             user_id=user_id,
             action=action[:50],
             target_entity=target_entity,
+            timestamp=timestamp,
             description=description,
             entity_id=entity_id,
             ip_address=request.client.host if request and request.client else None,
+            extraction_mode=extraction_mode,
+            fallback_reason=fallback_reason,
+            previous_hash=previous_hash,
+            current_hash=current_hash,
         )
     )
+
+
+def public_extraction_payload(extracted: dict[str, Any]) -> dict[str, Any]:
+    """Return only the standardized sectioned OCR result for API/storage use."""
+    sections = extracted.get("sections")
+    if not isinstance(sections, dict):
+        sections = {}
+
+    return {
+        "sections": sections,
+        "extraction_mode": extracted.get("extraction_mode"),
+        "raw_text": extracted.get("raw_text"),
+    }
 
 
 def case_category(record: models.Case) -> str:
@@ -1429,7 +1548,37 @@ def dashboard_staff_workload(user: models.User = Depends(current_user), db: Sess
 @app.post("/api/auth/register", response_model=RegisterResponse)
 def register(payload: RegisterPayload, request: Request, db: Session = Depends(get_db)):
     email = payload.email.lower().strip()
-    if db.query(models.User).filter((models.User.email == email) | (models.User.username == email)).first():
+    existing_user = db.query(models.User).filter(
+        (models.User.email == email) | (models.User.username == email)
+    ).first()
+    if existing_user:
+        if existing_user.approval_status == "rejected":
+            existing_user.role_id = role_id(db, "user")
+            existing_user.full_name = payload.full_name.strip()
+            existing_user.password_hash = hash_password(payload.password)
+            existing_user.approval_status = "pending"
+            existing_user.is_active = True
+            existing_user.profile_picture_path = payload.employee_id_path
+            existing_user.profile_completed = bool(payload.full_name.strip())
+            existing_user.mfa_enabled = False
+            existing_user.mfa_secret = None
+            write_audit(
+                db,
+                existing_user.user_id,
+                "Register",
+                "user",
+                "Rejected registration resubmitted",
+                str(existing_user.user_id),
+                request,
+            )
+            db.commit()
+            return {"message": "Registration resubmitted. Please wait for admin approval."}
+        if existing_user.approval_status == "pending":
+            raise HTTPException(status_code=400, detail="This email already has a pending application")
+        if existing_user.approval_status == "under_review":
+            raise HTTPException(status_code=400, detail="This email is already under review")
+        if existing_user.approval_status == "suspended":
+            raise HTTPException(status_code=400, detail="This email is suspended. Please contact the administrator")
         raise HTTPException(status_code=400, detail="Email is already registered")
 
     is_first_user = db.query(models.User).count() == 0
@@ -1465,6 +1614,7 @@ def register(payload: RegisterPayload, request: Request, db: Session = Depends(g
 def login(
     request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
+    otp_code: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     username = form.username.lower().strip()
@@ -1473,6 +1623,8 @@ def login(
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     if not user.is_active or user.approval_status != "approved":
         raise HTTPException(status_code=401, detail="Account is not approved")
+    if user.mfa_enabled and not verify_totp(user.mfa_secret, otp_code):
+        raise HTTPException(status_code=401, detail="MFA code required")
 
     user.last_login_at = datetime.now()
     write_audit(db, user.user_id, "Login", "user", "User signed in", str(user.user_id), request)
@@ -1483,6 +1635,49 @@ def login(
 @app.get("/api/auth/me")
 def me(user: models.User = Depends(current_user)):
     return user_to_auth(user)
+
+
+@app.post("/api/auth/me/mfa/setup", response_model=MfaSetupResponse)
+def setup_mfa(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    if user.mfa_enabled:
+        raise HTTPException(status_code=400, detail="MFA is already enabled")
+    if not user.mfa_secret:
+        user.mfa_secret = generate_mfa_secret()
+        db.commit()
+    return {"secret": user.mfa_secret, "otpauth_uri": mfa_otpauth_uri(user, user.mfa_secret)}
+
+
+@app.post("/api/auth/me/mfa/enable")
+def enable_mfa(
+    payload: MfaVerifyPayload,
+    request: Request,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.mfa_secret:
+        raise HTTPException(status_code=400, detail="Start MFA setup first")
+    if not verify_totp(user.mfa_secret, payload.code):
+        raise HTTPException(status_code=400, detail="Invalid MFA code")
+    user.mfa_enabled = True
+    write_audit(db, user.user_id, "Enable MFA", "user", "MFA enabled", str(user.user_id), request)
+    db.commit()
+    return {"message": "MFA enabled"}
+
+
+@app.post("/api/auth/me/mfa/disable")
+def disable_mfa(
+    payload: MfaVerifyPayload,
+    request: Request,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    if user.mfa_enabled and not verify_totp(user.mfa_secret, payload.code):
+        raise HTTPException(status_code=400, detail="Invalid MFA code")
+    user.mfa_enabled = False
+    user.mfa_secret = None
+    write_audit(db, user.user_id, "Disable MFA", "user", "MFA disabled", str(user.user_id), request)
+    db.commit()
+    return {"message": "MFA disabled"}
 
 
 @app.post("/api/auth/me/profile-image")
@@ -2031,6 +2226,24 @@ def create_case(
         applicant_role_other=intake_data.get("applicant_role_other"),
         nature_of_request=intake_data.get("nature_of_request"),
         nature_of_case=limit_text(intake_data.get("nature_of_case"), 50),
+        coi_agree_different_office=bool(intake_data.get("coi_agree_different_office")),
+        coi_agree_same_dept_appeal=bool(intake_data.get("coi_agree_same_dept_appeal")),
+        coi_waive_right_to_complain=bool(intake_data.get("coi_waive_right_to_complain")),
+        coi_trust_assigned_counsel=bool(intake_data.get("coi_trust_assigned_counsel")),
+        proof_submission_deadline=parse_date(intake_data.get("proof_submission_deadline")),
+        proof_itr_date=parse_date(intake_data.get("proof_itr_date")),
+        proof_brgy_date=parse_date(intake_data.get("proof_brgy_date")),
+        proof_dswd_date=parse_date(intake_data.get("proof_dswd_date")),
+        proof_others_details=intake_data.get("proof_others_details"),
+        proof_others_date=parse_date(intake_data.get("proof_others_date")),
+        inv_plaintiff=bool(intake_data.get("inv_plaintiff")),
+        inv_defendant=bool(intake_data.get("inv_defendant")),
+        inv_oppositor=bool(intake_data.get("inv_oppositor")),
+        inv_petitioner=bool(intake_data.get("inv_petitioner")),
+        inv_respondent=bool(intake_data.get("inv_respondent")),
+        inv_complainant=bool(intake_data.get("inv_complainant")),
+        inv_accused=bool(intake_data.get("inv_accused")),
+        inv_others=intake_data.get("inv_others"),
     )
     db.add(intake)
     db.flush()
@@ -2088,6 +2301,16 @@ def create_case(
     )
     db.add(record)
     db.flush()
+    db.add(
+        models.CaseHistory(
+            case_id=record.case_id,
+            updated_by=user.user_id,
+            previous_status=None,
+            new_status=record.status_of_case,
+            action_taken=record.last_action_taken or "Case created",
+            remarks="Initial case record",
+        )
+    )
     write_audit(db, user.user_id, "Create Case", "case", f"{user.full_name or user.email or user.username} created Criminal Case #{record.case_id}", str(record.case_id), request)
     db.commit()
     db.refresh(record)
@@ -2207,7 +2430,12 @@ def list_audit_logs(
                 "description": row.description or "",
                 "entity_type": row.target_entity,
                 "entity_id": row.entity_id,
-            }
+                "ip_address": row.ip_address,
+            "extraction_mode": row.extraction_mode,
+            "fallback_reason": row.fallback_reason,
+            "previous_hash": row.previous_hash,
+            "current_hash": row.current_hash,
+        }
         )
     return payload
 
@@ -2222,7 +2450,17 @@ def create_audit_log(
     target = payload.entity_type or payload.module
     if payload.module == "Export" and not target:
         target = "export"
-    write_audit(db, user.user_id, payload.action, target, payload.description, payload.entity_id, request)
+    write_audit(
+        db,
+        user.user_id,
+        payload.action,
+        target,
+        payload.description,
+        payload.entity_id,
+        request,
+        payload.extraction_mode,
+        payload.fallback_reason,
+    )
     db.commit()
     return {"message": "Audit log saved"}
 
@@ -2234,20 +2472,19 @@ async def upload_document(
     file: UploadFile = File(...),
     case_id: int | None = None,
     intake_id: int | None = None,
-    user: models.User = Depends(current_user),
+    extraction_mode: Literal["auto", "offline", "cloud"] = Query(default="auto"),
     db: Session = Depends(get_db),
 ):
     new_document = None
     try:
-        if user_id is not None and user_id != user.user_id and not is_admin(user):
-            raise HTTPException(status_code=403, detail="Cannot upload OCR documents for another user")
-        effective_user_id = user_id if is_admin(user) and user_id is not None else user.user_id
-        if case_id is not None:
-            ensure_case_access(db.get(models.Case, case_id), user)
-        if intake_id is not None and not is_admin(user):
-            intake = db.get(models.IntakeRecord, intake_id)
-            if not intake or intake.interviewer_id != user.user_id:
-                raise HTTPException(status_code=403, detail="Record access denied")
+        uploader = db.get(models.User, user_id)
+        if not uploader:
+            raise HTTPException(status_code=400, detail=f"Uploader user_id {user_id} does not exist")
+        if case_id is not None and not db.get(models.Case, case_id):
+            raise HTTPException(status_code=400, detail=f"Case ID {case_id} does not exist. Save the case before attaching a document.")
+        if intake_id is not None and not db.get(models.IntakeRecord, intake_id):
+            raise HTTPException(status_code=400, detail=f"Intake ID {intake_id} does not exist. Save the intake record before attaching a document.")
+
         original_name = Path(file.filename or "uploaded-document").name
         extension = Path(original_name).suffix.lower()
         if extension not in ALLOWED_EXTENSIONS or file.content_type not in ALLOWED_CONTENT_TYPES:
@@ -2271,16 +2508,17 @@ async def upload_document(
         db.commit()
         db.refresh(new_document)
 
-        extracted_json = process_document(str(file_location))
+        extracted_json = process_document(str(file_location), extraction_mode=extraction_mode)
+        public_extracted_json = public_extraction_payload(extracted_json)
 
         print("\n===== AI EXTRACTION RESULTS =====")
-        print(extracted_json)
+        print(public_extracted_json)
         print("=================================\n")
 
         db.add(
             models.ExtractedMetadata(
                 document_id=new_document.document_id,
-                extracted_json=extracted_json,
+                extracted_json=public_extracted_json,
                 verification_status="PENDING",
             )
         )
@@ -2300,7 +2538,7 @@ async def upload_document(
         return {
             "message": "Document processed successfully!",
             "document_id": new_document.document_id,
-            "extracted_data": extracted_json,
+            "extracted_data": public_extracted_json,
         }
 
     except Exception as exc:
