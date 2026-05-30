@@ -30,6 +30,9 @@ export async function login(payload: LoginPayload): Promise<TokenResponse> {
   const form = new URLSearchParams();
   form.set("username", payload.email);
   form.set("password", payload.password);
+  if (payload.otpCode) {
+    form.set("otp_code", payload.otpCode);
+  }
 
   try {
     const response = await apiClient.post<TokenResponse>("/auth/token", form, {
@@ -71,6 +74,33 @@ export async function removeProfileImage(): Promise<AuthUser> {
     return response.data;
   } catch (error) {
     throw new Error(getErrorMessage(error, "Unable to remove profile image"));
+  }
+}
+
+export async function setupMfa(): Promise<{ secret: string; otpauth_uri: string }> {
+  try {
+    const response = await apiClient.post<{ secret: string; otpauth_uri: string }>("/auth/me/mfa/setup");
+    return response.data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Unable to start MFA setup"));
+  }
+}
+
+export async function enableMfa(code: string): Promise<{ message: string }> {
+  try {
+    const response = await apiClient.post<{ message: string }>("/auth/me/mfa/enable", { code });
+    return response.data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Unable to enable MFA"));
+  }
+}
+
+export async function disableMfa(code: string): Promise<{ message: string }> {
+  try {
+    const response = await apiClient.post<{ message: string }>("/auth/me/mfa/disable", { code });
+    return response.data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Unable to disable MFA"));
   }
 }
 

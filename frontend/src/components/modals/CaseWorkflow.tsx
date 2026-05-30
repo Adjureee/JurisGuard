@@ -14,10 +14,17 @@ import {
   dataUrlToFile,
   extractCaseFromDocument,
   type CaseExtractionResult,
+  type ExtractionEngineMode,
 } from "../../services/documentExtractionService";
-import type { ClientRecord, ExtractionMap, IntakeMethod } from "../../types";
+import type { ClientRecord, ExtractionMap, ExtractionStatus, IntakeMethod } from "../../types";
 
 type CaseOcrPayload = CaseExtractionResult["extracted"];
+
+const extractionEngineLabels: Record<ExtractionEngineMode, string> = {
+  auto: "Auto",
+  offline: "Offline PaddleOCR",
+  cloud: "Cloud Vision",
+};
 
 interface CaseWorkflowProps {
   clients: ClientRecord[];
@@ -42,6 +49,24 @@ const createDefaultValues = (clientId = ""): CaseFormValues => ({
     applicant_role_other: "",
     nature_of_request: "",
     nature_of_case: "",
+    coi_agree_different_office: false,
+    coi_agree_same_dept_appeal: false,
+    coi_waive_right_to_complain: false,
+    coi_trust_assigned_counsel: false,
+    proof_submission_deadline: "",
+    proof_itr_date: "",
+    proof_brgy_date: "",
+    proof_dswd_date: "",
+    proof_others_details: "",
+    proof_others_date: "",
+    inv_plaintiff: false,
+    inv_defendant: false,
+    inv_oppositor: false,
+    inv_petitioner: false,
+    inv_respondent: false,
+    inv_complainant: false,
+    inv_accused: false,
+    inv_others: "",
   },
   representative: {
     rep_name: "",
@@ -93,6 +118,24 @@ const caseOcrFields = [
   "intake_record.applicant_role",
   "intake_record.nature_of_request",
   "intake_record.nature_of_case",
+  "intake_record.coi_agree_different_office",
+  "intake_record.coi_agree_same_dept_appeal",
+  "intake_record.coi_waive_right_to_complain",
+  "intake_record.coi_trust_assigned_counsel",
+  "intake_record.proof_submission_deadline",
+  "intake_record.proof_itr_date",
+  "intake_record.proof_brgy_date",
+  "intake_record.proof_dswd_date",
+  "intake_record.proof_others_details",
+  "intake_record.proof_others_date",
+  "intake_record.inv_plaintiff",
+  "intake_record.inv_defendant",
+  "intake_record.inv_oppositor",
+  "intake_record.inv_petitioner",
+  "intake_record.inv_respondent",
+  "intake_record.inv_complainant",
+  "intake_record.inv_accused",
+  "intake_record.inv_others",
   "representative.rep_name",
   "representative.rep_age",
   "representative.rep_sex",
@@ -178,7 +221,7 @@ function TextInput({
   registration: UseFormRegisterReturn;
   error?: string;
   type?: string;
-  status?: ExtractionMap[string];
+  status?: ExtractionStatus;
 }) {
   return (
     <label className="block">
@@ -205,7 +248,7 @@ function TextArea({
   label: string;
   registration: UseFormRegisterReturn;
   error?: string;
-  status?: ExtractionMap[string];
+  status?: ExtractionStatus;
 }) {
   return (
     <label className="block">
@@ -219,6 +262,30 @@ function TextArea({
         className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
       />
       <FieldError message={error} />
+    </label>
+  );
+}
+
+function CheckboxInput({
+  label,
+  registration,
+  status,
+}: {
+  label: string;
+  registration: UseFormRegisterReturn;
+  status?: ExtractionStatus;
+}) {
+  return (
+    <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#111827]/80">
+      <input
+        type="checkbox"
+        {...registration}
+        className="h-4 w-4 rounded border-[#E5E7EB] text-[#2F80ED] focus:ring-[#2F80ED]"
+      />
+      <span>
+        {label}
+        <FieldStatus status={status} />
+      </span>
     </label>
   );
 }
@@ -335,7 +402,7 @@ export function CaseWorkflow({
 }: CaseWorkflowProps) {
   const addNotification = useNotificationStore((state) => state.addNotification);
   const { user } = useAuth();
-  const [step, setStep] = useState(lockedClient ? 0 : 0);
+  const [step, setStep] = useState(0);
   const [method, setMethod] = useState<IntakeMethod | null>(null);
   const [query, setQuery] = useState("");
   const [activeClientIndex, setActiveClientIndex] = useState(0);
@@ -343,6 +410,7 @@ export function CaseWorkflow({
   const [documentLabel, setDocumentLabel] = useState("");
   const [indicators, setIndicators] = useState<ExtractionMap>({});
   const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionEngine, setExtractionEngine] = useState<ExtractionEngineMode>("auto");
   const [replaceExistingWithOcr, setReplaceExistingWithOcr] = useState(false);
   const [useClientRepresentative, setUseClientRepresentative] = useState(Boolean(lockedClient));
   const {
@@ -479,7 +547,10 @@ export function CaseWorkflow({
     const toastId = toast.loading("Extracting case fields...");
 
     try {
-      const result = await extractCaseFromDocument(file, { userId: user?.user_id });
+      const result = await extractCaseFromDocument(file, {
+        userId: user?.user_id,
+        extractionMode: extractionEngine,
+      });
       setIndicators(result.indicators);
       applyExtractedPayload(result.extracted);
       addNotification({
@@ -689,20 +760,34 @@ export function CaseWorkflow({
             </div>
 
             {method !== "manual" && (
-              <label className="flex items-start gap-3 rounded-lg border border-[#E7D7EE] bg-[#F7F0FA] px-4 py-3 text-sm text-[#5F3675]">
-                <input
-                  type="checkbox"
-                  checked={replaceExistingWithOcr}
-                  onChange={(event) => setReplaceExistingWithOcr(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-[#704389] text-[#704389] focus:ring-[#704389]"
-                />
-                <span>
-                  <span className="block font-semibold">Replace existing fields with scanned values</span>
-                  <span className="mt-1 block text-[#5F3675]">
-                    Leave this off to fill only blank fields. Form Date is always updated from Petsa when the scan finds it.
+              <div className="grid gap-3 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3 text-sm text-[#1E3A8A] md:grid-cols-[minmax(0,1fr)_220px]">
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={replaceExistingWithOcr}
+                    onChange={(event) => setReplaceExistingWithOcr(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-[#2F80ED] text-[#2F80ED] focus:ring-[#2F80ED]"
+                  />
+                  <span>
+                    <span className="block font-semibold">Replace existing fields with scanned values</span>
+                    <span className="mt-1 block text-[#1E40AF]">
+                      Leave this off to fill only blank fields. Form Date is always updated from Petsa when the scan finds it.
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase text-[#1E3A8A]">OCR Engine</span>
+                  <select
+                    value={extractionEngine}
+                    onChange={(event) => setExtractionEngine(event.target.value as ExtractionEngineMode)}
+                    className="mt-1 h-10 w-full rounded-md border border-[#93C5FD] bg-white px-3 text-sm font-semibold text-[#111827] outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+                  >
+                    {Object.entries(extractionEngineLabels).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             )}
 
             {method === "camera" && (
@@ -762,6 +847,28 @@ export function CaseWorkflow({
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
+              <h3 className="text-sm font-semibold text-[#111827]">Conflict of Interest Agreement</h3>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <CheckboxInput label="Different office may assist if conflict exists" registration={register("intake_record.coi_agree_different_office")} status={indicators["intake_record.coi_agree_different_office"]} />
+                <CheckboxInput label="Same department appeal may proceed" registration={register("intake_record.coi_agree_same_dept_appeal")} status={indicators["intake_record.coi_agree_same_dept_appeal"]} />
+                <CheckboxInput label="Waives right to complain on conflict handling" registration={register("intake_record.coi_waive_right_to_complain")} status={indicators["intake_record.coi_waive_right_to_complain"]} />
+                <CheckboxInput label="Trusts assigned counsel" registration={register("intake_record.coi_trust_assigned_counsel")} status={indicators["intake_record.coi_trust_assigned_counsel"]} />
+              </div>
+            </section>
+
+            <section className="border-t border-[#E5E7EB] pt-4">
+              <h3 className="text-sm font-semibold text-[#111827]">Proof of Qualification</h3>
+              <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <TextInput label="Submission Deadline" type="date" registration={register("intake_record.proof_submission_deadline")} error={errors.intake_record?.proof_submission_deadline?.message} status={indicators["intake_record.proof_submission_deadline"]} />
+                <TextInput label="ITR Date" type="date" registration={register("intake_record.proof_itr_date")} error={errors.intake_record?.proof_itr_date?.message} status={indicators["intake_record.proof_itr_date"]} />
+                <TextInput label="Barangay Certification Date" type="date" registration={register("intake_record.proof_brgy_date")} error={errors.intake_record?.proof_brgy_date?.message} status={indicators["intake_record.proof_brgy_date"]} />
+                <TextInput label="DSWD Certification Date" type="date" registration={register("intake_record.proof_dswd_date")} error={errors.intake_record?.proof_dswd_date?.message} status={indicators["intake_record.proof_dswd_date"]} />
+                <TextInput label="Other Proof Date" type="date" registration={register("intake_record.proof_others_date")} error={errors.intake_record?.proof_others_date?.message} status={indicators["intake_record.proof_others_date"]} />
+                <TextInput label="Other Proof Details" registration={register("intake_record.proof_others_details")} error={errors.intake_record?.proof_others_details?.message} status={indicators["intake_record.proof_others_details"]} />
+              </div>
+            </section>
+
+            <section className="border-t border-[#E5E7EB] pt-4">
               <h3 className="text-sm font-semibold text-[#2B3642]">VIII Applicant Case Involvement</h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {[
@@ -791,6 +898,16 @@ export function CaseWorkflow({
                   <TextInput label="Specify Role" registration={register("intake_record.applicant_role_other")} error={errors.intake_record?.applicant_role_other?.message} />
                 </div>
               )}
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <CheckboxInput label="Plaintiff" registration={register("intake_record.inv_plaintiff")} status={indicators["intake_record.inv_plaintiff"]} />
+                <CheckboxInput label="Defendant" registration={register("intake_record.inv_defendant")} status={indicators["intake_record.inv_defendant"]} />
+                <CheckboxInput label="Oppositor" registration={register("intake_record.inv_oppositor")} status={indicators["intake_record.inv_oppositor"]} />
+                <CheckboxInput label="Petitioner" registration={register("intake_record.inv_petitioner")} status={indicators["intake_record.inv_petitioner"]} />
+                <CheckboxInput label="Respondent" registration={register("intake_record.inv_respondent")} status={indicators["intake_record.inv_respondent"]} />
+                <CheckboxInput label="Complainant" registration={register("intake_record.inv_complainant")} status={indicators["intake_record.inv_complainant"]} />
+                <CheckboxInput label="Accused" registration={register("intake_record.inv_accused")} status={indicators["intake_record.inv_accused"]} />
+                <TextInput label="Others" registration={register("intake_record.inv_others")} error={errors.intake_record?.inv_others?.message} status={indicators["intake_record.inv_others"]} />
+              </div>
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
