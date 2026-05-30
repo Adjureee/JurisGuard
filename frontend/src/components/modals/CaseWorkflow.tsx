@@ -788,20 +788,6 @@ export function CaseWorkflow({
                   </select>
                 </label>
               </div>
-              <label className="flex items-start gap-3 rounded-lg border border-[#E7D7EE] bg-[#F7F0FA] px-4 py-3 text-sm text-[#5F3675]">
-                <input
-                  type="checkbox"
-                  checked={replaceExistingWithOcr}
-                  onChange={(event) => setReplaceExistingWithOcr(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-[#704389] text-[#704389] focus:ring-[#704389]"
-                />
-                <span>
-                  <span className="block font-semibold">Replace existing fields with scanned values</span>
-                  <span className="mt-1 block text-[#5F3675]">
-                    Leave this off to fill only blank fields. Form Date is always updated from Petsa when the scan finds it.
-                  </span>
-                </span>
-              </label>
             )}
 
             {method === "camera" && (

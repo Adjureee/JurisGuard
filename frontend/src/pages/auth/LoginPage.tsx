@@ -24,6 +24,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otpCode, setOtpCode] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [showMfaCode, setShowMfaCode] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(unauthorizedMessage);
