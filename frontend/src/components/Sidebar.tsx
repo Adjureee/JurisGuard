@@ -49,6 +49,14 @@ function ArchiveIcon() {
   );
 }
 
+function SubmissionIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
+      <path fill="currentColor" d="M4 2h8l4 4v12H4V2Zm7 1.5V7h3.5L11 3.5ZM7 9h6v1.5H7V9Zm0 3h6v1.5H7V12Zm0 3h4v1.5H7V15Z" />
+    </svg>
+  );
+}
+
 const navigation = [
   { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
   { label: "Criminal Cases", path: "/cases", icon: <GavelIcon /> },
@@ -77,6 +85,11 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const manageNavigation = [
     navigation[1],
     navigation[2],
+    {
+      label: user?.role === "admin" ? "Case Review Center" : "Case Submissions",
+      path: user?.role === "admin" ? "/case-review-center" : "/case-submissions",
+      icon: <SubmissionIcon />,
+    },
     ...(user?.role === "admin" ? [{ label: "Verification", path: "/admin/verification", icon: <ShieldIcon /> }] : []),
   ];
   const recordsNavigation = [navigation[3]];

@@ -6,6 +6,7 @@ import { useNotificationStore } from "../../features/notifications/notificationS
 import { createAuditLog } from "../../services/auditService";
 import {
   buildCriminalCasesCsv,
+  buildCriminalCasesExcelHtml,
   downloadCsv,
   filterCriminalCaseRows,
   type CriminalCaseExportFilterDto,
@@ -44,22 +45,6 @@ function downloadText(filename: string, content: string, type: string) {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
-}
-
-function tableCell(value: string | number | undefined | null) {
-  return String(value ?? "").replace(/[<>&]/g, (char) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[char] ?? char));
-}
-
-function buildInventoryTable(rows: CriminalCaseRow[]) {
-  const headers = ["Control No.", "Client", "Status", "Barangay", "Category", "Date", "Termination", "Staff"];
-  const body = rows
-    .map(({ record, clientName }) => {
-      const termination = record.cases.is_terminated || record.cases.status_of_case === "Terminated" ? "Terminated" : "Active";
-      const staff = record.created_by_user_id === null ? "Unassigned" : `User #${record.created_by_user_id}`;
-      return `<tr><td>${tableCell(record.intake_record.control_no)}</td><td>${tableCell(clientName)}</td><td>${tableCell(record.cases.status_of_case)}</td><td>${tableCell(record.cases.incident_barangay)}</td><td>${tableCell(record.cases.cause_of_action || record.intake_record.nature_of_case)}</td><td>${tableCell(record.intake_record.form_date || record.last_updated)}</td><td>${tableCell(termination)}</td><td>${tableCell(staff)}</td></tr>`;
-    })
-    .join("");
-  return `<!doctype html><html><head><meta charset="utf-8" /><style>body{font-family:Arial,sans-serif;color:#2B3642}table{border-collapse:collapse;width:100%}th{background:#E9EEF3;text-transform:uppercase;letter-spacing:.04em}th,td{border:1px solid #D6DEE7;padding:8px;font-size:12px}</style></head><body><h2>JurisGuard Criminal Cases Export</h2><table><thead><tr>${headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></body></html>`;
 }
 
 export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModalProps) {
@@ -106,7 +91,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
         const csv = buildCriminalCasesCsv(rows, filters);
         downloadCsv(`jurisguard-criminal-cases_${stamp}.csv`, csv);
       } else {
-        downloadText(`jurisguard-criminal-cases_${stamp}.xls`, buildInventoryTable(exportRows), "application/vnd.ms-excel;charset=utf-8");
+        downloadText(`jurisguard-criminal-cases_${stamp}.xls`, buildCriminalCasesExcelHtml(rows, filters), "application/vnd.ms-excel;charset=utf-8");
       }
       addLog({
         userId: user?.user_id,

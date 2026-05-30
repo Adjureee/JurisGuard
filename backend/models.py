@@ -282,3 +282,53 @@ class AuditLog(Base):
     entity_id = Column(String(100))
 
     user = relationship("User")
+
+
+class CaseSubmission(Base):
+    __tablename__ = "case_submission"
+
+    submission_id = Column(Integer, primary_key=True, index=True)
+    staff_id = Column(Integer, ForeignKey("user.user_id"), nullable=False)
+    title = Column(String(255), nullable=False)
+    date_from = Column(DateTime, nullable=False)
+    date_to = Column(DateTime, nullable=False)
+    status = Column(String(40), nullable=False, default="Draft")
+    version = Column(Integer, nullable=False, default=1)
+    parent_submission_id = Column(Integer, ForeignKey("case_submission.submission_id"))
+    notes = Column(Text)
+    submitted_at = Column(DateTime)
+    approved_at = Column(DateTime)
+    reviewed_by = Column(Integer, ForeignKey("user.user_id"))
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+
+    staff = relationship("User", foreign_keys=[staff_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    items = relationship("CaseSubmissionItem", back_populates="submission", cascade="all, delete-orphan")
+    feedback = relationship("SubmissionFeedback", back_populates="submission", cascade="all, delete-orphan")
+
+
+class CaseSubmissionItem(Base):
+    __tablename__ = "case_submission_item"
+
+    submission_item_id = Column(Integer, primary_key=True, index=True)
+    submission_id = Column(Integer, ForeignKey("case_submission.submission_id"), nullable=False)
+    case_id = Column(Integer, ForeignKey("case.case_id"), nullable=False)
+    snapshot_json = Column(JSONB, nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    submission = relationship("CaseSubmission", back_populates="items")
+    case = relationship("Case")
+
+
+class SubmissionFeedback(Base):
+    __tablename__ = "submission_feedback"
+
+    feedback_id = Column(Integer, primary_key=True, index=True)
+    submission_id = Column(Integer, ForeignKey("case_submission.submission_id"), nullable=False)
+    reviewer_id = Column(Integer, ForeignKey("user.user_id"), nullable=False)
+    comments = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    submission = relationship("CaseSubmission", back_populates="feedback")
+    reviewer = relationship("User")

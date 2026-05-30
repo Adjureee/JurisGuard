@@ -7,6 +7,8 @@ import {
   useNotificationStore,
   type NotificationType,
 } from "../../features/notifications/notificationStore";
+import { listApplicants } from "../../services/adminService";
+import { listCaseSubmissions } from "../../services/caseSubmissionService";
 
 interface TopbarProps {
   onToggleSidebar: () => void;
@@ -69,6 +71,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   const { user, logout } = useAuth();
   const addLog = useAuditLogStore((state) => state.addLog);
   const notifications = useNotificationStore((state) => state.notifications);
+  const addNotification = useNotificationStore((state) => state.addNotification);
   const markRead = useNotificationStore((state) => state.markRead);
   const markAllRead = useNotificationStore((state) => state.markAllRead);
   const removeNotification = useNotificationStore((state) => state.removeNotification);
@@ -109,6 +112,95 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  useEffect(() => {
+    if (user?.role !== "admin") return;
+    let cancelled = false;
+
+    async function syncPendingRegistrations() {
+      try {
+        const pendingUsers = await listApplicants("pending");
+        if (cancelled) return;
+        pendingUsers.forEach((pendingUser) => {
+          addNotification({
+            type: "new_registration",
+            targetRole: "admin",
+            title: "New Registration",
+            message: `New registration pending approval: ${pendingUser.full_name || pendingUser.email}`,
+            redirectTo: "/admin/verification",
+            entityType: "user_registration",
+            entityId: String(pendingUser.user_id),
+          });
+        });
+      } catch {
+        // Registration notifications are opportunistic; page rendering should not depend on them.
+      }
+    }
+
+    void syncPendingRegistrations();
+    const interval = window.setInterval(syncPendingRegistrations, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [addNotification, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const currentUser = user;
+
+    async function syncSubmissionNotifications() {
+      try {
+        const submissions = await listCaseSubmissions();
+        if (cancelled) return;
+        submissions.forEach((submission) => {
+          if (currentUser.role === "admin" && (submission.status === "Submitted" || submission.status === "Resubmitted")) {
+            addNotification({
+              type: "workflow",
+              targetRole: "admin",
+              title: submission.version > 1 ? "Submission Resubmitted" : "New Submission Received",
+              message: `${submission.staff_name} submitted ${submission.title}`,
+              redirectTo: "/case-review-center",
+              entityType: "case_submission",
+              entityId: `${submission.submission_id}-${submission.status}-v${submission.version}`,
+            });
+          }
+          if (currentUser.role === "staff" && submission.status === "Correction Required") {
+            addNotification({
+              type: "workflow",
+              userId: currentUser.user_id,
+              title: "Submission Requires Correction",
+              message: `${submission.title} needs correction.`,
+              redirectTo: "/case-submissions",
+              entityType: "case_submission",
+              entityId: `${submission.submission_id}-${submission.status}`,
+            });
+          }
+          if (currentUser.role === "staff" && submission.status === "Approved") {
+            addNotification({
+              type: "workflow",
+              userId: currentUser.user_id,
+              title: "Submission Approved",
+              message: `${submission.title} has been approved.`,
+              redirectTo: "/case-submissions",
+              entityType: "case_submission",
+              entityId: `${submission.submission_id}-${submission.status}`,
+            });
+          }
+        });
+      } catch {
+        // Workflow notifications should not block the shell.
+      }
+    }
+
+    void syncSubmissionNotifications();
+    const interval = window.setInterval(syncSubmissionNotifications, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [addNotification, user]);
 
   const handleLogout = () => {
     addLog({
