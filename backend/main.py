@@ -295,6 +295,49 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE case_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS entity_id VARCHAR(100)",
+        """
+        CREATE TABLE IF NOT EXISTS case_submission (
+            submission_id SERIAL PRIMARY KEY,
+            parent_submission_id INTEGER REFERENCES case_submission(submission_id),
+            staff_id INTEGER NOT NULL REFERENCES "user"(user_id),
+            title TEXT NOT NULL,
+            date_from TIMESTAMP NOT NULL,
+            date_to TIMESTAMP NOT NULL,
+            status VARCHAR(30) NOT NULL DEFAULT 'Draft',
+            version INTEGER NOT NULL DEFAULT 1,
+            notes TEXT,
+            submitted_at TIMESTAMP,
+            approved_at TIMESTAMP,
+            reviewed_by INTEGER REFERENCES "user"(user_id),
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_case_submission_submission_id ON case_submission (submission_id)",
+        "CREATE INDEX IF NOT EXISTS ix_case_submission_staff_id ON case_submission (staff_id)",
+        "CREATE INDEX IF NOT EXISTS ix_case_submission_status ON case_submission (status)",
+        """
+        CREATE TABLE IF NOT EXISTS case_submission_item (
+            submission_item_id SERIAL PRIMARY KEY,
+            submission_id INTEGER NOT NULL REFERENCES case_submission(submission_id),
+            case_id INTEGER NOT NULL REFERENCES "case"(case_id),
+            snapshot_json JSONB NOT NULL
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_case_submission_item_submission_item_id ON case_submission_item (submission_item_id)",
+        "CREATE INDEX IF NOT EXISTS ix_case_submission_item_submission_id ON case_submission_item (submission_id)",
+        "CREATE INDEX IF NOT EXISTS ix_case_submission_item_case_id ON case_submission_item (case_id)",
+        """
+        CREATE TABLE IF NOT EXISTS submission_feedback (
+            feedback_id SERIAL PRIMARY KEY,
+            submission_id INTEGER NOT NULL REFERENCES case_submission(submission_id),
+            reviewer_id INTEGER NOT NULL REFERENCES "user"(user_id),
+            comments TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_submission_feedback_feedback_id ON submission_feedback (feedback_id)",
+        "CREATE INDEX IF NOT EXISTS ix_submission_feedback_submission_id ON submission_feedback (submission_id)",
     ]
     with engine.begin() as connection:
         for statement in statements:

@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
 import {
   getBarangayStats,
   getCaseCategories,
@@ -177,9 +176,6 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
         setActivities([]);
         setIntakeLoad(safeIntakeLoad(getSettledValue(intakeLoadResult, emptyIntakeLoad, "intake load")));
         setOcrAnalytics(safeOcrAnalytics(getSettledValue(ocrResult, emptyOcrAnalytics, "OCR analytics")));
-        if (results.some((result) => result.status === "rejected")) {
-          toast.error("Some dashboard summary widgets could not refresh.");
-        }
         setIsLoading(false);
         return;
       }
@@ -216,9 +212,6 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
       setActivities(safeArray<RecentActivity>(getSettledValue(activityResult, [], "recent activities")));
       setIntakeLoad(safeIntakeLoad(getSettledValue(intakeLoadResult, emptyIntakeLoad, "intake load")));
       setOcrAnalytics(safeOcrAnalytics(getSettledValue(ocrResult, emptyOcrAnalytics, "OCR analytics")));
-      if (results.some((result) => result.status === "rejected")) {
-        toast.error("Some dashboard widgets could not refresh.");
-      }
       setIsLoading(false);
     }
     void loadDashboard();

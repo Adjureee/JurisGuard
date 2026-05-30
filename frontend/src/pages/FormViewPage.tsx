@@ -5,15 +5,22 @@ import MainLayout from "../layouts/MainLayout";
 import PrintableFormEnglish from "../components/printable/PrintableFormEnglish";
 import PrintableFormFilipino from "../components/printable/PrintableFormFilipino";
 import { getPrintableIntake, type PrintableIntakeResponse } from "../services/recordService";
-import type { PrintableFormLanguage } from "../components/printable/officialFormHydrator";
+import {
+  hydrateOfficialTemplate,
+  type PrintableFormLanguage,
+} from "../components/printable/officialFormHydrator";
 
 export default function FormViewPage() {
   const { caseId = "" } = useParams();
   const [searchParams] = useSearchParams();
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const printRootRef = useRef<HTMLDivElement>(null);
   const [language, setLanguage] = useState<PrintableFormLanguage>("english");
   const [data, setData] = useState<PrintableIntakeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [frameReady, setFrameReady] = useState(false);
+  const autoPrint = searchParams.get("autoPrint") === "1";
+  const autoPrintDoneRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,15 +42,6 @@ export default function FormViewPage() {
     };
   }, [caseId]);
 
-  useEffect(() => {
-    if (!data || searchParams.get("print") !== "1") return;
-    const timeout = window.setTimeout(() => {
-      frameRef.current?.contentWindow?.focus();
-      frameRef.current?.contentWindow?.print();
-    }, 600);
-    return () => window.clearTimeout(timeout);
-  }, [data, language, searchParams]);
-
   const printableData = useMemo(() => {
     if (!data) return null;
     return {
@@ -53,14 +51,84 @@ export default function FormViewPage() {
     };
   }, [data]);
 
-  const printForm = () => {
-    frameRef.current?.contentWindow?.focus();
-    frameRef.current?.contentWindow?.print();
+  const activeTemplate = data
+    ? language === "english"
+      ? data.templates.english
+      : data.templates.filipino
+    : "";
+
+  const printMarkup = useMemo(() => {
+    if (!printableData || !activeTemplate) return "";
+    const hydrated = hydrateOfficialTemplate(activeTemplate, printableData, language);
+    const doc = new DOMParser().parseFromString(hydrated, "text/html");
+    const styles = Array.from(doc.head.querySelectorAll("style"))
+      .map((style) => style.outerHTML)
+      .join("\n");
+    return `${styles}\n${doc.body.innerHTML}`;
+  }, [activeTemplate, language, printableData]);
+
+  const waitForPrintAssets = async () => {
+    const printRoot = printRootRef.current;
+    if (!printRoot) return;
+
+    const pendingImages = Array.from(printRoot.querySelectorAll("img")).filter(
+      (image) => !image.complete,
+    );
+
+    if (pendingImages.length === 0) return;
+
+    await Promise.race([
+      Promise.all(
+        pendingImages.map(
+          (image) =>
+            new Promise<void>((resolve) => {
+              image.addEventListener("load", () => resolve(), { once: true });
+              image.addEventListener("error", () => resolve(), { once: true });
+            }),
+        ),
+      ),
+      new Promise<void>((resolve) => window.setTimeout(resolve, 1000)),
+    ]);
   };
 
+  const printPreview = async () => {
+    if (!printMarkup) {
+      toast.error("Printable form is still loading. Please try again.");
+      return;
+    }
+
+    await waitForPrintAssets();
+    window.print();
+  };
+
+  useEffect(() => {
+    setFrameReady(false);
+  }, [data, language]);
+
+  useEffect(() => {
+    const requestedLanguage = searchParams.get("language");
+    if (requestedLanguage === "english" || requestedLanguage === "filipino") {
+      setLanguage(requestedLanguage);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    autoPrintDoneRef.current = false;
+  }, [autoPrint, caseId]);
+
+  useEffect(() => {
+    if (!autoPrint || !printMarkup || autoPrintDoneRef.current) return;
+    autoPrintDoneRef.current = true;
+    const timeout = window.setTimeout(() => {
+      void printPreview();
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [autoPrint, printMarkup]);
+
   return (
-    <MainLayout>
-      <div className="mb-4 flex flex-col gap-3 print:hidden lg:flex-row lg:items-center lg:justify-between">
+    <>
+      <MainLayout>
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-sm font-semibold text-[#704389]">Official PAO Intake Form</p>
           <h1 className="text-2xl font-bold text-[#2B3642]">
@@ -93,11 +161,11 @@ export default function FormViewPage() {
           </div>
           <button
             type="button"
-            onClick={printForm}
-            disabled={!data}
+            onClick={printPreview}
+            disabled={!data || !printMarkup}
             className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#5F3675] disabled:opacity-50"
           >
-            Print Form
+            {printMarkup ? "Print Form" : "Preparing Form..."}
           </button>
           <Link
             to="/criminal-cases"
@@ -116,12 +184,14 @@ export default function FormViewPage() {
             ref={frameRef}
             template={data.templates.english}
             data={printableData}
+            onReady={() => setFrameReady(true)}
           />
         ) : (
           <PrintableFormFilipino
             ref={frameRef}
             template={data.templates.filipino}
             data={printableData}
+            onReady={() => setFrameReady(true)}
           />
         )
       ) : (
@@ -129,7 +199,13 @@ export default function FormViewPage() {
           Printable form data could not be loaded.
         </div>
       )}
-    </MainLayout>
+      </MainLayout>
+      <div
+        ref={printRootRef}
+        className="jurisguard-print-root"
+        dangerouslySetInnerHTML={{ __html: printMarkup }}
+      />
+    </>
   );
 }
 

@@ -5,11 +5,12 @@ import type { PrintableFormData } from "./officialFormHydrator";
 interface PrintableFormFilipinoProps {
   template: string;
   data: PrintableFormData;
+  onReady?: () => void;
 }
 
 const PrintableFormFilipino = forwardRef<HTMLIFrameElement, PrintableFormFilipinoProps>(
-  ({ template, data }, ref) => (
-    <OfficialFormFrame ref={ref} template={template} data={data} language="filipino" />
+  ({ template, data, onReady }, ref) => (
+    <OfficialFormFrame ref={ref} template={template} data={data} language="filipino" onReady={onReady} />
   )
 );
 

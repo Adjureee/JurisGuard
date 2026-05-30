@@ -38,3 +38,41 @@ textarea {
     transform: translateY(0) scale(1);
   }
 }
+
+.jurisguard-print-root {
+  height: 0;
+  left: -10000px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: 8in;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .jurisguard-print-root,
+  .jurisguard-print-root * {
+    visibility: visible !important;
+  }
+
+  .jurisguard-print-root {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    height: auto;
+    left: 0;
+    opacity: 1;
+    overflow: visible;
+    pointer-events: auto;
+    position: absolute;
+    top: 0;
+    width: 100%;
+  }
+
+}
