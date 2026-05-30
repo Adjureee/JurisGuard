@@ -623,10 +623,11 @@ def limit_text(value: Any, max_length: int, fallback: str | None = None) -> str 
 
 
 def user_to_auth(user: models.User) -> dict[str, Any]:
+    role_name = "admin" if is_admin_role(user.role) else "staff"
     return {
         "user_id": user.user_id,
         "email": user.email or user.username,
-        "role": "admin" if role_name == "admin" else "staff",
+        "role": role_name,
         "approval_status": user.approval_status,
         "full_name": user.full_name or "",
         "mfa_enabled": bool(user.mfa_enabled),
