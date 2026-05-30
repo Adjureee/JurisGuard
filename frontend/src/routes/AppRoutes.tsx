@@ -6,6 +6,7 @@ import VerificationPage from "../pages/admin/VerificationPage";
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import AuditLogsPage from "../pages/AuditLogsPage";
+import CaseSubmissionsPage from "../pages/CaseSubmissionsPage";
 import CriminalCases from "../pages/CriminalCases";
 import Dashboard from "../pages/Dashboard";
 import FormViewPage from "../pages/FormViewPage";
@@ -86,6 +87,22 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <TerminatedCasesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/case-submissions"
+          element={
+            <ProtectedRoute>
+              <CaseSubmissionsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/case-review-center"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <CaseSubmissionsPage />
             </ProtectedRoute>
           }
         />

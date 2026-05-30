@@ -47,7 +47,7 @@ export default function LoginPage() {
         entityType: "user",
         entityId: String(user.user_id),
       });
-      navigate(state?.from?.pathname ?? "/dashboard", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       logout();
       const message = err instanceof Error ? err.message : "Login failed";

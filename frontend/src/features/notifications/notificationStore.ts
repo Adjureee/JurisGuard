@@ -101,6 +101,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const duplicate = get().notifications.find(
       (item) =>
         item.type === notification.type &&
+        item.title === (notification.title || defaultTitle(notification.type)) &&
         item.entity_id &&
         item.entity_id === notification.entityId &&
         item.target_role === notification.targetRole

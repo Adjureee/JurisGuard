@@ -213,6 +213,52 @@ export function buildCriminalCasesCsv(
   ].join("\n");
 }
 
+function htmlCell(value: string | number | undefined | null) {
+  return String(value ?? "").replace(/[<>&]/g, (char) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[char] ?? char));
+}
+
+export function buildCriminalCasesExcelHtml(
+  rows: CriminalCaseRow[],
+  filters: CriminalCaseExportFilterDto
+) {
+  const parsedFilters = criminalCaseExportFilterSchema.parse(filters);
+  const filteredRows = filterCriminalCaseRows(rows, parsedFilters);
+  const headers = [...PAO_INVENTORY_HEADERS];
+  const body = filteredRows
+    .map(({ record, client }) => {
+      const values = [
+        record.intake_record.control_no,
+        record.intake_record.party_represented,
+        client?.client.sex,
+        record.cases.title_of_case,
+        record.cases.court_body,
+        record.cases.case_no,
+        record.cases.cause_of_action,
+        record.cases.status_of_case,
+        record.cases.last_action_taken,
+        record.cases.cause_of_termination,
+        record.cases.date_of_termination,
+        client?.client.age,
+        boolFlag(client?.client_classification.flag_urban),
+        boolFlag(client?.client_classification.flag_rural),
+        boolFlag(client?.client_classification.flag_drugs),
+        boolFlag(client?.client_classification.flag_senior),
+        boolFlag(client?.client_classification.flag_cicl),
+        record.cases.date_of_confinement,
+        record.cases.place_of_detention,
+        record.intake_record.form_date,
+        client?.client_details.address,
+        client?.client_details.contact_no,
+        record.representative.relationship_to_applicant ||
+          client?.client_details.representative_relationship,
+      ];
+      return `<tr>${values.map((value) => `<td>${htmlCell(value)}</td>`).join("")}</tr>`;
+    })
+    .join("");
+
+  return `<!doctype html><html><head><meta charset="utf-8" /><style>body{font-family:Arial,sans-serif;color:#2B3642}table{border-collapse:collapse;width:100%}th{background:#E9EEF3;text-transform:uppercase;letter-spacing:.04em}th,td{border:1px solid #D6DEE7;padding:8px;font-size:12px}.title{text-align:center;font-weight:700}</style></head><body><p class="title">REPUBLIKA NG PILIPINAS</p><p class="title">KAGAWARAN NG KATARUNGAN</p><p class="title">TANGGAPAN NG MANANANGGOL PAMBAYAN</p><p class="title">(PUBLIC ATTORNEY'S OFFICE)</p><p class="title">Regional Office No. XI</p><p class="title">Panabo City District Office</p><p class="title">YEAR-END INVENTORY OF CASES</p><p class="title">As of ${htmlCell(formatAsOfDate())}</p><table><thead><tr>${headers.map((header) => `<th>${htmlCell(header)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></body></html>`;
+}
+
 export function downloadCsv(filename: string, csv: string) {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
