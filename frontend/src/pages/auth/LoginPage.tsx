@@ -128,23 +128,6 @@ export default function LoginPage() {
                 Show Password
               </label>
 
-              {showMfaCode && (
-                <label className="block">
-                  <span className="text-sm font-medium text-[#111827]">
-                    Authenticator Code
-                  </span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    className="mt-1.5 h-11 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none transition placeholder-gray-400 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/15"
-                    value={otpCode}
-                    onChange={(event) => setOtpCode(event.target.value)}
-                    autoComplete="one-time-code"
-                    placeholder="Enter 6-digit code"
-                  />
-                </label>
-              )}
-
               {error && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
                   {error}
