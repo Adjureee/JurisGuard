@@ -41,10 +41,12 @@ function initials(name: string, email: string) {
 
 function formatDate(value: string | null) {
   if (!value) return "Not yet";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not yet";
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function Field({ label, value }: { label: string; value: string }) {

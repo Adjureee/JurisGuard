@@ -18,5 +18,5 @@
     "jsx": "react-jsx"
   },
   "include": ["src"],
-  "exclude": ["src/**/* - Copy.*"]
+  "exclude": ["src/**/* - Copy.*", "src/**/* - Copy.ts", "src/**/* - Copy.tsx"]
 }
