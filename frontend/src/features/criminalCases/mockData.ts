@@ -1,4 +1,4 @@
-import type { ClientRecord, CriminalCaseRecord } from "../../types";
+import type { ClientRecord, CriminalCaseRecord, IntakeRecord } from "../../types";
 
 export const mockClients: ClientRecord[] = [
   {
@@ -119,6 +119,47 @@ export const mockClients: ClientRecord[] = [
   },
 ];
 
+const defaultIntakeRecordExtras: Pick<
+  IntakeRecord,
+  | "coi_agree_different_office"
+  | "coi_agree_same_dept_appeal"
+  | "coi_waive_right_to_complain"
+  | "coi_trust_assigned_counsel"
+  | "proof_submission_deadline"
+  | "proof_itr_date"
+  | "proof_brgy_date"
+  | "proof_dswd_date"
+  | "proof_others_details"
+  | "proof_others_date"
+  | "inv_plaintiff"
+  | "inv_defendant"
+  | "inv_oppositor"
+  | "inv_petitioner"
+  | "inv_respondent"
+  | "inv_complainant"
+  | "inv_accused"
+  | "inv_others"
+> = {
+  coi_agree_different_office: false,
+  coi_agree_same_dept_appeal: false,
+  coi_waive_right_to_complain: false,
+  coi_trust_assigned_counsel: false,
+  proof_submission_deadline: "",
+  proof_itr_date: "",
+  proof_brgy_date: "",
+  proof_dswd_date: "",
+  proof_others_details: "",
+  proof_others_date: "",
+  inv_plaintiff: false,
+  inv_defendant: false,
+  inv_oppositor: false,
+  inv_petitioner: false,
+  inv_respondent: false,
+  inv_complainant: false,
+  inv_accused: true,
+  inv_others: "",
+};
+
 export const mockCases: CriminalCaseRecord[] = [
   {
     case_id: "CASE-2026-001",
@@ -134,6 +175,7 @@ export const mockCases: CriminalCaseRecord[] = [
       applicant_role_other: "",
       nature_of_request: "Legal representation",
       nature_of_case: "Criminal",
+      ...defaultIntakeRecordExtras,
     },
     representative: {
       rep_name: "Jose Santos",
@@ -180,6 +222,7 @@ export const mockCases: CriminalCaseRecord[] = [
       applicant_role_other: "",
       nature_of_request: "Custodial assistance",
       nature_of_case: "Criminal",
+      ...defaultIntakeRecordExtras,
     },
     representative: {
       rep_name: "Ana Dela Cruz",
@@ -226,6 +269,7 @@ export const mockCases: CriminalCaseRecord[] = [
       applicant_role_other: "",
       nature_of_request: "Representation",
       nature_of_case: "Criminal",
+      ...defaultIntakeRecordExtras,
     },
     representative: {
       rep_name: "Ana Dela Cruz",
