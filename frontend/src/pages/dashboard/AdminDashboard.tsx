@@ -67,23 +67,23 @@ export default function AdminDashboard() {
 
   return (
     <MainLayout>
-      <div className="relative mb-6 overflow-hidden rounded-xl border border-[#E5E7EB] bg-white px-6 py-6 shadow-sm">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">PAO Panabo Command Center</p>
-            <h1 className="mt-2 text-3xl font-bold text-[#111827]">Executive Operations Dashboard</h1>
-            <p className="mt-3 max-w-3xl text-sm font-medium leading-6 text-[#6B7280]">
-              A focused command snapshot for client volume, active workload, closures, monthly intake, and OCR digitization from the live JurisGuard database.
-            </p>
-          </div>
-          <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Operational posture</p>
-            <p className="mt-1 text-lg font-bold text-[#111827]">Live legal intelligence</p>
-            <Link to="/analytics" className="mt-3 inline-flex text-sm font-semibold text-[#704389] underline-offset-4 hover:underline">
-              Open analytics workspace
-            </Link>
-          </div>
+      <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <h2 className="text-3xl font-semibold text-[#2B3642]">
+            Operations Overview
+          </h2>
+          <nav className="mt-1 flex items-center gap-2 text-sm text-[#4B5563]">
+            <span>Dashboard</span>
+            <span>/</span>
+            <span className="text-[#2B3642]">Overview</span>
+          </nav>
         </div>
+        <Link
+          to="/analytics"
+          className="inline-flex h-10 items-center justify-center rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]"
+        >
+          Open Analytics
+        </Link>
       </div>
 
       {isLoading && !overview ? (
@@ -117,10 +117,10 @@ export default function AdminDashboard() {
           </div>
         </AnalyticsPanel>
 
-        <section className="flex flex-col justify-between rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm ">
+        <section className="flex flex-col justify-between rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">Deep analytics</p>
-            <h2 className="mt-2 text-xl font-bold text-[#2B3642]">Charts, map, OCR, audit, and export tools</h2>
+            <p className="text-sm font-semibold text-[#704389]">Deep Analytics</p>
+            <h2 className="mt-1 text-xl font-semibold text-[#2B3642]">Charts, map, OCR, audit, and export tools</h2>
             <p className="mt-3 text-sm font-medium leading-6 text-[#4B5563]">
               Open the dedicated analytics workspace when you need detailed barangay hotspots, intake trends, category distribution, staff activity, or export-ready datasets.
             </p>

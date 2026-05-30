@@ -21,6 +21,20 @@ import {
   type TerminatedDashboardStats,
 } from "../../services/dashboardService";
 
+interface DashboardAnalyticsSnapshot {
+  activities: RecentActivity[];
+  barangays: BarangayStat[];
+  caseCategories: CaseCategoryStat[];
+  heatmap: HeatmapResponse | null;
+  intakeLoad: IntakeLoadAnalytics | null;
+  monthlyTrends: MonthlyTrend[];
+  ocrAnalytics: OcrAnalytics | null;
+  overview: DashboardOverview | null;
+  terminatedStats: TerminatedDashboardStats | null;
+}
+
+const analyticsCache = new Map<string, DashboardAnalyticsSnapshot>();
+
 export const emptyOverview: DashboardOverview = {
   total_clients: 0,
   total_cases: 0,
@@ -141,22 +155,58 @@ function safeOcrAnalytics(value: unknown): OcrAnalytics {
   };
 }
 
+function analyticsCacheKey(deep: boolean, dateRange?: DashboardDateRange) {
+  return JSON.stringify({
+    deep,
+    dateFrom: dateRange?.dateFrom ?? "",
+    dateTo: dateRange?.dateTo ?? "",
+  });
+}
+
+function emptySnapshot(): DashboardAnalyticsSnapshot {
+  return {
+    activities: [],
+    barangays: [],
+    caseCategories: [],
+    heatmap: null,
+    intakeLoad: null,
+    monthlyTrends: [],
+    ocrAnalytics: null,
+    overview: null,
+    terminatedStats: null,
+  };
+}
+
 export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boolean; dateRange?: DashboardDateRange } = {}) {
-  const [overview, setOverview] = useState<DashboardOverview | null>(null);
-  const [monthlyTrends, setMonthlyTrends] = useState<MonthlyTrend[]>([]);
-  const [caseCategories, setCaseCategories] = useState<CaseCategoryStat[]>([]);
-  const [barangays, setBarangays] = useState<BarangayStat[]>([]);
-  const [heatmap, setHeatmap] = useState<HeatmapResponse | null>(null);
-  const [terminatedStats, setTerminatedStats] = useState<TerminatedDashboardStats | null>(null);
-  const [activities, setActivities] = useState<RecentActivity[]>([]);
-  const [intakeLoad, setIntakeLoad] = useState<IntakeLoadAnalytics | null>(null);
-  const [ocrAnalytics, setOcrAnalytics] = useState<OcrAnalytics | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const cacheKey = analyticsCacheKey(deep, dateRange);
+  const initialSnapshot = analyticsCache.get(cacheKey) ?? emptySnapshot();
+  const [overview, setOverview] = useState<DashboardOverview | null>(initialSnapshot.overview);
+  const [monthlyTrends, setMonthlyTrends] = useState<MonthlyTrend[]>(initialSnapshot.monthlyTrends);
+  const [caseCategories, setCaseCategories] = useState<CaseCategoryStat[]>(initialSnapshot.caseCategories);
+  const [barangays, setBarangays] = useState<BarangayStat[]>(initialSnapshot.barangays);
+  const [heatmap, setHeatmap] = useState<HeatmapResponse | null>(initialSnapshot.heatmap);
+  const [terminatedStats, setTerminatedStats] = useState<TerminatedDashboardStats | null>(initialSnapshot.terminatedStats);
+  const [activities, setActivities] = useState<RecentActivity[]>(initialSnapshot.activities);
+  const [intakeLoad, setIntakeLoad] = useState<IntakeLoadAnalytics | null>(initialSnapshot.intakeLoad);
+  const [ocrAnalytics, setOcrAnalytics] = useState<OcrAnalytics | null>(initialSnapshot.ocrAnalytics);
+  const [isLoading, setIsLoading] = useState(!analyticsCache.has(cacheKey));
 
   useEffect(() => {
     let cancelled = false;
     async function loadDashboard() {
-      setIsLoading(true);
+      const cachedSnapshot = analyticsCache.get(cacheKey);
+      if (cachedSnapshot) {
+        setOverview(cachedSnapshot.overview);
+        setMonthlyTrends(cachedSnapshot.monthlyTrends);
+        setCaseCategories(cachedSnapshot.caseCategories);
+        setBarangays(cachedSnapshot.barangays);
+        setHeatmap(cachedSnapshot.heatmap);
+        setTerminatedStats(cachedSnapshot.terminatedStats);
+        setActivities(cachedSnapshot.activities);
+        setIntakeLoad(cachedSnapshot.intakeLoad);
+        setOcrAnalytics(cachedSnapshot.ocrAnalytics);
+      }
+      setIsLoading(!cachedSnapshot);
       if (!deep) {
         const results = await Promise.allSettled([
           getDashboardOverview(),
@@ -167,15 +217,27 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
         ]);
         if (cancelled) return;
         const [overviewResult, monthlyResult, barangayResult, intakeLoadResult, ocrResult] = results;
-        setOverview(getSettledValue(overviewResult, emptyOverview, "overview"));
-        setMonthlyTrends(safeArray<MonthlyTrend>(getSettledValue(monthlyResult, [], "monthly trends")));
-        setCaseCategories([]);
-        setBarangays(safeArray<BarangayStat>(getSettledValue(barangayResult, [], "barangay stats")));
-        setHeatmap(null);
-        setTerminatedStats(emptyTerminatedStats);
-        setActivities([]);
-        setIntakeLoad(safeIntakeLoad(getSettledValue(intakeLoadResult, emptyIntakeLoad, "intake load")));
-        setOcrAnalytics(safeOcrAnalytics(getSettledValue(ocrResult, emptyOcrAnalytics, "OCR analytics")));
+        const snapshot: DashboardAnalyticsSnapshot = {
+          overview: getSettledValue(overviewResult, emptyOverview, "overview"),
+          monthlyTrends: safeArray<MonthlyTrend>(getSettledValue(monthlyResult, [], "monthly trends")),
+          caseCategories: [],
+          barangays: safeArray<BarangayStat>(getSettledValue(barangayResult, [], "barangay stats")),
+          heatmap: null,
+          terminatedStats: emptyTerminatedStats,
+          activities: [],
+          intakeLoad: safeIntakeLoad(getSettledValue(intakeLoadResult, emptyIntakeLoad, "intake load")),
+          ocrAnalytics: safeOcrAnalytics(getSettledValue(ocrResult, emptyOcrAnalytics, "OCR analytics")),
+        };
+        analyticsCache.set(cacheKey, snapshot);
+        setOverview(snapshot.overview);
+        setMonthlyTrends(snapshot.monthlyTrends);
+        setCaseCategories(snapshot.caseCategories);
+        setBarangays(snapshot.barangays);
+        setHeatmap(snapshot.heatmap);
+        setTerminatedStats(snapshot.terminatedStats);
+        setActivities(snapshot.activities);
+        setIntakeLoad(snapshot.intakeLoad);
+        setOcrAnalytics(snapshot.ocrAnalytics);
         setIsLoading(false);
         return;
       }
@@ -203,22 +265,34 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
         intakeLoadResult,
         ocrResult,
       ] = results;
-      setOverview(getSettledValue(overviewResult, emptyOverview, "overview"));
-      setMonthlyTrends(safeArray<MonthlyTrend>(getSettledValue(monthlyResult, [], "monthly trends")));
-      setCaseCategories(safeArray<CaseCategoryStat>(getSettledValue(categoryResult, [], "case categories")));
-      setBarangays(safeArray<BarangayStat>(getSettledValue(barangayResult, [], "barangay stats")));
-      setHeatmap(safeHeatmap(getSettledValue(heatmapResult, null, "heatmap")));
-      setTerminatedStats(safeTerminatedStats(getSettledValue(terminatedResult, emptyTerminatedStats, "terminated cases")));
-      setActivities(safeArray<RecentActivity>(getSettledValue(activityResult, [], "recent activities")));
-      setIntakeLoad(safeIntakeLoad(getSettledValue(intakeLoadResult, emptyIntakeLoad, "intake load")));
-      setOcrAnalytics(safeOcrAnalytics(getSettledValue(ocrResult, emptyOcrAnalytics, "OCR analytics")));
+      const snapshot: DashboardAnalyticsSnapshot = {
+        overview: getSettledValue(overviewResult, emptyOverview, "overview"),
+        monthlyTrends: safeArray<MonthlyTrend>(getSettledValue(monthlyResult, [], "monthly trends")),
+        caseCategories: safeArray<CaseCategoryStat>(getSettledValue(categoryResult, [], "case categories")),
+        barangays: safeArray<BarangayStat>(getSettledValue(barangayResult, [], "barangay stats")),
+        heatmap: safeHeatmap(getSettledValue(heatmapResult, null, "heatmap")),
+        terminatedStats: safeTerminatedStats(getSettledValue(terminatedResult, emptyTerminatedStats, "terminated cases")),
+        activities: safeArray<RecentActivity>(getSettledValue(activityResult, [], "recent activities")),
+        intakeLoad: safeIntakeLoad(getSettledValue(intakeLoadResult, emptyIntakeLoad, "intake load")),
+        ocrAnalytics: safeOcrAnalytics(getSettledValue(ocrResult, emptyOcrAnalytics, "OCR analytics")),
+      };
+      analyticsCache.set(cacheKey, snapshot);
+      setOverview(snapshot.overview);
+      setMonthlyTrends(snapshot.monthlyTrends);
+      setCaseCategories(snapshot.caseCategories);
+      setBarangays(snapshot.barangays);
+      setHeatmap(snapshot.heatmap);
+      setTerminatedStats(snapshot.terminatedStats);
+      setActivities(snapshot.activities);
+      setIntakeLoad(snapshot.intakeLoad);
+      setOcrAnalytics(snapshot.ocrAnalytics);
       setIsLoading(false);
     }
     void loadDashboard();
     return () => {
       cancelled = true;
     };
-  }, [dateRange, deep]);
+  }, [cacheKey, dateRange, deep]);
 
   return {
     activities,
