@@ -39,6 +39,28 @@ textarea {
   }
 }
 
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.jurisguard-page-transition {
+  animation: pageFadeIn 180ms ease-out both;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jurisguard-page-transition {
+    animation: none;
+  }
+}
+
 .jurisguard-print-root {
   height: 0;
   left: -10000px;

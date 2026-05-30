@@ -226,18 +226,21 @@ export default function AnalyticsPage() {
 
   return (
     <MainLayout>
-      <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] bg-white px-6 py-5 shadow-sm  lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">PAO Panabo Analytics Workspace</p>
-          <h1 className="mt-2 text-3xl font-bold text-[#2B3642]">Deep Analytics & Export</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-[#4B5563]">
-            Focused legal operations intelligence for trends, GIS hotspots, closures, OCR usage, and export-ready reports.
-          </p>
+          <h2 className="text-3xl font-semibold text-[#2B3642]">
+            Deep Analytics & Export
+          </h2>
+          <nav className="mt-1 flex items-center gap-2 text-sm text-[#4B5563]">
+            <span>Dashboard</span>
+            <span>/</span>
+            <span className="text-[#2B3642]">Analytics</span>
+          </nav>
         </div>
         <button
           type="button"
           onClick={() => setExportOpen(true)}
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-10 items-center justify-center rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
           disabled={exportRows.length === 0}
         >
           Advanced Report Export

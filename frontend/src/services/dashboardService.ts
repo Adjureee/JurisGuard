@@ -1,4 +1,37 @@
 import { apiClient } from "../api/client";
+import {
+  getPanaboCoordinate,
+  PANABO_CITY_HALL_COORDINATES,
+  resolvePanaboBarangay,
+} from "../utils/panaboCoordinates";
+
+export interface RawGeoCase {
+  case_id?: number | string | null;
+  client_name?: string | null;
+  clientName?: string | null;
+  case_type?: string | null;
+  caseType?: string | null;
+  category?: string | null;
+  nature_of_case?: string | null;
+  case_status?: string | null;
+  caseStatus?: string | null;
+  status?: string | null;
+  barangay?: string | null;
+  incident_barangay?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+}
+
+export interface EnrichedGeoCase extends RawGeoCase {
+  case_id: number | string;
+  client_name: string;
+  case_type: string;
+  case_status: string;
+  barangay: string;
+  latitude: number;
+  longitude: number;
+  coordinate_source: "case_coordinates" | "local_barangay_dictionary" | "panabo_city_fallback";
+}
 
 export interface DashboardOverview {
   total_clients: number;
@@ -125,6 +158,119 @@ function dateRangeParams(range?: DashboardDateRange) {
     date_from: range?.dateFrom || undefined,
     date_to: range?.dateTo || undefined,
   };
+}
+
+function toFiniteNumber(value: number | string | null | undefined) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || !value.trim()) return null;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function firstText(...values: Array<string | number | null | undefined>) {
+  const value = values.find((item) => String(item ?? "").trim().length > 0);
+  return value == null ? "" : String(value).trim();
+}
+
+export function enrichCasesWithCoordinates<T extends RawGeoCase>(
+  cases: T[],
+): Array<EnrichedGeoCase & T> {
+  return cases.map((record, index) => {
+    const rawBarangay = firstText(record.incident_barangay, record.barangay);
+    const resolvedBarangay = resolvePanaboBarangay(rawBarangay);
+    const explicitLat = toFiniteNumber(record.latitude);
+    const explicitLng = toFiniteNumber(record.longitude);
+    const hasExplicitCoordinates = explicitLat !== null && explicitLng !== null;
+    const dictionaryCoordinates = getPanaboCoordinate(rawBarangay);
+    const fallbackUsed = !hasExplicitCoordinates && !resolvedBarangay;
+
+    return {
+      ...record,
+      case_id: record.case_id ?? `local-geo-${index + 1}`,
+      client_name: firstText(record.client_name, record.clientName, "Unknown Client"),
+      case_type: firstText(
+        record.case_type,
+        record.caseType,
+        record.category,
+        record.nature_of_case,
+        "Unclassified",
+      ),
+      case_status: firstText(record.case_status, record.caseStatus, record.status, "Pending"),
+      barangay: resolvedBarangay ?? (rawBarangay || "Panabo City"),
+      latitude: hasExplicitCoordinates ? explicitLat : dictionaryCoordinates.lat,
+      longitude: hasExplicitCoordinates ? explicitLng : dictionaryCoordinates.lng,
+      coordinate_source: hasExplicitCoordinates
+        ? "case_coordinates"
+        : fallbackUsed
+          ? "panabo_city_fallback"
+          : "local_barangay_dictionary",
+    };
+  });
+}
+
+export function buildLocalHeatmap(cases: EnrichedGeoCase[]): HeatmapResponse {
+  const barangayBuckets = new Map<string, BarangayStat & { categoryCounts: Map<string, number> }>();
+
+  const points = cases.map<HeatmapPoint>((record) => {
+    const bucket =
+      barangayBuckets.get(record.barangay) ??
+      {
+        barangay: record.barangay,
+        city: "Panabo City",
+        total_cases: 0,
+        active_cases: 0,
+        terminated_cases: 0,
+        most_common_category: record.case_type,
+        latitude: record.latitude,
+        longitude: record.longitude,
+        categoryCounts: new Map<string, number>(),
+      };
+
+    bucket.total_cases += 1;
+    if (record.case_status.toLowerCase() === "terminated") {
+      bucket.terminated_cases += 1;
+    } else {
+      bucket.active_cases += 1;
+    }
+    bucket.categoryCounts.set(
+      record.case_type,
+      (bucket.categoryCounts.get(record.case_type) ?? 0) + 1,
+    );
+    bucket.most_common_category = Array.from(bucket.categoryCounts.entries()).sort(
+      (left, right) => right[1] - left[1],
+    )[0]?.[0] ?? record.case_type;
+    barangayBuckets.set(record.barangay, bucket);
+
+    return {
+      case_id: Number(record.case_id) || pointsSafeId(record.case_id),
+      barangay: record.barangay,
+      latitude: record.latitude,
+      longitude: record.longitude,
+      weight: record.case_status.toLowerCase() === "terminated" ? 0.65 : 1,
+      source:
+        record.coordinate_source === "case_coordinates"
+          ? "coordinates"
+          : "barangay",
+      status: record.case_status,
+      category: record.case_type,
+    };
+  });
+
+  const barangays = Array.from(barangayBuckets.values())
+    .map(({ categoryCounts: _categoryCounts, ...barangay }) => barangay)
+    .sort((left, right) => right.total_cases - left.total_cases);
+
+  return {
+    center: PANABO_CITY_HALL_COORDINATES,
+    points,
+    barangays,
+  };
+}
+
+function pointsSafeId(value: number | string | null | undefined) {
+  const text = String(value ?? "");
+  return Array.from(text).reduce((total, char) => total + char.charCodeAt(0), 0);
 }
 
 export async function getDashboardOverview(range?: DashboardDateRange) {
