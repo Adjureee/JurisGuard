@@ -2499,7 +2499,7 @@ async def upload_document(
         new_document = models.Document(
             case_id=case_id,
             intake_id=intake_id,
-            uploaded_by=effective_user_id,
+            uploaded_by=uploader.user_id,
             document_type=file.content_type,
             encrypted_file_path=str(file_location),
             ocr_status="PROCESSING",
@@ -2526,10 +2526,10 @@ async def upload_document(
         new_document.ocr_status = "COMPLETED"
         write_audit(
             db,
-            effective_user_id,
+            uploader.user_id,
             "OCR Scan",
             "ocr",
-            f"{user.full_name or user.email or user.username} scanned document #{new_document.document_id}",
+            f"{uploader.full_name or uploader.email or uploader.username} scanned document #{new_document.document_id}",
             str(new_document.document_id),
             request,
         )

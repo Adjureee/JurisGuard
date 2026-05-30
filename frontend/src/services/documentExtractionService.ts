@@ -447,6 +447,8 @@ export async function extractCaseFromDocument(
     cleanText(extracted_data.action_legal_service_text),
     cleanText(extracted_data.action_other_text),
   ]);
+  const applicantRole = cleanText(extracted_data.applicant_role);
+  const applicantRoleKey = applicantRole?.toLowerCase() ?? "";
 
   const extracted: CaseExtractionResult["extracted"] = {
     intake_record: {
@@ -455,7 +457,7 @@ export async function extractCaseFromDocument(
       region: cleanText(header("region", extracted_data.rehiyon)),
       district_office: cleanText(header("district_office", extracted_data.district_office)),
       party_represented: cleanText(applicant("name", extracted_data.applicant_name)),
-      applicant_role: cleanText(extracted_data.applicant_role),
+      applicant_role: applicantRole,
       nature_of_request: natureOfRequest,
       nature_of_case: natureOfCase,
       proof_submission_deadline: parseFormDate(proof("submission_deadline", extracted_data.proof_submit_date)),
@@ -463,13 +465,13 @@ export async function extractCaseFromDocument(
       proof_brgy_date: parseFormDate(proof("barangay_certification_date", extracted_data.proof_brgy_date)),
       proof_dswd_date: parseFormDate(proof("dswd_certification_date", extracted_data.proof_dswd_date)),
       proof_others_details: cleanText(proof("others_text", extracted_data.proof_other_text)),
-      inv_plaintiff: isTrue(involvement("plaintiff")) || cleanText(extracted_data.applicant_role).toLowerCase() === "plaintiff",
-      inv_defendant: isTrue(involvement("defendant")) || cleanText(extracted_data.applicant_role).toLowerCase() === "defendant",
-      inv_oppositor: isTrue(involvement("oppositor")) || cleanText(extracted_data.applicant_role).toLowerCase() === "oppositor",
-      inv_petitioner: isTrue(involvement("petitioner")) || cleanText(extracted_data.applicant_role).toLowerCase() === "petitioner",
-      inv_respondent: isTrue(involvement("respondent")) || cleanText(extracted_data.applicant_role).toLowerCase() === "respondent",
-      inv_complainant: isTrue(involvement("complainant")) || cleanText(extracted_data.applicant_role).toLowerCase() === "complainant",
-      inv_accused: isTrue(involvement("accused")) || cleanText(extracted_data.applicant_role).toLowerCase() === "accused",
+      inv_plaintiff: isTrue(involvement("plaintiff")) || applicantRoleKey === "plaintiff",
+      inv_defendant: isTrue(involvement("defendant")) || applicantRoleKey === "defendant",
+      inv_oppositor: isTrue(involvement("oppositor")) || applicantRoleKey === "oppositor",
+      inv_petitioner: isTrue(involvement("petitioner")) || applicantRoleKey === "petitioner",
+      inv_respondent: isTrue(involvement("respondent")) || applicantRoleKey === "respondent",
+      inv_complainant: isTrue(involvement("complainant")) || applicantRoleKey === "complainant",
+      inv_accused: isTrue(involvement("accused")) || applicantRoleKey === "accused",
     },
     representative: {
       rep_name: cleanText(representative("name", extracted_data.rep_name)),

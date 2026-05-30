@@ -16,7 +16,7 @@ import {
   type CaseExtractionResult,
   type ExtractionEngineMode,
 } from "../../services/documentExtractionService";
-import type { ClientRecord, ExtractionMap, IntakeMethod } from "../../types";
+import type { ClientRecord, ExtractionMap, ExtractionStatus, IntakeMethod } from "../../types";
 
 type CaseOcrPayload = CaseExtractionResult["extracted"];
 
@@ -221,7 +221,7 @@ function TextInput({
   registration: UseFormRegisterReturn;
   error?: string;
   type?: string;
-  status?: ExtractionMap[string];
+  status?: ExtractionStatus;
 }) {
   return (
     <label className="block">
@@ -248,7 +248,7 @@ function TextArea({
   label: string;
   registration: UseFormRegisterReturn;
   error?: string;
-  status?: ExtractionMap[string];
+  status?: ExtractionStatus;
 }) {
   return (
     <label className="block">
@@ -273,7 +273,7 @@ function CheckboxInput({
 }: {
   label: string;
   registration: UseFormRegisterReturn;
-  status?: ExtractionMap[string];
+  status?: ExtractionStatus;
 }) {
   return (
     <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#111827]/80">
@@ -402,7 +402,7 @@ export function CaseWorkflow({
 }: CaseWorkflowProps) {
   const addNotification = useNotificationStore((state) => state.addNotification);
   const { user } = useAuth();
-  const [step, setStep] = useState(lockedClient ? 0 : 0);
+  const [step, setStep] = useState(0);
   const [method, setMethod] = useState<IntakeMethod | null>(null);
   const [query, setQuery] = useState("");
   const [activeClientIndex, setActiveClientIndex] = useState(0);
@@ -788,20 +788,6 @@ export function CaseWorkflow({
                   </select>
                 </label>
               </div>
-              <label className="flex items-start gap-3 rounded-lg border border-[#E7D7EE] bg-[#F7F0FA] px-4 py-3 text-sm text-[#5F3675]">
-                <input
-                  type="checkbox"
-                  checked={replaceExistingWithOcr}
-                  onChange={(event) => setReplaceExistingWithOcr(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-[#704389] text-[#704389] focus:ring-[#704389]"
-                />
-                <span>
-                  <span className="block font-semibold">Replace existing fields with scanned values</span>
-                  <span className="mt-1 block text-[#5F3675]">
-                    Leave this off to fill only blank fields. Form Date is always updated from Petsa when the scan finds it.
-                  </span>
-                </span>
-              </label>
             )}
 
             {method === "camera" && (

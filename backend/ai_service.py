@@ -864,7 +864,7 @@ def apply_applicant_section_fields(extracted: dict, lines: list[str]) -> None:
     spouse = extract_text_near_label(
         applicant_lines,
         r"\basawa\s*[:.]|\bspouse\s*[:.]",
-        stop_pattern=r"\btirahan\s+ng\s+asawa\b|\baddress\s+of\s+spouse\b|\bcontact\s*no\b|\bnakakulong\b|\bdetained\b",
+        stop_pattern=r"\bindividual\s+monthly\s+income\b|\be[-\s]?mail\b|\btirahan\s+ng\s+asawa\b|\baddress\s+of\s+spouse\b|\bcontact\s*no\b|\bnakakulong\b|\bdetained\b",
     )
     if spouse:
         extracted["spouse_name"] = spouse
@@ -876,7 +876,7 @@ def apply_applicant_section_fields(extracted: dict, lines: list[str]) -> None:
     spouse_address = extract_text_near_label(
         applicant_lines,
         r"\btirahan\s+ng\s+asawa\b|\baddress\s+of\s+spouse\b",
-        stop_pattern=r"\bcontact\s*no\b|\bnakakulong\b|\bdetained\b|\blugar\s+ng\s+detention\b|\bplace\s+of\s+detention\b",
+        stop_pattern=r"\bindividual\s+monthly\s+income\b|\be[-\s]?mail\b|\bspouse\b|\basawa\b|\bcontact\s*no\b|\bnakakulong\b|\bdetained\b|\blugar\s+ng\s+detention\b|\bplace\s+of\s+detention\b",
     )
     if spouse_address:
         extracted["spouse_address"] = spouse_address
@@ -1110,6 +1110,11 @@ ADDRESS_SIGNAL_PATTERN = (
     r"village|zone|block|blk\.?|lot|phase|city|municipality|province|davao|panabo|tagum|"
     r"del\s+norte|del\s+sur)\b|#|\d"
 )
+ADDRESS_REJECT_PATTERN = (
+    r"\b(?:individual\s+monthly\s+income|monthly\s+income|income|contact\s*no|e[-\s]?mail|"
+    r"nakakulong|detained|petsa\s+ng\s+pag[ak]*akulong|edad|sex|civil\s*status|"
+    r"relihiyon|religion|pangalan|name|asawa|spouse)\b"
+)
 
 def normalize_simple_text(value: str | None) -> str:
     if not value:
@@ -1137,6 +1142,8 @@ def clean_address_candidate(value: str | None) -> str | None:
         return None
     candidate = clean_ocr_value(value)
     if not candidate or has_mixed_form_labels(candidate) or looks_like_ocr_noise(candidate):
+        return None
+    if re.search(ADDRESS_REJECT_PATTERN, candidate, re.IGNORECASE):
         return None
     words = re.findall(r"[A-Za-z]+", candidate)
     has_address_signal = bool(re.search(ADDRESS_SIGNAL_PATTERN, candidate, re.IGNORECASE))
