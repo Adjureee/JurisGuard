@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
@@ -15,10 +15,14 @@ export default function FormViewPage() {
   const [searchParams] = useSearchParams();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const printRootRef = useRef<HTMLDivElement>(null);
-  const [language, setLanguage] = useState<PrintableFormLanguage>("english");
+  const [language, setLanguage] = useState<PrintableFormLanguage>(() => {
+    const requestedLanguage = searchParams.get("language");
+    return requestedLanguage === "english" || requestedLanguage === "filipino"
+      ? requestedLanguage
+      : "english";
+  });
   const [data, setData] = useState<PrintableIntakeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [frameReady, setFrameReady] = useState(false);
   const autoPrint = searchParams.get("autoPrint") === "1";
   const autoPrintDoneRef = useRef(false);
 
@@ -67,7 +71,7 @@ export default function FormViewPage() {
     return `${styles}\n${doc.body.innerHTML}`;
   }, [activeTemplate, language, printableData]);
 
-  const waitForPrintAssets = async () => {
+  const waitForPrintAssets = useCallback(async () => {
     const printRoot = printRootRef.current;
     if (!printRoot) return;
 
@@ -89,9 +93,9 @@ export default function FormViewPage() {
       ),
       new Promise<void>((resolve) => window.setTimeout(resolve, 1000)),
     ]);
-  };
+  }, []);
 
-  const printPreview = async () => {
+  const printPreview = useCallback(async () => {
     if (!printMarkup) {
       toast.error("Printable form is still loading. Please try again.");
       return;
@@ -99,18 +103,7 @@ export default function FormViewPage() {
 
     await waitForPrintAssets();
     window.print();
-  };
-
-  useEffect(() => {
-    setFrameReady(false);
-  }, [data, language]);
-
-  useEffect(() => {
-    const requestedLanguage = searchParams.get("language");
-    if (requestedLanguage === "english" || requestedLanguage === "filipino") {
-      setLanguage(requestedLanguage);
-    }
-  }, [searchParams]);
+  }, [printMarkup, waitForPrintAssets]);
 
   useEffect(() => {
     autoPrintDoneRef.current = false;
@@ -123,7 +116,7 @@ export default function FormViewPage() {
       void printPreview();
     }, 250);
     return () => window.clearTimeout(timeout);
-  }, [autoPrint, printMarkup]);
+  }, [autoPrint, printMarkup, printPreview]);
 
   return (
     <>
@@ -184,14 +177,12 @@ export default function FormViewPage() {
             ref={frameRef}
             template={data.templates.english}
             data={printableData}
-            onReady={() => setFrameReady(true)}
           />
         ) : (
           <PrintableFormFilipino
             ref={frameRef}
             template={data.templates.filipino}
             data={printableData}
-            onReady={() => setFrameReady(true)}
           />
         )
       ) : (
