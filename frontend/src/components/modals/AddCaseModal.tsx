@@ -21,13 +21,7 @@ export default function AddCaseModal({ isOpen, onClose }: AddCaseModalProps) {
 
   if (!isOpen) return null;
 
-  const visibleClients =
-    user?.role === "admin"
-      ? clients
-      : clients.filter(
-          (client) =>
-            client.created_by_user_id === null || client.created_by_user_id === user?.user_id
-        );
+  const visibleClients = clients;
 
   return (
     <ModalPortal>

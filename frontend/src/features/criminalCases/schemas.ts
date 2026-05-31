@@ -7,11 +7,11 @@ const optionalNumber = (label: string) =>
   z.preprocess(
     (value) => {
       if (value === "" || value === null || value === undefined)
-        return undefined;
-      if (typeof value === "number" && Number.isNaN(value)) return undefined;
+        return 0;
+      if (typeof value === "number" && Number.isNaN(value)) return 0;
       return value;
     },
-    z.number().int().min(0, `${label} must be 0 or higher`).optional(),
+    z.number().int().min(0, `${label} must be 0 or higher`),
   );
 
 export const clientFormSchema = z.object({

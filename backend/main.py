@@ -284,6 +284,18 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS inv_complainant BOOLEAN DEFAULT false",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS inv_accused BOOLEAN DEFAULT false",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS inv_others TEXT",
+        "ALTER TABLE representative ADD COLUMN IF NOT EXISTS rep_name TEXT",
+        "ALTER TABLE representative ADD COLUMN IF NOT EXISTS rep_age INTEGER",
+        "ALTER TABLE representative ADD COLUMN IF NOT EXISTS rep_sex VARCHAR(20)",
+        "ALTER TABLE representative ADD COLUMN IF NOT EXISTS civil_status VARCHAR(50)",
+        "ALTER TABLE representative ADD COLUMN IF NOT EXISTS rep_address TEXT",
+        "ALTER TABLE representative ADD COLUMN IF NOT EXISTS rep_contact_no TEXT",
+        "ALTER TABLE representative ADD COLUMN IF NOT EXISTS relationship_to_applicant VARCHAR(50)",
+        "ALTER TABLE adverse_party ADD COLUMN IF NOT EXISTS role_plaintiff_complainant BOOLEAN DEFAULT false",
+        "ALTER TABLE adverse_party ADD COLUMN IF NOT EXISTS role_defendant_respondent_accused BOOLEAN DEFAULT false",
+        "ALTER TABLE adverse_party ADD COLUMN IF NOT EXISTS role_oppositor_others BOOLEAN DEFAULT false",
+        "ALTER TABLE adverse_party ADD COLUMN IF NOT EXISTS name TEXT",
+        "ALTER TABLE adverse_party ADD COLUMN IF NOT EXISTS address TEXT",
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS court_body VARCHAR(255)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS case_status VARCHAR(30)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS incident_barangay VARCHAR(120)',
@@ -297,6 +309,8 @@ def ensure_schema_compatibility() -> None:
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS cause_of_action TEXT',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS facts_of_case TEXT',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS pending_in_court BOOLEAN DEFAULT false',
+        'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS date_of_termination TIMESTAMP',
+        'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS cause_of_termination TEXT',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS assigned_pao VARCHAR(255)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS hearing_schedule VARCHAR(255)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS remarks TEXT',
@@ -695,6 +709,17 @@ def limit_text(value: Any, max_length: int, fallback: str | None = None) -> str 
     if value in (None, ""):
         return fallback
     return str(value)[:max_length]
+
+
+def normalize_sex(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    normalized = str(value).strip().lower()
+    if normalized in {"m", "male"}:
+        return "Male"
+    if normalized in {"f", "female"}:
+        return "Female"
+    return None
 
 
 def user_to_auth(user: models.User) -> dict[str, Any]:
@@ -1123,6 +1148,23 @@ def commit_or_client_error(db: Session, action: str) -> None:
         ) from exc
 
 
+def commit_or_case_error(db: Session, action: str) -> None:
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"Unable to {action} case. Check duplicate control number or case number.",
+        ) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error while trying to {action} case. Refresh the page and try again.",
+        ) from exc
+
+
 def apply_case_payload(record: models.Case, payload: CasePayload) -> None:
     intake = record.intake
     if intake is None:
@@ -1149,7 +1191,7 @@ def apply_case_payload(record: models.Case, payload: CasePayload) -> None:
         intake.representatives.append(representative)
     representative.rep_name = rep_data.get("rep_name") or "Not applicable"
     representative.rep_age = rep_data.get("rep_age") or None
-    representative.rep_sex = rep_data.get("rep_sex")
+    representative.rep_sex = normalize_sex(rep_data.get("rep_sex"))
     representative.civil_status = rep_data.get("civil_status")
     representative.rep_address = rep_data.get("rep_address")
     representative.rep_contact_no = rep_data.get("rep_contact_no")
@@ -2385,113 +2427,123 @@ def create_case(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    client_id = int(payload.client_id)
-    ensure_client_access(db.get(models.Client, client_id), user, db)
+    try:
+        client_id = int(payload.client_id)
+        ensure_client_access(db.get(models.Client, client_id), user, db)
 
-    intake_data = payload.intake_record
-    rep_data = payload.representative
-    adverse_data = payload.adverse_party
-    case_data = payload.cases
+        intake_data = payload.intake_record
+        rep_data = payload.representative
+        adverse_data = payload.adverse_party
+        case_data = payload.cases
 
-    intake = models.IntakeRecord(
-        client_id=client_id,
-        interviewer_id=user.user_id,
-        control_no=limit_text(intake_data.get("control_no"), 20),
-        form_date=parse_date(intake_data.get("form_date"), datetime.now()) or datetime.now(),
-        region=intake_data.get("region"),
-        district_office=intake_data.get("district_office"),
-        party_represented=limit_text(intake_data.get("party_represented"), 50),
-        applicant_role=intake_data.get("applicant_role"),
-        applicant_role_other=intake_data.get("applicant_role_other"),
-        nature_of_request=intake_data.get("nature_of_request"),
-        nature_of_case=limit_text(intake_data.get("nature_of_case"), 50),
-        coi_agree_different_office=bool(intake_data.get("coi_agree_different_office")),
-        coi_agree_same_dept_appeal=bool(intake_data.get("coi_agree_same_dept_appeal")),
-        coi_waive_right_to_complain=bool(intake_data.get("coi_waive_right_to_complain")),
-        coi_trust_assigned_counsel=bool(intake_data.get("coi_trust_assigned_counsel")),
-        proof_submission_deadline=parse_date(intake_data.get("proof_submission_deadline")),
-        proof_itr_date=parse_date(intake_data.get("proof_itr_date")),
-        proof_brgy_date=parse_date(intake_data.get("proof_brgy_date")),
-        proof_dswd_date=parse_date(intake_data.get("proof_dswd_date")),
-        proof_others_details=intake_data.get("proof_others_details"),
-        proof_others_date=parse_date(intake_data.get("proof_others_date")),
-        inv_plaintiff=bool(intake_data.get("inv_plaintiff")),
-        inv_defendant=bool(intake_data.get("inv_defendant")),
-        inv_oppositor=bool(intake_data.get("inv_oppositor")),
-        inv_petitioner=bool(intake_data.get("inv_petitioner")),
-        inv_respondent=bool(intake_data.get("inv_respondent")),
-        inv_complainant=bool(intake_data.get("inv_complainant")),
-        inv_accused=bool(intake_data.get("inv_accused")),
-        inv_others=intake_data.get("inv_others"),
-    )
-    db.add(intake)
-    db.flush()
+        intake = models.IntakeRecord(
+            client_id=client_id,
+            interviewer_id=user.user_id,
+            control_no=limit_text(intake_data.get("control_no"), 20),
+            form_date=parse_date(intake_data.get("form_date"), datetime.now()) or datetime.now(),
+            region=intake_data.get("region"),
+            district_office=intake_data.get("district_office"),
+            party_represented=limit_text(intake_data.get("party_represented"), 50),
+            applicant_role=intake_data.get("applicant_role"),
+            applicant_role_other=intake_data.get("applicant_role_other"),
+            nature_of_request=intake_data.get("nature_of_request"),
+            nature_of_case=limit_text(intake_data.get("nature_of_case"), 50),
+            coi_agree_different_office=bool(intake_data.get("coi_agree_different_office")),
+            coi_agree_same_dept_appeal=bool(intake_data.get("coi_agree_same_dept_appeal")),
+            coi_waive_right_to_complain=bool(intake_data.get("coi_waive_right_to_complain")),
+            coi_trust_assigned_counsel=bool(intake_data.get("coi_trust_assigned_counsel")),
+            proof_submission_deadline=parse_date(intake_data.get("proof_submission_deadline")),
+            proof_itr_date=parse_date(intake_data.get("proof_itr_date")),
+            proof_brgy_date=parse_date(intake_data.get("proof_brgy_date")),
+            proof_dswd_date=parse_date(intake_data.get("proof_dswd_date")),
+            proof_others_details=intake_data.get("proof_others_details"),
+            proof_others_date=parse_date(intake_data.get("proof_others_date")),
+            inv_plaintiff=bool(intake_data.get("inv_plaintiff")),
+            inv_defendant=bool(intake_data.get("inv_defendant")),
+            inv_oppositor=bool(intake_data.get("inv_oppositor")),
+            inv_petitioner=bool(intake_data.get("inv_petitioner")),
+            inv_respondent=bool(intake_data.get("inv_respondent")),
+            inv_complainant=bool(intake_data.get("inv_complainant")),
+            inv_accused=bool(intake_data.get("inv_accused")),
+            inv_others=intake_data.get("inv_others"),
+        )
+        db.add(intake)
+        db.flush()
 
-    db.add(
-        models.Representative(
+        db.add(
+            models.Representative(
+                intake_id=intake.intake_id,
+                rep_name=rep_data.get("rep_name") or "Not applicable",
+                rep_age=rep_data.get("rep_age") or None,
+                rep_sex=normalize_sex(rep_data.get("rep_sex")),
+                civil_status=rep_data.get("civil_status"),
+                rep_address=rep_data.get("rep_address"),
+                rep_contact_no=rep_data.get("rep_contact_no"),
+                relationship_to_applicant=limit_text(rep_data.get("relationship_to_applicant"), 50),
+            )
+        )
+
+        role = (adverse_data.get("role") or "").lower()
+        db.add(
+            models.AdverseParty(
+                intake_id=intake.intake_id,
+                role_plaintiff_complainant="plaintiff" in role or "complainant" in role,
+                role_defendant_respondent_accused=any(key in role for key in ["defendant", "respondent", "accused"]),
+                role_oppositor_others="oppositor" in role or "other" in role,
+                name=adverse_data.get("name") or "Not provided",
+                address=adverse_data.get("address"),
+            )
+        )
+
+        record = models.Case(
             intake_id=intake.intake_id,
-            rep_name=rep_data.get("rep_name") or "Not applicable",
-            rep_age=rep_data.get("rep_age") or None,
-            rep_sex=rep_data.get("rep_sex"),
-            civil_status=rep_data.get("civil_status"),
-            rep_address=rep_data.get("rep_address"),
-            rep_contact_no=rep_data.get("rep_contact_no"),
-            relationship_to_applicant=limit_text(rep_data.get("relationship_to_applicant"), 50),
+            client_id=client_id,
+            title_of_case=limit_text(case_data.get("title_of_case"), 50, "Untitled Case"),
+            case_no=limit_text(case_data.get("case_no"), 20),
+            court_body=case_data.get("court_body"),
+            status_of_case=case_data.get("status_of_case") or "Pending",
+            case_status=case_data.get("case_status") or case_data.get("status_of_case") or "Pending",
+            incident_barangay=case_data.get("incident_barangay"),
+            incident_city=case_data.get("incident_city") or DEFAULT_INCIDENT_CITY,
+            incident_address=case_data.get("incident_address"),
+            latitude=str(case_data.get("latitude")) if case_data.get("latitude") not in (None, "") else None,
+            longitude=str(case_data.get("longitude")) if case_data.get("longitude") not in (None, "") else None,
+            last_action_taken=case_data.get("last_action_taken"),
+            date_of_confinement=parse_date(case_data.get("date_of_confinement")),
+            place_of_detention=case_data.get("place_of_detention"),
+            location_type=case_data.get("location_type"),
+            cause_of_action=case_data.get("cause_of_action"),
+            facts_of_case=case_data.get("facts_of_case"),
+            pending_in_court=bool(case_data.get("pending_in_court")),
+            cause_of_termination=case_data.get("cause_of_termination"),
+            date_of_termination=parse_date(case_data.get("date_of_termination")),
+            assigned_pao=case_data.get("assigned_pao"),
+            hearing_schedule=case_data.get("hearing_schedule"),
+            remarks=case_data.get("remarks"),
         )
-    )
+        db.add(record)
+        db.flush()
+        db.add(
+            models.CaseHistory(
+                case_id=record.case_id,
+                updated_by=user.user_id,
+                previous_status=None,
+                new_status=record.status_of_case,
+                action_taken=record.last_action_taken or "Case created",
+                remarks="Initial case record",
+            )
+        )
+        write_audit(db, user.user_id, "Create Case", "case", f"{user.full_name or user.email or user.username} created Criminal Case #{record.case_id}", str(record.case_id), request)
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=f"Invalid case payload: {exc}") from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database error while creating case. Check duplicate control number or missing migrated columns.") from exc
 
-    role = (adverse_data.get("role") or "").lower()
-    db.add(
-        models.AdverseParty(
-            intake_id=intake.intake_id,
-            role_plaintiff_complainant="plaintiff" in role or "complainant" in role,
-            role_defendant_respondent_accused=any(key in role for key in ["defendant", "respondent", "accused"]),
-            role_oppositor_others="oppositor" in role or "other" in role,
-            name=adverse_data.get("name") or "Not provided",
-            address=adverse_data.get("address"),
-        )
-    )
-
-    record = models.Case(
-        intake_id=intake.intake_id,
-        client_id=client_id,
-        title_of_case=limit_text(case_data.get("title_of_case"), 50, "Untitled Case"),
-        case_no=limit_text(case_data.get("case_no"), 20),
-        court_body=case_data.get("court_body"),
-        status_of_case=case_data.get("status_of_case") or "Pending",
-        case_status=case_data.get("case_status") or case_data.get("status_of_case") or "Pending",
-        incident_barangay=case_data.get("incident_barangay"),
-        incident_city=case_data.get("incident_city") or DEFAULT_INCIDENT_CITY,
-        incident_address=case_data.get("incident_address"),
-        latitude=str(case_data.get("latitude")) if case_data.get("latitude") not in (None, "") else None,
-        longitude=str(case_data.get("longitude")) if case_data.get("longitude") not in (None, "") else None,
-        last_action_taken=case_data.get("last_action_taken"),
-        date_of_confinement=parse_date(case_data.get("date_of_confinement")),
-        place_of_detention=case_data.get("place_of_detention"),
-        location_type=case_data.get("location_type"),
-        cause_of_action=case_data.get("cause_of_action"),
-        facts_of_case=case_data.get("facts_of_case"),
-        pending_in_court=bool(case_data.get("pending_in_court")),
-        cause_of_termination=case_data.get("cause_of_termination"),
-        date_of_termination=parse_date(case_data.get("date_of_termination")),
-        assigned_pao=case_data.get("assigned_pao"),
-        hearing_schedule=case_data.get("hearing_schedule"),
-        remarks=case_data.get("remarks"),
-    )
-    db.add(record)
-    db.flush()
-    db.add(
-        models.CaseHistory(
-            case_id=record.case_id,
-            updated_by=user.user_id,
-            previous_status=None,
-            new_status=record.status_of_case,
-            action_taken=record.last_action_taken or "Case created",
-            remarks="Initial case record",
-        )
-    )
-    write_audit(db, user.user_id, "Create Case", "case", f"{user.full_name or user.email or user.username} created Criminal Case #{record.case_id}", str(record.case_id), request)
-    db.commit()
+    commit_or_case_error(db, "create")
     db.refresh(record)
     return get_case_payload(record)
 

@@ -2,7 +2,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { useForm } from "react-hook-form";
-import type { FieldPath, UseFormRegisterReturn } from "react-hook-form";
+import type {
+  FieldPath,
+  Resolver,
+  UseFormRegisterReturn,
+} from "react-hook-form";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { FieldStatus } from "../../features/criminalCases/components/FieldStatus";
@@ -317,7 +321,7 @@ export default function AddClientModal({
     setValue,
     formState: { errors },
   } = useForm<ClientFormValues>({
-    resolver: zodResolver(clientFormSchema),
+    resolver: zodResolver(clientFormSchema) as Resolver<ClientFormValues>,
     defaultValues,
     mode: "onBlur",
   });

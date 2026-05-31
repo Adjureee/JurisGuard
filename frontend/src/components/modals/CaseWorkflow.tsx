@@ -1310,11 +1310,22 @@ export function CaseWorkflow({
                     })}
                     error={errors.representative?.rep_age?.message}
                   />
-                  <TextInput
-                    label="Representative Sex"
-                    registration={register("representative.rep_sex")}
-                    error={errors.representative?.rep_sex?.message}
-                  />
+                  <label className="block">
+                    <span className="text-sm font-medium text-[#4B5563]">
+                      Representative Sex
+                    </span>
+                    <select
+                      {...register("representative.rep_sex")}
+                      className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                    >
+                      <option value="">Select</option>
+                      <option>Male</option>
+                      <option>Female</option>
+                    </select>
+                    <FieldError
+                      message={errors.representative?.rep_sex?.message}
+                    />
+                  </label>
                   <TextInput
                     label="Civil Status"
                     registration={register("representative.civil_status")}
