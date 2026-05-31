@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   FolderCheck,
@@ -91,6 +91,8 @@ export default function AnalyticsPage() {
   } = useDashboardAnalytics({ dateRange });
   const [selectedBarangay, setSelectedBarangay] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const hotspotPanelRef = useRef<HTMLDivElement>(null);
+  const [hotspotPanelHeight, setHotspotPanelHeight] = useState<number | null>(null);
 
   const intakeTotal = useMemo(() => monthlyTrends.reduce((sum, row) => sum + row.total_cases, 0), [monthlyTrends]);
   const displayMonthlyTrends = useMemo(
@@ -228,6 +230,25 @@ export default function AnalyticsPage() {
     if (preset !== "custom") setDateRange(presetRange(preset));
   };
 
+  useEffect(() => {
+    const panel = hotspotPanelRef.current;
+    if (!panel) return;
+
+    const updateHeight = () => {
+      setHotspotPanelHeight(Math.ceil(panel.getBoundingClientRect().height));
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(panel);
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [heatmap, selectedBarangay, topBarangays]);
+
   return (
     <MainLayout>
       <PageHeader
@@ -256,43 +277,47 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <>
-          <div className="grid items-stretch gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-            <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay." className="h-[680px]">
-              <div className="mb-4 flex flex-wrap gap-2">
-                <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
-                  All Barangays
-                </button>
-                {topBarangays.slice(0, 8).map((barangay) => (
-                  <button type="button" key={barangay.barangay} onClick={() => setSelectedBarangay(barangay.barangay)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === barangay.barangay ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
-                    {barangay.barangay}
+          <div className="grid items-start gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+            <div ref={hotspotPanelRef}>
+              <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay.">
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
+                    All Barangays
                   </button>
-                ))}
-              </div>
-              {heatmap ? (
-                <ErrorBoundary fallback={<EmptyState message="The geospatial map could not render, but barangay analytics remain available." />}>
-                  <Suspense fallback={<SkeletonBlock className="h-[520px]" />}>
-                    <GeoAnalyticsMap center={heatmap.center} points={heatmap.points} barangays={heatmap.barangays} selectedBarangay={selectedBarangay} onSelectBarangay={setSelectedBarangay} />
-                  </Suspense>
-                </ErrorBoundary>
-              ) : (
-                <EmptyState message="No geospatial data is available yet. Encode barangay or coordinates in case records to activate the map." />
-              )}
-            </AnalyticsPanel>
+                  {topBarangays.slice(0, 8).map((barangay) => (
+                    <button type="button" key={barangay.barangay} onClick={() => setSelectedBarangay(barangay.barangay)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === barangay.barangay ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
+                      {barangay.barangay}
+                    </button>
+                  ))}
+                </div>
+                {heatmap ? (
+                  <ErrorBoundary fallback={<EmptyState message="The geospatial map could not render, but barangay analytics remain available." />}>
+                    <Suspense fallback={<SkeletonBlock className="h-[520px]" />}>
+                      <GeoAnalyticsMap center={heatmap.center} points={heatmap.points} barangays={heatmap.barangays} selectedBarangay={selectedBarangay} onSelectBarangay={setSelectedBarangay} />
+                    </Suspense>
+                  </ErrorBoundary>
+                ) : (
+                  <EmptyState message="No geospatial data is available yet. Encode barangay or coordinates in case records to activate the map." />
+                )}
+              </AnalyticsPanel>
+            </div>
 
-            <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-[680px]">
-              <div className="h-full min-h-0 space-y-3 overflow-y-auto pr-2">
-                {topBarangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : topBarangays.map((barangay, index) => (
-                  <button key={barangay.barangay} type="button" onClick={() => setSelectedBarangay(barangay.barangay)} className="flex w-full items-center gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3 text-left hover:bg-[#F8FAFC]">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#704389] text-sm font-bold text-white">{index + 1}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-[#2B3642]">{barangay.barangay}</span>
-                      <span className="text-xs text-[#4B5563]">{barangay.most_common_category}</span>
-                    </span>
-                    <span className="rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-bold text-[#704389]">{barangay.total_cases}</span>
-                  </button>
-                ))}
-              </div>
-            </AnalyticsPanel>
+            <div className="min-h-0" style={hotspotPanelHeight ? { height: `${hotspotPanelHeight}px` } : undefined}>
+              <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-full min-h-0">
+                <div className="h-full min-h-0 space-y-3 overflow-y-auto pr-2">
+                  {topBarangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : topBarangays.map((barangay, index) => (
+                    <button key={barangay.barangay} type="button" onClick={() => setSelectedBarangay(barangay.barangay)} className="flex w-full items-center gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3 text-left hover:bg-[#F8FAFC]">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#704389] text-sm font-bold text-white">{index + 1}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-[#2B3642]">{barangay.barangay}</span>
+                        <span className="text-xs text-[#4B5563]">{barangay.most_common_category}</span>
+                      </span>
+                      <span className="rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-bold text-[#704389]">{barangay.total_cases}</span>
+                    </button>
+                  ))}
+                </div>
+              </AnalyticsPanel>
+            </div>
           </div>
 
           <div className="mt-6 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
