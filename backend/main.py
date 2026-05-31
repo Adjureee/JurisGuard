@@ -536,7 +536,17 @@ def is_admin(user: models.User) -> bool:
 
 def can_collaborate_on_cases(user: models.User) -> bool:
     role_name = (user.role.role_name or "").strip().lower() if user.role else ""
-    return is_admin(user) or role_name in {"staff", "legal_staff"}
+    shared_workspace_roles = {
+        "staff",
+        "user",
+        "legal staff",
+        "legal_staff",
+        "legal-staff",
+        "lawyer",
+        "attorney",
+        "public attorney",
+    }
+    return is_admin(user) or role_name in shared_workspace_roles
 
 
 def display_role_name(user: models.User | None) -> str | None:

@@ -47,7 +47,7 @@ interface AuditLogState {
 const STORAGE_KEY = "jurisguard_audit_logs";
 export interface AuditLogViewer {
   user_id: number;
-  role: "admin" | "staff";
+  role: string;
 }
 const IMPORTANT_ACTIONS = new Set([
   "Login",
