@@ -444,7 +444,7 @@ export default function CaseSubmissionsPage() {
       </section>
 
       {reportModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-5 backdrop-blur-sm sm:items-center">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/60 px-4 py-5 backdrop-blur-sm">
           <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
             <div className="flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
               <div>
@@ -499,7 +499,7 @@ export default function CaseSubmissionsPage() {
       )}
 
       {selected && (
-        <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-5 backdrop-blur-sm sm:items-center">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/60 px-4 py-5 backdrop-blur-sm">
           <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
             <ReportHeader submission={selected} />
             <div className="min-h-0 flex-1 overflow-y-auto p-6">

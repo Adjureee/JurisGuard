@@ -1,10 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from "react";
 import {
-  Activity,
   BarChart3,
-  FileScan,
   FolderCheck,
-  ShieldCheck,
 } from "lucide-react";
 import {
   Area,
@@ -124,9 +121,6 @@ export default function AnalyticsPage() {
   const busiestHour = intakeLoad?.busiest_hour;
   const leadingCategory = caseCategories[0];
   const categoryTotal = caseCategories.reduce((sum, row) => sum + row.total_cases, 0);
-  const ocrSuccessRate = ocrAnalytics?.total_scans
-    ? Math.round((ocrAnalytics.successful_extractions / ocrAnalytics.total_scans) * 100)
-    : 0;
   const exportRows = useMemo<ReportExportRow[]>(() => {
     const monthlyRows = monthlyTrends.map((row) => ({
       dataset: "monthly_intake_trends",
@@ -263,9 +257,9 @@ export default function AnalyticsPage() {
       ) : (
         <>
           <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-            <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay.">
+            <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay." className="h-full">
               <div className="mb-4 flex flex-wrap gap-2">
-            <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
+                <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
                   All Barangays
                 </button>
                 {topBarangays.slice(0, 8).map((barangay) => (
@@ -285,8 +279,8 @@ export default function AnalyticsPage() {
               )}
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records.">
-              <div className="max-h-[520px] space-y-3 overflow-y-auto pr-2">
+            <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-full">
+              <div className="h-full min-h-[460px] space-y-3 overflow-y-auto pr-2">
                 {topBarangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : topBarangays.map((barangay, index) => (
                   <button key={barangay.barangay} type="button" onClick={() => setSelectedBarangay(barangay.barangay)} className="flex w-full items-center gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3 text-left hover:bg-[#F8FAFC]">
                     <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#704389] text-sm font-bold text-white">{index + 1}</span>
@@ -559,54 +553,6 @@ export default function AnalyticsPage() {
               </div>
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="OCR Intelligence" subtitle="Document digitization and extraction health.">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-lg bg-[#F3E8FF] p-3 text-[#6D28D9]">
-                  <FileScan className="h-4 w-4" />
-                  <p className="mt-2 text-xl font-bold">{ocrAnalytics?.total_scans ?? 0}</p>
-                  <p className="text-[11px] font-semibold">Scans</p>
-                </div>
-                <div className="rounded-lg bg-[#DCFCE7] p-3 text-[#065F46]">
-                  <ShieldCheck className="h-4 w-4" />
-                  <p className="mt-2 text-xl font-bold">{ocrAnalytics?.successful_extractions ?? 0}</p>
-                  <p className="text-[11px] font-semibold">Success</p>
-                </div>
-                <div className="rounded-lg bg-[#FEE2E2] p-3 text-[#991B1B]">
-                  <Activity className="h-4 w-4" />
-                  <p className="mt-2 text-xl font-bold">{ocrAnalytics?.failed_scans ?? 0}</p>
-                  <p className="text-[11px] font-semibold">Failed</p>
-                </div>
-              </div>
-              <div className="mt-4 rounded-xl border border-[#DDD6FE] bg-[#F5F3FF] px-3 py-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-[#5B21B6]">Extraction Success Rate</p>
-                <p className="mt-1 text-lg font-bold text-[#111827]">{ocrSuccessRate}%</p>
-              </div>
-              <div className="mt-4 space-y-2">
-                {(ocrAnalytics?.recent ?? []).length === 0 ? <EmptyState message="No OCR activity has been recorded yet." /> : (ocrAnalytics?.recent ?? []).slice(0, 5).map((item) => (
-                  <div key={item.document_id} className="flex items-center justify-between rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm">
-                    <span className="font-semibold text-[#2B3642]">Document #{item.document_id}</span>
-                    <span className="rounded-full bg-[#E5E7EB] px-2 py-1 text-xs font-semibold text-[#4B5563]">{item.ocr_status}</span>
-                  </div>
-                ))}
-              </div>
-            </AnalyticsPanel>
-
-            <AnalyticsPanel title="Analytics Export Summary" subtitle="Current export package composition." className="xl:col-span-2">
-              <div className="grid gap-3">
-                {[
-                  { label: "Monthly trend rows", value: monthlyTrends.length },
-                  { label: "Weekly volume rows", value: intakeLoad?.weekly.length ?? 0 },
-                  { label: "Category rows", value: caseCategories.length },
-                  { label: "Barangay rows", value: barangays.length },
-                  { label: "Termination rows", value: terminatedStats?.monthly.length ?? 0 },
-                ].map((row) => (
-                  <div key={row.label} className="flex items-center justify-between rounded-lg border border-[#E5E7EB] px-3 py-2">
-                    <span className="text-sm font-semibold text-[#4B5563]">{row.label}</span>
-                    <span className="rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-bold text-[#704389]">{row.value}</span>
-                  </div>
-                ))}
-              </div>
-            </AnalyticsPanel>
           </div>
         </>
       )}

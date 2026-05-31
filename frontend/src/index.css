@@ -42,17 +42,14 @@ textarea {
 @keyframes pageGrowIn {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.985);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
   }
 }
 
 .jurisguard-page-transition {
   animation: pageGrowIn 200ms ease-out both;
-  will-change: opacity, transform;
 }
 
 @media (prefers-reduced-motion: reduce) {
