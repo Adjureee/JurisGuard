@@ -66,6 +66,25 @@ function isFinalStatus(status: ApprovalStatus) {
   return status === "approved" || status === "rejected";
 }
 
+function resolveEmployeeIdEvidence(user: AdminUserListItem | null) {
+  const raw =
+    user?.employee_id_path || user?.profile_picture_path || "";
+
+  if (!raw) {
+    return { imageSrc: "", reference: "" };
+  }
+
+  if (raw.startsWith("/uploads")) {
+    return { imageSrc: `${API_ORIGIN}${raw}`, reference: raw };
+  }
+
+  if (raw.startsWith("data:image/") || raw.startsWith("http")) {
+    return { imageSrc: raw, reference: raw };
+  }
+
+  return { imageSrc: "", reference: raw };
+}
+
 export default function VerificationPage() {
   const { user: currentUser } = useAuth();
   const addLog = useAuditLogStore((state) => state.addLog);
@@ -192,13 +211,7 @@ export default function VerificationPage() {
     }
   };
 
-  const employerIdImage = selectedUser?.profile_picture_path
-    ? selectedUser.profile_picture_path.startsWith("/uploads")
-      ? `${API_ORIGIN}${selectedUser.profile_picture_path}`
-      : selectedUser.profile_picture_path.startsWith("data:")
-        ? selectedUser.profile_picture_path
-        : ""
-    : "";
+  const employeeIdEvidence = resolveEmployeeIdEvidence(selectedUser);
 
   return (
     <MainLayout>
@@ -501,34 +514,46 @@ export default function VerificationPage() {
 
                 <aside className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
                   <h3 className="text-sm font-semibold text-[#2B3642]">
-                    Employer ID
+                    Employee ID
                   </h3>
                   <div className="mt-4 overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
-                    {employerIdImage ? (
+                    {employeeIdEvidence.imageSrc ? (
                       <button
                         type="button"
-                        onClick={() => setPreviewImage(employerIdImage)}
+                        onClick={() => setPreviewImage(employeeIdEvidence.imageSrc)}
                         className="block w-full"
-                        aria-label="Preview employer ID"
+                        aria-label="Preview employee ID"
                       >
                         <img
-                          src={employerIdImage}
-                          alt="Employer ID"
+                          src={employeeIdEvidence.imageSrc}
+                          alt="Employee ID"
                           className="h-64 w-full object-contain"
                         />
                       </button>
+                    ) : employeeIdEvidence.reference ? (
+                      <div className="flex h-64 flex-col items-center justify-center gap-2 px-4 text-center text-sm text-[#4B5563]">
+                        <span className="font-semibold text-[#2B3642]">
+                          Employee ID was submitted
+                        </span>
+                        <span className="break-all text-xs">
+                          This record contains only a local upload reference, not
+                          a previewable image. Ask the applicant to resubmit the
+                          ID image if visual review is required.
+                        </span>
+                      </div>
                     ) : (
                       <div className="flex h-64 items-center justify-center px-4 text-center text-sm text-[#4B5563]">
-                        Employer ID image is not available for preview.
+                        Employee ID image is not available for preview.
                       </div>
                     )}
                   </div>
                   <button
                     type="button"
                     onClick={() =>
-                      employerIdImage && setPreviewImage(employerIdImage)
+                      employeeIdEvidence.imageSrc &&
+                      setPreviewImage(employeeIdEvidence.imageSrc)
                     }
-                    disabled={!employerIdImage}
+                    disabled={!employeeIdEvidence.imageSrc}
                     className="mt-4 w-full rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Preview ID

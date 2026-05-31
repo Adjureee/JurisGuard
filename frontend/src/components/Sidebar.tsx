@@ -92,12 +92,12 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     },
     ...(user?.role === "admin" ? [{ label: "Verification", path: "/admin/verification", icon: <ShieldIcon /> }] : []),
   ];
-  const recordsNavigation = [navigation[3]];
+  const recordsNavigation = user?.role === "admin" ? [navigation[3]] : [];
   const navigationSections = [
     { label: "Overview", items: primaryNavigation },
     { label: "Manage", items: manageNavigation },
     { label: "Records", items: recordsNavigation },
-  ];
+  ].filter((section) => section.items.length > 0);
 
   const itemClass = (path: string) =>
     location.pathname === path || (path !== "/dashboard" && location.pathname.startsWith(path))

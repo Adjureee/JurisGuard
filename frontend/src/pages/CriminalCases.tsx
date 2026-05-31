@@ -1003,7 +1003,9 @@ function ClientRecordModal({
                         <button
                           type="button"
                           onClick={() =>
-                            navigate(`/criminal-cases/form-view/${record.case_id}`)
+                            navigate(
+                              `/criminal-cases/form-view/${record.case_id}`,
+                            )
                           }
                           className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
                         >
@@ -1081,6 +1083,10 @@ function ClientRecordModal({
 
 export default function CriminalCasesPage() {
   const { user } = useAuth();
+  const canCollaborateOnCases =
+    user?.role === "admin" ||
+    user?.role === "staff" ||
+    user?.role === "legal_staff";
   const clients = useCriminalCasesStore((state) => state.clients);
   const cases = useCriminalCasesStore((state) => state.cases);
   const setClients = useCriminalCasesStore((state) => state.setClients);
@@ -1127,25 +1133,25 @@ export default function CriminalCasesPage() {
 
   const visibleClients = useMemo(
     () =>
-      user?.role === "admin"
+      canCollaborateOnCases
         ? clients
         : clients.filter(
             (client) =>
               client.created_by_user_id === null ||
               client.created_by_user_id === user?.user_id,
           ),
-    [clients, user],
+    [canCollaborateOnCases, clients, user?.user_id],
   );
   const visibleCases = useMemo(
     () =>
-      user?.role === "admin"
+      canCollaborateOnCases
         ? cases
         : cases.filter(
             (record) =>
               record.created_by_user_id === null ||
               record.created_by_user_id === user?.user_id,
           ),
-    [cases, user],
+    [canCollaborateOnCases, cases, user?.user_id],
   );
   const activeVisibleCases = useMemo(
     () =>

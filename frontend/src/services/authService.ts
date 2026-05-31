@@ -8,6 +8,8 @@ import type {
   TokenResponse,
 } from "../types/auth";
 
+const MFA_TRUSTED_DEVICES_KEY = "jurisguard_mfa_trusted_devices";
+
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof AxiosError) {
     const detail = error.response?.data?.detail;
@@ -15,6 +17,31 @@ function getErrorMessage(error: unknown, fallback: string) {
   }
 
   return error instanceof Error ? error.message : fallback;
+}
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function readTrustedDeviceMap(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(MFA_TRUSTED_DEVICES_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function getTrustedDeviceToken(email: string): string | null {
+  return readTrustedDeviceMap()[normalizeEmail(email)] ?? null;
+}
+
+export function saveTrustedDeviceToken(email: string, token: string | null | undefined) {
+  if (!token) return;
+  const trustedDevices = readTrustedDeviceMap();
+  trustedDevices[normalizeEmail(email)] = token;
+  localStorage.setItem(MFA_TRUSTED_DEVICES_KEY, JSON.stringify(trustedDevices));
 }
 
 export async function register(payload: RegisterPayload): Promise<RegisterResponse> {
@@ -30,6 +57,14 @@ export async function login(payload: LoginPayload): Promise<TokenResponse> {
   const form = new URLSearchParams();
   form.set("username", payload.email);
   form.set("password", payload.password);
+  const trustedDeviceToken =
+    payload.trustedDeviceToken ?? getTrustedDeviceToken(payload.email);
+  if (trustedDeviceToken) {
+    form.set("trusted_device_token", trustedDeviceToken);
+  }
+  if (payload.rememberDevice) {
+    form.set("remember_device", "true");
+  }
   if (payload.otpCode) {
     form.set("otp_code", payload.otpCode);
   }

@@ -137,7 +137,7 @@ export default function AppRoutes() {
         <Route
           path="/audit-logs"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredRole="admin">
               <AuditLogsPage />
             </ProtectedRoute>
           }

@@ -117,6 +117,7 @@ class RegisterResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"
+    mfa_trusted_device_token: str | None = None
 
 
 class MfaSetupResponse(BaseModel):
@@ -424,6 +425,47 @@ def mfa_otpauth_uri(user: models.User, secret: str) -> str:
     return f"otpauth://totp/{quote(label)}?secret={secret}&issuer=JurisGuard&digits=6&period=30"
 
 
+def create_mfa_trusted_device_token(user: models.User, expires_in_days: int = 14) -> str:
+    secret_fingerprint = hashlib.sha256((user.mfa_secret or "").encode("utf-8")).hexdigest()
+    payload = {
+        "sub": user.user_id,
+        "purpose": "mfa_trusted_device",
+        "mfa": secret_fingerprint,
+        "exp": int((datetime.now(timezone.utc) + timedelta(days=expires_in_days)).timestamp()),
+    }
+    payload_segment = b64url(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    signature = hmac.new(
+        SECRET_KEY.encode("utf-8"),
+        payload_segment.encode("utf-8"),
+        hashlib.sha256,
+    )
+    return f"{payload_segment}.{b64url(signature.digest())}"
+
+
+def verify_mfa_trusted_device_token(user: models.User, token: str | None) -> bool:
+    if not token or not user.mfa_secret:
+        return False
+    try:
+        payload_segment, signature_segment = token.split(".", 1)
+        expected = hmac.new(
+            SECRET_KEY.encode("utf-8"),
+            payload_segment.encode("utf-8"),
+            hashlib.sha256,
+        )
+        if not hmac.compare_digest(b64url(expected.digest()), signature_segment):
+            return False
+        payload = json.loads(b64url_decode(payload_segment))
+        secret_fingerprint = hashlib.sha256(user.mfa_secret.encode("utf-8")).hexdigest()
+        return (
+            payload.get("purpose") == "mfa_trusted_device"
+            and int(payload.get("sub", 0)) == user.user_id
+            and payload.get("mfa") == secret_fingerprint
+            and int(payload.get("exp", 0)) >= int(datetime.now(timezone.utc).timestamp())
+        )
+    except Exception:
+        return False
+
+
 def b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
 
@@ -454,7 +496,9 @@ def is_admin_role(role: models.Role | None) -> bool:
         return False
     role_name = (role.role_name or "").strip().lower()
     permissions = (role.permissions or "").strip().lower()
-    return role_name in {"admin", "system admin"} or permissions == "all_access"
+    admin_role_names = {"admin", "administrator", "system admin", "system administrator"}
+    admin_permissions = {"all", "all_access", "*", "admin"}
+    return role_name in admin_role_names or permissions in admin_permissions
 
 
 def read_access_token(token: str) -> int:
@@ -490,16 +534,20 @@ def is_admin(user: models.User) -> bool:
     return is_admin_role(user.role)
 
 
+def can_collaborate_on_cases(user: models.User) -> bool:
+    role_name = (user.role.role_name or "").strip().lower() if user.role else ""
+    return is_admin(user) or role_name in {"staff", "legal_staff"}
+
+
 def display_role_name(user: models.User | None) -> str | None:
-    if not user or not user.role:
+    if not user:
         return None
-    role_name = (user.role.role_name or "").lower()
-    return "admin" if role_name == "admin" else "staff"
+    return "admin" if is_admin_role(user.role) else "staff"
 
 
 def scoped_case_query(db: Session, user: models.User):
     query = db.query(models.Case).outerjoin(models.IntakeRecord)
-    if is_admin(user):
+    if can_collaborate_on_cases(user):
         return query
     return query.filter(models.IntakeRecord.interviewer_id == user.user_id)
 
@@ -528,7 +576,7 @@ def staff_client_ids(db: Session, user: models.User) -> set[int]:
 
 def scoped_client_query(db: Session, user: models.User):
     query = db.query(models.Client).filter(models.Client.deleted_at.is_(None))
-    if is_admin(user):
+    if can_collaborate_on_cases(user):
         return query
     ids = staff_client_ids(db, user)
     if not ids:
@@ -539,7 +587,7 @@ def scoped_client_query(db: Session, user: models.User):
 def ensure_case_access(record: models.Case | None, user: models.User) -> models.Case:
     if not record:
         raise HTTPException(status_code=404, detail="Case not found")
-    if is_admin(user):
+    if can_collaborate_on_cases(user):
         return record
     if not record.intake or record.intake.interviewer_id != user.user_id:
         raise HTTPException(status_code=403, detail="Record access denied")
@@ -549,7 +597,7 @@ def ensure_case_access(record: models.Case | None, user: models.User) -> models.
 def ensure_client_access(client: models.Client | None, user: models.User, db: Session) -> models.Client:
     if not client or client.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Client not found")
-    if is_admin(user) or client.client_id in staff_client_ids(db, user):
+    if can_collaborate_on_cases(user) or client.client_id in staff_client_ids(db, user):
         return client
     raise HTTPException(status_code=403, detail="Record access denied")
 
@@ -605,6 +653,7 @@ def limit_text(value: Any, max_length: int, fallback: str | None = None) -> str 
 
 
 def user_to_auth(user: models.User) -> dict[str, Any]:
+    employee_id_path = user.profile_picture_path
     return {
         "user_id": user.user_id,
         "email": user.email or user.username,
@@ -614,6 +663,7 @@ def user_to_auth(user: models.User) -> dict[str, Any]:
         "mfa_enabled": bool(user.mfa_enabled),
         "profile_image_path": user.profile_image_path,
         "profile_picture_path": user.profile_picture_path,
+        "employee_id_path": employee_id_path,
         "profile_completed": bool(user.profile_completed),
     }
 
@@ -642,6 +692,7 @@ def user_to_details(user: models.User) -> dict[str, Any]:
             "birth_date": user.birth_date,
             "profile_image_path": user.profile_image_path,
             "profile_picture_path": user.profile_picture_path,
+            "employee_id_path": user.profile_picture_path,
             "profile_completed": bool(user.profile_completed),
         },
     }
@@ -1659,6 +1710,8 @@ def login(
     request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
     otp_code: str | None = Form(default=None),
+    trusted_device_token: str | None = Form(default=None),
+    remember_device: bool = Form(default=False),
     db: Session = Depends(get_db),
 ):
     username = form.username.lower().strip()
@@ -1667,13 +1720,23 @@ def login(
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     if not user.is_active or user.approval_status != "approved":
         raise HTTPException(status_code=401, detail="Account is not approved")
-    if user.mfa_enabled and not verify_totp(user.mfa_secret, otp_code):
-        raise HTTPException(status_code=401, detail="MFA code required")
+    new_trusted_device_token = None
+    if user.mfa_enabled:
+        trusted_device_ok = verify_mfa_trusted_device_token(user, trusted_device_token)
+        if not trusted_device_ok:
+            if not verify_totp(user.mfa_secret, otp_code):
+                raise HTTPException(status_code=401, detail="MFA code required")
+            if remember_device:
+                new_trusted_device_token = create_mfa_trusted_device_token(user)
 
     user.last_login_at = datetime.now()
     write_audit(db, user.user_id, "Login", "user", "User signed in", str(user.user_id), request)
     db.commit()
-    return {"access_token": create_access_token(user.user_id), "token_type": "bearer"}
+    return {
+        "access_token": create_access_token(user.user_id),
+        "token_type": "bearer",
+        "mfa_trusted_device_token": new_trusted_device_token,
+    }
 
 
 @app.get("/api/auth/me")
@@ -2370,8 +2433,17 @@ def update_case(
     db: Session = Depends(get_db),
 ):
     record = ensure_case_access(db.get(models.Case, case_id), user)
+    created_by_user_id = record.intake.interviewer_id if record.intake else None
     apply_case_payload(record, payload)
-    write_audit(db, user.user_id, "Update Case", "case", f"{user.full_name or user.email or user.username} updated Criminal Case #{record.case_id}", str(record.case_id), request)
+    actor_name = user.full_name or user.email or user.username
+    if created_by_user_id and created_by_user_id != user.user_id:
+        description = (
+            f"{actor_name} collaboratively updated Criminal Case #{record.case_id} "
+            f"originally created by User #{created_by_user_id}"
+        )
+    else:
+        description = f"{actor_name} updated Criminal Case #{record.case_id}"
+    write_audit(db, user.user_id, "Update Case", "case", description, str(record.case_id), request)
     db.commit()
     db.refresh(record)
     return get_case_payload(record)
@@ -2386,6 +2458,7 @@ def terminate_case(
     db: Session = Depends(get_db),
 ):
     record = ensure_case_access(db.get(models.Case, case_id), user)
+    created_by_user_id = record.intake.interviewer_id if record.intake else None
     terminated_at = parse_date(payload.date_terminated, datetime.now()) or datetime.now()
     record.status_of_case = "Terminated"
     record.case_status = "Terminated"
@@ -2401,7 +2474,15 @@ def terminate_case(
     record.handled_by = payload.handled_by or user.full_name or user.email or user.username
     record.supporting_document_path = payload.supporting_document_path
     record.last_updated = datetime.now()
-    write_audit(db, user.user_id, "Terminate Case", "case", f"{user.full_name or user.email or user.username} terminated Criminal Case #{record.case_id}", str(record.case_id), request)
+    actor_name = user.full_name or user.email or user.username
+    if created_by_user_id and created_by_user_id != user.user_id:
+        description = (
+            f"{actor_name} collaboratively terminated Criminal Case #{record.case_id} "
+            f"originally created by User #{created_by_user_id}"
+        )
+    else:
+        description = f"{actor_name} terminated Criminal Case #{record.case_id}"
+    write_audit(db, user.user_id, "Terminate Case", "case", description, str(record.case_id), request)
     db.commit()
     db.refresh(record)
     return get_case_payload(record)
@@ -2409,7 +2490,7 @@ def terminate_case(
 
 @app.get("/api/audit-logs/")
 def list_audit_logs(
-    user: models.User = Depends(current_user),
+    user: models.User = Depends(admin_user),
     db: Session = Depends(get_db),
     limit: int = Query(100, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -2420,11 +2501,8 @@ def list_audit_logs(
     search: str | None = Query(None),
 ):
     query = db.query(models.AuditLog).outerjoin(models.User)
-    if is_admin(user):
-        if user_id is not None:
-            query = query.filter(models.AuditLog.user_id == user_id)
-    else:
-        query = query.filter(models.AuditLog.user_id == user.user_id)
+    if user_id is not None:
+        query = query.filter(models.AuditLog.user_id == user_id)
     if action and action.lower() != "all":
         query = query.filter(models.AuditLog.action == action)
     from_date = parse_date(date_from)
