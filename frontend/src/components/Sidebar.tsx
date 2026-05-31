@@ -92,7 +92,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     },
     ...(user?.role === "admin" ? [{ label: "Verification", path: "/admin/verification", icon: <ShieldIcon /> }] : []),
   ];
-  const recordsNavigation = user?.role === "admin" ? [navigation[3]] : [];
+  const recordsNavigation = [navigation[3]];
   const navigationSections = [
     { label: "Overview", items: primaryNavigation },
     { label: "Manage", items: manageNavigation },

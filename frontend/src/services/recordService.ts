@@ -1,6 +1,26 @@
 import { apiClient } from "../api/client";
+import { AxiosError } from "axios";
 import type { ClientRecord, CriminalCaseRecord } from "../types";
 import type { CaseFormValues, ClientFormValues } from "../features/criminalCases/schemas";
+
+function getRecordErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof AxiosError) {
+    const detail = error.response?.data?.detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((item) => item?.msg || item?.message)
+        .filter(Boolean)
+        .join(", ") || fallback;
+    }
+    if (error.message === "Network Error") {
+      return "Cannot reach the backend server. Make sure FastAPI is running, then refresh and try again.";
+    }
+    return error.message || fallback;
+  }
+
+  return error instanceof Error ? error.message : fallback;
+}
 
 export async function listClientRecords(): Promise<ClientRecord[]> {
   const response = await apiClient.get<ClientRecord[]>("/clients/");
@@ -18,16 +38,24 @@ export async function getClientCases(clientId: string): Promise<CriminalCaseReco
 }
 
 export async function createClientRecord(values: ClientFormValues): Promise<ClientRecord> {
-  const response = await apiClient.post<ClientRecord>("/clients/", values);
-  return response.data;
+  try {
+    const response = await apiClient.post<ClientRecord>("/clients/", values);
+    return response.data;
+  } catch (error) {
+    throw new Error(getRecordErrorMessage(error, "Unable to create client"));
+  }
 }
 
 export async function updateClientRecord(
   clientId: string,
   values: ClientFormValues
 ): Promise<ClientRecord> {
-  const response = await apiClient.patch<ClientRecord>(`/clients/${clientId}`, values);
-  return response.data;
+  try {
+    const response = await apiClient.patch<ClientRecord>(`/clients/${clientId}`, values);
+    return response.data;
+  } catch (error) {
+    throw new Error(getRecordErrorMessage(error, "Unable to update client"));
+  }
 }
 
 export async function listCaseRecords(): Promise<CriminalCaseRecord[]> {
@@ -36,16 +64,24 @@ export async function listCaseRecords(): Promise<CriminalCaseRecord[]> {
 }
 
 export async function createCaseRecord(values: CaseFormValues): Promise<CriminalCaseRecord> {
-  const response = await apiClient.post<CriminalCaseRecord>("/cases/", values);
-  return response.data;
+  try {
+    const response = await apiClient.post<CriminalCaseRecord>("/cases/", values);
+    return response.data;
+  } catch (error) {
+    throw new Error(getRecordErrorMessage(error, "Unable to create case"));
+  }
 }
 
 export async function updateCaseRecord(
   caseId: string,
   values: CaseFormValues
 ): Promise<CriminalCaseRecord> {
-  const response = await apiClient.patch<CriminalCaseRecord>(`/cases/${caseId}`, values);
-  return response.data;
+  try {
+    const response = await apiClient.patch<CriminalCaseRecord>(`/cases/${caseId}`, values);
+    return response.data;
+  } catch (error) {
+    throw new Error(getRecordErrorMessage(error, "Unable to update case"));
+  }
 }
 
 export interface TerminationPayload {

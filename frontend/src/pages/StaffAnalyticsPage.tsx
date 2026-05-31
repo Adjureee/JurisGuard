@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import {
   Bar,
@@ -20,7 +20,14 @@ import {
   SkeletonBlock,
 } from "../components/dashboard/AnalyticsPrimitives";
 import ReportExportModal, { type ReportExportRow } from "../components/modals/ReportExportModal";
-import { getStaffWorkload, type StaffWorkload } from "../services/dashboardService";
+import {
+  getHeatmap,
+  getStaffWorkload,
+  type HeatmapResponse,
+  type StaffWorkload,
+} from "../services/dashboardService";
+
+const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsMap"));
 
 const COLORS = ["#704389", "#F59E0B", "#15803D", "#DC2626", "#7C3AED"];
 
@@ -46,6 +53,8 @@ function tally<T extends { label: string }>(rows: T[]) {
 
 export default function StaffAnalyticsPage() {
   const [workload, setWorkload] = useState<StaffWorkload | null>(null);
+  const [heatmap, setHeatmap] = useState<HeatmapResponse | null>(null);
+  const [selectedBarangay, setSelectedBarangay] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [exportOpen, setExportOpen] = useState(false);
 
@@ -54,8 +63,14 @@ export default function StaffAnalyticsPage() {
     async function loadWorkload() {
       setIsLoading(true);
       try {
-        const data = await getStaffWorkload();
-        if (!cancelled) setWorkload(data);
+        const [workloadData, heatmapData] = await Promise.all([
+          getStaffWorkload(),
+          getHeatmap(),
+        ]);
+        if (!cancelled) {
+          setWorkload(workloadData);
+          setHeatmap(heatmapData);
+        }
       } catch (error) {
         if (!cancelled) toast.error(error instanceof Error ? error.message : "Unable to load staff analytics");
       } finally {
@@ -246,6 +261,66 @@ export default function StaffAnalyticsPage() {
                         />
                       </div>
                     </div>
+                  ))}
+                </div>
+              )}
+            </AnalyticsPanel>
+          </div>
+
+          <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <AnalyticsPanel
+              title="Shared Case GIS Map"
+              subtitle="Barangay-centered map for the shared PAO criminal case workspace."
+            >
+              {heatmap && heatmap.points.length > 0 ? (
+                <Suspense fallback={<SkeletonBlock className="h-[28rem]" />}>
+                  <GeoAnalyticsMap
+                    center={heatmap.center}
+                    points={heatmap.points}
+                    barangays={heatmap.barangays}
+                    selectedBarangay={selectedBarangay}
+                    onSelectBarangay={setSelectedBarangay}
+                  />
+                </Suspense>
+              ) : (
+                <EmptyState message="No GIS data is available yet. Encode incident barangay or coordinates in case records to activate the staff map." />
+              )}
+            </AnalyticsPanel>
+
+            <AnalyticsPanel
+              title="Barangay Hotspots"
+              subtitle="Top locations from the current shared case records."
+            >
+              {!heatmap || heatmap.barangays.length === 0 ? (
+                <EmptyState message="No barangay hotspot data is available yet." />
+              ) : (
+                <div className="space-y-3">
+                  {heatmap.barangays.slice(0, 8).map((barangay, index) => (
+                    <button
+                      key={barangay.barangay}
+                      type="button"
+                      onClick={() => setSelectedBarangay(barangay.barangay)}
+                      className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${
+                        selectedBarangay === barangay.barangay
+                          ? "border-[#704389] bg-[#F7F0FA]"
+                          : "border-[#E5E7EB] bg-[#F9FAFB] hover:bg-white"
+                      }`}
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#704389] text-sm font-bold text-white">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-[#2B3642]">
+                          {barangay.barangay}
+                        </span>
+                        <span className="text-xs text-[#4B5563]">
+                          {barangay.most_common_category}
+                        </span>
+                      </span>
+                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-[#704389]">
+                        {barangay.total_cases}
+                      </span>
+                    </button>
                   ))}
                 </div>
               )}

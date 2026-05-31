@@ -19,6 +19,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import func, or_, text
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 import models
@@ -218,6 +219,13 @@ def ensure_schema_compatibility() -> None:
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(64)',
         'UPDATE "user" SET email = username WHERE email IS NULL',
         "ALTER TABLE document ADD COLUMN IF NOT EXISTS intake_id INTEGER",
+        "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS address TEXT",
+        "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS contact_no TEXT",
+        "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS email TEXT",
+        "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS individual_monthly_income TEXT",
+        "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS spouse TEXT",
+        "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS address_of_spouse TEXT",
+        "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS contact_no_of_spouse TEXT",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS representative_name TEXT",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS representative_age INTEGER",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS representative_sex VARCHAR(20)",
@@ -226,6 +234,33 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS representative_contact_no TEXT",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS representative_relationship VARCHAR(100)",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS representative_email TEXT",
+        "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS detained BOOLEAN DEFAULT false",
+        "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS detained_since TIMESTAMP",
+        "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS place_of_detention VARCHAR(255)",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_cicl BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_woman BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_law_enforcer BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_tenant_agrarian BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_ofw_land BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_ofw_sea BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_former_rebel BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_trafficking_victim BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_senior_citizen BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_vawc_victim BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_drug_related BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_terrorism_arrested BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_torture_victim BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_voluntary_rehab BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_foreign_national VARCHAR(100)",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_refugee VARCHAR(100)",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_urban_poor VARCHAR(100)",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_rural_poor VARCHAR(100)",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_indigenous_people VARCHAR(100)",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_pwd_type VARCHAR(100)",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_urban BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_rural BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_9165 BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_female BOOLEAN DEFAULT false",
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS classification_notes TEXT",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS district_office VARCHAR(255)",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS applicant_role VARCHAR(100)",
@@ -1071,6 +1106,23 @@ def apply_client_payload(client: models.Client, payload: ClientPayload) -> None:
     classification.classification_notes = class_data.get("classification_notes")
 
 
+def commit_or_client_error(db: Session, action: str) -> None:
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"Unable to {action} client because the submitted data conflicts with an existing database record.",
+        ) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error while trying to {action} client. Refresh the page and try again.",
+        ) from exc
+
+
 def apply_case_payload(record: models.Case, payload: CasePayload) -> None:
     intake = record.intake
     if intake is None:
@@ -1588,9 +1640,7 @@ def dashboard_ocr_analytics(user: models.User = Depends(current_user), db: Sessi
 @app.get("/api/dashboard/staff-workload")
 def dashboard_staff_workload(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     cases = (
-        db.query(models.Case)
-        .join(models.IntakeRecord, models.Case.intake_id == models.IntakeRecord.intake_id, isouter=True)
-        .filter(models.IntakeRecord.interviewer_id == user.user_id)
+        scoped_case_query(db, user)
         .order_by(models.Case.last_updated.desc())
         .all()
     )
@@ -2190,73 +2240,79 @@ def create_client(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    client_data = payload.client
-    details_data = payload.client_details
-    class_data = payload.client_classification
-    client = models.Client(
-        name=client_data.get("name") or "Unnamed Client",
-        age=client_data.get("age") or None,
-        sex=client_data.get("sex") or "",
-        civil_status=client_data.get("civil_status") or "",
-        religion=client_data.get("religion") or "",
-        educational_attainment=client_data.get("educational_attainment") or "",
-        citizenship=client_data.get("citizenship") or "",
-        language_dialect=client_data.get("language_dialect") or "",
-    )
-    db.add(client)
-    db.flush()
-    db.add(
-        models.ClientDetails(
-            client_id=client.client_id,
-            address=details_data.get("address"),
-            contact_no=details_data.get("contact_no"),
-            email=details_data.get("email"),
-            individual_monthly_income=details_data.get("individual_monthly_income"),
-            spouse=details_data.get("spouse"),
-            address_of_spouse=details_data.get("address_of_spouse"),
-            contact_no_of_spouse=details_data.get("contact_no_of_spouse"),
-            representative_name=details_data.get("representative_name"),
-            representative_age=details_data.get("representative_age") or None,
-            representative_sex=details_data.get("representative_sex"),
-            representative_civil_status=details_data.get("representative_civil_status"),
-            representative_address=details_data.get("representative_address"),
-            representative_contact_no=details_data.get("representative_contact_no"),
-            representative_relationship=details_data.get("representative_relationship"),
-            representative_email=details_data.get("representative_email"),
-            detained=bool(details_data.get("detained")),
-            detained_since=parse_date(details_data.get("detained_since")),
-            place_of_detention=details_data.get("place_of_detention"),
+    try:
+        client_data = payload.client
+        details_data = payload.client_details
+        class_data = payload.client_classification
+        client = models.Client(
+            name=client_data.get("name") or "Unnamed Client",
+            age=client_data.get("age") or None,
+            sex=client_data.get("sex") or "",
+            civil_status=client_data.get("civil_status") or "",
+            religion=client_data.get("religion") or "",
+            educational_attainment=client_data.get("educational_attainment") or "",
+            citizenship=client_data.get("citizenship") or "",
+            language_dialect=client_data.get("language_dialect") or "",
         )
-    )
-    db.add(
-        models.ClientClassification(
-            client_id=client.client_id,
-            class_senior_citizen=bool(class_data.get("flag_senior")),
-            class_cicl=bool(class_data.get("flag_cicl")),
-            class_female=bool(class_data.get("flag_female")),
-            class_woman=bool(class_data.get("flag_female")),
-            class_urban=bool(class_data.get("flag_urban")),
-            class_rural=bool(class_data.get("flag_rural")),
-            class_drug_related=bool(class_data.get("flag_drugs")),
-            class_foreign_national="Yes" if class_data.get("flag_foreign_national") else None,
-            class_vawc_victim=bool(class_data.get("flag_vawc_victim")),
-            class_refugee="Yes" if class_data.get("flag_refugee_evacuee") else None,
-            class_law_enforcer=bool(class_data.get("flag_law_enforcer")),
-            class_tenant_agrarian=bool(class_data.get("flag_tenant_agrarian")),
-            class_ofw_land=bool(class_data.get("flag_ofw_land_based")),
-            class_ofw_sea=bool(class_data.get("flag_ofw_sea_based")),
-            class_terrorism_arrested=bool(class_data.get("flag_arrested_terrorism")),
-            class_indigenous_people="Yes" if class_data.get("flag_indigenous_people") else None,
-            class_pwd_type="PWD" if class_data.get("flag_pwd") else None,
-            class_former_rebel=bool(class_data.get("flag_former_rebel_fve")),
-            class_torture_victim=bool(class_data.get("flag_torture_victim")),
-            class_trafficking_victim=bool(class_data.get("flag_trafficking_victim")),
-            class_voluntary_rehab=bool(class_data.get("flag_voluntary_rehab_petitioner")),
-            classification_notes=class_data.get("classification_notes"),
+        db.add(client)
+        db.flush()
+        db.add(
+            models.ClientDetails(
+                client_id=client.client_id,
+                address=details_data.get("address"),
+                contact_no=details_data.get("contact_no"),
+                email=details_data.get("email"),
+                individual_monthly_income=details_data.get("individual_monthly_income"),
+                spouse=details_data.get("spouse"),
+                address_of_spouse=details_data.get("address_of_spouse"),
+                contact_no_of_spouse=details_data.get("contact_no_of_spouse"),
+                representative_name=details_data.get("representative_name"),
+                representative_age=details_data.get("representative_age") or None,
+                representative_sex=details_data.get("representative_sex"),
+                representative_civil_status=details_data.get("representative_civil_status"),
+                representative_address=details_data.get("representative_address"),
+                representative_contact_no=details_data.get("representative_contact_no"),
+                representative_relationship=details_data.get("representative_relationship"),
+                representative_email=details_data.get("representative_email"),
+                detained=bool(details_data.get("detained")),
+                detained_since=parse_date(details_data.get("detained_since")),
+                place_of_detention=details_data.get("place_of_detention"),
+            )
         )
-    )
-    write_audit(db, user.user_id, "Create Client", "client", f"{user.full_name or user.email or user.username} created client {client.name}", str(client.client_id), request)
-    db.commit()
+        db.add(
+            models.ClientClassification(
+                client_id=client.client_id,
+                class_senior_citizen=bool(class_data.get("flag_senior")),
+                class_cicl=bool(class_data.get("flag_cicl")),
+                class_female=bool(class_data.get("flag_female")),
+                class_woman=bool(class_data.get("flag_female")),
+                class_urban=bool(class_data.get("flag_urban")),
+                class_rural=bool(class_data.get("flag_rural")),
+                class_drug_related=bool(class_data.get("flag_drugs")),
+                class_foreign_national="Yes" if class_data.get("flag_foreign_national") else None,
+                class_vawc_victim=bool(class_data.get("flag_vawc_victim")),
+                class_refugee="Yes" if class_data.get("flag_refugee_evacuee") else None,
+                class_law_enforcer=bool(class_data.get("flag_law_enforcer")),
+                class_tenant_agrarian=bool(class_data.get("flag_tenant_agrarian")),
+                class_ofw_land=bool(class_data.get("flag_ofw_land_based")),
+                class_ofw_sea=bool(class_data.get("flag_ofw_sea_based")),
+                class_terrorism_arrested=bool(class_data.get("flag_arrested_terrorism")),
+                class_indigenous_people="Yes" if class_data.get("flag_indigenous_people") else None,
+                class_pwd_type="PWD" if class_data.get("flag_pwd") else None,
+                class_former_rebel=bool(class_data.get("flag_former_rebel_fve")),
+                class_torture_victim=bool(class_data.get("flag_torture_victim")),
+                class_trafficking_victim=bool(class_data.get("flag_trafficking_victim")),
+                class_voluntary_rehab=bool(class_data.get("flag_voluntary_rehab_petitioner")),
+                classification_notes=class_data.get("classification_notes"),
+            )
+        )
+        write_audit(db, user.user_id, "Create Client", "client", f"{user.full_name or user.email or user.username} created client {client.name}", str(client.client_id), request)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=f"Invalid client payload: {exc}") from exc
+    commit_or_client_error(db, "create")
     db.refresh(client)
     return get_client_payload(client)
 
@@ -2270,9 +2326,15 @@ def update_client(
     db: Session = Depends(get_db),
 ):
     client = ensure_client_access(db.get(models.Client, client_id), user, db)
-    apply_client_payload(client, payload)
+    try:
+        apply_client_payload(client, payload)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=f"Invalid client update payload: {exc}") from exc
     write_audit(db, user.user_id, "Update Client", "client", f"{user.full_name or user.email or user.username} updated client {client.name}", str(client.client_id), request)
-    db.commit()
+    commit_or_client_error(db, "update")
     db.refresh(client)
     return get_client_payload(client)
 
@@ -2444,7 +2506,13 @@ def update_case(
 ):
     record = ensure_case_access(db.get(models.Case, case_id), user)
     created_by_user_id = record.intake.interviewer_id if record.intake else None
-    apply_case_payload(record, payload)
+    previous_status = record.status_of_case
+    try:
+        apply_case_payload(record, payload)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid case update payload: {exc}") from exc
     actor_name = user.full_name or user.email or user.username
     if created_by_user_id and created_by_user_id != user.user_id:
         description = (
@@ -2453,8 +2521,26 @@ def update_case(
         )
     else:
         description = f"{actor_name} updated Criminal Case #{record.case_id}"
+    db.add(
+        models.CaseHistory(
+            case_id=record.case_id,
+            updated_by=user.user_id,
+            previous_status=previous_status,
+            new_status=record.status_of_case or "Pending",
+            action_taken=record.last_action_taken or "Case updated",
+            remarks="Case updated from workspace",
+        )
+    )
     write_audit(db, user.user_id, "Update Case", "case", description, str(record.case_id), request)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        detail = "Case update conflicts with an existing record. Check duplicate control number or case number."
+        raise HTTPException(status_code=409, detail=detail) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database error while updating case. Please retry after refreshing the page.") from exc
     db.refresh(record)
     return get_case_payload(record)
 
@@ -2500,7 +2586,7 @@ def terminate_case(
 
 @app.get("/api/audit-logs/")
 def list_audit_logs(
-    user: models.User = Depends(admin_user),
+    user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
     limit: int = Query(100, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -2511,8 +2597,11 @@ def list_audit_logs(
     search: str | None = Query(None),
 ):
     query = db.query(models.AuditLog).outerjoin(models.User)
-    if user_id is not None:
-        query = query.filter(models.AuditLog.user_id == user_id)
+    if is_admin(user):
+        if user_id is not None:
+            query = query.filter(models.AuditLog.user_id == user_id)
+    else:
+        query = query.filter(models.AuditLog.user_id == user.user_id)
     if action and action.lower() != "all":
         query = query.filter(models.AuditLog.action == action)
     from_date = parse_date(date_from)

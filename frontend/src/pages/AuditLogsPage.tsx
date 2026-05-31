@@ -37,12 +37,21 @@ function UserTypeBadge({ role }: { role?: string | null }) {
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{label}</span>;
 }
 
+function normalizedLogRole(log: AuditLogEntry) {
+  return log.userRole ?? log.user_role ?? "system";
+}
+
+function scopedRoleList(logs: AuditLogEntry[]) {
+  return logs.map(normalizedLogRole).filter(Boolean);
+}
+
 export default function AuditLogsPage() {
   const { user } = useAuth();
   const logs = useAuditLogStore((state) => state.logs);
   const setLogsForViewer = useAuditLogStore((state) => state.setLogsForViewer);
   const scopeToViewer = useAuditLogStore((state) => state.scopeToViewer);
   const [selectedUserId, setSelectedUserId] = useState("all");
+  const [userType, setUserType] = useState("all");
   const [actionType, setActionType] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -79,6 +88,15 @@ export default function AuditLogsPage() {
       ),
     [logs]
   );
+  const userTypeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          scopedRoleList(logs)
+        )
+      ).sort(),
+    [logs]
+  );
   const scopedLogs = useMemo(
     () =>
       user?.role === "admin"
@@ -95,22 +113,30 @@ export default function AuditLogsPage() {
       if (user?.role === "admin" && selectedUserId !== "all" && String(log.userId) !== selectedUserId) {
         return false;
       }
+      if (user?.role === "admin" && userType !== "all" && normalizedLogRole(log) !== userType) {
+        return false;
+      }
       if (actionType !== "all" && log.action !== actionType) return false;
       if (dateFrom && log.timestamp.slice(0, 10) < dateFrom) return false;
       if (dateTo && log.timestamp.slice(0, 10) > dateTo) return false;
       return true;
     });
-  }, [actionType, dateFrom, dateTo, scopedLogs, selectedUserId, user]);
+  }, [actionType, dateFrom, dateTo, scopedLogs, selectedUserId, user, userType]);
 
   return (
     <MainLayout>
       <div className="mb-5">
         <p className="text-sm font-semibold text-[#704389]">System Activity</p>
         <h2 className="text-2xl font-bold text-[#2B3642]">Audit Logs</h2>
+        <p className="mt-1 text-sm text-[#6B7280]">
+          {user?.role === "admin"
+            ? "Monitor all administrator and legal staff activity."
+            : "Review your own account activity and case actions."}
+        </p>
       </div>
 
       <section className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
-        <div className="grid gap-3 border-b border-[#E5E7EB] bg-white px-5 py-4 md:grid-cols-4">
+        <div className="grid gap-3 border-b border-[#E5E7EB] bg-white px-5 py-4 md:grid-cols-5">
           {user?.role === "admin" && (
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">User</span>
@@ -123,6 +149,23 @@ export default function AuditLogsPage() {
                 {userOptions.map(([id, label]) => (
                   <option key={id} value={id}>
                     {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {user?.role === "admin" && (
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">User Type</span>
+              <select
+                value={userType}
+                onChange={(event) => setUserType(event.target.value)}
+                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              >
+                <option value="all">All User Types</option>
+                {userTypeOptions.map((role) => (
+                  <option key={role} value={role}>
+                    {role === "admin" ? "Administrators" : role === "staff" ? "Legal Staff" : "System"}
                   </option>
                 ))}
               </select>
