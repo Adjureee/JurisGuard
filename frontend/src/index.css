@@ -39,19 +39,6 @@ textarea {
   }
 }
 
-@keyframes pageGrowIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.jurisguard-page-transition {
-  animation: pageGrowIn 200ms ease-out both;
-}
-
 .jurisguard-modal-overlay {
   align-items: center;
   display: grid;
@@ -66,12 +53,6 @@ textarea {
 
 .jurisguard-modal-surface {
   margin: auto;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .jurisguard-page-transition {
-    animation: none;
-  }
 }
 
 .jurisguard-print-root {
