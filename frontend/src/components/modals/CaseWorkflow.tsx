@@ -8,7 +8,10 @@ import { useAuth } from "../../contexts/AuthContext";
 import { FieldStatus } from "../../features/criminalCases/components/FieldStatus";
 import { StepIndicator } from "../../features/criminalCases/components/StepIndicator";
 import { useCamera } from "../../features/criminalCases/hooks/useCamera";
-import { caseFormSchema, type CaseFormValues } from "../../features/criminalCases/schemas";
+import {
+  caseFormSchema,
+  type CaseFormValues,
+} from "../../features/criminalCases/schemas";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
 import {
   dataUrlToFile,
@@ -16,7 +19,12 @@ import {
   type CaseExtractionResult,
   type ExtractionEngineMode,
 } from "../../services/documentExtractionService";
-import type { ClientRecord, ExtractionMap, ExtractionStatus, IntakeMethod } from "../../types";
+import type {
+  ClientRecord,
+  ExtractionMap,
+  ExtractionStatus,
+  IntakeMethod,
+} from "../../types";
 
 type CaseOcrPayload = CaseExtractionResult["extracted"];
 
@@ -300,11 +308,29 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-function getPayloadValue(source: CaseOcrPayload, path: FieldPath<CaseFormValues>) {
+function getPayloadValue(
+  source: CaseOcrPayload,
+  path: FieldPath<CaseFormValues>,
+) {
   return path.split(".").reduce<unknown>((current, key) => {
     if (!current || typeof current !== "object") return undefined;
     return (current as Record<string, unknown>)[key];
   }, source);
+}
+
+function getFirstValidationMessage(errors: unknown): string | null {
+  if (!errors || typeof errors !== "object") return null;
+
+  for (const value of Object.values(errors as Record<string, unknown>)) {
+    if (!value || typeof value !== "object") continue;
+    const message = (value as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+
+    const nestedMessage = getFirstValidationMessage(value);
+    if (nestedMessage) return nestedMessage;
+  }
+
+  return null;
 }
 
 function MethodCard({
@@ -364,11 +390,15 @@ function SelectedClientCard({
           {initials(client.client.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-semibold text-[#2B3642]">{client.client.name}</p>
+          <p className="truncate text-base font-semibold text-[#2B3642]">
+            {client.client.name}
+          </p>
           <div className="mt-2 grid gap-2 text-sm text-[#4B5563] sm:grid-cols-2">
             <span>Sex: {client.client.sex || "-"}</span>
             <span>Age: {client.client.age || "-"}</span>
-            <span className="sm:col-span-2">Address: {client.client_details.address || "-"}</span>
+            <span className="sm:col-span-2">
+              Address: {client.client_details.address || "-"}
+            </span>
           </div>
         </div>
       </div>
@@ -400,7 +430,9 @@ export function CaseWorkflow({
   submitLabel = "Save Case",
   onSubmit,
 }: CaseWorkflowProps) {
-  const addNotification = useNotificationStore((state) => state.addNotification);
+  const addNotification = useNotificationStore(
+    (state) => state.addNotification,
+  );
   const { user } = useAuth();
   const [step, setStep] = useState(0);
   const [method, setMethod] = useState<IntakeMethod | null>(null);
@@ -410,9 +442,12 @@ export function CaseWorkflow({
   const [documentLabel, setDocumentLabel] = useState("");
   const [indicators, setIndicators] = useState<ExtractionMap>({});
   const [isExtracting, setIsExtracting] = useState(false);
-  const [extractionEngine, setExtractionEngine] = useState<ExtractionEngineMode>("auto");
+  const [extractionEngine, setExtractionEngine] =
+    useState<ExtractionEngineMode>("auto");
   const [replaceExistingWithOcr, setReplaceExistingWithOcr] = useState(false);
-  const [useClientRepresentative, setUseClientRepresentative] = useState(Boolean(lockedClient));
+  const [useClientRepresentative, setUseClientRepresentative] = useState(
+    Boolean(lockedClient),
+  );
   const {
     videoRef,
     isCameraActive,
@@ -440,7 +475,8 @@ export function CaseWorkflow({
 
   const selectedClientId = watch("client_id");
   const selectedClient =
-    lockedClient ?? clients.find((client) => client.client_id === selectedClientId);
+    lockedClient ??
+    clients.find((client) => client.client_id === selectedClientId);
   const status = watch("cases.status_of_case");
   const applicantRole = watch("intake_record.applicant_role");
   const pendingInCourt = watch("cases.pending_in_court");
@@ -449,7 +485,9 @@ export function CaseWorkflow({
     if (!hasSearch) return [];
     const normalized = query.trim().toLowerCase();
     return clients.filter((client) =>
-      `${client.client_id} ${client.client.name}`.toLowerCase().includes(normalized)
+      `${client.client_id} ${client.client.name}`
+        .toLowerCase()
+        .includes(normalized),
     );
   }, [clients, hasSearch, query]);
   const visibleClients = filteredClients.slice(0, 8);
@@ -469,19 +507,57 @@ export function CaseWorkflow({
 
   useEffect(() => {
     if (!selectedClient || !useClientRepresentative) return;
-    setValue("representative.rep_name", selectedClient.client_details.representative_name || "Not applicable", { shouldDirty: true, shouldValidate: true });
-    setValue("representative.rep_age", selectedClient.client_details.representative_age || 0, { shouldDirty: true, shouldValidate: true });
-    setValue("representative.rep_sex", selectedClient.client_details.representative_sex || selectedClient.client.sex || "", { shouldDirty: true, shouldValidate: true });
-    setValue("representative.civil_status", selectedClient.client_details.representative_civil_status || "", { shouldDirty: true, shouldValidate: true });
-    setValue("representative.rep_address", selectedClient.client_details.representative_address || selectedClient.client_details.address || "", { shouldDirty: true, shouldValidate: true });
-    setValue("representative.rep_contact_no", selectedClient.client_details.representative_contact_no || selectedClient.client_details.contact_no || "", { shouldDirty: true, shouldValidate: true });
-    setValue("representative.relationship_to_applicant", selectedClient.client_details.representative_relationship || "Client representative", { shouldDirty: true, shouldValidate: true });
+    setValue(
+      "representative.rep_name",
+      selectedClient.client_details.representative_name || "Not applicable",
+      { shouldDirty: true, shouldValidate: true },
+    );
+    setValue(
+      "representative.rep_age",
+      selectedClient.client_details.representative_age || 0,
+      { shouldDirty: true, shouldValidate: true },
+    );
+    setValue(
+      "representative.rep_sex",
+      selectedClient.client_details.representative_sex ||
+        selectedClient.client.sex ||
+        "",
+      { shouldDirty: true, shouldValidate: true },
+    );
+    setValue(
+      "representative.civil_status",
+      selectedClient.client_details.representative_civil_status || "",
+      { shouldDirty: true, shouldValidate: true },
+    );
+    setValue(
+      "representative.rep_address",
+      selectedClient.client_details.representative_address ||
+        selectedClient.client_details.address ||
+        "",
+      { shouldDirty: true, shouldValidate: true },
+    );
+    setValue(
+      "representative.rep_contact_no",
+      selectedClient.client_details.representative_contact_no ||
+        selectedClient.client_details.contact_no ||
+        "",
+      { shouldDirty: true, shouldValidate: true },
+    );
+    setValue(
+      "representative.relationship_to_applicant",
+      selectedClient.client_details.representative_relationship ||
+        "Client representative",
+      { shouldDirty: true, shouldValidate: true },
+    );
   }, [selectedClient, setValue, useClientRepresentative]);
 
   useEffect(() => () => stopCamera(), [stopCamera]);
 
   const selectClient = (client: ClientRecord) => {
-    setValue("client_id", client.client_id, { shouldValidate: true, shouldDirty: true });
+    setValue("client_id", client.client_id, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
     setQuery(client.client.name);
   };
 
@@ -490,10 +566,14 @@ export function CaseWorkflow({
     setQuery("");
   };
 
-  const handleClientSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const handleClientSearchKeyDown = (
+    event: KeyboardEvent<HTMLInputElement>,
+  ) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActiveClientIndex((current) => Math.min(current + 1, visibleClients.length - 1));
+      setActiveClientIndex((current) =>
+        Math.min(current + 1, visibleClients.length - 1),
+      );
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
@@ -531,11 +611,23 @@ export function CaseWorkflow({
     caseOcrFields.forEach((path) => {
       const current = getValues(path);
       const extracted = getPayloadValue(payload, path);
-      const isEmpty = current === "" || current === false || current === undefined || current === null;
+      const isEmpty =
+        current === "" ||
+        current === false ||
+        current === undefined ||
+        current === null;
       const canOverwriteDefault = overwriteDefaultOcrFields.has(path);
 
-      if ((isEmpty || canOverwriteDefault || replaceExistingWithOcr) && extracted !== undefined && extracted !== null && extracted !== "") {
-        setValue(path, extracted as never, { shouldDirty: true, shouldValidate: true });
+      if (
+        (isEmpty || canOverwriteDefault || replaceExistingWithOcr) &&
+        extracted !== undefined &&
+        extracted !== null &&
+        extracted !== ""
+      ) {
+        setValue(path, extracted as never, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
       }
     });
   };
@@ -562,7 +654,9 @@ export function CaseWorkflow({
       });
       toast.success("OCR extraction completed", { id: toastId });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "OCR failed", { id: toastId });
+      toast.error(error instanceof Error ? error.message : "OCR failed", {
+        id: toastId,
+      });
     } finally {
       setIsExtracting(false);
     }
@@ -575,7 +669,10 @@ export function CaseWorkflow({
       return;
     }
 
-    const file = await dataUrlToFile(captured, `live-case-scan-${Date.now()}.png`);
+    const file = await dataUrlToFile(
+      captured,
+      `live-case-scan-${Date.now()}.png`,
+    );
     await runOcr(file, captured, "Live camera case scan");
   };
 
@@ -611,13 +708,20 @@ export function CaseWorkflow({
         },
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to save case");
+      toast.error(
+        error instanceof Error ? error.message : "Unable to save case",
+      );
     }
   };
 
   return (
     <form
-      onSubmit={handleSubmit(submitCase, () => toast.error("Please resolve validation errors before saving."))}
+      onSubmit={handleSubmit(submitCase, () =>
+        toast.error(
+          getFirstValidationMessage(errors) ??
+            "Please resolve validation errors before saving.",
+        ),
+      )}
       className="flex max-h-[calc(92vh-138px)] flex-col"
     >
       <div className="border-b border-[#E5E7EB] bg-white px-6 py-4">
@@ -689,7 +793,8 @@ export function CaseWorkflow({
                       key={client.client_id}
                       onClick={() => selectClient(client)}
                       className={`block w-full px-4 py-3 text-left transition duration-200 hover:bg-[#F8FAFC] ${
-                        selectedClientId === client.client_id || activeClientIndex === index
+                        selectedClientId === client.client_id ||
+                        activeClientIndex === index
                           ? "bg-[#F7F0FA]"
                           : "bg-white"
                       }`}
@@ -699,7 +804,9 @@ export function CaseWorkflow({
                           <p className="text-sm font-semibold text-[#2B3642]">
                             {client.client.name}
                           </p>
-                          <p className="mt-1 text-xs text-[#4B5563]">{client.client_id}</p>
+                          <p className="mt-1 text-xs text-[#4B5563]">
+                            {client.client_id}
+                          </p>
                         </div>
                         <span className="text-xs font-medium text-[#4B5563]">
                           {client.client.sex}
@@ -728,9 +835,30 @@ export function CaseWorkflow({
             )}
 
             <div className="grid gap-4 md:grid-cols-3">
-              <MethodCard value="manual" title="Manual Entry" description="Enter case data manually." icon="fa-keyboard" selected={method === "manual"} onSelect={setMethod} />
-              <MethodCard value="camera" title="Live OCR Scan" description="Use live camera scanning." icon="fa-camera" selected={method === "camera"} onSelect={setMethod} />
-              <MethodCard value="upload" title="Upload Document" description="Upload a case document image." icon="fa-upload" selected={method === "upload"} onSelect={setMethod} />
+              <MethodCard
+                value="manual"
+                title="Manual Entry"
+                description="Enter case data manually."
+                icon="fa-keyboard"
+                selected={method === "manual"}
+                onSelect={setMethod}
+              />
+              <MethodCard
+                value="camera"
+                title="Live OCR Scan"
+                description="Use live camera scanning."
+                icon="fa-camera"
+                selected={method === "camera"}
+                onSelect={setMethod}
+              />
+              <MethodCard
+                value="upload"
+                title="Upload Document"
+                description="Upload a case document image."
+                icon="fa-upload"
+                selected={method === "upload"}
+                onSelect={setMethod}
+              />
             </div>
           </div>
         )}
@@ -740,20 +868,39 @@ export function CaseWorkflow({
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-[#2B3642]">
-                  {lockedClient ? "Client selected automatically" : selectedClient?.client.name || "No client selected"}
+                  {lockedClient
+                    ? "Client selected automatically"
+                    : selectedClient?.client.name || "No client selected"}
                 </p>
-                {lockedClient && <p className="text-sm text-[#2B3642]">{lockedClient.client.name}</p>}
+                {lockedClient && (
+                  <p className="text-sm text-[#2B3642]">
+                    {lockedClient.client.name}
+                  </p>
+                )}
                 <p className="text-xs text-[#4B5563]">
-                  Method: {method === "manual" ? "Manual Entry" : method === "camera" ? "Live OCR Scan" : "Upload Document"}
+                  Method:{" "}
+                  {method === "manual"
+                    ? "Manual Entry"
+                    : method === "camera"
+                      ? "Live OCR Scan"
+                      : "Upload Document"}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {!lockedClient && (
-                  <button type="button" onClick={() => setStep(0)} className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]">
+                  <button
+                    type="button"
+                    onClick={() => setStep(0)}
+                    className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
+                  >
                     Change Client
                   </button>
                 )}
-                <button type="button" onClick={() => setStep(lockedClient ? 0 : 1)} className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white">
+                <button
+                  type="button"
+                  onClick={() => setStep(lockedClient ? 0 : 1)}
+                  className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
+                >
                   Change Method
                 </button>
               </div>
@@ -765,26 +912,41 @@ export function CaseWorkflow({
                   <input
                     type="checkbox"
                     checked={replaceExistingWithOcr}
-                    onChange={(event) => setReplaceExistingWithOcr(event.target.checked)}
+                    onChange={(event) =>
+                      setReplaceExistingWithOcr(event.target.checked)
+                    }
                     className="mt-0.5 h-4 w-4 rounded border-[#2F80ED] text-[#2F80ED] focus:ring-[#2F80ED]"
                   />
                   <span>
-                    <span className="block font-semibold">Replace existing fields with scanned values</span>
+                    <span className="block font-semibold">
+                      Replace existing fields with scanned values
+                    </span>
                     <span className="mt-1 block text-[#1E40AF]">
-                      Leave this off to fill only blank fields. Form Date is always updated from Petsa when the scan finds it.
+                      Leave this off to fill only blank fields. Form Date is
+                      always updated from Petsa when the scan finds it.
                     </span>
                   </span>
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase text-[#1E3A8A]">OCR Engine</span>
+                  <span className="text-xs font-semibold uppercase text-[#1E3A8A]">
+                    OCR Engine
+                  </span>
                   <select
                     value={extractionEngine}
-                    onChange={(event) => setExtractionEngine(event.target.value as ExtractionEngineMode)}
+                    onChange={(event) =>
+                      setExtractionEngine(
+                        event.target.value as ExtractionEngineMode,
+                      )
+                    }
                     className="mt-1 h-10 w-full rounded-md border border-[#93C5FD] bg-white px-3 text-sm font-semibold text-[#111827] outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
                   >
-                    {Object.entries(extractionEngineLabels).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
+                    {Object.entries(extractionEngineLabels).map(
+                      ([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </label>
               </div>
@@ -793,14 +955,38 @@ export function CaseWorkflow({
             {method === "camera" && (
               <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
                 <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
-                  <video ref={videoRef} muted playsInline className="aspect-video w-full rounded-md border border-[#E5E7EB] bg-white object-cover" />
+                  <video
+                    ref={videoRef}
+                    muted
+                    playsInline
+                    className="aspect-video w-full rounded-md border border-[#E5E7EB] bg-white object-cover"
+                  />
                   <div className="space-y-3">
-                    <button type="button" onClick={startCamera} className="w-full rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:bg-[#5F3675]">Start Camera</button>
-                    <button type="button" onClick={stopCamera} className="w-full rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] transition duration-200 hover:bg-[#F8FAFC]">Stop Camera</button>
-                    <button type="button" disabled={!isCameraActive || isExtracting} onClick={handleCapture} className="w-full rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#704389] hover:text-white disabled:opacity-50">
+                    <button
+                      type="button"
+                      onClick={startCamera}
+                      className="w-full rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:bg-[#5F3675]"
+                    >
+                      Start Camera
+                    </button>
+                    <button
+                      type="button"
+                      onClick={stopCamera}
+                      className="w-full rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] transition duration-200 hover:bg-[#F8FAFC]"
+                    >
+                      Stop Camera
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!isCameraActive || isExtracting}
+                      onClick={handleCapture}
+                      className="w-full rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#704389] hover:text-white disabled:opacity-50"
+                    >
                       {isExtracting ? "Extracting..." : "Capture Case Fields"}
                     </button>
-                    {cameraError && <p className="text-sm text-red-600">{cameraError}</p>}
+                    {cameraError && (
+                      <p className="text-sm text-red-600">{cameraError}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -809,8 +995,15 @@ export function CaseWorkflow({
             {method === "upload" && (
               <div className="rounded-lg border border-dashed border-[#E5E7EB] bg-[#F9FAFB] p-4">
                 <label className="block">
-                  <span className="text-sm font-semibold text-[#4B5563]">Upload case document image</span>
-                  <input type="file" accept="image/*" onChange={handleUpload} className="mt-3 block w-full text-sm text-[#4B5563] file:mr-4 file:rounded-md file:border-0 file:bg-[#704389] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white" />
+                  <span className="text-sm font-semibold text-[#4B5563]">
+                    Upload case document image
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUpload}
+                    className="mt-3 block w-full text-sm text-[#4B5563] file:mr-4 file:rounded-md file:border-0 file:bg-[#704389] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
+                  />
                 </label>
               </div>
             )}
@@ -819,7 +1012,11 @@ export function CaseWorkflow({
               <div className="grid gap-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 lg:grid-cols-[220px_1fr]">
                 <div>
                   {documentPreview ? (
-                    <img src={documentPreview} alt="Document preview" className="max-h-40 w-full rounded-md border border-emerald-200 object-cover" />
+                    <img
+                      src={documentPreview}
+                      alt="Document preview"
+                      className="max-h-40 w-full rounded-md border border-emerald-200 object-cover"
+                    />
                   ) : (
                     <div className="flex h-32 items-center justify-center rounded-md border border-emerald-200 bg-white text-sm font-medium text-emerald-700">
                       {documentLabel || "PDF document"}
@@ -827,49 +1024,165 @@ export function CaseWorkflow({
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-emerald-800">Review extracted case fields before saving.</p>
-                  <p className="mt-1 text-sm text-emerald-700">OCR maps Filipino PAO labels like Petsa, Control No., Rehiyon, and request details into the case fields.</p>
+                  <p className="text-sm font-semibold text-emerald-800">
+                    Review extracted case fields before saving.
+                  </p>
+                  <p className="mt-1 text-sm text-emerald-700">
+                    OCR maps Filipino PAO labels like Petsa, Control No.,
+                    Rehiyon, and request details into the case fields.
+                  </p>
                 </div>
               </div>
             )}
 
             <section className="border-t border-[#E5E7EB] pt-4 first:border-t-0 first:pt-0">
-              <h3 className="text-sm font-semibold text-[#2B3642]">Case Identification</h3>
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                Case Identification
+              </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <TextInput label="Control No." registration={register("intake_record.control_no")} error={errors.intake_record?.control_no?.message} status={indicators["intake_record.control_no"]} />
-                <TextInput label="Form Date" registration={register("intake_record.form_date")} error={errors.intake_record?.form_date?.message} status={indicators["intake_record.form_date"]} />
-                <TextInput label="Region" registration={register("intake_record.region")} error={errors.intake_record?.region?.message} status={indicators["intake_record.region"]} />
-                <TextInput label="District Office" registration={register("intake_record.district_office")} error={errors.intake_record?.district_office?.message} status={indicators["intake_record.district_office"]} />
-                <TextInput label="Party Represented" registration={register("intake_record.party_represented")} error={errors.intake_record?.party_represented?.message} />
-                <TextInput label="Nature of Request" registration={register("intake_record.nature_of_request")} error={errors.intake_record?.nature_of_request?.message} />
-                <TextInput label="Nature of Case" registration={register("intake_record.nature_of_case")} error={errors.intake_record?.nature_of_case?.message} />
+                <TextInput
+                  label="Control No."
+                  registration={register("intake_record.control_no")}
+                  error={errors.intake_record?.control_no?.message}
+                  status={indicators["intake_record.control_no"]}
+                />
+                <TextInput
+                  label="Form Date"
+                  registration={register("intake_record.form_date")}
+                  error={errors.intake_record?.form_date?.message}
+                  status={indicators["intake_record.form_date"]}
+                />
+                <TextInput
+                  label="Region"
+                  registration={register("intake_record.region")}
+                  error={errors.intake_record?.region?.message}
+                  status={indicators["intake_record.region"]}
+                />
+                <TextInput
+                  label="District Office"
+                  registration={register("intake_record.district_office")}
+                  error={errors.intake_record?.district_office?.message}
+                  status={indicators["intake_record.district_office"]}
+                />
+                <TextInput
+                  label="Party Represented"
+                  registration={register("intake_record.party_represented")}
+                  error={errors.intake_record?.party_represented?.message}
+                />
+                <TextInput
+                  label="Nature of Request"
+                  registration={register("intake_record.nature_of_request")}
+                  error={errors.intake_record?.nature_of_request?.message}
+                />
+                <TextInput
+                  label="Nature of Case"
+                  registration={register("intake_record.nature_of_case")}
+                  error={errors.intake_record?.nature_of_case?.message}
+                />
               </div>
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#111827]">Conflict of Interest Agreement</h3>
+              <h3 className="text-sm font-semibold text-[#111827]">
+                Conflict of Interest Agreement
+              </h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <CheckboxInput label="Different office may assist if conflict exists" registration={register("intake_record.coi_agree_different_office")} status={indicators["intake_record.coi_agree_different_office"]} />
-                <CheckboxInput label="Same department appeal may proceed" registration={register("intake_record.coi_agree_same_dept_appeal")} status={indicators["intake_record.coi_agree_same_dept_appeal"]} />
-                <CheckboxInput label="Waives right to complain on conflict handling" registration={register("intake_record.coi_waive_right_to_complain")} status={indicators["intake_record.coi_waive_right_to_complain"]} />
-                <CheckboxInput label="Trusts assigned counsel" registration={register("intake_record.coi_trust_assigned_counsel")} status={indicators["intake_record.coi_trust_assigned_counsel"]} />
+                <CheckboxInput
+                  label="Different office may assist if conflict exists"
+                  registration={register(
+                    "intake_record.coi_agree_different_office",
+                  )}
+                  status={
+                    indicators["intake_record.coi_agree_different_office"]
+                  }
+                />
+                <CheckboxInput
+                  label="Same department appeal may proceed"
+                  registration={register(
+                    "intake_record.coi_agree_same_dept_appeal",
+                  )}
+                  status={
+                    indicators["intake_record.coi_agree_same_dept_appeal"]
+                  }
+                />
+                <CheckboxInput
+                  label="Waives right to complain on conflict handling"
+                  registration={register(
+                    "intake_record.coi_waive_right_to_complain",
+                  )}
+                  status={
+                    indicators["intake_record.coi_waive_right_to_complain"]
+                  }
+                />
+                <CheckboxInput
+                  label="Trusts assigned counsel"
+                  registration={register(
+                    "intake_record.coi_trust_assigned_counsel",
+                  )}
+                  status={
+                    indicators["intake_record.coi_trust_assigned_counsel"]
+                  }
+                />
               </div>
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#111827]">Proof of Qualification</h3>
+              <h3 className="text-sm font-semibold text-[#111827]">
+                Proof of Qualification
+              </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <TextInput label="Submission Deadline" type="date" registration={register("intake_record.proof_submission_deadline")} error={errors.intake_record?.proof_submission_deadline?.message} status={indicators["intake_record.proof_submission_deadline"]} />
-                <TextInput label="ITR Date" type="date" registration={register("intake_record.proof_itr_date")} error={errors.intake_record?.proof_itr_date?.message} status={indicators["intake_record.proof_itr_date"]} />
-                <TextInput label="Barangay Certification Date" type="date" registration={register("intake_record.proof_brgy_date")} error={errors.intake_record?.proof_brgy_date?.message} status={indicators["intake_record.proof_brgy_date"]} />
-                <TextInput label="DSWD Certification Date" type="date" registration={register("intake_record.proof_dswd_date")} error={errors.intake_record?.proof_dswd_date?.message} status={indicators["intake_record.proof_dswd_date"]} />
-                <TextInput label="Other Proof Date" type="date" registration={register("intake_record.proof_others_date")} error={errors.intake_record?.proof_others_date?.message} status={indicators["intake_record.proof_others_date"]} />
-                <TextInput label="Other Proof Details" registration={register("intake_record.proof_others_details")} error={errors.intake_record?.proof_others_details?.message} status={indicators["intake_record.proof_others_details"]} />
+                <TextInput
+                  label="Submission Deadline"
+                  type="date"
+                  registration={register(
+                    "intake_record.proof_submission_deadline",
+                  )}
+                  error={
+                    errors.intake_record?.proof_submission_deadline?.message
+                  }
+                  status={indicators["intake_record.proof_submission_deadline"]}
+                />
+                <TextInput
+                  label="ITR Date"
+                  type="date"
+                  registration={register("intake_record.proof_itr_date")}
+                  error={errors.intake_record?.proof_itr_date?.message}
+                  status={indicators["intake_record.proof_itr_date"]}
+                />
+                <TextInput
+                  label="Barangay Certification Date"
+                  type="date"
+                  registration={register("intake_record.proof_brgy_date")}
+                  error={errors.intake_record?.proof_brgy_date?.message}
+                  status={indicators["intake_record.proof_brgy_date"]}
+                />
+                <TextInput
+                  label="DSWD Certification Date"
+                  type="date"
+                  registration={register("intake_record.proof_dswd_date")}
+                  error={errors.intake_record?.proof_dswd_date?.message}
+                  status={indicators["intake_record.proof_dswd_date"]}
+                />
+                <TextInput
+                  label="Other Proof Date"
+                  type="date"
+                  registration={register("intake_record.proof_others_date")}
+                  error={errors.intake_record?.proof_others_date?.message}
+                  status={indicators["intake_record.proof_others_date"]}
+                />
+                <TextInput
+                  label="Other Proof Details"
+                  registration={register("intake_record.proof_others_details")}
+                  error={errors.intake_record?.proof_others_details?.message}
+                  status={indicators["intake_record.proof_others_details"]}
+                />
               </div>
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">VIII Applicant Case Involvement</h3>
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                VIII Applicant Case Involvement
+              </h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {[
                   "Plaintiff",
@@ -881,7 +1194,10 @@ export function CaseWorkflow({
                   "Complainant",
                   "Accused",
                 ].map((role) => (
-                  <label key={role} className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
+                  <label
+                    key={role}
+                    className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]"
+                  >
                     <input
                       type="radio"
                       value={role}
@@ -892,31 +1208,75 @@ export function CaseWorkflow({
                   </label>
                 ))}
               </div>
-              <FieldError message={errors.intake_record?.applicant_role?.message} />
+              <FieldError
+                message={errors.intake_record?.applicant_role?.message}
+              />
               {applicantRole === "Others" && (
                 <div className="mt-3 max-w-md">
-                  <TextInput label="Specify Role" registration={register("intake_record.applicant_role_other")} error={errors.intake_record?.applicant_role_other?.message} />
+                  <TextInput
+                    label="Specify Role"
+                    registration={register(
+                      "intake_record.applicant_role_other",
+                    )}
+                    error={errors.intake_record?.applicant_role_other?.message}
+                  />
                 </div>
               )}
               <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <CheckboxInput label="Plaintiff" registration={register("intake_record.inv_plaintiff")} status={indicators["intake_record.inv_plaintiff"]} />
-                <CheckboxInput label="Defendant" registration={register("intake_record.inv_defendant")} status={indicators["intake_record.inv_defendant"]} />
-                <CheckboxInput label="Oppositor" registration={register("intake_record.inv_oppositor")} status={indicators["intake_record.inv_oppositor"]} />
-                <CheckboxInput label="Petitioner" registration={register("intake_record.inv_petitioner")} status={indicators["intake_record.inv_petitioner"]} />
-                <CheckboxInput label="Respondent" registration={register("intake_record.inv_respondent")} status={indicators["intake_record.inv_respondent"]} />
-                <CheckboxInput label="Complainant" registration={register("intake_record.inv_complainant")} status={indicators["intake_record.inv_complainant"]} />
-                <CheckboxInput label="Accused" registration={register("intake_record.inv_accused")} status={indicators["intake_record.inv_accused"]} />
-                <TextInput label="Others" registration={register("intake_record.inv_others")} error={errors.intake_record?.inv_others?.message} status={indicators["intake_record.inv_others"]} />
+                <CheckboxInput
+                  label="Plaintiff"
+                  registration={register("intake_record.inv_plaintiff")}
+                  status={indicators["intake_record.inv_plaintiff"]}
+                />
+                <CheckboxInput
+                  label="Defendant"
+                  registration={register("intake_record.inv_defendant")}
+                  status={indicators["intake_record.inv_defendant"]}
+                />
+                <CheckboxInput
+                  label="Oppositor"
+                  registration={register("intake_record.inv_oppositor")}
+                  status={indicators["intake_record.inv_oppositor"]}
+                />
+                <CheckboxInput
+                  label="Petitioner"
+                  registration={register("intake_record.inv_petitioner")}
+                  status={indicators["intake_record.inv_petitioner"]}
+                />
+                <CheckboxInput
+                  label="Respondent"
+                  registration={register("intake_record.inv_respondent")}
+                  status={indicators["intake_record.inv_respondent"]}
+                />
+                <CheckboxInput
+                  label="Complainant"
+                  registration={register("intake_record.inv_complainant")}
+                  status={indicators["intake_record.inv_complainant"]}
+                />
+                <CheckboxInput
+                  label="Accused"
+                  registration={register("intake_record.inv_accused")}
+                  status={indicators["intake_record.inv_accused"]}
+                />
+                <TextInput
+                  label="Others"
+                  registration={register("intake_record.inv_others")}
+                  error={errors.intake_record?.inv_others?.message}
+                  status={indicators["intake_record.inv_others"]}
+                />
               </div>
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-[#2B3642]">Representative</h3>
+                  <h3 className="text-sm font-semibold text-[#2B3642]">
+                    Representative
+                  </h3>
                   {lockedClient && useClientRepresentative && (
                     <p className="mt-1 text-sm text-[#4B5563]">
-                      Using representative details already saved on the client record.
+                      Using representative details already saved on the client
+                      record.
                     </p>
                   )}
                 </div>
@@ -925,7 +1285,9 @@ export function CaseWorkflow({
                     <input
                       type="checkbox"
                       checked={!useClientRepresentative}
-                      onChange={(event) => setUseClientRepresentative(!event.target.checked)}
+                      onChange={(event) =>
+                        setUseClientRepresentative(!event.target.checked)
+                      }
                       className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
                     />
                     Use Different Representative
@@ -933,48 +1295,106 @@ export function CaseWorkflow({
                 )}
               </div>
 
-              {(!lockedClient || !useClientRepresentative) ? (
+              {!lockedClient || !useClientRepresentative ? (
                 <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  <TextInput label="Representative Name" registration={register("representative.rep_name")} error={errors.representative?.rep_name?.message} />
-                  <TextInput label="Representative Age" type="number" registration={register("representative.rep_age", { valueAsNumber: true })} error={errors.representative?.rep_age?.message} />
-                  <TextInput label="Representative Sex" registration={register("representative.rep_sex")} error={errors.representative?.rep_sex?.message} />
-                  <TextInput label="Civil Status" registration={register("representative.civil_status")} error={errors.representative?.civil_status?.message} />
-                  <TextInput label="Representative Address" registration={register("representative.rep_address")} error={errors.representative?.rep_address?.message} />
-                  <TextInput label="Representative Contact No." registration={register("representative.rep_contact_no")} error={errors.representative?.rep_contact_no?.message} />
-                  <TextInput label="Relationship to Applicant" registration={register("representative.relationship_to_applicant")} error={errors.representative?.relationship_to_applicant?.message} />
+                  <TextInput
+                    label="Representative Name"
+                    registration={register("representative.rep_name")}
+                    error={errors.representative?.rep_name?.message}
+                  />
+                  <TextInput
+                    label="Representative Age"
+                    type="number"
+                    registration={register("representative.rep_age", {
+                      valueAsNumber: true,
+                    })}
+                    error={errors.representative?.rep_age?.message}
+                  />
+                  <TextInput
+                    label="Representative Sex"
+                    registration={register("representative.rep_sex")}
+                    error={errors.representative?.rep_sex?.message}
+                  />
+                  <TextInput
+                    label="Civil Status"
+                    registration={register("representative.civil_status")}
+                    error={errors.representative?.civil_status?.message}
+                  />
+                  <TextInput
+                    label="Representative Address"
+                    registration={register("representative.rep_address")}
+                    error={errors.representative?.rep_address?.message}
+                  />
+                  <TextInput
+                    label="Representative Contact No."
+                    registration={register("representative.rep_contact_no")}
+                    error={errors.representative?.rep_contact_no?.message}
+                  />
+                  <TextInput
+                    label="Relationship to Applicant"
+                    registration={register(
+                      "representative.relationship_to_applicant",
+                    )}
+                    error={
+                      errors.representative?.relationship_to_applicant?.message
+                    }
+                  />
                 </div>
               ) : (
                 <div className="mt-3 rounded-lg border border-[#E7D7EE] bg-[#F7F0FA] p-4">
                   <p className="text-sm font-semibold text-[#5F3675]">
-                    {selectedClient?.client_details.representative_name || selectedClient?.client.name || "Client representative"}
+                    {selectedClient?.client_details.representative_name ||
+                      selectedClient?.client.name ||
+                      "Client representative"}
                   </p>
                   <p className="mt-1 text-sm text-[#5F3675]">
-                    {selectedClient?.client_details.representative_relationship || "Representative details will be copied into this case."}
+                    {selectedClient?.client_details
+                      .representative_relationship ||
+                      "Representative details will be copied into this case."}
                   </p>
                 </div>
               )}
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">VIII-A Adverse Party</h3>
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                VIII-A Adverse Party
+              </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2">
-                <TextInput label="Adverse Party Role" registration={register("adverse_party.role")} error={errors.adverse_party?.role?.message} />
-                <TextInput label="Adverse Party Name" registration={register("adverse_party.name")} error={errors.adverse_party?.name?.message} />
+                <TextInput
+                  label="Adverse Party Role"
+                  registration={register("adverse_party.role")}
+                  error={errors.adverse_party?.role?.message}
+                />
+                <TextInput
+                  label="Adverse Party Name"
+                  registration={register("adverse_party.name")}
+                  error={errors.adverse_party?.name?.message}
+                />
                 <div className="md:col-span-2">
-                  <TextInput label="Adverse Party Address" registration={register("adverse_party.address")} error={errors.adverse_party?.address?.message} />
+                  <TextInput
+                    label="Adverse Party Address"
+                    registration={register("adverse_party.address")}
+                    error={errors.adverse_party?.address?.message}
+                  />
                 </div>
               </div>
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">Case Status</h3>
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                Case Status
+              </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <label className="block">
                   <span className="text-sm font-medium text-[#4B5563]">
                     Status of Case
                     <FieldStatus status={indicators["cases.status_of_case"]} />
                   </span>
-                  <select {...register("cases.status_of_case")} className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
+                  <select
+                    {...register("cases.status_of_case")}
+                    className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                  >
                     <option>Pending</option>
                     <option>Ongoing</option>
                     <option>Active</option>
@@ -982,64 +1402,139 @@ export function CaseWorkflow({
                     <option>Archived</option>
                   </select>
                 </label>
-                <TextInput label="Last Action Taken" registration={register("cases.last_action_taken")} error={errors.cases?.last_action_taken?.message} />
-                <TextInput label="Date of Confinement" type="date" registration={register("cases.date_of_confinement")} />
-                <TextInput label="Place of Detention" registration={register("cases.place_of_detention")} />
+                <TextInput
+                  label="Last Action Taken"
+                  registration={register("cases.last_action_taken")}
+                  error={errors.cases?.last_action_taken?.message}
+                />
+                <TextInput
+                  label="Date of Confinement"
+                  type="date"
+                  registration={register("cases.date_of_confinement")}
+                />
+                <TextInput
+                  label="Place of Detention"
+                  registration={register("cases.place_of_detention")}
+                />
                 <label className="block">
-                  <span className="text-sm font-medium text-[#4B5563]">Location Type</span>
-                  <select {...register("cases.location_type")} className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
+                  <span className="text-sm font-medium text-[#4B5563]">
+                    Location Type
+                  </span>
+                  <select
+                    {...register("cases.location_type")}
+                    className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                  >
                     <option value="">Select</option>
                     <option>Urban</option>
                     <option>Rural</option>
                   </select>
                 </label>
                 <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
-                  <input type="checkbox" {...register("cases.pending_in_court")} className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]" />
+                  <input
+                    type="checkbox"
+                    {...register("cases.pending_in_court")}
+                    className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                  />
                   Pending in Court?
                 </label>
                 <div className="md:col-span-2 lg:col-span-3">
-                  <TextArea label="VIII-B Facts of Case" registration={register("cases.facts_of_case")} error={errors.cases?.facts_of_case?.message} status={indicators["cases.facts_of_case"]} />
+                  <TextArea
+                    label="VIII-B Facts of Case"
+                    registration={register("cases.facts_of_case")}
+                    error={errors.cases?.facts_of_case?.message}
+                    status={indicators["cases.facts_of_case"]}
+                  />
                 </div>
                 <div className="md:col-span-2 lg:col-span-3">
-                  <TextArea label="VIII-C Cause of Action / Nature of Offense" registration={register("cases.cause_of_action")} error={errors.cases?.cause_of_action?.message} status={indicators["cases.cause_of_action"]} />
+                  <TextArea
+                    label="VIII-C Cause of Action / Nature of Offense"
+                    registration={register("cases.cause_of_action")}
+                    error={errors.cases?.cause_of_action?.message}
+                    status={indicators["cases.cause_of_action"]}
+                  />
                 </div>
                 {pendingInCourt && (
                   <div className="md:col-span-2 lg:col-span-3">
-                    <h4 className="mb-3 text-sm font-semibold text-[#2B3642]">VIII-D Pending Court Details</h4>
+                    <h4 className="mb-3 text-sm font-semibold text-[#2B3642]">
+                      VIII-D Pending Court Details
+                    </h4>
                     <div className="grid gap-4 md:grid-cols-3">
-                      <TextInput label="Title of Case" registration={register("cases.title_of_case")} error={errors.cases?.title_of_case?.message} status={indicators["cases.title_of_case"]} />
-                      <TextInput label="Docket Number" registration={register("cases.case_no")} error={errors.cases?.case_no?.message} status={indicators["cases.case_no"]} />
-                      <TextInput label="Court / Body / Tribunal" registration={register("cases.court_body")} error={errors.cases?.court_body?.message} status={indicators["cases.court_body"]} />
+                      <TextInput
+                        label="Title of Case"
+                        registration={register("cases.title_of_case")}
+                        error={errors.cases?.title_of_case?.message}
+                        status={indicators["cases.title_of_case"]}
+                      />
+                      <TextInput
+                        label="Docket Number"
+                        registration={register("cases.case_no")}
+                        error={errors.cases?.case_no?.message}
+                        status={indicators["cases.case_no"]}
+                      />
+                      <TextInput
+                        label="Court / Body / Tribunal"
+                        registration={register("cases.court_body")}
+                        error={errors.cases?.court_body?.message}
+                        status={indicators["cases.court_body"]}
+                      />
                     </div>
                   </div>
                 )}
                 {status === "Terminated" && (
                   <>
-                    <TextInput label="Cause of Termination" registration={register("cases.cause_of_termination")} status={indicators["cases.cause_of_termination"]} />
-                    <TextInput label="Date of Termination" type="date" registration={register("cases.date_of_termination")} status={indicators["cases.date_of_termination"]} />
+                    <TextInput
+                      label="Cause of Termination"
+                      registration={register("cases.cause_of_termination")}
+                      status={indicators["cases.cause_of_termination"]}
+                    />
+                    <TextInput
+                      label="Date of Termination"
+                      type="date"
+                      registration={register("cases.date_of_termination")}
+                      status={indicators["cases.date_of_termination"]}
+                    />
                   </>
                 )}
               </div>
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">Incident Location</h3>
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                Incident Location
+              </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <label className="block">
-                  <span className="text-sm font-medium text-[#4B5563]">Barangay</span>
-                  <select {...register("cases.incident_barangay")} className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
+                  <span className="text-sm font-medium text-[#4B5563]">
+                    Barangay
+                  </span>
+                  <select
+                    {...register("cases.incident_barangay")}
+                    className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                  >
                     <option value="">Select barangay</option>
                     {panaboBarangays.map((barangay) => (
                       <option key={barangay}>{barangay}</option>
                     ))}
                   </select>
                 </label>
-                <TextInput label="City" registration={register("cases.incident_city")} />
+                <TextInput
+                  label="City"
+                  registration={register("cases.incident_city")}
+                />
                 <div className="lg:col-span-3">
-                  <TextInput label="Incident Address" registration={register("cases.incident_address")} />
+                  <TextInput
+                    label="Incident Address"
+                    registration={register("cases.incident_address")}
+                  />
                 </div>
-                <TextInput label="Latitude (optional)" registration={register("cases.latitude")} />
-                <TextInput label="Longitude (optional)" registration={register("cases.longitude")} />
+                <TextInput
+                  label="Latitude (optional)"
+                  registration={register("cases.latitude")}
+                />
+                <TextInput
+                  label="Longitude (optional)"
+                  registration={register("cases.longitude")}
+                />
               </div>
             </section>
           </div>
@@ -1058,27 +1553,47 @@ export function CaseWorkflow({
 
         <div className="flex flex-wrap justify-end gap-2">
           {!lockedClient && step > 0 && (
-            <button type="button" onClick={() => setStep(0)} className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#2B3642]">
+            <button
+              type="button"
+              onClick={() => setStep(0)}
+              className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#2B3642]"
+            >
               Change Client
             </button>
           )}
           {isCaseFormStep && (
-            <button type="button" onClick={() => setStep(lockedClient ? 0 : 1)} className="rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#704389] hover:text-white">
+            <button
+              type="button"
+              onClick={() => setStep(lockedClient ? 0 : 1)}
+              className="rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#704389] hover:text-white"
+            >
               Change Method
             </button>
           )}
           {!lockedClient && step === 0 && (
-            <button type="button" onClick={continueFromClient} className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675]">
+            <button
+              type="button"
+              onClick={continueFromClient}
+              className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675]"
+            >
               Continue
             </button>
           )}
           {isMethodStep && (
-            <button type="button" onClick={continueFromMethod} disabled={!method} className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50">
+            <button
+              type="button"
+              onClick={continueFromMethod}
+              disabled={!method}
+              className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
+            >
               Continue
             </button>
           )}
           {isCaseFormStep && (
-            <button type="submit" className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675]">
+            <button
+              type="submit"
+              className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675]"
+            >
               {submitLabel}
             </button>
           )}
@@ -1087,4 +1602,3 @@ export function CaseWorkflow({
     </form>
   );
 }
-
