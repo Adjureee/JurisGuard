@@ -103,6 +103,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       login: async (payload) => {
         const response = await authService.login(payload);
         sessionStorage.setItem(TOKEN_STORAGE_KEY, response.access_token);
+        authService.saveTrustedDeviceToken(
+          payload.email,
+          response.mfa_trusted_device_token,
+        );
         setToken(response.access_token);
 
         const currentUser = await authService.getMe();

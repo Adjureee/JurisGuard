@@ -1,5 +1,10 @@
-export type UserRole = "admin" | "staff";
-export type ApprovalStatus = "pending" | "under_review" | "approved" | "rejected" | "suspended";
+export type UserRole = "admin" | "staff" | "legal_staff";
+export type ApprovalStatus =
+  | "pending"
+  | "under_review"
+  | "approved"
+  | "rejected"
+  | "suspended";
 
 export interface AuthUser {
   user_id: number;
@@ -10,6 +15,7 @@ export interface AuthUser {
   mfa_enabled: boolean;
   profile_image_path: string | null;
   profile_picture_path: string | null;
+  employee_id_path: string | null;
   profile_completed: boolean;
 }
 
@@ -28,11 +34,14 @@ export interface LoginPayload {
   email: string;
   password: string;
   otpCode?: string;
+  rememberDevice?: boolean;
+  trustedDeviceToken?: string | null;
 }
 
 export interface TokenResponse {
   access_token: string;
   token_type: "bearer";
+  mfa_trusted_device_token?: string | null;
 }
 
 export interface AdminUserListItem extends AuthUser {
@@ -53,10 +62,10 @@ export interface UserProfile {
   birth_date: string | null;
   profile_image_path: string | null;
   profile_picture_path: string | null;
+  employee_id_path: string | null;
   profile_completed: boolean;
 }
 
 export interface AdminUserDetails extends AdminUserListItem {
   profile: UserProfile;
 }
-

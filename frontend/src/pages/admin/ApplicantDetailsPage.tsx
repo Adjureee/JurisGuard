@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import toast from "react-hot-toast";
+import ImagePreviewModal from "../../components/ImagePreviewModal";
+import { API_ORIGIN } from "../../api/client";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
@@ -37,6 +39,29 @@ function isFinalStatus(status: ApprovalStatus) {
   return status === "approved" || status === "rejected";
 }
 
+function resolveEmployeeIdEvidence(user: AdminUserDetails | null) {
+  const raw =
+    user?.employee_id_path ||
+    user?.profile?.employee_id_path ||
+    user?.profile_picture_path ||
+    user?.profile?.profile_picture_path ||
+    "";
+
+  if (!raw) {
+    return { imageSrc: "", reference: "" };
+  }
+
+  if (raw.startsWith("/uploads")) {
+    return { imageSrc: `${API_ORIGIN}${raw}`, reference: raw };
+  }
+
+  if (raw.startsWith("data:image/") || raw.startsWith("http")) {
+    return { imageSrc: raw, reference: raw };
+  }
+
+  return { imageSrc: "", reference: raw };
+}
+
 export default function ApplicantDetailsPage() {
   const { user: currentUser } = useAuth();
   const { id } = useParams();
@@ -47,6 +72,7 @@ export default function ApplicantDetailsPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!Number.isFinite(userId)) return;
@@ -113,6 +139,8 @@ export default function ApplicantDetailsPage() {
     }
   };
 
+  const employeeIdEvidence = resolveEmployeeIdEvidence(applicant);
+
   return (
     <MainLayout>
       <PageHeader
@@ -166,6 +194,49 @@ export default function ApplicantDetailsPage() {
           </div>
 
           <aside className="h-fit rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm ">
+            <div className="mb-5 border-b border-[#E5E7EB] pb-5">
+              <h2 className="text-base font-semibold text-[#2B3642]">Employee ID</h2>
+              <div className="mt-3 overflow-hidden rounded-xl border border-[#E5E7EB] bg-[#F9FAFB]">
+                {employeeIdEvidence.imageSrc ? (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewImage(employeeIdEvidence.imageSrc)}
+                    className="block w-full"
+                    aria-label="Preview employee ID"
+                  >
+                    <img
+                      src={employeeIdEvidence.imageSrc}
+                      alt="Employee ID"
+                      className="h-52 w-full object-contain"
+                    />
+                  </button>
+                ) : employeeIdEvidence.reference ? (
+                  <div className="flex h-52 flex-col items-center justify-center gap-2 px-4 text-center text-sm text-[#4B5563]">
+                    <span className="font-semibold text-[#2B3642]">
+                      Employee ID was submitted
+                    </span>
+                    <span className="break-all text-xs">
+                      This record contains only a local upload reference.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex h-52 items-center justify-center px-4 text-center text-sm text-[#4B5563]">
+                    Employee ID image is not available.
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  employeeIdEvidence.imageSrc &&
+                  setPreviewImage(employeeIdEvidence.imageSrc)
+                }
+                disabled={!employeeIdEvidence.imageSrc}
+                className="mt-3 w-full rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Preview ID
+              </button>
+            </div>
             <h2 className="text-base font-semibold text-[#2B3642]">Actions</h2>
             {isFinalStatus(applicant.approval_status) ? (
               <p className="mt-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm text-[#4B5563]">
@@ -192,6 +263,12 @@ export default function ApplicantDetailsPage() {
           </aside>
         </div>
       )}
+      <ImagePreviewModal
+        image={previewImage}
+        alt="Employee ID"
+        title="Employee ID Preview"
+        onClose={() => setPreviewImage(null)}
+      />
     </MainLayout>
   );
 }
