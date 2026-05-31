@@ -4,6 +4,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
 import MainLayout from "../../layouts/MainLayout";
+import PageHeader from "../../components/PageHeader";
 import ImagePreviewModal from "../../components/ImagePreviewModal";
 import { API_ORIGIN } from "../../api/client";
 import {
@@ -202,16 +203,12 @@ export default function VerificationPage() {
 
   return (
     <MainLayout>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-[#704389]">
-            Application Review
-          </p>
-          <h1 className="text-2xl font-semibold text-[#2B3642]">
-            User Verification
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        eyebrow="Application Review"
+        title="User Verification"
+        description="Review registration requests, validate uploaded identification, and manage account approval decisions."
+        actions={
+          <div className="flex items-center gap-2">
           <select
             value={filter}
             onChange={(event) =>
@@ -229,8 +226,9 @@ export default function VerificationPage() {
           <span className="rounded-full bg-[#704389] px-3 py-1 text-xs font-semibold text-white">
             {requestCount}
           </span>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       <section className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
         <div className="border-b border-[#E5E7EB] bg-white px-5 py-4">
@@ -434,7 +432,7 @@ export default function VerificationPage() {
       </section>
 
       {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm sm:items-center">
           <div className="max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-4">
               <div>

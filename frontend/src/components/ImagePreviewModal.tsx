@@ -26,7 +26,7 @@ export default function ImagePreviewModal({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/80 px-4 py-6 backdrop-blur-sm sm:items-center"
       onMouseDown={onClose}
       role="dialog"
       aria-modal="true"

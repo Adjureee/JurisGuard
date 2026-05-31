@@ -225,7 +225,7 @@ export default function ReportExportModal({
   const labelClass = "text-xs font-semibold uppercase tracking-wide text-[#2B3642]";
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4 py-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-4 backdrop-blur-sm sm:items-center">
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div className="flex items-start justify-between gap-4">

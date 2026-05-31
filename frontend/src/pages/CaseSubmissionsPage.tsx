@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import MainLayout from "../layouts/MainLayout";
+import PageHeader from "../components/PageHeader";
 import { useAuth } from "../contexts/AuthContext";
 import { useAuditLogStore } from "../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../features/notifications/notificationStore";
@@ -168,9 +169,15 @@ export default function CaseSubmissionsPage() {
       const rows = await listCaseSubmissions();
       setSubmissions(Array.isArray(rows) ? rows : []);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to load submissions";
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      const message = status === 401
+        ? "Your session expired. Please sign in again."
+        : error instanceof Error
+          ? error.message
+          : "Unable to load submissions";
       setLoadError(message);
       setSubmissions([]);
+      if (status === 401) return;
       throw error;
     } finally {
       setLoadingSubmissions(false);
@@ -370,24 +377,16 @@ export default function CaseSubmissionsPage() {
 
   return (
     <MainLayout>
-      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">
-            {isAdmin ? "Case Review Center" : "Case Submissions"}
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-[#2B3642]">
-            {isAdmin ? "Supervisory Report Review" : "Report Management"}
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm text-[#6B7280]">
-            Internal PAO report review workflow with snapshots, correction tracking, version history, and approved export packages.
-          </p>
-        </div>
-        {!isAdmin && (
+      <PageHeader
+        eyebrow={isAdmin ? "Case Review Center" : "Case Submissions"}
+        title={isAdmin ? "Supervisory Report Review" : "Report Management"}
+        description="Internal PAO report review workflow with snapshots, correction tracking, version history, and approved export packages."
+        actions={!isAdmin ? (
           <button type="button" onClick={openCreateModal} className="h-10 rounded-lg bg-[#704389] px-4 text-sm font-semibold text-white hover:bg-[#5F3675]">
             Create Report
           </button>
-        )}
-      </div>
+        ) : null}
+      />
 
       <section className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
         <div className="grid gap-3 border-b border-[#E5E7EB] bg-white px-5 py-4 md:grid-cols-[1fr_220px_auto] md:items-end">
@@ -445,7 +444,7 @@ export default function CaseSubmissionsPage() {
       </section>
 
       {reportModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4 py-5 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-5 backdrop-blur-sm sm:items-center">
           <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
             <div className="flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
               <div>
@@ -500,7 +499,7 @@ export default function CaseSubmissionsPage() {
       )}
 
       {selected && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4 py-5 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-5 backdrop-blur-sm sm:items-center">
           <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
             <ReportHeader submission={selected} />
             <div className="min-h-0 flex-1 overflow-y-auto p-6">

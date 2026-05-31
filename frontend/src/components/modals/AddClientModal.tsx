@@ -463,7 +463,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
+    <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200 sm:items-center">
       <div className="max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div className="flex items-center justify-between gap-4">

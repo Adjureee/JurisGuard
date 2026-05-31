@@ -1,4 +1,5 @@
 import MainLayout from "../layouts/MainLayout";
+import PageHeader from "../components/PageHeader";
 import { useAuth } from "../contexts/AuthContext";
 import { useAuditLogStore, type AuditLogEntry } from "../features/auditLogs/auditLogStore";
 import { useEffect, useMemo, useState } from "react";
@@ -104,10 +105,14 @@ export default function AuditLogsPage() {
 
   return (
     <MainLayout>
-      <div className="mb-5">
-        <p className="text-sm font-semibold text-[#704389]">System Activity</p>
-        <h2 className="text-2xl font-bold text-[#2B3642]">Audit Logs</h2>
-      </div>
+      <PageHeader
+        eyebrow="System Activity"
+        title="Audit Logs"
+        description={user?.role === "admin"
+          ? "Monitor system-wide user actions, exports, authentication events, and record changes."
+          : "Review your own account activity, record changes, exports, and authentication events."
+        }
+      />
 
       <section className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
         <div className="grid gap-3 border-b border-[#E5E7EB] bg-white px-5 py-4 md:grid-cols-4">

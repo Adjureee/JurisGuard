@@ -211,22 +211,23 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
         const results = await Promise.allSettled([
           getDashboardOverview(),
           getMonthlyTrends(),
+          getCaseCategories(),
           getBarangayStats(),
           getIntakeLoadAnalytics(),
-          getOcrAnalytics(),
+          getRecentActivities(),
         ]);
         if (cancelled) return;
-        const [overviewResult, monthlyResult, barangayResult, intakeLoadResult, ocrResult] = results;
+        const [overviewResult, monthlyResult, categoryResult, barangayResult, intakeLoadResult, activityResult] = results;
         const snapshot: DashboardAnalyticsSnapshot = {
           overview: getSettledValue(overviewResult, emptyOverview, "overview"),
           monthlyTrends: safeArray<MonthlyTrend>(getSettledValue(monthlyResult, [], "monthly trends")),
-          caseCategories: [],
+          caseCategories: safeArray<CaseCategoryStat>(getSettledValue(categoryResult, [], "case categories")),
           barangays: safeArray<BarangayStat>(getSettledValue(barangayResult, [], "barangay stats")),
           heatmap: null,
           terminatedStats: emptyTerminatedStats,
-          activities: [],
+          activities: safeArray<RecentActivity>(getSettledValue(activityResult, [], "recent activity")),
           intakeLoad: safeIntakeLoad(getSettledValue(intakeLoadResult, emptyIntakeLoad, "intake load")),
-          ocrAnalytics: safeOcrAnalytics(getSettledValue(ocrResult, emptyOcrAnalytics, "OCR analytics")),
+          ocrAnalytics: null,
         };
         analyticsCache.set(cacheKey, snapshot);
         setOverview(snapshot.overview);

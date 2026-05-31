@@ -30,6 +30,8 @@ import {
 } from "../components/dashboard/AnalyticsPrimitives";
 import ReportExportModal, { type ReportExportRow } from "../components/modals/ReportExportModal";
 import MainLayout from "../layouts/MainLayout";
+import PageHeader from "../components/PageHeader";
+import { formatLegalMonth } from "../services/dashboardService";
 import { useDashboardAnalytics } from "./dashboard/useDashboardAnalytics";
 
 const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsMap"));
@@ -94,9 +96,17 @@ export default function AnalyticsPage() {
   const [exportOpen, setExportOpen] = useState(false);
 
   const intakeTotal = useMemo(() => monthlyTrends.reduce((sum, row) => sum + row.total_cases, 0), [monthlyTrends]);
-  const intakePeak = useMemo(
-    () => monthlyTrends.reduce<typeof monthlyTrends[number] | null>((best, row) => (!best || row.total_cases > best.total_cases ? row : best), null),
+  const displayMonthlyTrends = useMemo(
+    () => monthlyTrends.map((row) => ({ ...row, month: formatLegalMonth(row.month) })),
     [monthlyTrends]
+  );
+  const displayTerminatedMonthly = useMemo(
+    () => (terminatedStats?.monthly ?? []).map((row) => ({ ...row, month: formatLegalMonth(row.month) })),
+    [terminatedStats]
+  );
+  const intakePeak = useMemo(
+    () => displayMonthlyTrends.reduce<typeof displayMonthlyTrends[number] | null>((best, row) => (!best || row.total_cases > best.total_cases ? row : best), null),
+    [displayMonthlyTrends]
   );
   const mostCommonReason = terminatedStats?.most_common_reason ?? terminatedStats?.by_reason[0]?.reason ?? "No closures in range";
   const averageDailyIntake = intakeLoad?.average_daily_intake ?? 0;
@@ -121,8 +131,8 @@ export default function AnalyticsPage() {
     const monthlyRows = monthlyTrends.map((row) => ({
       dataset: "monthly_intake_trends",
       case_category: "Monthly Case Trends",
-      date: row.month,
-      label: row.month,
+      date: formatLegalMonth(row.month),
+      label: formatLegalMonth(row.month),
       value: row.total_cases,
       case_status: "All",
       barangay: "",
@@ -191,8 +201,8 @@ export default function AnalyticsPage() {
     const terminatedRows = (terminatedStats?.monthly ?? []).map((row) => ({
       dataset: "terminated_case_movement",
       case_category: "Termination Trends",
-      date: row.month,
-      label: row.month,
+      date: formatLegalMonth(row.month),
+      label: formatLegalMonth(row.month),
       value: row.total_cases,
       case_status: "Terminated",
       barangay: "",
@@ -205,8 +215,8 @@ export default function AnalyticsPage() {
     const ocrRows = (ocrAnalytics?.trends ?? []).map((row) => ({
       dataset: "ocr_volume_trends",
       case_category: "OCR Volume Trends",
-      date: row.month,
-      label: row.month,
+      date: formatLegalMonth(row.month),
+      label: formatLegalMonth(row.month),
       value: row.total_scans,
       case_status: "",
       barangay: "",
@@ -226,26 +236,21 @@ export default function AnalyticsPage() {
 
   return (
     <MainLayout>
-      <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div>
-          <h2 className="text-3xl font-semibold text-[#2B3642]">
-            Deep Analytics & Export
-          </h2>
-          <nav className="mt-1 flex items-center gap-2 text-sm text-[#4B5563]">
-            <span>Dashboard</span>
-            <span>/</span>
-            <span className="text-[#2B3642]">Analytics</span>
-          </nav>
-        </div>
-        <button
-          type="button"
-          onClick={() => setExportOpen(true)}
-          className="inline-flex h-10 items-center justify-center rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={exportRows.length === 0}
-        >
-          Advanced Report Export
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Analytics Workspace"
+        title="Deep Analytics & Export"
+        description="Review GIS hotspots, intake trends, case categories, closure patterns, and export-ready operational datasets."
+        actions={
+          <button
+            type="button"
+            onClick={() => setExportOpen(true)}
+            className="inline-flex h-10 items-center justify-center rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={exportRows.length === 0}
+          >
+            Advanced Report Export
+          </button>
+        }
+      />
 
       {isLoading ? (
         <div className="grid gap-6">
@@ -370,9 +375,9 @@ export default function AnalyticsPage() {
                 </div>
               </div>
               <div className="h-80">
-                {monthlyTrends.length === 0 ? <EmptyState message="No intake records match the selected date range." /> : (
+                {displayMonthlyTrends.length === 0 ? <EmptyState message="No intake records match the selected date range." /> : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={monthlyTrends}>
+                    <LineChart data={displayMonthlyTrends}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                       <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
                       <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
@@ -510,11 +515,11 @@ export default function AnalyticsPage() {
               </div>
               <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                 <div className="rounded-xl border border-[#FECACA] bg-[#FFF7F7] p-3">
-                  {(terminatedStats?.monthly ?? []).length === 0 ? (
+                  {displayTerminatedMonthly.length === 0 ? (
                     <EmptyState message="No terminated case records match the selected date range." />
                   ) : (
                     <ResponsiveContainer width="100%" height={240}>
-                      <AreaChart data={terminatedStats?.monthly ?? []}>
+                      <AreaChart data={displayTerminatedMonthly}>
                         <defs>
                           <linearGradient id="terminatedGradient" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#DC2626" stopOpacity={0.35} />

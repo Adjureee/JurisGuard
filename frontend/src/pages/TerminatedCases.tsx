@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
+import PageHeader from "../components/PageHeader";
 import { listCaseRecords, listClientRecords } from "../services/recordService";
 import type { ClientRecord, CriminalCaseRecord } from "../types";
 
@@ -260,14 +261,12 @@ export default function TerminatedCasesPage() {
 
   return (
     <MainLayout>
-      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-[#704389]">Case Archive</p>
-          <h1 className="text-2xl font-semibold text-[#2B3642]">
-            Terminated Cases
-          </h1>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
+      <PageHeader
+        eyebrow="Case Archive"
+        title="Terminated Cases"
+        description="Review closed criminal case records, termination reasons, archive details, and official export outputs."
+        actions={
+          <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={exportCsv}
@@ -282,8 +281,9 @@ export default function TerminatedCasesPage() {
           >
             Export Excel
           </button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       <section className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
         <div className="grid gap-3 border-b border-[#E5E7EB] px-5 py-4 md:grid-cols-[1fr_220px]">
@@ -448,7 +448,7 @@ export default function TerminatedCasesPage() {
       </section>
 
       {selectedRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm sm:items-center">
           <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
               <h2 className="text-base font-bold text-[#2B3642]">

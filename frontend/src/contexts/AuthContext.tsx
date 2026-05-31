@@ -84,6 +84,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [getCurrentUser, token]);
 
+  useEffect(() => {
+    function handleUnauthorized() {
+      logout();
+      window.location.assign("/login");
+    }
+
+    window.addEventListener("jurisguard:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("jurisguard:unauthorized", handleUnauthorized);
+  }, [logout]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       token,

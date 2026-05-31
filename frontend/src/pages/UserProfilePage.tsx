@@ -1,6 +1,7 @@
 import { useState, type ChangeEvent } from "react";
 import toast from "react-hot-toast";
 import MainLayout from "../layouts/MainLayout";
+import PageHeader from "../components/PageHeader";
 import { useAuth } from "../contexts/AuthContext";
 import {
   disableMfa,
@@ -167,10 +168,11 @@ export default function UserProfilePage() {
 
   return (
     <MainLayout>
-      <div className="mb-5">
-        <p className="text-sm font-semibold text-[#704389]">Account</p>
-        <h2 className="text-2xl font-bold text-[#2B3642]">My Profile</h2>
-      </div>
+      <PageHeader
+        eyebrow="Account"
+        title="My Profile"
+        description="Manage your JurisGuard account details, profile photo, and authentication settings."
+      />
 
       <section className="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-sm ">
         <div className="mb-5 flex flex-col gap-4 border-b border-[#E5E7EB] pb-5 sm:flex-row sm:items-center">
