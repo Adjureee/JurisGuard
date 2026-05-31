@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import ModalPortal from "./ModalPortal";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
@@ -119,8 +120,9 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
-      <div className="w-full max-w-3xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+    <ModalPortal>
+    <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
+      <div className="jurisguard-modal-surface w-full max-w-3xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div>
             <h2 className="text-lg font-bold text-[#2B3642]">Advanced Criminal Cases Export</h2>
@@ -260,6 +262,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

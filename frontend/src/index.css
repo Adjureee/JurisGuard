@@ -39,26 +39,20 @@ textarea {
   }
 }
 
-@keyframes pageFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.jurisguard-modal-overlay {
+  align-items: center;
+  display: grid;
+  inset: 0;
+  justify-items: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(1rem, 3vh, 1.5rem) 1rem;
+  position: fixed;
+  z-index: 2147483647;
 }
 
-.jurisguard-page-transition {
-  animation: pageFadeIn 180ms ease-out both;
-  will-change: opacity, transform;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .jurisguard-page-transition {
-    animation: none;
-  }
+.jurisguard-modal-surface {
+  margin: auto;
 }
 
 .jurisguard-print-root {

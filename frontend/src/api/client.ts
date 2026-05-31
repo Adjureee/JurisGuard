@@ -23,3 +23,16 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+      if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
+        window.dispatchEvent(new Event("jurisguard:unauthorized"));
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+

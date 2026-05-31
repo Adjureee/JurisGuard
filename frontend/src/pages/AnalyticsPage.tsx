@@ -1,10 +1,7 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity,
   BarChart3,
-  FileScan,
   FolderCheck,
-  ShieldCheck,
 } from "lucide-react";
 import {
   Area,
@@ -30,6 +27,8 @@ import {
 } from "../components/dashboard/AnalyticsPrimitives";
 import ReportExportModal, { type ReportExportRow } from "../components/modals/ReportExportModal";
 import MainLayout from "../layouts/MainLayout";
+import PageHeader from "../components/PageHeader";
+import { formatLegalMonth } from "../services/dashboardService";
 import { useDashboardAnalytics } from "./dashboard/useDashboardAnalytics";
 
 const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsMap"));
@@ -92,11 +91,21 @@ export default function AnalyticsPage() {
   } = useDashboardAnalytics({ dateRange });
   const [selectedBarangay, setSelectedBarangay] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const hotspotPanelRef = useRef<HTMLDivElement>(null);
+  const [hotspotPanelHeight, setHotspotPanelHeight] = useState<number | null>(null);
 
   const intakeTotal = useMemo(() => monthlyTrends.reduce((sum, row) => sum + row.total_cases, 0), [monthlyTrends]);
-  const intakePeak = useMemo(
-    () => monthlyTrends.reduce<typeof monthlyTrends[number] | null>((best, row) => (!best || row.total_cases > best.total_cases ? row : best), null),
+  const displayMonthlyTrends = useMemo(
+    () => monthlyTrends.map((row) => ({ ...row, month: formatLegalMonth(row.month) })),
     [monthlyTrends]
+  );
+  const displayTerminatedMonthly = useMemo(
+    () => (terminatedStats?.monthly ?? []).map((row) => ({ ...row, month: formatLegalMonth(row.month) })),
+    [terminatedStats]
+  );
+  const intakePeak = useMemo(
+    () => displayMonthlyTrends.reduce<typeof displayMonthlyTrends[number] | null>((best, row) => (!best || row.total_cases > best.total_cases ? row : best), null),
+    [displayMonthlyTrends]
   );
   const mostCommonReason = terminatedStats?.most_common_reason ?? terminatedStats?.by_reason[0]?.reason ?? "No closures in range";
   const averageDailyIntake = intakeLoad?.average_daily_intake ?? 0;
@@ -114,15 +123,12 @@ export default function AnalyticsPage() {
   const busiestHour = intakeLoad?.busiest_hour;
   const leadingCategory = caseCategories[0];
   const categoryTotal = caseCategories.reduce((sum, row) => sum + row.total_cases, 0);
-  const ocrSuccessRate = ocrAnalytics?.total_scans
-    ? Math.round((ocrAnalytics.successful_extractions / ocrAnalytics.total_scans) * 100)
-    : 0;
   const exportRows = useMemo<ReportExportRow[]>(() => {
     const monthlyRows = monthlyTrends.map((row) => ({
       dataset: "monthly_intake_trends",
       case_category: "Monthly Case Trends",
-      date: row.month,
-      label: row.month,
+      date: formatLegalMonth(row.month),
+      label: formatLegalMonth(row.month),
       value: row.total_cases,
       case_status: "All",
       barangay: "",
@@ -191,8 +197,8 @@ export default function AnalyticsPage() {
     const terminatedRows = (terminatedStats?.monthly ?? []).map((row) => ({
       dataset: "terminated_case_movement",
       case_category: "Termination Trends",
-      date: row.month,
-      label: row.month,
+      date: formatLegalMonth(row.month),
+      label: formatLegalMonth(row.month),
       value: row.total_cases,
       case_status: "Terminated",
       barangay: "",
@@ -205,8 +211,8 @@ export default function AnalyticsPage() {
     const ocrRows = (ocrAnalytics?.trends ?? []).map((row) => ({
       dataset: "ocr_volume_trends",
       case_category: "OCR Volume Trends",
-      date: row.month,
-      label: row.month,
+      date: formatLegalMonth(row.month),
+      label: formatLegalMonth(row.month),
       value: row.total_scans,
       case_status: "",
       barangay: "",
@@ -224,28 +230,42 @@ export default function AnalyticsPage() {
     if (preset !== "custom") setDateRange(presetRange(preset));
   };
 
+  useEffect(() => {
+    const panel = hotspotPanelRef.current;
+    if (!panel) return;
+
+    const updateHeight = () => {
+      setHotspotPanelHeight(Math.ceil(panel.getBoundingClientRect().height));
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(panel);
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [heatmap, selectedBarangay, topBarangays]);
+
   return (
     <MainLayout>
-      <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div>
-          <h2 className="text-3xl font-semibold text-[#2B3642]">
-            Deep Analytics & Export
-          </h2>
-          <nav className="mt-1 flex items-center gap-2 text-sm text-[#4B5563]">
-            <span>Dashboard</span>
-            <span>/</span>
-            <span className="text-[#2B3642]">Analytics</span>
-          </nav>
-        </div>
-        <button
-          type="button"
-          onClick={() => setExportOpen(true)}
-          className="inline-flex h-10 items-center justify-center rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={exportRows.length === 0}
-        >
-          Advanced Report Export
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Analytics Workspace"
+        title="Deep Analytics & Export"
+        description="Review GIS hotspots, intake trends, case categories, closure patterns, and export-ready operational datasets."
+        actions={
+          <button
+            type="button"
+            onClick={() => setExportOpen(true)}
+            className="inline-flex h-10 items-center justify-center rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={exportRows.length === 0}
+          >
+            Advanced Report Export
+          </button>
+        }
+      />
 
       {isLoading ? (
         <div className="grid gap-6">
@@ -257,43 +277,47 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-            <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay.">
-              <div className="mb-4 flex flex-wrap gap-2">
-            <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
-                  All Barangays
-                </button>
-                {topBarangays.slice(0, 8).map((barangay) => (
-                  <button type="button" key={barangay.barangay} onClick={() => setSelectedBarangay(barangay.barangay)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === barangay.barangay ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
-                    {barangay.barangay}
+          <div className="grid items-start gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+            <div ref={hotspotPanelRef}>
+              <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay.">
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
+                    All Barangays
                   </button>
-                ))}
-              </div>
-              {heatmap ? (
-                <ErrorBoundary fallback={<EmptyState message="The geospatial map could not render, but barangay analytics remain available." />}>
-                  <Suspense fallback={<SkeletonBlock className="h-[520px]" />}>
-                    <GeoAnalyticsMap center={heatmap.center} points={heatmap.points} barangays={heatmap.barangays} selectedBarangay={selectedBarangay} onSelectBarangay={setSelectedBarangay} />
-                  </Suspense>
-                </ErrorBoundary>
-              ) : (
-                <EmptyState message="No geospatial data is available yet. Encode barangay or coordinates in case records to activate the map." />
-              )}
-            </AnalyticsPanel>
+                  {topBarangays.slice(0, 8).map((barangay) => (
+                    <button type="button" key={barangay.barangay} onClick={() => setSelectedBarangay(barangay.barangay)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === barangay.barangay ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
+                      {barangay.barangay}
+                    </button>
+                  ))}
+                </div>
+                {heatmap ? (
+                  <ErrorBoundary fallback={<EmptyState message="The geospatial map could not render, but barangay analytics remain available." />}>
+                    <Suspense fallback={<SkeletonBlock className="h-[520px]" />}>
+                      <GeoAnalyticsMap center={heatmap.center} points={heatmap.points} barangays={heatmap.barangays} selectedBarangay={selectedBarangay} onSelectBarangay={setSelectedBarangay} />
+                    </Suspense>
+                  </ErrorBoundary>
+                ) : (
+                  <EmptyState message="No geospatial data is available yet. Encode barangay or coordinates in case records to activate the map." />
+                )}
+              </AnalyticsPanel>
+            </div>
 
-            <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records.">
-              <div className="max-h-[520px] space-y-3 overflow-y-auto pr-2">
-                {topBarangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : topBarangays.map((barangay, index) => (
-                  <button key={barangay.barangay} type="button" onClick={() => setSelectedBarangay(barangay.barangay)} className="flex w-full items-center gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3 text-left hover:bg-[#F8FAFC]">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#704389] text-sm font-bold text-white">{index + 1}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-[#2B3642]">{barangay.barangay}</span>
-                      <span className="text-xs text-[#4B5563]">{barangay.most_common_category}</span>
-                    </span>
-                    <span className="rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-bold text-[#704389]">{barangay.total_cases}</span>
-                  </button>
-                ))}
-              </div>
-            </AnalyticsPanel>
+            <div className="min-h-0" style={hotspotPanelHeight ? { height: `${hotspotPanelHeight}px` } : undefined}>
+              <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-full min-h-0">
+                <div className="h-full min-h-0 space-y-3 overflow-y-auto pr-2">
+                  {topBarangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : topBarangays.map((barangay, index) => (
+                    <button key={barangay.barangay} type="button" onClick={() => setSelectedBarangay(barangay.barangay)} className="flex w-full items-center gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3 text-left hover:bg-[#F8FAFC]">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#704389] text-sm font-bold text-white">{index + 1}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-[#2B3642]">{barangay.barangay}</span>
+                        <span className="text-xs text-[#4B5563]">{barangay.most_common_category}</span>
+                      </span>
+                      <span className="rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-bold text-[#704389]">{barangay.total_cases}</span>
+                    </button>
+                  ))}
+                </div>
+              </AnalyticsPanel>
+            </div>
           </div>
 
           <div className="mt-6 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
@@ -370,9 +394,9 @@ export default function AnalyticsPage() {
                 </div>
               </div>
               <div className="h-80">
-                {monthlyTrends.length === 0 ? <EmptyState message="No intake records match the selected date range." /> : (
+                {displayMonthlyTrends.length === 0 ? <EmptyState message="No intake records match the selected date range." /> : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={monthlyTrends}>
+                    <LineChart data={displayMonthlyTrends}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                       <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
                       <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
@@ -510,11 +534,11 @@ export default function AnalyticsPage() {
               </div>
               <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                 <div className="rounded-xl border border-[#FECACA] bg-[#FFF7F7] p-3">
-                  {(terminatedStats?.monthly ?? []).length === 0 ? (
+                  {displayTerminatedMonthly.length === 0 ? (
                     <EmptyState message="No terminated case records match the selected date range." />
                   ) : (
                     <ResponsiveContainer width="100%" height={240}>
-                      <AreaChart data={terminatedStats?.monthly ?? []}>
+                      <AreaChart data={displayTerminatedMonthly}>
                         <defs>
                           <linearGradient id="terminatedGradient" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#DC2626" stopOpacity={0.35} />
@@ -554,54 +578,6 @@ export default function AnalyticsPage() {
               </div>
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="OCR Intelligence" subtitle="Document digitization and extraction health.">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-lg bg-[#F3E8FF] p-3 text-[#6D28D9]">
-                  <FileScan className="h-4 w-4" />
-                  <p className="mt-2 text-xl font-bold">{ocrAnalytics?.total_scans ?? 0}</p>
-                  <p className="text-[11px] font-semibold">Scans</p>
-                </div>
-                <div className="rounded-lg bg-[#DCFCE7] p-3 text-[#065F46]">
-                  <ShieldCheck className="h-4 w-4" />
-                  <p className="mt-2 text-xl font-bold">{ocrAnalytics?.successful_extractions ?? 0}</p>
-                  <p className="text-[11px] font-semibold">Success</p>
-                </div>
-                <div className="rounded-lg bg-[#FEE2E2] p-3 text-[#991B1B]">
-                  <Activity className="h-4 w-4" />
-                  <p className="mt-2 text-xl font-bold">{ocrAnalytics?.failed_scans ?? 0}</p>
-                  <p className="text-[11px] font-semibold">Failed</p>
-                </div>
-              </div>
-              <div className="mt-4 rounded-xl border border-[#DDD6FE] bg-[#F5F3FF] px-3 py-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-[#5B21B6]">Extraction Success Rate</p>
-                <p className="mt-1 text-lg font-bold text-[#111827]">{ocrSuccessRate}%</p>
-              </div>
-              <div className="mt-4 space-y-2">
-                {(ocrAnalytics?.recent ?? []).length === 0 ? <EmptyState message="No OCR activity has been recorded yet." /> : (ocrAnalytics?.recent ?? []).slice(0, 5).map((item) => (
-                  <div key={item.document_id} className="flex items-center justify-between rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm">
-                    <span className="font-semibold text-[#2B3642]">Document #{item.document_id}</span>
-                    <span className="rounded-full bg-[#E5E7EB] px-2 py-1 text-xs font-semibold text-[#4B5563]">{item.ocr_status}</span>
-                  </div>
-                ))}
-              </div>
-            </AnalyticsPanel>
-
-            <AnalyticsPanel title="Analytics Export Summary" subtitle="Current export package composition." className="xl:col-span-2">
-              <div className="grid gap-3">
-                {[
-                  { label: "Monthly trend rows", value: monthlyTrends.length },
-                  { label: "Weekly volume rows", value: intakeLoad?.weekly.length ?? 0 },
-                  { label: "Category rows", value: caseCategories.length },
-                  { label: "Barangay rows", value: barangays.length },
-                  { label: "Termination rows", value: terminatedStats?.monthly.length ?? 0 },
-                ].map((row) => (
-                  <div key={row.label} className="flex items-center justify-between rounded-lg border border-[#E5E7EB] px-3 py-2">
-                    <span className="text-sm font-semibold text-[#4B5563]">{row.label}</span>
-                    <span className="rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-bold text-[#704389]">{row.value}</span>
-                  </div>
-                ))}
-              </div>
-            </AnalyticsPanel>
           </div>
         </>
       )}

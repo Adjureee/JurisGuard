@@ -1,13 +1,18 @@
 import MainLayout from "../layouts/MainLayout";
+import PageHeader from "../components/PageHeader";
 import { useAuth } from "../contexts/AuthContext";
-import { useAuditLogStore, type AuditLogEntry } from "../features/auditLogs/auditLogStore";
+import {
+  useAuditLogStore,
+  type AuditLogEntry,
+} from "../features/auditLogs/auditLogStore";
 import { useEffect, useMemo, useState } from "react";
 import { listAuditLogs } from "../services/auditService";
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(value)
-  );
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function ModuleBadge({ module }: { module: AuditLogEntry["module"] }) {
@@ -21,7 +26,9 @@ function ModuleBadge({ module }: { module: AuditLogEntry["module"] }) {
           : "bg-[#F8FAFC] text-[#4B5563]";
 
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}
+    >
       {module}
     </span>
   );
@@ -29,12 +36,19 @@ function ModuleBadge({ module }: { module: AuditLogEntry["module"] }) {
 
 function UserTypeBadge({ role }: { role?: string | null }) {
   const label = role ? role.charAt(0).toUpperCase() + role.slice(1) : "System";
-  const className = role === "admin"
-    ? "bg-[#F7F0FA] text-[#704389]"
-    : role === "staff"
-      ? "bg-[#F8FAFC] text-[#4B5563]"
-      : "bg-[#F3F4F6] text-[#4B5563]";
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{label}</span>;
+  const className =
+    role === "admin"
+      ? "bg-[#F7F0FA] text-[#704389]"
+      : role === "staff"
+        ? "bg-[#F8FAFC] text-[#4B5563]"
+        : "bg-[#F3F4F6] text-[#4B5563]";
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}
+    >
+      {label}
+    </span>
+  );
 }
 
 function normalizedLogRole(log: AuditLogEntry) {
@@ -83,37 +97,40 @@ export default function AuditLogsPage() {
         new Map(
           logs
             .filter((log) => log.userId !== null)
-            .map((log) => [String(log.userId), log.user])
-        ).entries()
+            .map((log) => [String(log.userId), log.user]),
+        ).entries(),
       ),
-    [logs]
+    [logs],
   );
   const userTypeOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          scopedRoleList(logs)
-        )
-      ).sort(),
-    [logs]
+    () => Array.from(new Set(scopedRoleList(logs))).sort(),
+    [logs],
   );
   const scopedLogs = useMemo(
     () =>
       user?.role === "admin"
         ? logs
         : logs.filter((log) => log.userId === user?.user_id),
-    [logs, user]
+    [logs, user],
   );
   const actionOptions = useMemo(
     () => Array.from(new Set(scopedLogs.map((log) => log.action))).sort(),
-    [scopedLogs]
+    [scopedLogs],
   );
   const visibleLogs = useMemo(() => {
     return scopedLogs.filter((log) => {
-      if (user?.role === "admin" && selectedUserId !== "all" && String(log.userId) !== selectedUserId) {
+      if (
+        user?.role === "admin" &&
+        selectedUserId !== "all" &&
+        String(log.userId) !== selectedUserId
+      ) {
         return false;
       }
-      if (user?.role === "admin" && userType !== "all" && normalizedLogRole(log) !== userType) {
+      if (
+        user?.role === "admin" &&
+        userType !== "all" &&
+        normalizedLogRole(log) !== userType
+      ) {
         return false;
       }
       if (actionType !== "all" && log.action !== actionType) return false;
@@ -121,7 +138,15 @@ export default function AuditLogsPage() {
       if (dateTo && log.timestamp.slice(0, 10) > dateTo) return false;
       return true;
     });
-  }, [actionType, dateFrom, dateTo, scopedLogs, selectedUserId, user, userType]);
+  }, [
+    actionType,
+    dateFrom,
+    dateTo,
+    scopedLogs,
+    selectedUserId,
+    user,
+    userType,
+  ]);
 
   return (
     <MainLayout>
@@ -139,7 +164,9 @@ export default function AuditLogsPage() {
         <div className="grid gap-3 border-b border-[#E5E7EB] bg-white px-5 py-4 md:grid-cols-5">
           {user?.role === "admin" && (
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">User</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+                User
+              </span>
               <select
                 value={selectedUserId}
                 onChange={(event) => setSelectedUserId(event.target.value)}
@@ -156,7 +183,9 @@ export default function AuditLogsPage() {
           )}
           {user?.role === "admin" && (
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">User Type</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+                User Type
+              </span>
               <select
                 value={userType}
                 onChange={(event) => setUserType(event.target.value)}
@@ -165,14 +194,20 @@ export default function AuditLogsPage() {
                 <option value="all">All User Types</option>
                 {userTypeOptions.map((role) => (
                   <option key={role} value={role}>
-                    {role === "admin" ? "Administrators" : role === "staff" ? "Legal Staff" : "System"}
+                    {role === "admin"
+                      ? "Administrators"
+                      : role === "staff"
+                        ? "Legal Staff"
+                        : "System"}
                   </option>
                 ))}
               </select>
             </label>
           )}
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Action Type</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+              Action Type
+            </span>
             <select
               value={actionType}
               onChange={(event) => setActionType(event.target.value)}
@@ -187,7 +222,9 @@ export default function AuditLogsPage() {
             </select>
           </label>
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Date From</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+              Date From
+            </span>
             <input
               type="date"
               value={dateFrom}
@@ -196,7 +233,9 @@ export default function AuditLogsPage() {
             />
           </label>
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Date To</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+              Date To
+            </span>
             <input
               type="date"
               value={dateTo}
@@ -217,20 +256,30 @@ export default function AuditLogsPage() {
                 <th className="px-5 py-3 text-left font-semibold">User Type</th>
                 <th className="px-5 py-3 text-left font-semibold">Module</th>
                 <th className="px-5 py-3 text-left font-semibold">Action</th>
-                <th className="px-5 py-3 text-left font-semibold">Description</th>
+                <th className="px-5 py-3 text-left font-semibold">
+                  Description
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E5E7EB]">
               {visibleLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-[#4B5563]">
+                  <td
+                    colSpan={6}
+                    className="px-5 py-10 text-center text-[#4B5563]"
+                  >
                     No audit logs recorded yet.
                   </td>
                 </tr>
               ) : (
                 visibleLogs.map((log) => (
-                  <tr key={log.id} className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]">
-                    <td className="px-5 py-4 text-[#2B3642]">{formatDate(log.timestamp)}</td>
+                  <tr
+                    key={log.id}
+                    className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]"
+                  >
+                    <td className="px-5 py-4 text-[#2B3642]">
+                      {formatDate(log.timestamp)}
+                    </td>
                     <td className="px-5 py-4 text-[#4B5563]">{log.user}</td>
                     <td className="px-5 py-4">
                       <UserTypeBadge role={log.userRole ?? log.user_role} />
@@ -238,8 +287,12 @@ export default function AuditLogsPage() {
                     <td className="px-5 py-4">
                       <ModuleBadge module={log.module} />
                     </td>
-                    <td className="px-5 py-4 font-medium text-[#2B3642]">{log.action}</td>
-                    <td className="px-5 py-4 text-[#4B5563]">{log.description}</td>
+                    <td className="px-5 py-4 font-medium text-[#2B3642]">
+                      {log.action}
+                    </td>
+                    <td className="px-5 py-4 text-[#4B5563]">
+                      {log.description}
+                    </td>
                   </tr>
                 ))
               )}
@@ -250,4 +303,3 @@ export default function AuditLogsPage() {
     </MainLayout>
   );
 }
-

@@ -258,7 +258,16 @@ export function buildLocalHeatmap(cases: EnrichedGeoCase[]): HeatmapResponse {
   });
 
   const barangays = Array.from(barangayBuckets.values())
-    .map(({ categoryCounts: _categoryCounts, ...barangay }) => barangay)
+    .map((bucket) => ({
+      barangay: bucket.barangay,
+      city: bucket.city,
+      total_cases: bucket.total_cases,
+      active_cases: bucket.active_cases,
+      terminated_cases: bucket.terminated_cases,
+      most_common_category: bucket.most_common_category,
+      latitude: bucket.latitude,
+      longitude: bucket.longitude,
+    }))
     .sort((left, right) => right.total_cases - left.total_cases);
 
   return {
@@ -286,6 +295,16 @@ export async function getMonthlyTrends(range?: DashboardDateRange) {
 export async function getCaseCategories() {
   const response = await apiClient.get<CaseCategoryStat[]>("/dashboard/case-categories");
   return response.data;
+}
+
+export function formatLegalMonth(value: string | number | undefined | null) {
+  if (value === undefined || value === null || value === "") return "";
+  const raw = String(value);
+  if (/^\d{4}-\d{2}$/.test(raw)) {
+    const [year, month] = raw.split("-").map(Number);
+    return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
+  }
+  return raw;
 }
 
 export async function getIntakeLoadAnalytics(range?: DashboardDateRange) {

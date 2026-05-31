@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import ImagePreviewModal from "../../components/ImagePreviewModal";
 import { API_ORIGIN } from "../../api/client";
@@ -7,6 +7,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
 import MainLayout from "../../layouts/MainLayout";
+import PageHeader from "../../components/PageHeader";
 import { getApplicant, updateApplicantApproval } from "../../services/adminService";
 import type { AdminUserDetails, ApprovalStatus } from "../../types/auth";
 
@@ -142,18 +143,11 @@ export default function ApplicantDetailsPage() {
 
   return (
     <MainLayout>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#2B3642]">Applicant Details</h1>
-          <nav className="mt-1 flex items-center gap-2 text-sm text-[#4B5563]">
-            <Link to="/dashboard" className="hover:text-[#704389]">Dashboard</Link>
-            <span>/</span>
-            <Link to="/admin/verification" className="hover:text-[#704389]">Verification</Link>
-            <span>/</span>
-            <span className="text-[#2B3642]">{applicant?.full_name || "Applicant"}</span>
-          </nav>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Application Review"
+        title="Applicant Details"
+        description={`Review identity, account information, and approval actions for ${applicant?.full_name || "this applicant"}.`}
+      />
 
       {error && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

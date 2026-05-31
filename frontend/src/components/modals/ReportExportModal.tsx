@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { FileDown, FileSpreadsheet } from "lucide-react";
+import ModalPortal from "./ModalPortal";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
@@ -225,8 +226,9 @@ export default function ReportExportModal({
   const labelClass = "text-xs font-semibold uppercase tracking-wide text-[#2B3642]";
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4 py-4 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+    <ModalPortal>
+    <div className="jurisguard-modal-overlay bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div className="flex items-start justify-between gap-4">
           <div>
@@ -370,6 +372,7 @@ export default function ReportExportModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

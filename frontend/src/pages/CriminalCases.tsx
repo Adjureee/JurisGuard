@@ -3,9 +3,11 @@ import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import MainLayout from "../layouts/MainLayout";
+import PageHeader from "../components/PageHeader";
 import AddCaseModal from "../components/modals/AddCaseModal";
 import AddClientModal from "../components/modals/AddClientModal";
 import ExportCsvModal from "../components/modals/ExportCsvModal";
+import ModalPortal from "../components/modals/ModalPortal";
 import { StatusBadge } from "../features/criminalCases/components/StatusBadge";
 import { useCriminalCasesStore } from "../features/criminalCases/criminalCasesStore";
 import {
@@ -436,8 +438,9 @@ function UpdateClientInfoModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+    <ModalPortal>
+    <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h3 className="text-base font-bold text-[#2B3642]">
             Update Client Info
@@ -526,6 +529,7 @@ function UpdateClientInfoModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -579,8 +583,9 @@ function UpdateCaseModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+    <ModalPortal>
+    <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h3 className="text-base font-bold text-[#2B3642]">Update Case</h3>
           <button
@@ -725,6 +730,7 @@ function UpdateCaseModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -768,8 +774,9 @@ function TerminationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-sm">
-      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+    <ModalPortal>
+    <div className="jurisguard-modal-overlay bg-black/75 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <div className="jurisguard-modal-surface w-full max-w-2xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h3 className="text-base font-bold text-[#2B3642]">Terminate Case</h3>
           <button
@@ -865,6 +872,7 @@ function TerminationModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -900,19 +908,18 @@ function ClientRecordModal({
   const activeCount = Math.max(cases.length - terminatedCount, 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
-      <div className="max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+    <ModalPortal>
+    <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
+      <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
-              <span>Dashboard</span>
-              <span className="text-[#CBD5E1]">/</span>
-              <span>Criminal Cases</span>
-            </div>
-            <h2 className="mt-2 text-xl font-bold text-[#2B3642]">
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">
+              Criminal Cases
+            </p>
+            <h2 className="mt-1 text-xl font-bold text-[#2B3642]">
               {mode === "view" ? "Criminal Case Record" : "Update Record"}
             </h2>
-            <p className="mt-1 truncate text-sm font-semibold text-[#704389]">
+            <p className="mt-2 truncate text-sm text-[#6B7280]">
               {client.client.name}
             </p>
           </div>
@@ -1078,6 +1085,7 @@ function ClientRecordModal({
         />
       )}
     </div>
+    </ModalPortal>
   );
 }
 
@@ -1199,19 +1207,12 @@ export default function CriminalCasesPage() {
 
   return (
     <MainLayout>
-      <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div>
-          <h2 className="text-3xl font-semibold text-[#2B3642]">
-            Criminal Cases
-          </h2>
-          <nav className="mt-1 flex items-center gap-2 text-sm text-[#4B5563]">
-            <span>Dashboard</span>
-            <span>/</span>
-            <span className="text-[#2B3642]">Criminal Cases</span>
-          </nav>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <PageHeader
+        eyebrow="Criminal Cases"
+        title="Case Records Management"
+        description="Manage PAO Panabo client profiles, active criminal case records, printable intake forms, and update workflows."
+        actions={
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <button
             type="button"
             onClick={() => setShowCaseModal(true)}
@@ -1228,8 +1229,9 @@ export default function CriminalCasesPage() {
             <UserPlusIcon />
             Add Client
           </button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       <div className="rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
         <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

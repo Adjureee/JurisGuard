@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { FileDown } from "lucide-react";
 import MainLayout from "../layouts/MainLayout";
+import PageHeader from "../components/PageHeader";
 import {
   AnalyticsPanel,
   EmptyState,
@@ -153,24 +154,22 @@ export default function StaffAnalyticsPage() {
 
   return (
     <MainLayout>
-      <div className="mb-8 flex flex-col gap-4 rounded-2xl border border-[#D7DEE7] bg-white px-6 py-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">Staff Analytics & Reports</p>
-          <h1 className="mt-2 text-3xl font-bold text-[#111827]">Personal Productivity Workspace</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-[#6B7280]">
-            Personal case trends, OCR activity, status breakdowns, and staff-only exports.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setExportOpen(true)}
-          disabled={exportRows.length === 0}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <FileDown className="h-4 w-4" />
-          Export Center
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Staff Analytics & Reports"
+        title="Personal Productivity Workspace"
+        description="Personal case trends, OCR activity, status breakdowns, and staff-only exports."
+        actions={
+          <button
+            type="button"
+            onClick={() => setExportOpen(true)}
+            disabled={exportRows.length === 0}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <FileDown className="h-4 w-4" />
+            Export Center
+          </button>
+        }
+      />
 
       {isLoading ? (
         <div className="grid gap-6 xl:grid-cols-2">

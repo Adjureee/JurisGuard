@@ -1,5 +1,6 @@
 import toast from "react-hot-toast";
 import { CaseWorkflow } from "./CaseWorkflow";
+import ModalPortal from "./ModalPortal";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useCriminalCasesStore } from "../../features/criminalCases/criminalCasesStore";
@@ -29,8 +30,9 @@ export default function AddCaseModal({ isOpen, onClose }: AddCaseModalProps) {
         );
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
-      <div className="flex max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+    <ModalPortal>
+    <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
+      <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-lg font-semibold text-[#2B3642]">Add Criminal Case</h2>
@@ -75,6 +77,7 @@ export default function AddCaseModal({ isOpen, onClose }: AddCaseModalProps) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
