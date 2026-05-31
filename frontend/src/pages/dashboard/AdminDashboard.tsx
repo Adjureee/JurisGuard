@@ -81,12 +81,14 @@ function KpiCard({
   detail,
   icon,
   label,
+  metricLabel,
   tone,
   value,
 }: {
   detail: string;
   icon: ReactNode;
   label: string;
+  metricLabel?: string;
   tone: string;
   value: string | number;
 }) {
@@ -95,6 +97,7 @@ function KpiCard({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-[#6B7280]">{label}</p>
+          {metricLabel && <p className="mt-2 text-[13px] font-semibold uppercase tracking-[0.12em] text-[#6B7280]">{metricLabel}</p>}
           <p className="mt-3 text-3xl font-bold tracking-tight text-[#111827]">{value}</p>
         </div>
         <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${tone}`}>
@@ -244,7 +247,7 @@ export default function AdminDashboard() {
           <KpiCard label="Total Cases" value={overview?.total_cases ?? 0} detail="Criminal case records" icon={<Gavel className="h-5 w-5" />} tone="bg-[#F3F4F6] text-[#111827]" />
           <KpiCard label="Active Cases" value={overview?.active_cases ?? 0} detail="Open operational workload" icon={<BriefcaseBusiness className="h-5 w-5" />} tone="bg-[#ECFDF5] text-[#065F46]" />
           <KpiCard label="Terminated Cases" value={overview?.terminated_cases ?? 0} detail="Closed or archived matters" icon={<Archive className="h-5 w-5" />} tone="bg-[#FFF1F2] text-[#9F1239]" />
-          <KpiCard label="This Month" value={`${overview?.cases_this_month ?? 0} Cases`} detail={`Since ${formatLegalDate(monthStart)}`} icon={<CalendarDays className="h-5 w-5" />} tone="bg-[#FFFBEB] text-[#92400E]" />
+          <KpiCard label="This Month" metricLabel="Cases" value={overview?.cases_this_month ?? 0} detail={`Since ${formatLegalDate(monthStart)}`} icon={<CalendarDays className="h-5 w-5" />} tone="bg-[#FFFBEB] text-[#92400E]" />
           <KpiCard label="Reports Awaiting Review" value={awaitingReview.length} detail="Staff report bundles for action" icon={<FileText className="h-5 w-5" />} tone="bg-[#EFF6FF] text-[#2563EB]" />
         </div>
       )}

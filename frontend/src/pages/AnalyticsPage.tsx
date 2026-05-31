@@ -256,8 +256,8 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-            <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay." className="h-full">
+          <div className="grid items-stretch gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+            <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay." className="h-[680px]">
               <div className="mb-4 flex flex-wrap gap-2">
                 <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
                   All Barangays
@@ -279,8 +279,8 @@ export default function AnalyticsPage() {
               )}
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-full">
-              <div className="h-full min-h-[460px] space-y-3 overflow-y-auto pr-2">
+            <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-[680px]">
+              <div className="h-full min-h-0 space-y-3 overflow-y-auto pr-2">
                 {topBarangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : topBarangays.map((barangay, index) => (
                   <button key={barangay.barangay} type="button" onClick={() => setSelectedBarangay(barangay.barangay)} className="flex w-full items-center gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3 text-left hover:bg-[#F8FAFC]">
                     <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#704389] text-sm font-bold text-white">{index + 1}</span>
