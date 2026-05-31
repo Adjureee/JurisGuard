@@ -449,8 +449,8 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/30 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
-      <div className="max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-lg border border-[#E5E7EB] bg-[#FFFFFF] shadow-2xl shadow-[#111827]/10">
+    <div className="jurisguard-modal-overlay bg-[#111827]/30 backdrop-blur-sm transition-opacity duration-200">
+      <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-lg border border-[#E5E7EB] bg-[#FFFFFF] shadow-2xl shadow-[#111827]/10">
         <div className="border-b border-[#E5E7EB] bg-[#F3F4F6] px-6 py-4">
           <div className="flex items-center justify-between gap-4">
             <div>

@@ -6,6 +6,7 @@ import { useNotificationStore } from "../../features/notifications/notificationS
 import MainLayout from "../../layouts/MainLayout";
 import PageHeader from "../../components/PageHeader";
 import ImagePreviewModal from "../../components/ImagePreviewModal";
+import ModalPortal from "../../components/modals/ModalPortal";
 import { API_ORIGIN } from "../../api/client";
 import {
   listApplicants,
@@ -432,8 +433,9 @@ export default function VerificationPage() {
       </section>
 
       {selectedUser && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm">
-          <div className="max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+        <ModalPortal>
+        <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">
@@ -570,6 +572,7 @@ export default function VerificationPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
       <ImagePreviewModal
         image={previewImage}

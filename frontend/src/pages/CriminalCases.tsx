@@ -7,6 +7,7 @@ import PageHeader from "../components/PageHeader";
 import AddCaseModal from "../components/modals/AddCaseModal";
 import AddClientModal from "../components/modals/AddClientModal";
 import ExportCsvModal from "../components/modals/ExportCsvModal";
+import ModalPortal from "../components/modals/ModalPortal";
 import { StatusBadge } from "../features/criminalCases/components/StatusBadge";
 import { useCriminalCasesStore } from "../features/criminalCases/criminalCasesStore";
 import {
@@ -437,8 +438,9 @@ function UpdateClientInfoModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+    <ModalPortal>
+    <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h3 className="text-base font-bold text-[#2B3642]">
             Update Client Info
@@ -527,6 +529,7 @@ function UpdateClientInfoModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -580,8 +583,9 @@ function UpdateCaseModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+    <ModalPortal>
+    <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h3 className="text-base font-bold text-[#2B3642]">Update Case</h3>
           <button
@@ -726,6 +730,7 @@ function UpdateCaseModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -769,8 +774,9 @@ function TerminationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/75 px-4 py-6 backdrop-blur-sm">
-      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+    <ModalPortal>
+    <div className="jurisguard-modal-overlay bg-black/75 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <div className="jurisguard-modal-surface w-full max-w-2xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h3 className="text-base font-bold text-[#2B3642]">Terminate Case</h3>
           <button
@@ -866,6 +872,7 @@ function TerminationModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -901,8 +908,9 @@ function ClientRecordModal({
   const activeCount = Math.max(cases.length - terminatedCount, 0);
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
-      <div className="max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+    <ModalPortal>
+    <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
+      <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div className="min-w-0">
             <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">
@@ -1075,6 +1083,7 @@ function ClientRecordModal({
         />
       )}
     </div>
+    </ModalPortal>
   );
 }
 

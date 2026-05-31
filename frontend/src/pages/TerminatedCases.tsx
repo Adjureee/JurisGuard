@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
 import PageHeader from "../components/PageHeader";
+import ModalPortal from "../components/modals/ModalPortal";
 import { listCaseRecords, listClientRecords } from "../services/recordService";
 import type { ClientRecord, CriminalCaseRecord } from "../types";
 
@@ -448,8 +449,9 @@ export default function TerminatedCasesPage() {
       </section>
 
       {selectedRecord && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+        <ModalPortal>
+        <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
               <h2 className="text-base font-bold text-[#2B3642]">
                 Terminated Case Details
@@ -528,6 +530,7 @@ export default function TerminatedCasesPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </MainLayout>
   );

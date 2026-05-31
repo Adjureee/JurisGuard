@@ -68,8 +68,8 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/30 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
-      <div className="w-full max-w-xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-2xl shadow-[#111827]/10">
+    <div className="jurisguard-modal-overlay bg-[#111827]/30 backdrop-blur-sm transition-opacity duration-200">
+      <div className="jurisguard-modal-surface w-full max-w-xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-2xl shadow-[#111827]/10">
         <div className="flex items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F3F4F6] px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-[#111827]">Export Criminal Cases</h2>

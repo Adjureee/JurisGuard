@@ -284,8 +284,8 @@ export default function VerificationPage() {
       </section>
 
       {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/45 px-4 py-6 backdrop-blur-sm">
-          <div className="w-full max-w-lg animate-[modalIn_200ms_ease-out] overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-2xl shadow-[#111827]/20">
+        <div className="jurisguard-modal-overlay bg-[#111827]/45 backdrop-blur-sm">
+          <div className="jurisguard-modal-surface w-full max-w-lg animate-[modalIn_200ms_ease-out] overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-2xl shadow-[#111827]/20">
             <div className="flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-[#F3F4F6] px-5 py-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">

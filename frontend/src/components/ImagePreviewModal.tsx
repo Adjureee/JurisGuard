@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import ModalPortal from "./modals/ModalPortal";
 
 interface ImagePreviewModalProps {
   image: string | null;
@@ -25,15 +26,16 @@ export default function ImagePreviewModal({
   if (!image) return null;
 
   return (
+    <ModalPortal>
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/80 px-4 py-6 backdrop-blur-sm"
+      className="jurisguard-modal-overlay bg-black/80 backdrop-blur-sm"
       onMouseDown={onClose}
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
       <div
-        className="relative max-h-[92vh] w-full max-w-4xl animate-[modalIn_180ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-xl "
+        className="jurisguard-modal-surface relative max-h-[92vh] w-full max-w-4xl animate-[modalIn_180ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-xl "
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -54,6 +56,7 @@ export default function ImagePreviewModal({
         />
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

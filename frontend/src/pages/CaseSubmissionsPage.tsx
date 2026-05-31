@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import MainLayout from "../layouts/MainLayout";
 import PageHeader from "../components/PageHeader";
+import ModalPortal from "../components/modals/ModalPortal";
 import { useAuth } from "../contexts/AuthContext";
 import { useAuditLogStore } from "../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../features/notifications/notificationStore";
@@ -444,8 +445,9 @@ export default function CaseSubmissionsPage() {
       </section>
 
       {reportModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/60 px-4 py-5 backdrop-blur-sm">
-          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+        <ModalPortal>
+        <div className="jurisguard-modal-overlay bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
             <div className="flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
               <div>
                 <h2 className="text-lg font-bold text-[#2B3642]">
@@ -496,11 +498,13 @@ export default function CaseSubmissionsPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {selected && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/60 px-4 py-5 backdrop-blur-sm">
-          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+        <ModalPortal>
+        <div className="jurisguard-modal-overlay bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
             <ReportHeader submission={selected} />
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
               {selected.notes && <div className="mb-5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4 text-sm text-[#4B5563]">{selected.notes}</div>}
@@ -557,6 +561,7 @@ export default function CaseSubmissionsPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </MainLayout>
   );

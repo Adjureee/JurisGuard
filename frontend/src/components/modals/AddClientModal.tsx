@@ -19,6 +19,7 @@ import {
 import { createCaseRecord, createClientRecord } from "../../services/recordService";
 import type { ClientRecord, ExtractionMap, ExtractedClientPayload, IntakeMethod } from "../../types";
 import { CaseWorkflow } from "./CaseWorkflow";
+import ModalPortal from "./ModalPortal";
 
 interface AddClientModalProps {
   isOpen: boolean;
@@ -463,8 +464,9 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm transition-opacity duration-200">
-      <div className="max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+    <ModalPortal>
+    <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
+      <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -758,6 +760,7 @@ export default function AddClientModal({ isOpen, onClose }: AddClientModalProps)
         )}
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
