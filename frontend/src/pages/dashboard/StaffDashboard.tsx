@@ -68,10 +68,10 @@ function ActionCard({
   return (
     <Link
       to={to}
-      className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_20px_rgba(0,0,0,0.04)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-[#C7D2FE] hover:bg-[#F9FAFB]"
+      className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_20px_rgba(0,0,0,0.04)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-[#E7D7EE] hover:bg-[#F9FAFB]"
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EFF6FF] text-[#2563EB]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F7F0FA] text-[#704389]">
           {icon}
         </div>
         <div className="min-w-0">
@@ -132,20 +132,20 @@ export default function StaffDashboard() {
       />
 
       {isLoading && !workload ? (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => <SkeletonBlock key={index} className="h-36" />)}
         </div>
       ) : (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          <StaffMetricCard label="My Cases" value={workload?.assigned_cases ?? 0} detail="Assigned case records" icon={<BriefcaseBusiness className="h-5 w-5" />} tone="bg-[#EFF6FF] text-[#2563EB]" />
+        <div className="grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <StaffMetricCard label="My Cases" value={workload?.assigned_cases ?? 0} detail="Assigned case records" icon={<BriefcaseBusiness className="h-5 w-5" />} tone="bg-[#F7F0FA] text-[#704389]" />
           <StaffMetricCard label="Pending Work" value={pendingCount} detail="Awaiting follow-up" icon={<FolderOpen className="h-5 w-5" />} tone="bg-[#FFFBEB] text-[#92400E]" />
           <StaffMetricCard label="Today's Intake" value={workload?.cases_created_today ?? 0} detail="Cases encoded today" icon={<ClipboardList className="h-5 w-5" />} tone="bg-[#ECFDF5] text-[#065F46]" />
           <StaffMetricCard label="OCR Usage" value={workload?.my_ocr_usage ?? 0} detail="Personal document scans" icon={<FileScan className="h-5 w-5" />} tone="bg-[#F5F3FF] text-[#5B21B6]" />
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[0.38fr_0.62fr]">
-        <section className="rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+      <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,0.38fr)_minmax(0,0.62fr)]">
+        <section className="min-w-0 rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
           <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
             <h2 className="text-xl font-bold text-[#111827]">Quick Actions</h2>
           </div>
@@ -156,11 +156,11 @@ export default function StaffDashboard() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+        <section className="min-w-0 rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
           <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
             <h2 className="text-xl font-bold text-[#111827]">My Recent Assigned Cases</h2>
           </div>
-          <div className="max-h-[360px] overflow-auto">
+          <div className="max-h-[360px] max-w-full overflow-auto">
             {recentCases.length === 0 ? (
               <div className="p-5"><EmptyState message="No assigned cases are available yet." /></div>
             ) : (
@@ -193,7 +193,7 @@ export default function StaffDashboard() {
         </section>
       </div>
 
-      <section className="mt-6 rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+      <section className="mt-6 min-w-0 rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
         <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h2 className="text-xl font-bold text-[#111827]">Recent Clients</h2>
         </div>
@@ -207,7 +207,7 @@ export default function StaffDashboard() {
                 to="/cases"
                 className="flex items-center gap-3 rounded-xl border border-[#E5E7EB] bg-white px-3 py-3 transition hover:bg-[#F9FAFB]"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EFF6FF] text-[#2563EB]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F7F0FA] text-[#704389]">
                   <UserRound className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">

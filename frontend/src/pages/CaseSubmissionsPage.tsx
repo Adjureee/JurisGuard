@@ -453,25 +453,29 @@ export default function CaseSubmissionsPage() {
 
   return (
     <MainLayout>
-      <PageHeader
-        eyebrow={isAdmin ? "Case Review Center" : "Case Submissions"}
-        title={isAdmin ? "Supervisory Report Review" : "Report Management"}
-        description="Internal PAO report review workflow with snapshots, correction tracking, version history, and approved export packages."
-        actions={
-          !isAdmin ? (
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="h-10 rounded-lg bg-[#704389] px-4 text-sm font-semibold text-white hover:bg-[#5F3675]"
-            >
-              Create Report
-            </button>
-          ) : null
-        }
-      />
+      <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-3 overflow-hidden">
+        <div className="shrink-0">
+          <PageHeader
+            eyebrow={isAdmin ? "Case Review Center" : "Case Submissions"}
+            title={isAdmin ? "Supervisory Report Review" : "Report Management"}
+            description="Internal PAO report review workflow with snapshots, correction tracking, version history, and approved export packages."
+            compact
+            actions={
+              !isAdmin ? (
+                <button
+                  type="button"
+                  onClick={openCreateModal}
+                  className="h-9 rounded-lg bg-[#704389] px-3.5 text-sm font-semibold text-white hover:bg-[#5F3675]"
+                >
+                  Create Report
+                </button>
+              ) : null
+            }
+          />
+        </div>
 
-      <section className="min-w-0 max-w-full overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-        <div className="grid gap-3 border-b border-[#E5E7EB] bg-white px-5 py-4 md:grid-cols-[1fr_220px_220px_auto] md:items-end">
+      <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+        <div className="grid shrink-0 gap-2 border-b border-[#E5E7EB] bg-white px-4 py-3 md:grid-cols-[minmax(220px,360px)_200px_190px_auto] md:items-end">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
               Search
@@ -485,7 +489,7 @@ export default function CaseSubmissionsPage() {
                   ? "Search staff, report, status..."
                   : "Search report, period, status..."
               }
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             />
           </label>
           <label className="block">
@@ -495,7 +499,7 @@ export default function CaseSubmissionsPage() {
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             >
               <option value="all">All Statuses</option>
               {statusOptions.map((status) => (
@@ -506,12 +510,12 @@ export default function CaseSubmissionsPage() {
             </select>
           </label>
           <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
-          <div className="rounded-lg border border-[#E5E7EB] bg-[#F8FAFC] px-4 py-2 text-sm font-semibold text-[#4B5563]">
+          <div className="flex h-9 items-center rounded-lg border border-[#E5E7EB] bg-[#F8FAFC] px-3 text-sm font-semibold text-[#4B5563]">
             {filteredSubmissions.length} result
             {filteredSubmissions.length === 1 ? "" : "s"}
           </div>
         </div>
-        <div className="max-w-full overflow-x-auto">
+        <div className="min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto">
           {isAdmin ? (
             <AdminSubmissionTable
               error={loadError}
@@ -538,6 +542,7 @@ export default function CaseSubmissionsPage() {
           )}
         </div>
       </section>
+      </div>
 
       {reportModalOpen && (
         <ModalPortal>

@@ -159,19 +159,22 @@ export default function AuditLogsPage() {
 
   return (
     <MainLayout>
-      <div className="mb-5 min-w-0">
-        <p className="text-sm font-semibold text-[#704389]">System Activity</p>
-        <h2 className="text-2xl font-bold text-[#2B3642]">Audit Logs</h2>
-        <p className="mt-1 text-sm text-[#6B7280]">
-          {user?.role === "admin"
-            ? "Monitor all administrator and legal staff activity."
-            : "Review your own account activity and case actions."}
-        </p>
-      </div>
+      <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-3 overflow-hidden">
+        <div className="min-w-0 shrink-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">
+            System Activity
+          </p>
+          <h2 className="mt-1 text-xl font-bold text-[#2B3642]">Audit Logs</h2>
+          <p className="mt-1 text-sm leading-snug text-[#6B7280]">
+            {user?.role === "admin"
+              ? "Monitor all administrator and legal staff activity."
+              : "Review your own account activity and case actions."}
+          </p>
+        </div>
 
-      <section className="min-w-0 max-w-full overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
-        <div className="grid min-w-0 gap-3 border-b border-[#E5E7EB] bg-white px-5 py-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {user?.role === "admin" && (
+        <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
+          <div className="grid min-w-0 shrink-0 gap-2 border-b border-[#E5E7EB] bg-white px-4 py-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {user?.role === "admin" && (
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
                 User
@@ -179,7 +182,7 @@ export default function AuditLogsPage() {
               <select
                 value={selectedUserId}
                 onChange={(event) => setSelectedUserId(event.target.value)}
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               >
                 <option value="all">All Users</option>
                 {userOptions.map(([id, label]) => (
@@ -189,8 +192,8 @@ export default function AuditLogsPage() {
                 ))}
               </select>
             </label>
-          )}
-          {user?.role === "admin" && (
+            )}
+            {user?.role === "admin" && (
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
                 User Type
@@ -198,7 +201,7 @@ export default function AuditLogsPage() {
               <select
                 value={userType}
                 onChange={(event) => setUserType(event.target.value)}
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               >
                 <option value="all">All User Types</option>
                 {userTypeOptions.map((role) => (
@@ -212,15 +215,15 @@ export default function AuditLogsPage() {
                 ))}
               </select>
             </label>
-          )}
-          <label className="block">
+            )}
+            <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
               Action Type
             </span>
             <select
               value={actionType}
               onChange={(event) => setActionType(event.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             >
               <option value="all">All Actions</option>
               {actionOptions.map((action) => (
@@ -229,9 +232,9 @@ export default function AuditLogsPage() {
                 </option>
               ))}
             </select>
-          </label>
-          <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
-          <label className="block">
+            </label>
+            <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
+            <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
               Date From
             </span>
@@ -239,10 +242,10 @@ export default function AuditLogsPage() {
               type="date"
               value={dateFrom}
               onChange={(event) => setDateFrom(event.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             />
-          </label>
-          <label className="block">
+            </label>
+            <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
               Date To
             </span>
@@ -250,15 +253,15 @@ export default function AuditLogsPage() {
               type="date"
               value={dateTo}
               onChange={(event) => setDateTo(event.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             />
-          </label>
-        </div>
-        <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <h3 className="font-semibold text-[#2B3642]">Recent Activity</h3>
-        </div>
-        <div className="max-w-full overflow-x-auto">
-          <table className="w-full min-w-[860px] text-sm">
+            </label>
+          </div>
+          <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-4 py-2">
+            <h3 className="font-semibold text-[#2B3642]">Recent Activity</h3>
+          </div>
+          <div className="min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto">
+            <table className="w-full min-w-[860px] text-sm">
             <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
               <tr>
                 <th className="px-5 py-3 text-left font-semibold">Timestamp</th>
@@ -307,9 +310,10 @@ export default function AuditLogsPage() {
                 ))
               )}
             </tbody>
-          </table>
-        </div>
-      </section>
+            </table>
+          </div>
+        </section>
+      </div>
     </MainLayout>
   );
 }

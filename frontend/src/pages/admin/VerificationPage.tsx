@@ -232,48 +232,52 @@ export default function VerificationPage() {
 
   return (
     <MainLayout>
-      <PageHeader
-        eyebrow="Application Review"
-        title="User Verification"
-        description="Review registration requests, validate uploaded identification, and manage account approval decisions."
-        actions={
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <select
-              value={filter}
-              onChange={(event) =>
-                setFilter(event.target.value as ApprovalStatus | "all")
-              }
-              className="h-10 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-            >
-              <option value="all">All</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="under_review">Under Review</option>
-              <option value="suspended">Suspended</option>
-            </select>
-            <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
-            <span className="rounded-full bg-[#704389] px-3 py-1 text-xs font-semibold text-white">
-              {requestCount}
-            </span>
-          </div>
-        }
-      />
+      <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-3 overflow-hidden">
+        <div className="shrink-0">
+          <PageHeader
+            eyebrow="Application Review"
+            title="User Verification"
+            description="Review registration requests, validate uploaded identification, and manage account approval decisions."
+            compact
+            actions={
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <select
+                  value={filter}
+                  onChange={(event) =>
+                    setFilter(event.target.value as ApprovalStatus | "all")
+                  }
+                  className="h-9 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                >
+                  <option value="all">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="under_review">Under Review</option>
+                  <option value="suspended">Suspended</option>
+                </select>
+                <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
+                <span className="inline-flex h-9 items-center rounded-full bg-[#704389] px-3 text-xs font-semibold text-white">
+                  {requestCount}
+                </span>
+              </div>
+            }
+          />
+        </div>
 
-      <section className="min-w-0 max-w-full overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
-        <div className="border-b border-[#E5E7EB] bg-white px-5 py-4">
+      <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
+        <div className="shrink-0 border-b border-[#E5E7EB] bg-white px-4 py-2">
           <h2 className="text-base font-semibold text-[#2B3642]">
             Account Requests
           </h2>
         </div>
 
         {error && (
-          <div className="mx-5 mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="mx-5 mt-4 shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
           </div>
         )}
 
-        <div className="grid gap-3 p-4 md:hidden">
+        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-4 md:hidden">
           {isLoading ? (
             <div className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-8 text-center text-sm text-[#6B7280]">
               Loading applications...
@@ -350,7 +354,7 @@ export default function VerificationPage() {
           )}
         </div>
 
-        <div className="hidden max-w-full overflow-x-auto md:block">
+        <div className="hidden min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto md:block">
           <table className="w-full min-w-[760px] text-sm">
             <thead className="sticky top-0 z-10 border-b border-[#D6DEE7] bg-[#E9EEF3] text-xs uppercase tracking-wide text-[#2B3642]">
               <tr>
@@ -460,6 +464,7 @@ export default function VerificationPage() {
           </table>
         </div>
       </section>
+      </div>
 
       {selectedUser && (
         <ModalPortal>

@@ -265,33 +265,37 @@ export default function TerminatedCasesPage() {
 
 return (
     <MainLayout>
-      <PageHeader
-        eyebrow="Case Archive"
-        title="Terminated Cases"
-        description="Review closed criminal case records, termination reasons, archive details, and official export outputs."
-        actions={
-          <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={exportCsv}
-            className="h-10 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white transition hover:bg-[#5F3675]"
-          >
-            Export CSV
-          </button>
-          <button
-            type="button"
-            onClick={exportExcel}
-            className="h-10 rounded-md border border-[#704389] bg-white px-4 text-sm font-semibold text-[#704389] transition hover:bg-[#F7F0FA]"
-          >
-            Export Excel
-          </button>
-          </div>
-        }
-      />
+      <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-3 overflow-hidden">
+        <div className="shrink-0">
+          <PageHeader
+            eyebrow="Case Archive"
+            title="Terminated Cases"
+            description="Review closed criminal case records, termination reasons, archive details, and official export outputs."
+            compact
+            actions={
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  className="h-9 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white transition hover:bg-[#5F3675]"
+                >
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={exportExcel}
+                  className="h-9 rounded-md border border-[#704389] bg-white px-3.5 text-sm font-semibold text-[#704389] transition hover:bg-[#F7F0FA]"
+                >
+                  Export Excel
+                </button>
+              </div>
+            }
+          />
+        </div>
 
-      <section className="min-w-0 max-w-full overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
+      <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
         {/* Filters remain fixed at the top of the section */}
-        <div className="grid gap-3 border-b border-[#E5E7EB] px-5 py-4 md:grid-cols-[1fr_220px_220px] md:items-end">
+        <div className="grid shrink-0 gap-2 border-b border-[#E5E7EB] px-4 py-3 md:grid-cols-[minmax(220px,360px)_200px_190px] md:items-end">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
               Search
@@ -304,7 +308,7 @@ return (
                 setPage(1);
               }}
               placeholder="Search terminated cases..."
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] px-3 text-sm outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] px-3 text-sm outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             />
           </label>
           <label className="block">
@@ -317,7 +321,7 @@ return (
                 setResolutionFilter(event.target.value);
                 setPage(1);
               }}
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             >
               <option value="all">All resolutions</option>
               {resolutionOptions.map((option) => (
@@ -335,7 +339,7 @@ return (
         </div>
 
         {/* NEW: Scrollable Table Container */}
-        <div className="relative max-h-[70vh] max-w-full overflow-y-auto overflow-x-auto">
+        <div className="relative min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto">
           <table className="w-full min-w-[980px] text-sm">
             {/* NEW: Sticky Table Header */}
             <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
@@ -445,7 +449,7 @@ return (
         </div>
 
         {/* Pagination remains fixed at the bottom of the section */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E5E7EB] px-5 py-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#E5E7EB] px-5 py-3">
           <p className="text-sm text-[#4B5563]">
             Page {page} of {totalPages} - {filteredRows.length} records
           </p>
@@ -471,6 +475,7 @@ return (
           </div>
         </div>
       </section>
+      </div>
 
       {/* Modal logic remains completely untouched */}
       {selectedRecord && (

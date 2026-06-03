@@ -22,7 +22,7 @@ export default function DateFilterSelect({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value as DateFilterValue)}
-        className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+        className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
       >
         {DATE_FILTER_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>

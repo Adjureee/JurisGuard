@@ -251,7 +251,7 @@ function CaseFilterSelect({
   onChange: (value: CaseTableFilter) => void;
 }) {
   return (
-    <div className="flex h-10 items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-3 text-[#2B3642]">
+    <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-3 text-[#2B3642]">
       <SlidersIcon />
       <select
         className="h-8 min-w-32 bg-white text-sm font-medium text-[#2B3642] outline-none"
@@ -1241,7 +1241,7 @@ export default function CriminalCasesPage() {
  return (
     <MainLayout>
       {/* 1. Global Height Wrapper: Locks the page to the viewport height */}
-      <div className="flex h-[calc(100vh-100px)] max-w-full flex-col gap-4 overflow-hidden">
+      <div className="flex h-[calc(100vh-110px)] max-w-full flex-col gap-4 overflow-hidden">
         
         {/* 2. Header Area: shrink-0 keeps it from compressing */}
         <div className="shrink-0">
@@ -1249,12 +1249,13 @@ export default function CriminalCasesPage() {
             eyebrow="Criminal Cases"
             title="Case Records Management"
             description="Manage PAO Panabo client profiles, active criminal case records, printable intake forms, and update workflows."
+            compact
             actions={
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <button
                   type="button"
                   onClick={() => setShowCaseModal(true)}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]"
                 >
                   <PlusIcon />
                   Add Case
@@ -1262,7 +1263,7 @@ export default function CriminalCasesPage() {
                 <button
                   type="button"
                   onClick={() => setShowClientModal(true)}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#15803D] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#166534]"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#15803D] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#166534]"
                 >
                   <UserPlusIcon />
                   Add Client
@@ -1273,10 +1274,10 @@ export default function CriminalCasesPage() {
         </div>
 
         {/* 3. Main Content Card: flex-1 min-h-0 allows it to absorb remaining screen space */}
-        <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
+        <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
           
           {/* 4. Filters Area: shrink-0 preserves its height */}
-          <div className="mb-4 grid min-w-0 shrink-0 gap-3 xl:grid-cols-[minmax(220px,1fr)_190px_180px_180px_auto_auto] xl:items-end">
+          <div className="mb-3 grid min-w-0 shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_170px_165px_165px_auto_auto] xl:items-end">
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
                 Search
@@ -1284,7 +1285,7 @@ export default function CriminalCasesPage() {
               <input
                 type="text"
                 placeholder="Search case..."
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition placeholder:text-[#4B5563] focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition placeholder:text-[#4B5563] focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
@@ -1299,7 +1300,7 @@ export default function CriminalCasesPage() {
                 onChange={(event) =>
                   setStatusFilter(event.target.value as CriminalStatusFilter)
                 }
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               >
                 {statusFilterOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -1308,10 +1309,10 @@ export default function CriminalCasesPage() {
                 ))}
               </select>
             </label>
-            <div className="pt-5">
+            <div className="pt-5 xl:pt-4">
               <CaseFilterSelect value={filter} onChange={setFilter} />
             </div>
-            <div className="flex h-10 items-center gap-2 rounded-md border border-[#E5E7EB] bg-[#F8FAFC] px-3">
+            <div className="flex h-9 items-center gap-2 rounded-md border border-[#E5E7EB] bg-[#F8FAFC] px-3">
               <span className="font-semibold text-[#4B5563]">Total:</span>
               <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
                 {filteredRows.length}
@@ -1320,7 +1321,7 @@ export default function CriminalCasesPage() {
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
             >
               Export CSV
             </button>

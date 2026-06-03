@@ -217,7 +217,7 @@ export default function AdminDashboard() {
 
   return (
     <MainLayout>
-      <section className="mb-6 rounded-2xl border border-[#E5E7EB] bg-white px-6 py-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+      <section className="mb-6 rounded-2xl border border-[#E7D7EE] bg-gradient-to-br from-[#F7F0FA] via-white to-white px-6 py-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-4xl font-bold tracking-tight text-[#111827]">{greeting}</h1>
@@ -243,12 +243,12 @@ export default function AdminDashboard() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-          <KpiCard label="Total Clients" value={overview?.total_clients ?? 0} detail="Registered client profiles" icon={<Users className="h-5 w-5" />} tone="bg-[#EFF6FF] text-[#2563EB]" />
+          <KpiCard label="Total Clients" value={overview?.total_clients ?? 0} detail="Registered client profiles" icon={<Users className="h-5 w-5" />} tone="bg-[#F7F0FA] text-[#704389]" />
           <KpiCard label="Total Cases" value={overview?.total_cases ?? 0} detail="Criminal case records" icon={<Gavel className="h-5 w-5" />} tone="bg-[#F3F4F6] text-[#111827]" />
           <KpiCard label="Active Cases" value={overview?.active_cases ?? 0} detail="Open operational workload" icon={<BriefcaseBusiness className="h-5 w-5" />} tone="bg-[#ECFDF5] text-[#065F46]" />
           <KpiCard label="Terminated Cases" value={overview?.terminated_cases ?? 0} detail="Closed or archived matters" icon={<Archive className="h-5 w-5" />} tone="bg-[#FFF1F2] text-[#9F1239]" />
           <KpiCard label="This Month" metricLabel="Cases" value={overview?.cases_this_month ?? 0} detail={`Since ${formatLegalDate(monthStart)}`} icon={<CalendarDays className="h-5 w-5" />} tone="bg-[#FFFBEB] text-[#92400E]" />
-          <KpiCard label="Reports Awaiting Review" value={awaitingReview.length} detail="Staff report bundles for action" icon={<FileText className="h-5 w-5" />} tone="bg-[#EFF6FF] text-[#2563EB]" />
+          <KpiCard label="Reports Awaiting Review" value={awaitingReview.length} detail="Staff report bundles for action" icon={<FileText className="h-5 w-5" />} tone="bg-[#F7F0FA] text-[#704389]" />
         </div>
       )}
 
@@ -258,18 +258,18 @@ export default function AdminDashboard() {
             <h2 className="text-xl font-bold text-[#111827]">Today's Intelligence Brief</h2>
           </div>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 text-base font-semibold text-[#2B3642]">
-            <p className="flex gap-3"><TrendingUp className="mt-1 h-5 w-5 shrink-0 text-[#2563EB]" /> {busiestDay} remains the busiest intake day.</p>
-            <p className="flex gap-3"><Clock3 className="mt-1 h-5 w-5 shrink-0 text-[#2563EB]" /> Most client arrivals occur around {busiestHour}.</p>
-            <p className="flex gap-3"><LocateFixed className="mt-1 h-5 w-5 shrink-0 text-[#2563EB]" /> {hotspot} currently generates the highest case volume.</p>
-            <p className="flex gap-3"><Gavel className="mt-1 h-5 w-5 shrink-0 text-[#2563EB]" /> {leadingCategory} remains the most common recorded offense.</p>
-            <p className="flex gap-3"><FileText className="mt-1 h-5 w-5 shrink-0 text-[#2563EB]" /> {awaitingReview.length} staff submissions require review.</p>
+            <p className="flex gap-3"><TrendingUp className="mt-1 h-5 w-5 shrink-0 text-[#704389]" /> {busiestDay} remains the busiest intake day.</p>
+            <p className="flex gap-3"><Clock3 className="mt-1 h-5 w-5 shrink-0 text-[#704389]" /> Most client arrivals occur around {busiestHour}.</p>
+            <p className="flex gap-3"><LocateFixed className="mt-1 h-5 w-5 shrink-0 text-[#704389]" /> {hotspot} currently generates the highest case volume.</p>
+            <p className="flex gap-3"><Gavel className="mt-1 h-5 w-5 shrink-0 text-[#704389]" /> {leadingCategory} remains the most common recorded offense.</p>
+            <p className="flex gap-3"><FileText className="mt-1 h-5 w-5 shrink-0 text-[#704389]" /> {awaitingReview.length} staff submissions require review.</p>
           </div>
         </section>
 
         <section className="flex h-[320px] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
           <div className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
             <h2 className="text-xl font-bold text-[#111827]">Administrative Reminders</h2>
-            <button type="button" onClick={() => setShowReminderForm((value) => !value)} className="text-sm font-bold text-[#2563EB] hover:text-[#1D4ED8]">
+            <button type="button" onClick={() => setShowReminderForm((value) => !value)} className="text-sm font-bold text-[#704389] hover:text-[#5F3675]">
               + Add Reminder
             </button>
           </div>
@@ -299,7 +299,7 @@ export default function AdminDashboard() {
                   </div>
                   <p className="mt-3 font-bold text-[#111827]">{reminder.title}</p>
                   <div className="mt-3 flex items-center justify-between gap-3">
-                    <button type="button" onClick={() => updateReminderStatus(reminder.id, reminder.status === "Completed" ? "Open" : "Completed")} className="inline-flex items-center gap-2 text-sm font-semibold text-[#2563EB] hover:text-[#1D4ED8]">
+                    <button type="button" onClick={() => updateReminderStatus(reminder.id, reminder.status === "Completed" ? "Open" : "Completed")} className="inline-flex items-center gap-2 text-sm font-semibold text-[#704389] hover:text-[#5F3675]">
                       <CheckCircle2 className="h-4 w-4" />
                       {reminder.status}
                     </button>
@@ -328,7 +328,7 @@ export default function AdminDashboard() {
               <div className="space-y-3">
                 {recentCaseUpdates.map((activity) => (
                   <div key={activity.id} className="flex gap-3 rounded-xl border border-[#E5E7EB] bg-white p-3">
-                    <Activity className="mt-1 h-5 w-5 shrink-0 text-[#2563EB]" />
+                    <Activity className="mt-1 h-5 w-5 shrink-0 text-[#704389]" />
                     <div>
                       <p className="text-sm font-semibold leading-6 text-[#2B3642]">{activity.description}</p>
                       <p className="mt-1 text-xs font-medium text-[#6B7280]">{formatLegalDateTime(activity.timestamp)}</p>
@@ -356,7 +356,7 @@ export default function AdminDashboard() {
                       <tr key={submission.submission_id} onClick={() => navigate(`/case-review-center?submission=${submission.submission_id}`)} className="cursor-pointer bg-white hover:bg-[#F9FAFB]">
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#EFF6FF] text-sm font-bold text-[#2563EB]">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F7F0FA] text-sm font-bold text-[#704389]">
                               {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : initials(submission.staff_name).slice(0, 1)}
                             </div>
                             <div>
@@ -370,7 +370,7 @@ export default function AdminDashboard() {
                           <p className="mt-1 text-xs text-[#6B7280]">{formatLegalDate(submission.date_from)} - {formatLegalDate(submission.date_to)}</p>
                         </td>
                         <td className="px-5 py-4">
-                          <span className="rounded-full bg-[#EFF6FF] px-2.5 py-1 text-xs font-bold text-[#2563EB]">{submission.status}</span>
+                          <span className="rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-bold text-[#704389]">{submission.status}</span>
                         </td>
                       </tr>
                     );
@@ -384,7 +384,7 @@ export default function AdminDashboard() {
 
       <Link
         to="/analytics"
-        className="mt-6 flex items-center justify-between rounded-2xl border border-[#E5E7EB] bg-white px-6 py-5 text-[#111827] shadow-[0_4px_20px_rgba(0,0,0,0.04)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:text-[#2563EB] hover:shadow-[0_12px_28px_rgba(17,24,39,0.07)]"
+        className="mt-6 flex items-center justify-between rounded-2xl border border-[#E7D7EE] bg-white px-6 py-5 text-[#111827] shadow-[0_4px_20px_rgba(0,0,0,0.04)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:text-[#704389] hover:shadow-[0_12px_28px_rgba(17,24,39,0.07)]"
       >
         <div>
           <h2 className="text-xl font-bold">Open Analytics Workspace -&gt;</h2>
