@@ -15,7 +15,7 @@ try {
   window.localStorage.removeItem("jurisguard_profile_images");
 } catch {
   // Ignore unavailable storage; profile images are no longer stored in browser storage.
-}
+} 
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>

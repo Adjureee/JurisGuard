@@ -1,0 +1,26 @@
+{
+  "name": "jurisguardpro",
+  "version": "1.0.0",
+  "description": "JurisGuard is an open-source case intake and document processing platform with a FastAPI backend and a Vite + React (TypeScript) frontend. It includes OCR/document processing helpers, a PostgreSQL-backed database, and simple user/role management.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChristInsanity/JurisGuardPro.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ChristInsanity/JurisGuardPro/issues"
+  },
+  "homepage": "https://github.com/ChristInsanity/JurisGuardPro#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^25.9.1"
+  }
+}

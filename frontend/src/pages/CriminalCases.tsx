@@ -1205,140 +1205,146 @@ export default function CriminalCasesPage() {
     setActionMode(mode);
   };
 
-  return (
+ return (
     <MainLayout>
-      <PageHeader
-        eyebrow="Criminal Cases"
-        title="Case Records Management"
-        description="Manage PAO Panabo client profiles, active criminal case records, printable intake forms, and update workflows."
-        actions={
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <button
-            type="button"
-            onClick={() => setShowCaseModal(true)}
-            className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]"
-          >
-            <PlusIcon />
-            Add Case
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowClientModal(true)}
-            className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#15803D] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#166534]"
-          >
-            <UserPlusIcon />
-            Add Client
-          </button>
-          </div>
-        }
-      />
-
-      <div className="rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
-        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <CaseFilterSelect value={filter} onChange={setFilter} />
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-[#4B5563]">Total:</span>
-              <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
-                {filteredRows.length}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowExportModal(true)}
-              className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
-            >
-              Export CSV
-            </button>
-          </div>
-
-          <input
-            type="text"
-            placeholder="Search case..."
-            className="h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition placeholder:text-[#4B5563] focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20 lg:w-1/4"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
+      {/* 1. Global Height Wrapper: Locks the page to the viewport height */}
+      <div className="flex h-[calc(100vh-100px)] flex-col gap-4 overflow-hidden">
+        
+        {/* 2. Header Area: shrink-0 keeps it from compressing */}
+        <div className="shrink-0">
+          <PageHeader
+            eyebrow="Criminal Cases"
+            title="Case Records Management"
+            description="Manage PAO Panabo client profiles, active criminal case records, printable intake forms, and update workflows."
+            actions={
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  onClick={() => setShowCaseModal(true)}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]"
+                >
+                  <PlusIcon />
+                  Add Case
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowClientModal(true)}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#15803D] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#166534]"
+                >
+                  <UserPlusIcon />
+                  Add Client
+                </button>
+              </div>
+            }
           />
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] text-sm">
-            <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
-              <tr>
-                <th className="px-3 py-3 text-left font-semibold">
-                  Control No.
-                </th>
-                <th className="px-3 py-3 text-left font-semibold">
-                  Party Represented
-                </th>
-                <th className="px-3 py-3 text-left font-semibold">
-                  Gender / Sex
-                </th>
-                <th className="px-3 py-3 text-left font-semibold">Title</th>
-                <th className="px-5 py-3 text-left font-semibold">Status</th>
-                <th className="px-3 py-3 text-left font-semibold">Person</th>
-                <th className="px-3 py-3 text-right font-semibold"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E5E7EB]">
-              {filteredRows.length === 0 ? (
+        {/* 3. Main Content Card: flex-1 min-h-0 allows it to absorb remaining screen space */}
+        <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
+          
+          {/* 4. Filters Area: shrink-0 preserves its height */}
+          <div className="mb-4 shrink-0 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <CaseFilterSelect value={filter} onChange={setFilter} />
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-[#4B5563]">Total:</span>
+                <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
+                  {filteredRows.length}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExportModal(true)}
+                className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
+              >
+                Export CSV
+              </button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Search case..."
+              className="h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition placeholder:text-[#4B5563] focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20 lg:w-1/4"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+
+          {/* 5. Scrollable Table Container: Flex-1 fills the rest of the card perfectly */}
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto relative rounded-lg border border-[#E5E7EB]">
+            <table className="w-full min-w-[1040px] text-sm">
+              <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="px-5 py-10 text-center text-[#2B3642]/50"
-                  >
-                    No criminal cases found.
-                  </td>
+                  <th className="px-3 py-3 text-left font-semibold">Control No.</th>
+                  <th className="px-3 py-3 text-left font-semibold">Party Represented</th>
+                  <th className="px-3 py-3 text-left font-semibold">Gender / Sex</th>
+                  <th className="px-3 py-3 text-left font-semibold">Title</th>
+                  <th className="px-5 py-3 text-left font-semibold">Status</th>
+                  <th className="px-3 py-3 text-left font-semibold">Person</th>
+                  <th className="px-3 py-3 text-right font-semibold"></th>
                 </tr>
-              ) : (
-                filteredRows.map(({ record, client, clientName }) => (
-                  <tr
-                    key={record.case_id}
-                    className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]"
-                  >
-                    <td className="px-3 py-4 text-[#2B3642]">
-                      {record.intake_record.control_no}
-                    </td>
-                    <td className="px-3 py-4 text-[#4B5563]">
-                      {record.intake_record.party_represented}
-                    </td>
-                    <td className="px-3 py-4 text-[#4B5563]">
-                      {client?.client.sex ?? "-"}
-                    </td>
-                    <td className="px-3 py-4 text-[#4B5563]">
-                      {record.cases.title_of_case}
-                    </td>
-                    <td className="px-5 py-4">
-                      <StatusBadge status={record.cases.status_of_case} />
-                    </td>
-                    <td className="px-3 py-4 text-[#4B5563]">{clientName}</td>
-                    <td className="px-3 py-4">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openRecord(record, "view")}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
-                        >
-                          <EyeIcon />
-                          View
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openRecord(record, "update")}
-                          className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
-                        >
-                          Update
-                        </button>
-                      </div>
+              </thead>
+              <tbody className="divide-y divide-[#E5E7EB]">
+                {filteredRows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="px-5 py-10 text-center text-[#2B3642]/50"
+                    >
+                      No criminal cases found.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  filteredRows.map(({ record, client, clientName }) => (
+                    <tr
+                      key={record.case_id}
+                      className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]"
+                    >
+                      <td className="px-3 py-4 text-[#2B3642]">
+                        {record.intake_record.control_no}
+                      </td>
+                      <td className="px-3 py-4 text-[#4B5563]">
+                        {record.intake_record.party_represented}
+                      </td>
+                      <td className="px-3 py-4 text-[#4B5563]">
+                        {client?.client.sex ?? "-"}
+                      </td>
+                      <td className="px-3 py-4 text-[#4B5563]">
+                        {record.cases.title_of_case}
+                      </td>
+                      <td className="px-5 py-4">
+                        <StatusBadge status={record.cases.status_of_case} />
+                      </td>
+                      <td className="px-3 py-4 text-[#4B5563]">{clientName}</td>
+                      <td className="px-3 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openRecord(record, "view")}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
+                          >
+                            <EyeIcon />
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openRecord(record, "update")}
+                            className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
+                          >
+                            Update
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
+      {/* Modals */}
       <AddClientModal
         isOpen={showClientModal}
         onClose={() => setShowClientModal(false)}

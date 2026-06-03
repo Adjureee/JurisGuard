@@ -260,7 +260,7 @@ export default function TerminatedCasesPage() {
     );
   };
 
-  return (
+return (
     <MainLayout>
       <PageHeader
         eyebrow="Case Archive"
@@ -287,6 +287,7 @@ export default function TerminatedCasesPage() {
       />
 
       <section className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
+        {/* Filters remain fixed at the top of the section */}
         <div className="grid gap-3 border-b border-[#E5E7EB] px-5 py-4 md:grid-cols-[1fr_220px]">
           <input
             type="text"
@@ -313,9 +314,11 @@ export default function TerminatedCasesPage() {
           </select>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* NEW: Scrollable Table Container */}
+        <div className="max-h-[70vh] overflow-y-auto overflow-x-auto relative">
           <table className="w-full min-w-[980px] text-sm">
-            <thead className="border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
+            {/* NEW: Sticky Table Header */}
+            <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
               <tr>
                 <th className="px-5 py-3 text-left">
                   <SortHeader
@@ -421,6 +424,7 @@ export default function TerminatedCasesPage() {
           </table>
         </div>
 
+        {/* Pagination remains fixed at the bottom of the section */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E5E7EB] px-5 py-4">
           <p className="text-sm text-[#4B5563]">
             Page {page} of {totalPages} - {filteredRows.length} records
@@ -448,6 +452,7 @@ export default function TerminatedCasesPage() {
         </div>
       </section>
 
+      {/* Modal logic remains completely untouched */}
       {selectedRecord && (
         <ModalPortal>
         <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
