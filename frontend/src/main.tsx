@@ -21,7 +21,12 @@ ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <AuthProvider>
       <App />
-      <Toaster position="bottom-right" reverseOrder={true} />
+      <Toaster
+        position="bottom-right"
+        reverseOrder={true}
+        containerStyle={{ zIndex: 11000 }}
+        toastOptions={{ style: { zIndex: 11000 } }}
+      />
     </AuthProvider>
   </React.StrictMode>
 );

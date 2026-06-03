@@ -48,7 +48,7 @@ textarea {
   overscroll-behavior: contain;
   padding: clamp(1rem, 3vh, 1.5rem) 1rem;
   position: fixed;
-  z-index: 2147483647;
+  z-index: 10000;
 }
 
 .jurisguard-modal-surface {

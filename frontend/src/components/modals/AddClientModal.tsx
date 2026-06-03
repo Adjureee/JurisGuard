@@ -964,12 +964,14 @@ export default function AddClientModal({
                         status={indicators["client_details.detained"]}
                       />
                     </label>
-                    <TextInput
-                      label="Detained Since"
-                      type="date"
-                      registration={register("client_details.detained_since")}
-                      status={indicators["client_details.detained_since"]}
-                    />
+                    {values.client_details.detained && (
+                      <TextInput
+                        label="Detained Since"
+                        type="date"
+                        registration={register("client_details.detained_since")}
+                        status={indicators["client_details.detained_since"]}
+                      />
+                    )}
                     <TextInput
                       label="Place of Detention"
                       registration={register(

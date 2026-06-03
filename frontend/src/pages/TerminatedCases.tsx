@@ -2,10 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
+import DateFilterSelect from "../components/DateFilterSelect";
 import PageHeader from "../components/PageHeader";
 import ModalPortal from "../components/modals/ModalPortal";
 import { listCaseRecords, listClientRecords } from "../services/recordService";
 import type { ClientRecord, CriminalCaseRecord } from "../types";
+import {
+  buildCriminalCasesCsv,
+  buildCriminalCasesExcelHtml,
+  downloadCsv,
+  type CriminalCaseExportFilterDto,
+  type CriminalCaseRow,
+} from "../services/exportService";
+import {
+  matchesDateFilter,
+  type DateFilterValue,
+} from "../utils/dateFilters";
 
 function formatDate(value?: string) {
   if (!value) return "-";
@@ -13,17 +25,6 @@ function formatDate(value?: string) {
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
     date,
-  );
-}
-
-function csvEscape(value: string | number | null | undefined) {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
-}
-
-function htmlEscape(value: string | number | null | undefined) {
-  return String(value ?? "").replace(
-    /[<>&]/g,
-    (char) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[char] ?? char,
   );
 }
 
@@ -58,17 +59,17 @@ function DetailField({
 
 type TerminatedSortColumn = "client" | "title" | "reason" | "date" | "status";
 
-const TERMINATED_EXPORT_HEADERS = [
-  "Client name",
-  "Case title",
-  "Case number",
-  "Resolution type",
-  "Termination reason",
-  "Date terminated",
-  "Terminated by",
-  "Status",
-  "Final remarks",
-];
+const terminatedExportFilters: CriminalCaseExportFilterDto = {
+  status: "All",
+  date_from: "",
+  date_to: "",
+  location_type: "All",
+  barangay: "All",
+  case_category: "All",
+  staff: "All",
+  ocr_status: "All",
+  termination_status: "All",
+};
 
 function SortHeader({
   column,
@@ -103,6 +104,7 @@ export default function TerminatedCasesPage() {
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [search, setSearch] = useState("");
   const [resolutionFilter, setResolutionFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
   const [page, setPage] = useState(1);
   const [selectedRecord, setSelectedRecord] =
     useState<CriminalCaseRecord | null>(null);
@@ -177,6 +179,15 @@ export default function TerminatedCasesPage() {
         record.cases.resolution_type !== resolutionFilter
       )
         return false;
+      if (
+        !matchesDateFilter(
+          record.cases.terminated_at ||
+            record.cases.date_of_termination ||
+            record.last_updated,
+          dateFilter,
+        )
+      )
+        return false;
       return true;
     });
     return rows.sort((left, right) => {
@@ -205,50 +216,42 @@ export default function TerminatedCasesPage() {
       const result = String(leftValue).localeCompare(String(rightValue));
       return sortDirection === "asc" ? result : -result;
     });
-  }, [cases, clientById, resolutionFilter, search, sortBy, sortDirection]);
+  }, [
+    cases,
+    clientById,
+    dateFilter,
+    resolutionFilter,
+    search,
+    sortBy,
+    sortDirection,
+  ]);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
 
-  const exportRows = useMemo(
+  const exportRows = useMemo<CriminalCaseRow[]>(
     () =>
-      filteredRows.map((record) => [
-        clientById.get(record.client_id)?.client.name ?? "Unknown client",
-        record.cases.title_of_case,
-        record.cases.case_no,
-        record.cases.resolution_type,
-        record.cases.termination_reason,
-        record.cases.terminated_at,
-        record.cases.handled_by,
-        record.cases.status_of_case,
-        record.cases.termination_remarks,
-      ]),
+      filteredRows.map((record) => {
+        const client = clientById.get(record.client_id);
+        return {
+          record,
+          client,
+          clientName: client?.client.name ?? "Unknown client",
+        };
+      }),
     [clientById, filteredRows],
   );
 
   const exportCsv = () => {
-    const header = [...TERMINATED_EXPORT_HEADERS];
-    const lines = exportRows.map((row) => row.map(csvEscape).join(","));
-    downloadText(
+    downloadCsv(
       "terminated-cases.csv",
-      [header.map(csvEscape).join(","), ...lines].join("\n"),
-      "text/csv;charset=utf-8",
+      buildCriminalCasesCsv(exportRows, terminatedExportFilters),
     );
   };
 
   const exportExcel = () => {
-    const headerCells = TERMINATED_EXPORT_HEADERS.map(
-      (header) => `<th>${htmlEscape(header)}</th>`,
-    ).join("");
-    const bodyRows = exportRows
-      .map(
-        (row) =>
-          `<tr>${row.map((value) => `<td>${htmlEscape(value)}</td>`).join("")}</tr>`,
-      )
-      .join("");
-    const html = `<!doctype html><html><head><meta charset="utf-8" /><style>body{font-family:Arial,sans-serif;color:#2B3642}table{border-collapse:collapse;width:100%}th{background:#E9EEF3;text-transform:uppercase;letter-spacing:.04em}th,td{border:1px solid #D6DEE7;padding:8px;font-size:12px}</style></head><body><h2>JurisGuard Terminated Cases Export</h2><table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></body></html>`;
     downloadText(
       "terminated-cases.xls",
-      html,
+      buildCriminalCasesExcelHtml(exportRows, terminatedExportFilters),
       "application/vnd.ms-excel;charset=utf-8",
     );
   };
@@ -286,36 +289,53 @@ return (
         }
       />
 
-      <section className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
+      <section className="min-w-0 max-w-full overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
         {/* Filters remain fixed at the top of the section */}
-        <div className="grid gap-3 border-b border-[#E5E7EB] px-5 py-4 md:grid-cols-[1fr_220px]">
-          <input
-            type="text"
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
+        <div className="grid gap-3 border-b border-[#E5E7EB] px-5 py-4 md:grid-cols-[1fr_220px_220px] md:items-end">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+              Search
+            </span>
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Search terminated cases..."
+              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] px-3 text-sm outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+              Resolution
+            </span>
+            <select
+              value={resolutionFilter}
+              onChange={(event) => {
+                setResolutionFilter(event.target.value);
+                setPage(1);
+              }}
+              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+            >
+              <option value="all">All resolutions</option>
+              {resolutionOptions.map((option) => (
+                <option key={option}>{option}</option>
+              ))}
+            </select>
+          </label>
+          <DateFilterSelect
+            value={dateFilter}
+            onChange={(value) => {
+              setDateFilter(value);
               setPage(1);
             }}
-            placeholder="Search terminated cases..."
-            className="h-10 rounded-md border border-[#D1D5DB] px-3 text-sm outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
           />
-          <select
-            value={resolutionFilter}
-            onChange={(event) => {
-              setResolutionFilter(event.target.value);
-              setPage(1);
-            }}
-            className="h-10 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-          >
-            <option value="all">All resolutions</option>
-            {resolutionOptions.map((option) => (
-              <option key={option}>{option}</option>
-            ))}
-          </select>
         </div>
 
         {/* NEW: Scrollable Table Container */}
-        <div className="max-h-[70vh] overflow-y-auto overflow-x-auto relative">
+        <div className="relative max-h-[70vh] max-w-full overflow-y-auto overflow-x-auto">
           <table className="w-full min-w-[980px] text-sm">
             {/* NEW: Sticky Table Header */}
             <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">

@@ -14,8 +14,8 @@ export default function PageHeader({
   title,
 }: PageHeaderProps) {
   return (
-    <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-      <div>
+    <div className="mb-6 flex min-w-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+      <div className="min-w-0">
         <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">
           {eyebrow}
         </p>
@@ -26,7 +26,7 @@ export default function PageHeader({
           </p>
         ) : null}
       </div>
-      {actions ? <div>{actions}</div> : null}
+      {actions ? <div className="min-w-0 max-w-full">{actions}</div> : null}
     </div>
   );
 }

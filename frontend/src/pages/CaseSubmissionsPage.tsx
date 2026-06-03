@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import MainLayout from "../layouts/MainLayout";
+import DateFilterSelect from "../components/DateFilterSelect";
 import PageHeader from "../components/PageHeader";
 import ModalPortal from "../components/modals/ModalPortal";
 import { useAuth } from "../contexts/AuthContext";
@@ -29,6 +30,10 @@ import {
   downloadCsv,
   type CriminalCaseRow,
 } from "../services/exportService";
+import {
+  matchesDateFilter,
+  type DateFilterValue,
+} from "../utils/dateFilters";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -137,6 +142,7 @@ export default function CaseSubmissionsPage() {
   const [preview, setPreview] = useState<SubmissionSnapshot[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
 
   const isAdmin = user?.role === "admin";
   const selectedStatus = selected ? normalizeStatus(selected.status) : "";
@@ -159,6 +165,15 @@ export default function CaseSubmissionsPage() {
     return submissions.filter((submission) => {
       const status = normalizeStatus(submission.status);
       if (statusFilter !== "all" && status !== statusFilter) return false;
+      if (
+        !matchesDateFilter(
+          submission.submitted_at ||
+            submission.updated_at ||
+            submission.created_at,
+          dateFilter,
+        )
+      )
+        return false;
       if (!normalizedSearch) return true;
 
       const haystack = [
@@ -178,7 +193,7 @@ export default function CaseSubmissionsPage() {
 
       return haystack.includes(normalizedSearch);
     });
-  }, [search, statusFilter, submissions]);
+  }, [dateFilter, search, statusFilter, submissions]);
   const statusOptions = useMemo(
     () =>
       Array.from(
@@ -455,8 +470,8 @@ export default function CaseSubmissionsPage() {
         }
       />
 
-      <section className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-        <div className="grid gap-3 border-b border-[#E5E7EB] bg-white px-5 py-4 md:grid-cols-[1fr_220px_auto] md:items-end">
+      <section className="min-w-0 max-w-full overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+        <div className="grid gap-3 border-b border-[#E5E7EB] bg-white px-5 py-4 md:grid-cols-[1fr_220px_220px_auto] md:items-end">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
               Search
@@ -490,12 +505,13 @@ export default function CaseSubmissionsPage() {
               ))}
             </select>
           </label>
+          <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
           <div className="rounded-lg border border-[#E5E7EB] bg-[#F8FAFC] px-4 py-2 text-sm font-semibold text-[#4B5563]">
             {filteredSubmissions.length} result
             {filteredSubmissions.length === 1 ? "" : "s"}
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="max-w-full overflow-x-auto">
           {isAdmin ? (
             <AdminSubmissionTable
               error={loadError}

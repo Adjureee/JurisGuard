@@ -4,6 +4,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
 import MainLayout from "../../layouts/MainLayout";
+import DateFilterSelect from "../../components/DateFilterSelect";
 import PageHeader from "../../components/PageHeader";
 import ImagePreviewModal from "../../components/ImagePreviewModal";
 import ModalPortal from "../../components/modals/ModalPortal";
@@ -13,6 +14,10 @@ import {
   updateApplicantApproval,
 } from "../../services/adminService";
 import type { AdminUserListItem, ApprovalStatus } from "../../types/auth";
+import {
+  matchesDateFilter,
+  type DateFilterValue,
+} from "../../utils/dateFilters";
 
 const statusLabel: Record<ApprovalStatus, string> = {
   pending: "Pending",
@@ -98,6 +103,7 @@ export default function VerificationPage() {
     null,
   );
   const [filter, setFilter] = useState<ApprovalStatus | "all">("pending");
+  const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
@@ -129,7 +135,16 @@ export default function VerificationPage() {
     };
   }, [filter]);
 
-  const requestCount = useMemo(() => users.length, [users.length]);
+  const filteredUsers = useMemo(
+    () =>
+      users.filter((item) => matchesDateFilter(item.created_at, dateFilter)),
+    [dateFilter, users],
+  );
+
+  const requestCount = useMemo(
+    () => filteredUsers.length,
+    [filteredUsers.length],
+  );
 
   useEffect(() => {
     users
@@ -222,29 +237,30 @@ export default function VerificationPage() {
         title="User Verification"
         description="Review registration requests, validate uploaded identification, and manage account approval decisions."
         actions={
-          <div className="flex items-center gap-2">
-          <select
-            value={filter}
-            onChange={(event) =>
-              setFilter(event.target.value as ApprovalStatus | "all")
-            }
-            className="h-10 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-          >
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="under_review">Under Review</option>
-            <option value="suspended">Suspended</option>
-          </select>
-          <span className="rounded-full bg-[#704389] px-3 py-1 text-xs font-semibold text-white">
-            {requestCount}
-          </span>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <select
+              value={filter}
+              onChange={(event) =>
+                setFilter(event.target.value as ApprovalStatus | "all")
+              }
+              className="h-10 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="under_review">Under Review</option>
+              <option value="suspended">Suspended</option>
+            </select>
+            <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
+            <span className="rounded-full bg-[#704389] px-3 py-1 text-xs font-semibold text-white">
+              {requestCount}
+            </span>
           </div>
         }
       />
 
-      <section className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
+      <section className="min-w-0 max-w-full overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
         <div className="border-b border-[#E5E7EB] bg-white px-5 py-4">
           <h2 className="text-base font-semibold text-[#2B3642]">
             Account Requests
@@ -262,12 +278,12 @@ export default function VerificationPage() {
             <div className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-8 text-center text-sm text-[#6B7280]">
               Loading applications...
             </div>
-          ) : users.length === 0 ? (
+          ) : filteredUsers.length === 0 ? (
             <div className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-8 text-center text-sm text-[#6B7280]">
               No applications found.
             </div>
           ) : (
-            users.map((user) => (
+            filteredUsers.map((user) => (
               <article
                 key={user.user_id}
                 className="rounded-md border border-[#E5E7EB] bg-white p-4 shadow-sm shadow-[#111827]/5"
@@ -334,7 +350,7 @@ export default function VerificationPage() {
           )}
         </div>
 
-        <div className="hidden overflow-x-auto md:block">
+        <div className="hidden max-w-full overflow-x-auto md:block">
           <table className="w-full min-w-[760px] text-sm">
             <thead className="sticky top-0 z-10 border-b border-[#D6DEE7] bg-[#E9EEF3] text-xs uppercase tracking-wide text-[#2B3642]">
               <tr>
@@ -357,7 +373,7 @@ export default function VerificationPage() {
                     Loading applications...
                   </td>
                 </tr>
-              ) : users.length === 0 ? (
+              ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td
                     colSpan={5}
@@ -367,7 +383,7 @@ export default function VerificationPage() {
                   </td>
                 </tr>
               ) : (
-                users.map((user) => (
+                filteredUsers.map((user) => (
                   <tr
                     key={user.user_id}
                     className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]"

@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import MainLayout from "../layouts/MainLayout";
+import DateFilterSelect from "../components/DateFilterSelect";
 import PageHeader from "../components/PageHeader";
 import AddCaseModal from "../components/modals/AddCaseModal";
 import AddClientModal from "../components/modals/AddClientModal";
@@ -28,6 +29,10 @@ import type {
   CaseFormValues,
   ClientFormValues,
 } from "../features/criminalCases/schemas";
+import {
+  matchesDateFilter,
+  type DateFilterValue,
+} from "../utils/dateFilters";
 
 const accordionBorderClass: Record<CaseStatus, string> = {
   Pending: "border-amber-200",
@@ -38,11 +43,27 @@ const accordionBorderClass: Record<CaseStatus, string> = {
 };
 
 const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
-  { value: "all", label: "All Cases" },
+  { value: "all", label: "All Locations" },
   { value: "urban", label: "Urban" },
   { value: "rural", label: "Rural" },
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
+];
+
+type CriminalStatusFilter =
+  | "all"
+  | "Pending"
+  | "Active"
+  | "Ongoing";
+
+const statusFilterOptions: Array<{
+  value: CriminalStatusFilter;
+  label: string;
+}> = [
+  { value: "all", label: "All Cases" },
+  { value: "Pending", label: "Pending" },
+  { value: "Active", label: "Active" },
+  { value: "Ongoing", label: "Ongoing" },
 ];
 
 const panaboBarangays = [
@@ -229,9 +250,6 @@ function CaseFilterSelect({
   value: CaseTableFilter;
   onChange: (value: CaseTableFilter) => void;
 }) {
-  const selected =
-    filterOptions.find((option) => option.value === value) ?? filterOptions[0];
-
   return (
     <div className="flex h-10 items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-3 text-[#2B3642]">
       <SlidersIcon />
@@ -247,9 +265,6 @@ function CaseFilterSelect({
           </option>
         ))}
       </select>
-      <span className="hidden rounded-full bg-[#F9FAFB] px-2 py-0.5 text-xs font-medium text-[#4B5563] lg:inline-flex">
-        {selected.label}
-      </span>
     </div>
   );
 }
@@ -1103,6 +1118,9 @@ export default function CriminalCasesPage() {
   const upsertCase = useCriminalCasesStore((state) => state.upsertCase);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<CaseTableFilter>("all");
+  const [statusFilter, setStatusFilter] =
+    useState<CriminalStatusFilter>("all");
+  const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
   const [showCaseModal, setShowCaseModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -1172,10 +1190,11 @@ export default function CriminalCasesPage() {
       ),
     [visibleCases],
   );
+  const tableCases = activeVisibleCases;
 
   const rows = useMemo<CriminalCaseRow[]>(
     () =>
-      activeVisibleCases.map((record) => {
+      tableCases.map((record) => {
         const client = visibleClients.find(
           (item) => item.client_id === record.client_id,
         );
@@ -1185,13 +1204,27 @@ export default function CriminalCasesPage() {
           clientName: client?.client.name ?? "Unknown client",
         };
       }),
-    [activeVisibleCases, visibleClients],
+    [tableCases, visibleClients],
   );
 
-  const filteredRows = useMemo(
-    () => filterCriminalCaseRows(rows, { search, table_filter: filter }),
-    [filter, rows, search],
-  );
+  const filteredRows = useMemo(() => {
+    const baseRows = filterCriminalCaseRows(rows, {
+      search,
+      table_filter: filter,
+    });
+    return baseRows.filter(({ record }) => {
+      const status = record.cases.status_of_case;
+      const statusMatches =
+        statusFilter === "all" || status === statusFilter;
+      if (!statusMatches) return false;
+      return matchesDateFilter(
+        record.intake_record.form_date ||
+          record.cases.filing_date ||
+          record.last_updated,
+        dateFilter,
+      );
+    });
+  }, [dateFilter, filter, rows, search, statusFilter]);
 
   const activeClient =
     visibleClients.find((client) => client.client_id === activeClientId) ??
@@ -1208,7 +1241,7 @@ export default function CriminalCasesPage() {
  return (
     <MainLayout>
       {/* 1. Global Height Wrapper: Locks the page to the viewport height */}
-      <div className="flex h-[calc(100vh-100px)] flex-col gap-4 overflow-hidden">
+      <div className="flex h-[calc(100vh-100px)] max-w-full flex-col gap-4 overflow-hidden">
         
         {/* 2. Header Area: shrink-0 keeps it from compressing */}
         <div className="shrink-0">
@@ -1240,38 +1273,61 @@ export default function CriminalCasesPage() {
         </div>
 
         {/* 3. Main Content Card: flex-1 min-h-0 allows it to absorb remaining screen space */}
-        <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
+        <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
           
           {/* 4. Filters Area: shrink-0 preserves its height */}
-          <div className="mb-4 shrink-0 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <CaseFilterSelect value={filter} onChange={setFilter} />
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-[#4B5563]">Total:</span>
-                <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
-                  {filteredRows.length}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowExportModal(true)}
-                className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
+          <div className="mb-4 grid min-w-0 shrink-0 gap-3 xl:grid-cols-[minmax(220px,1fr)_190px_180px_180px_auto_auto] xl:items-end">
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+                Search
+              </span>
+              <input
+                type="text"
+                placeholder="Search case..."
+                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition placeholder:text-[#4B5563] focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </label>
+            <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+                Status
+              </span>
+              <select
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as CriminalStatusFilter)
+                }
+                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               >
-                Export CSV
-              </button>
+                {statusFilterOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="pt-5">
+              <CaseFilterSelect value={filter} onChange={setFilter} />
             </div>
-
-            <input
-              type="text"
-              placeholder="Search case..."
-              className="h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition placeholder:text-[#4B5563] focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20 lg:w-1/4"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
+            <div className="flex h-10 items-center gap-2 rounded-md border border-[#E5E7EB] bg-[#F8FAFC] px-3">
+              <span className="font-semibold text-[#4B5563]">Total:</span>
+              <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
+                {filteredRows.length}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowExportModal(true)}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
+            >
+              Export CSV
+            </button>
           </div>
 
           {/* 5. Scrollable Table Container: Flex-1 fills the rest of the card perfectly */}
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto relative rounded-lg border border-[#E5E7EB]">
+          <div className="relative min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto rounded-lg border border-[#E5E7EB]">
             <table className="w-full min-w-[1040px] text-sm">
               <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
                 <tr>

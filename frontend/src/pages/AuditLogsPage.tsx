@@ -1,12 +1,17 @@
-import MainLayout from "../layouts/MainLayout";
+import { useEffect, useMemo, useState } from "react";
+import DateFilterSelect from "../components/DateFilterSelect";
 import PageHeader from "../components/PageHeader";
 import { useAuth } from "../contexts/AuthContext";
 import {
   useAuditLogStore,
   type AuditLogEntry,
 } from "../features/auditLogs/auditLogStore";
-import { useEffect, useMemo, useState } from "react";
+import MainLayout from "../layouts/MainLayout";
 import { listAuditLogs } from "../services/auditService";
+import {
+  matchesDateFilter,
+  type DateFilterValue,
+} from "../utils/dateFilters";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -67,6 +72,7 @@ export default function AuditLogsPage() {
   const [selectedUserId, setSelectedUserId] = useState("all");
   const [userType, setUserType] = useState("all");
   const [actionType, setActionType] = useState("all");
+  const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -91,6 +97,7 @@ export default function AuditLogsPage() {
       cancelled = true;
     };
   }, [scopeToViewer, setLogsForViewer, user]);
+
   const userOptions = useMemo(
     () =>
       Array.from(
@@ -134,12 +141,14 @@ export default function AuditLogsPage() {
         return false;
       }
       if (actionType !== "all" && log.action !== actionType) return false;
+      if (!matchesDateFilter(log.timestamp, dateFilter)) return false;
       if (dateFrom && log.timestamp.slice(0, 10) < dateFrom) return false;
       if (dateTo && log.timestamp.slice(0, 10) > dateTo) return false;
       return true;
     });
   }, [
     actionType,
+    dateFilter,
     dateFrom,
     dateTo,
     scopedLogs,
@@ -150,7 +159,7 @@ export default function AuditLogsPage() {
 
   return (
     <MainLayout>
-      <div className="mb-5">
+      <div className="mb-5 min-w-0">
         <p className="text-sm font-semibold text-[#704389]">System Activity</p>
         <h2 className="text-2xl font-bold text-[#2B3642]">Audit Logs</h2>
         <p className="mt-1 text-sm text-[#6B7280]">
@@ -160,8 +169,8 @@ export default function AuditLogsPage() {
         </p>
       </div>
 
-      <section className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
-        <div className="grid gap-3 border-b border-[#E5E7EB] bg-white px-5 py-4 md:grid-cols-5">
+      <section className="min-w-0 max-w-full overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
+        <div className="grid min-w-0 gap-3 border-b border-[#E5E7EB] bg-white px-5 py-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {user?.role === "admin" && (
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
@@ -221,6 +230,7 @@ export default function AuditLogsPage() {
               ))}
             </select>
           </label>
+          <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
               Date From
@@ -247,7 +257,7 @@ export default function AuditLogsPage() {
         <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h3 className="font-semibold text-[#2B3642]">Recent Activity</h3>
         </div>
-        <div className="overflow-x-auto">
+        <div className="max-w-full overflow-x-auto">
           <table className="w-full min-w-[860px] text-sm">
             <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
               <tr>

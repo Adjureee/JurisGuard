@@ -1268,7 +1268,7 @@ export function CaseWorkflow({
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold text-[#2B3642]">
                     Representative
@@ -1281,17 +1281,28 @@ export function CaseWorkflow({
                   )}
                 </div>
                 {lockedClient && (
-                  <label className="flex items-center gap-2 rounded-md border border-[#E5E7EB] bg-white px-3 py-2 text-sm font-semibold text-[#4B5563]">
-                    <input
-                      type="checkbox"
-                      checked={!useClientRepresentative}
-                      onChange={(event) =>
-                        setUseClientRepresentative(!event.target.checked)
-                      }
-                      className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
-                    />
-                    Use Different Representative
-                  </label>
+                  <div className="grid gap-2 rounded-lg border border-[#E5E7EB] bg-[#F8FAFC] p-2 text-sm font-semibold text-[#4B5563] sm:grid-cols-2">
+                    <label className="flex items-center gap-2 rounded-md bg-white px-3 py-2">
+                      <input
+                        type="radio"
+                        name="case-representative-source"
+                        checked={useClientRepresentative}
+                        onChange={() => setUseClientRepresentative(true)}
+                        className="h-4 w-4 border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                      />
+                      Use Representative Details Already Saved
+                    </label>
+                    <label className="flex items-center gap-2 rounded-md bg-white px-3 py-2">
+                      <input
+                        type="radio"
+                        name="case-representative-source"
+                        checked={!useClientRepresentative}
+                        onChange={() => setUseClientRepresentative(false)}
+                        className="h-4 w-4 border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                      />
+                      Use Different Representative
+                    </label>
+                  </div>
                 )}
               </div>
 
