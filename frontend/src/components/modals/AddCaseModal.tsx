@@ -26,14 +26,14 @@ export default function AddCaseModal({ isOpen, onClose }: AddCaseModalProps) {
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-        <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
+      <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] flex-col overflow-hidden rounded-2xl border border-line bg-card shadow-xl">
+        <div className="shrink-0 border-b border-line bg-card-2 px-6 py-5">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold text-[#2B3642]">Add Criminal Case</h2>
+            <h2 className="text-lg font-semibold text-ink">Add Criminal Case</h2>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-3 py-1.5 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#2B3642]"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-muted transition duration-200 hover:bg-line hover:text-ink"
             >
               Close
             </button>

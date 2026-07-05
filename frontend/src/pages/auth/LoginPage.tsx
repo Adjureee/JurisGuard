@@ -83,13 +83,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 px-4 py-5">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-canvas via-card to-canvas px-4 py-5">
       <motion.div
         initial={{ opacity: 0, y: 18, scale: 0.985 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -12, scale: 0.985 }}
         transition={{ duration: 0.32, ease: "easeOut" }}
-        className="grid w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.12)] lg:grid-cols-[0.9fr_1.25fr]"
+        className="grid w-full max-w-6xl overflow-hidden rounded-2xl border border-line bg-card shadow-[0_24px_80px_rgba(15,23,42,0.12)] lg:grid-cols-[0.9fr_1.25fr]"
       >
         <AuthImagePanel
           headline="Secure legal intake starts here."
@@ -104,25 +104,25 @@ export default function LoginPage() {
             className="w-full max-w-md"
           >
             <div className="mb-6 text-center">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#704389]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600 dark:text-brand-400">
                 JurisGuard
               </p>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950">
+              <h1 className="mt-3 text-3xl font-bold tracking-tight text-ink">
                 Welcome back
               </h1>
-              <p className="mt-3 text-sm font-medium leading-6 text-slate-600">
+              <p className="mt-3 text-sm font-medium leading-6 text-muted">
                 Sign in with your approved PAO Panabo account.
               </p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-4">
               <label className="block">
-                <span className="text-sm font-medium text-[#111827]">
+                <span className="text-sm font-medium text-ink">
                   Email
                 </span>
                 <input
                   type="email"
-                    className="mt-1.5 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition-all duration-200 ease-in-out placeholder:text-slate-400 hover:border-slate-400 focus:border-[#704389] focus:ring-4 focus:ring-[#704389]/10"
+                    className="mt-1.5 h-11 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none transition-all duration-200 ease-in-out placeholder:text-faint hover:border-line2 focus:border-brand-600 focus:ring-4 focus:ring-brand-600/10"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   autoComplete="email"
@@ -131,12 +131,12 @@ export default function LoginPage() {
               </label>
 
               <label className="block">
-                <span className="text-sm font-medium text-[#111827]">
+                <span className="text-sm font-medium text-ink">
                   Password
                 </span>
                 <input
                   type={showPassword ? "text" : "password"}
-                    className="mt-1.5 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition-all duration-200 ease-in-out placeholder:text-slate-400 hover:border-slate-400 focus:border-[#704389] focus:ring-4 focus:ring-[#704389]/10"
+                    className="mt-1.5 h-11 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none transition-all duration-200 ease-in-out placeholder:text-faint hover:border-line2 focus:border-brand-600 focus:ring-4 focus:ring-brand-600/10"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   autoComplete="current-password"
@@ -144,12 +144,12 @@ export default function LoginPage() {
                 />
               </label>
 
-              <label className="flex items-center gap-2 text-sm font-medium text-[#111827]">
+              <label className="flex items-center gap-2 text-sm font-medium text-ink">
                 <input
                   type="checkbox"
                   checked={showPassword}
                   onChange={(event) => setShowPassword(event.target.checked)}
-                  className="h-4 w-4 rounded border-[#D1D5DB] text-[#704389] focus:ring-[#704389]"
+                  className="h-4 w-4 rounded border-line2 text-brand-600 dark:text-brand-400 focus:ring-brand-600"
                 />
                 Show Password
               </label>
@@ -161,24 +161,24 @@ export default function LoginPage() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
                     transition={{ duration: 0.22, ease: "easeOut" }}
-                    className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm"
+                    className="rounded-xl border border-line bg-card-2/80 p-4 shadow-sm"
                   >
                     <div className="mb-3 flex items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F7F0FA] text-[#704389]">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 dark:bg-brand-400/10 text-brand-600 dark:text-brand-400">
                         <ShieldCheck className="h-4 w-4" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold tracking-tight text-slate-950">
+                        <p className="text-sm font-semibold tracking-tight text-ink">
                           Two-step verification
                         </p>
-                        <p className="mt-1 text-xs leading-5 text-slate-600">
+                        <p className="mt-1 text-xs leading-5 text-muted">
                           Open your authenticator app and enter the 6-digit
                           code.
                         </p>
                       </div>
                     </div>
                     <label className="block">
-                      <span className="text-sm font-medium text-slate-800">
+                      <span className="text-sm font-medium text-ink">
                         Authenticator code
                       </span>
                       <input
@@ -186,7 +186,7 @@ export default function LoginPage() {
                         type="text"
                         inputMode="numeric"
                         maxLength={6}
-                        className="mt-1.5 h-12 w-full rounded-lg border border-slate-300 bg-white px-4 text-center font-mono text-lg font-semibold tracking-[0.35em] text-slate-950 outline-none transition-all duration-200 ease-in-out placeholder:tracking-normal placeholder:text-slate-400 focus:border-[#704389] focus:ring-4 focus:ring-[#704389]/10"
+                        className="mt-1.5 h-12 w-full rounded-lg border border-line2 bg-card px-4 text-center font-mono text-lg font-semibold tracking-[0.35em] text-ink outline-none transition-all duration-200 ease-in-out placeholder:tracking-normal placeholder:text-faint focus:border-brand-600 focus:ring-4 focus:ring-brand-600/10"
                         value={otpCode}
                         onChange={(event) =>
                           setOtpCode(
@@ -197,18 +197,18 @@ export default function LoginPage() {
                         placeholder="000000"
                       />
                     </label>
-                    <label className="mt-3 flex items-start gap-2 text-sm font-medium text-slate-700">
+                    <label className="mt-3 flex items-start gap-2 text-sm font-medium text-ink">
                       <input
                         type="checkbox"
                         checked={rememberDevice}
                         onChange={(event) =>
                           setRememberDevice(event.target.checked)
                         }
-                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#704389] focus:ring-[#704389]"
+                        className="mt-0.5 h-4 w-4 rounded border-line2 text-brand-600 dark:text-brand-400 focus:ring-brand-600"
                       />
                       <span>
                         Remember this device for 14 days
-                        <span className="block text-xs font-normal leading-5 text-slate-500">
+                        <span className="block text-xs font-normal leading-5 text-muted">
                           Use only on trusted PAO workstations.
                         </span>
                       </span>
@@ -218,13 +218,13 @@ export default function LoginPage() {
               </AnimatePresence>
 
               {error && (
-                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                <div role="alert" className="rounded-lg border border-rose-200 dark:border-rose-400/25 bg-rose-50 dark:bg-rose-400/10 px-3 py-2 text-sm font-medium text-rose-700 dark:text-rose-300">
                   {error}
                 </div>
               )}
 
               {notice && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm">
+                <div className="rounded-lg border border-line bg-card-2 px-3 py-2 text-sm font-medium text-ink shadow-sm">
                   {notice}
                 </div>
               )}
@@ -232,7 +232,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="h-11 w-full rounded-lg bg-[#704389] px-4 text-sm font-bold text-white shadow-sm transition-all duration-200 ease-in-out hover:bg-[#5F3675] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 disabled:active:scale-100"
+                className="h-11 w-full rounded-lg bg-brand-600 px-4 text-sm font-bold text-white shadow-sm transition-all duration-200 ease-in-out hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 disabled:active:scale-100"
               >
                 {isSubmitting
                   ? "Signing in..."
@@ -242,11 +242,11 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <p className="mt-6 text-center text-sm font-medium text-[#6B7280]">
+            <p className="mt-6 text-center text-sm font-medium text-muted">
               Need an account?{" "}
               <Link
                 to="/register"
-                className="font-semibold text-[#704389] hover:text-[#5F3675]"
+                className="font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300"
               >
                 Register
               </Link>

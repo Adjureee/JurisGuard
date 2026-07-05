@@ -13,7 +13,7 @@ import {
 import { Link } from "react-router-dom";
 import MainLayout from "../../layouts/MainLayout";
 import PageHeader from "../../components/PageHeader";
-import { EmptyState, SkeletonBlock } from "../../components/dashboard/AnalyticsPrimitives";
+import { EmptyState, SkeletonBlock, AnimatedNumber } from "../../components/dashboard/AnalyticsPrimitives";
 import { StatusBadge } from "../../features/criminalCases/components/StatusBadge";
 import { useAuth } from "../../contexts/AuthContext";
 import { getStaffWorkload, type StaffWorkload } from "../../services/dashboardService";
@@ -39,17 +39,17 @@ function StaffMetricCard({
   value: string | number;
 }) {
   return (
-    <div className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_4px_20px_rgba(0,0,0,0.04)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(17,24,39,0.07)]">
+    <div className="jg-lift jg-hairline rounded-2xl border border-line bg-card p-5 shadow-card">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-[#6B7280]">{label}</p>
-          <p className="mt-3 text-3xl font-bold tracking-tight text-[#111827]">{value}</p>
+          <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
+          <p className="mt-3 text-3xl font-bold tabular-nums tracking-tight text-ink">{typeof value === "number" ? <AnimatedNumber value={value} /> : value}</p>
         </div>
         <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${tone}`}>
           {icon}
         </div>
       </div>
-      <p className="mt-4 text-sm font-medium leading-6 text-[#6B7280]">{detail}</p>
+      <p className="mt-4 text-sm font-medium leading-6 text-muted">{detail}</p>
     </div>
   );
 }
@@ -68,15 +68,15 @@ function ActionCard({
   return (
     <Link
       to={to}
-      className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_20px_rgba(0,0,0,0.04)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-[#C7D2FE] hover:bg-[#F9FAFB]"
+      className="jg-lift rounded-2xl border border-line bg-card p-4 shadow-card hover:border-brand-200"
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EFF6FF] text-[#2563EB]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 dark:bg-brand-400/10 text-brand-600 dark:text-brand-400">
           {icon}
         </div>
         <div className="min-w-0">
-          <p className="font-bold text-[#111827]">{label}</p>
-          <p className="mt-1 text-sm leading-6 text-[#6B7280]">{description}</p>
+          <p className="font-bold text-ink">{label}</p>
+          <p className="mt-1 text-sm leading-6 text-muted">{description}</p>
         </div>
       </div>
     </Link>
@@ -124,7 +124,7 @@ export default function StaffDashboard() {
         actions={
           <Link
             to="/case-submissions"
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-[#D1D5DB] bg-white px-4 text-sm font-semibold text-[#2B3642] transition hover:bg-[#F3F4F6]"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-line2 bg-card px-4 text-sm font-semibold text-ink transition hover:bg-card-2"
           >
             Report Management
           </Link>
@@ -137,17 +137,17 @@ export default function StaffDashboard() {
         </div>
       ) : (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          <StaffMetricCard label="My Cases" value={workload?.assigned_cases ?? 0} detail="Assigned case records" icon={<BriefcaseBusiness className="h-5 w-5" />} tone="bg-[#EFF6FF] text-[#2563EB]" />
-          <StaffMetricCard label="Pending Work" value={pendingCount} detail="Awaiting follow-up" icon={<FolderOpen className="h-5 w-5" />} tone="bg-[#FFFBEB] text-[#92400E]" />
-          <StaffMetricCard label="Today's Intake" value={workload?.cases_created_today ?? 0} detail="Cases encoded today" icon={<ClipboardList className="h-5 w-5" />} tone="bg-[#ECFDF5] text-[#065F46]" />
-          <StaffMetricCard label="OCR Usage" value={workload?.my_ocr_usage ?? 0} detail="Personal document scans" icon={<FileScan className="h-5 w-5" />} tone="bg-[#F5F3FF] text-[#5B21B6]" />
+          <StaffMetricCard label="My Cases" value={workload?.assigned_cases ?? 0} detail="Assigned case records" icon={<BriefcaseBusiness className="h-5 w-5" />} tone="bg-brand-50 dark:bg-brand-400/10 text-brand-600 dark:text-brand-400" />
+          <StaffMetricCard label="Pending Work" value={pendingCount} detail="Awaiting follow-up" icon={<FolderOpen className="h-5 w-5" />} tone="bg-amber-50 dark:bg-amber-400/10 text-amber-800 dark:text-amber-300" />
+          <StaffMetricCard label="Today's Intake" value={workload?.cases_created_today ?? 0} detail="Cases encoded today" icon={<ClipboardList className="h-5 w-5" />} tone="bg-emerald-50 dark:bg-emerald-400/10 text-emerald-800 dark:text-emerald-300" />
+          <StaffMetricCard label="OCR Usage" value={workload?.my_ocr_usage ?? 0} detail="Personal document scans" icon={<FileScan className="h-5 w-5" />} tone="bg-brand-50 dark:bg-brand-400/10 text-brand-800 dark:text-brand-200" />
         </div>
       )}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[0.38fr_0.62fr]">
-        <section className="rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-            <h2 className="text-xl font-bold text-[#111827]">Quick Actions</h2>
+        <section className="rounded-2xl border border-line bg-card shadow-card">
+          <div className="border-b border-line bg-card-2 px-5 py-4">
+            <h2 className="text-xl font-bold text-ink">Quick Actions</h2>
           </div>
           <div className="grid gap-3 p-5">
             <ActionCard to="/cases" label="Add Client" description="Create a client intake record." icon={<UserPlus className="h-5 w-5" />} />
@@ -156,16 +156,16 @@ export default function StaffDashboard() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-            <h2 className="text-xl font-bold text-[#111827]">My Recent Assigned Cases</h2>
+        <section className="rounded-2xl border border-line bg-card shadow-card">
+          <div className="border-b border-line bg-card-2 px-5 py-4">
+            <h2 className="text-xl font-bold text-ink">My Recent Assigned Cases</h2>
           </div>
           <div className="max-h-[360px] overflow-auto">
             {recentCases.length === 0 ? (
               <div className="p-5"><EmptyState message="No assigned cases are available yet." /></div>
             ) : (
               <table className="w-full min-w-[720px] text-sm">
-                <thead className="border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
+                <thead className="border-b border-line2 bg-card-2 text-xs uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-4 py-3 text-left font-semibold">Client Name</th>
                     <th className="px-4 py-3 text-left font-semibold">Control Number</th>
@@ -173,17 +173,17 @@ export default function StaffDashboard() {
                     <th className="px-4 py-3 text-left font-semibold">Last Updated</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#E5E7EB]">
+                <tbody className="divide-y divide-line">
                   {recentCases.map((record) => (
-                    <tr key={record.case_id} className="bg-white hover:bg-[#F9FAFB]">
-                      <td className="px-4 py-4 font-semibold text-[#111827]">
+                    <tr key={record.case_id} className="bg-card hover:bg-card-2">
+                      <td className="px-4 py-4 font-semibold text-ink">
                         {clientById.get(record.client_id) ?? "Assigned client"}
                       </td>
-                      <td className="px-4 py-4 text-[#6B7280]">{record.intake_record.control_no || "-"}</td>
+                      <td className="px-4 py-4 text-muted">{record.intake_record.control_no || "-"}</td>
                       <td className="px-4 py-4">
                         <StatusBadge status={record.cases.status_of_case} />
                       </td>
-                      <td className="px-4 py-4 text-[#6B7280]">{formatDate(record.last_updated)}</td>
+                      <td className="px-4 py-4 text-muted">{formatDate(record.last_updated)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -193,9 +193,9 @@ export default function StaffDashboard() {
         </section>
       </div>
 
-      <section className="mt-6 rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-        <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <h2 className="text-xl font-bold text-[#111827]">Recent Clients</h2>
+      <section className="mt-6 rounded-2xl border border-line bg-card shadow-card">
+        <div className="border-b border-line bg-card-2 px-5 py-4">
+          <h2 className="text-xl font-bold text-ink">Recent Clients</h2>
         </div>
         <div className="grid max-h-[290px] gap-3 overflow-y-auto p-5 sm:grid-cols-2 xl:grid-cols-3">
           {recentClients.length === 0 ? (
@@ -205,14 +205,14 @@ export default function StaffDashboard() {
               <Link
                 key={client.client_id}
                 to="/cases"
-                className="flex items-center gap-3 rounded-xl border border-[#E5E7EB] bg-white px-3 py-3 transition hover:bg-[#F9FAFB]"
+                className="flex items-center gap-3 rounded-xl border border-line bg-card px-3 py-3 transition hover:bg-card-2"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EFF6FF] text-[#2563EB]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 dark:bg-brand-400/10 text-brand-600 dark:text-brand-400">
                   <UserRound className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-[#111827]">{client.client.name}</p>
-                  <p className="truncate text-xs text-[#6B7280]">{client.client_details.contact_no || client.client_details.address || "No contact encoded"}</p>
+                  <p className="truncate text-sm font-semibold text-ink">{client.client.name}</p>
+                  <p className="truncate text-xs text-muted">{client.client_details.contact_no || client.client_details.address || "No contact encoded"}</p>
                 </div>
               </Link>
             ))

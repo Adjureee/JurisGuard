@@ -30,7 +30,7 @@ import {
 
 const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsMap"));
 
-const COLORS = ["#704389", "#F59E0B", "#15803D", "#DC2626", "#7C3AED"];
+const COLORS = ["#23875C", "#7C5CFC", "#15803D", "#DC2626", "#14B8A6"];
 
 function monthKey(value: string) {
   const date = new Date(value);
@@ -163,7 +163,7 @@ export default function StaffAnalyticsPage() {
             type="button"
             onClick={() => setExportOpen(true)}
             disabled={exportRows.length === 0}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FileDown className="h-4 w-4" />
             Export Center
@@ -172,7 +172,7 @@ export default function StaffAnalyticsPage() {
       />
 
       {isLoading ? (
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="jg-stagger grid gap-6 xl:grid-cols-2">
           <SkeletonBlock className="h-80" />
           <SkeletonBlock className="h-80" />
         </div>
@@ -184,11 +184,11 @@ export default function StaffAnalyticsPage() {
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyProductivity}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#94A3B8" />
                       <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
                       <YAxis allowDecimals={false} stroke="#6B7280" fontSize={12} />
                       <Tooltip />
-                      <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill="#704389" />
+                      <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill="#23875C" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -200,11 +200,11 @@ export default function StaffAnalyticsPage() {
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={weeklyIntake}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#94A3B8" />
                       <XAxis dataKey="week" stroke="#6B7280" fontSize={11} />
                       <YAxis allowDecimals={false} stroke="#6B7280" fontSize={12} />
                       <Tooltip />
-                      <Bar dataKey="total_cases" name="Intake" radius={[8, 8, 0, 0]} fill="#704389" />
+                      <Bar dataKey="total_cases" name="Intake" radius={[8, 8, 0, 0]} fill="#23875C" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -232,9 +232,9 @@ export default function StaffAnalyticsPage() {
               {(workload?.status_breakdown ?? []).length === 0 ? <EmptyState message="No personal status breakdown is available yet." /> : (
                 <div className="space-y-3">
                   {(workload?.status_breakdown ?? []).map((row) => (
-                    <div key={row.status} className="flex items-center justify-between rounded-lg border border-[#D7DEE7] bg-white px-3 py-2">
-                      <span className="text-sm font-semibold text-[#111827]">{row.status}</span>
-                      <span className="rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-bold text-[#704389]">{row.total_cases}</span>
+                    <div key={row.status} className="flex items-center justify-between rounded-lg border border-line2 bg-card px-3 py-2">
+                      <span className="text-sm font-semibold text-ink">{row.status}</span>
+                      <span className="rounded-full bg-brand-50 dark:bg-brand-400/10 px-2.5 py-1 text-xs font-bold text-brand-600 dark:text-brand-400">{row.total_cases}</span>
                     </div>
                   ))}
                 </div>
@@ -247,10 +247,10 @@ export default function StaffAnalyticsPage() {
                   {caseTypes.slice(0, 6).map((row, index) => (
                     <div key={row.label}>
                       <div className="mb-1 flex justify-between text-sm">
-                        <span className="font-semibold text-[#111827]">{row.label}</span>
-                        <span className="text-[#6B7280]">{row.total_cases}</span>
+                        <span className="font-semibold text-ink">{row.label}</span>
+                        <span className="text-muted">{row.total_cases}</span>
                       </div>
-                      <div className="h-2 rounded-full bg-[#E9EEF3]">
+                      <div className="h-2 rounded-full bg-line">
                         <div
                           className="h-2 rounded-full"
                           style={{
@@ -301,22 +301,22 @@ export default function StaffAnalyticsPage() {
                       onClick={() => setSelectedBarangay(barangay.barangay)}
                       className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${
                         selectedBarangay === barangay.barangay
-                          ? "border-[#704389] bg-[#F7F0FA]"
-                          : "border-[#E5E7EB] bg-[#F9FAFB] hover:bg-white"
+                          ? "border-brand-600 bg-brand-50 dark:bg-brand-400/10"
+                          : "border-line bg-card-2 hover:bg-card"
                       }`}
                     >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#704389] text-sm font-bold text-white">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
                         {index + 1}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-[#2B3642]">
+                        <span className="block truncate text-sm font-semibold text-ink">
                           {barangay.barangay}
                         </span>
-                        <span className="text-xs text-[#4B5563]">
+                        <span className="text-xs text-muted">
                           {barangay.most_common_category}
                         </span>
                       </span>
-                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-[#704389]">
+                      <span className="rounded-full bg-card px-2.5 py-1 text-xs font-bold text-brand-600 dark:text-brand-400">
                         {barangay.total_cases}
                       </span>
                     </button>
@@ -326,16 +326,16 @@ export default function StaffAnalyticsPage() {
             </AnalyticsPanel>
           </div>
 
-          <div className="mt-6 rounded-xl border border-[#D7DEE7] bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-[#111827]">Export Center</h2>
-            <p className="mt-1 text-sm leading-6 text-[#6B7280]">
+          <div className="mt-6 rounded-xl border border-line2 bg-card p-5 shadow-sm">
+            <h2 className="text-base font-bold text-ink">Export Center</h2>
+            <p className="mt-1 text-sm leading-6 text-muted">
               Staff exports are restricted to your own cases, productivity rows, and OCR activity. Use the export filters before generating CSV or PDF reports.
             </p>
             <button
               type="button"
               onClick={() => setExportOpen(true)}
               disabled={exportRows.length === 0}
-              className="mt-4 rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-4 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Open Export Filters
             </button>

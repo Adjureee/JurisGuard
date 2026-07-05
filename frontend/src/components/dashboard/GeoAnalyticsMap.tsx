@@ -64,8 +64,8 @@ const STATUS_STYLE: Record<
   { stroke: string; fill: string; label: string; badge: string }
 > = {
   active: {
-    stroke: "#2563EB",
-    fill: "#93C5FD",
+    stroke: "#23875C",
+    fill: "#6EE7B7",
     label: "Active",
     badge: "bg-blue-50 text-blue-700 ring-blue-200",
   },
@@ -73,13 +73,13 @@ const STATUS_STYLE: Record<
     stroke: "#D97706",
     fill: "#FCD34D",
     label: "Pending",
-    badge: "bg-amber-50 text-amber-700 ring-amber-200",
+    badge: "bg-amber-50 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-400/30",
   },
   terminated: {
     stroke: "#DC2626",
     fill: "#FCA5A5",
     label: "Terminated",
-    badge: "bg-red-50 text-red-700 ring-red-200",
+    badge: "bg-red-50 dark:bg-red-400/10 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-400/30",
   },
 };
 
@@ -117,7 +117,7 @@ function toCoordinateNumber(value: number | string | null | undefined) {
 }
 
 function createClusterIcon(total: number, terminated: number) {
-  const color = terminated > 0 && terminated === total ? "#DC2626" : "#2563EB";
+  const color = terminated > 0 && terminated === total ? "#DC2626" : "#23875C";
   return L.divIcon({
     className: "",
     html: `<div style="height:38px;width:38px;border-radius:999px;background:${color};color:white;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 12px 26px rgba(17,24,39,.25);font-size:13px;font-weight:800">${total}</div>`,
@@ -154,7 +154,7 @@ function HeatLayer({ points }: { points: CaseMapPoint[] }) {
         blur: 26,
         minOpacity: 0.35,
         gradient: {
-          0.2: "#60A5FA",
+          0.2: "#14B8A6",
           0.45: "#22C55E",
           0.7: "#F59E0B",
           1: "#DC2626",
@@ -303,13 +303,13 @@ export default function GeoAnalyticsMap({
   const tileLayer = getTileLayerConfig(tileLayerUrl);
 
   return (
-    <div className="relative z-0 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3">
+    <div className="relative z-0 overflow-hidden rounded-lg border border-line bg-card shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-card-2 px-4 py-3">
         <div>
-          <p className="text-sm font-semibold text-[#2B3642]">
+          <p className="text-sm font-semibold text-ink">
             PAO Case Distribution
           </p>
-          <p className="text-xs text-[#6B7280]">
+          <p className="text-xs text-muted">
             Local barangay geocoding, no external geocoding API required
           </p>
         </div>
@@ -317,10 +317,10 @@ export default function GeoAnalyticsMap({
           <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700 ring-1 ring-blue-200">
             Active
           </span>
-          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 ring-1 ring-amber-200">
+          <span className="rounded-full bg-amber-50 dark:bg-amber-400/10 px-2.5 py-1 text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-400/30">
             Pending
           </span>
-          <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700 ring-1 ring-red-200">
+          <span className="rounded-full bg-red-50 dark:bg-red-400/10 px-2.5 py-1 text-red-700 dark:text-red-300 ring-1 ring-red-200 dark:ring-red-400/30">
             Terminated
           </span>
         </div>
@@ -357,37 +357,37 @@ export default function GeoAnalyticsMap({
             >
               <Popup>
                 <div className="min-w-52">
-                  <p className="text-sm font-bold text-[#2B3642]">
+                  <p className="text-sm font-bold text-ink">
                     {barangay.barangay}
                   </p>
-                  <p className="text-xs text-[#4B5563]">{barangay.city}</p>
+                  <p className="text-xs text-muted">{barangay.city}</p>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-md bg-[#EFF6FF] p-2">
-                      <p className="text-base font-bold text-[#2563EB]">
+                    <div className="rounded-lg bg-brand-50 dark:bg-brand-400/10 p-2">
+                      <p className="text-base font-bold text-brand-600 dark:text-brand-400">
                         {barangay.total_cases}
                       </p>
-                      <p className="text-[10px] uppercase text-[#1D4ED8]">
+                      <p className="text-[10px] uppercase text-brand-700 dark:text-brand-300">
                         Total
                       </p>
                     </div>
-                    <div className="rounded-md bg-[#EFF6FF] p-2">
-                      <p className="text-base font-bold text-[#2563EB]">
+                    <div className="rounded-lg bg-brand-50 dark:bg-brand-400/10 p-2">
+                      <p className="text-base font-bold text-brand-600 dark:text-brand-400">
                         {barangay.active_cases}
                       </p>
-                      <p className="text-[10px] uppercase text-[#2563EB]">
+                      <p className="text-[10px] uppercase text-brand-600 dark:text-brand-400">
                         Active
                       </p>
                     </div>
-                    <div className="rounded-md bg-[#FEE2E2] p-2">
-                      <p className="text-base font-bold text-[#991B1B]">
+                    <div className="rounded-lg bg-red-100 dark:bg-red-400/15 p-2">
+                      <p className="text-base font-bold text-red-800 dark:text-red-300">
                         {barangay.terminated_cases}
                       </p>
-                      <p className="text-[10px] uppercase text-[#991B1B]">
+                      <p className="text-[10px] uppercase text-red-800 dark:text-red-300">
                         Closed
                       </p>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-[#4B5563]">
+                  <p className="mt-3 text-xs text-muted">
                     Common type:{" "}
                     <span className="font-semibold">
                       {barangay.most_common_category}
@@ -422,10 +422,10 @@ export default function GeoAnalyticsMap({
                   <div className="min-w-56">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-bold text-[#111827]">
+                        <p className="text-sm font-bold text-ink">
                           {point.clientName}
                         </p>
-                        <p className="text-xs text-[#6B7280]">
+                        <p className="text-xs text-muted">
                           {point.barangay}, Panabo City
                         </p>
                       </div>
@@ -435,15 +435,15 @@ export default function GeoAnalyticsMap({
                         {style.label}
                       </span>
                     </div>
-                    <div className="mt-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] p-3">
-                      <p className="text-[11px] font-semibold uppercase text-[#6B7280]">
+                    <div className="mt-3 rounded-lg border border-line bg-card-2 p-3">
+                      <p className="text-[11px] font-semibold uppercase text-muted">
                         Case Type
                       </p>
-                      <p className="mt-1 text-sm font-semibold text-[#2B3642]">
+                      <p className="mt-1 text-sm font-semibold text-ink">
                         {point.caseType}
                       </p>
                     </div>
-                    <p className="mt-2 text-[11px] text-[#6B7280]">
+                    <p className="mt-2 text-[11px] text-muted">
                       Coordinate source:{" "}
                       {point.source === "coordinates"
                         ? "encoded coordinates"

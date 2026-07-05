@@ -122,25 +122,25 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface w-full max-w-3xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-        <div className="flex items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
+      <div className="jurisguard-modal-surface w-full max-w-3xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-line bg-card shadow-xl">
+        <div className="flex items-center justify-between gap-4 border-b border-line bg-card-2 px-6 py-5">
           <div>
-            <h2 className="text-lg font-bold text-[#2B3642]">Advanced Criminal Cases Export</h2>
-            <p className="mt-1 text-sm text-[#4B5563]">
+            <h2 className="text-lg font-bold text-ink">Advanced Criminal Cases Export</h2>
+            <p className="mt-1 text-sm text-muted">
               Filter legal records and export to CSV or Excel.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-white hover:text-[#2B3642]"
+            className="rounded-lg px-3 py-1.5 text-sm font-medium text-muted transition duration-200 hover:bg-card hover:text-ink"
           >
             Close
           </button>
         </div>
 
-        <div className="space-y-4 bg-white px-6 py-5">
-          <div className="grid gap-3 rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] p-3 sm:grid-cols-2">
+        <div className="space-y-4 bg-card px-6 py-5">
+          <div className="grid gap-3 rounded-xl border border-line bg-card-2 p-3 sm:grid-cols-2">
             {(["csv", "excel"] as ExportType[]).map((type) => (
               <button
                 key={type}
@@ -148,8 +148,8 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
                 onClick={() => setExportType(type)}
                 className={`rounded-lg border px-3 py-2 text-sm font-semibold uppercase ${
                   exportType === type
-                    ? "border-[#704389] bg-[#704389] text-white"
-                    : "border-[#D1D5DB] bg-white text-[#2B3642] hover:bg-[#F3F7FB]"
+                    ? "border-brand-600 bg-brand-600 text-white"
+                    : "border-line2 bg-card text-ink hover:bg-card-2"
                 }`}
               >
                 {type}
@@ -158,11 +158,11 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
           </div>
 
           <label className="block">
-            <span className="text-sm font-medium text-[#2B3642]">Case Status</span>
+            <span className="text-sm font-medium text-ink">Case Status</span>
             <select
               value={filters.status}
               onChange={(event) => updateFilter("status", event.target.value)}
-              className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              className="mt-1 w-full rounded-lg border border-line2 bg-card px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
             >
               <option>All</option>
               <option>Active</option>
@@ -175,31 +175,31 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-sm font-medium text-[#2B3642]">Date From</span>
+              <span className="text-sm font-medium text-ink">Date From</span>
               <input
                 type="date"
                 value={filters.date_from}
                 onChange={(event) => updateFilter("date_from", event.target.value)}
-                className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                className="mt-1 w-full rounded-lg border border-line2 bg-card px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
               />
             </label>
             <label className="block">
-              <span className="text-sm font-medium text-[#2B3642]">Date To</span>
+              <span className="text-sm font-medium text-ink">Date To</span>
               <input
                 type="date"
                 value={filters.date_to}
                 onChange={(event) => updateFilter("date_to", event.target.value)}
-                className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                className="mt-1 w-full rounded-lg border border-line2 bg-card px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
               />
             </label>
           </div>
 
           <label className="block">
-            <span className="text-sm font-medium text-[#2B3642]">Location Type</span>
+            <span className="text-sm font-medium text-ink">Location Type</span>
             <select
               value={filters.location_type}
               onChange={(event) => updateFilter("location_type", event.target.value)}
-              className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              className="mt-1 w-full rounded-lg border border-line2 bg-card px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
             >
               <option>All</option>
               <option>Urban</option>
@@ -209,29 +209,29 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-sm font-medium text-[#2B3642]">Barangay</span>
-              <select value={filters.barangay} onChange={(event) => updateFilter("barangay", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
+              <span className="text-sm font-medium text-ink">Barangay</span>
+              <select value={filters.barangay} onChange={(event) => updateFilter("barangay", event.target.value)} className="mt-1 w-full rounded-lg border border-line2 bg-card px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20">
                 <option>All</option>
                 {options.barangays.map((option) => <option key={option}>{option}</option>)}
               </select>
             </label>
             <label className="block">
-              <span className="text-sm font-medium text-[#2B3642]">Case Category</span>
-              <select value={filters.case_category} onChange={(event) => updateFilter("case_category", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
+              <span className="text-sm font-medium text-ink">Case Category</span>
+              <select value={filters.case_category} onChange={(event) => updateFilter("case_category", event.target.value)} className="mt-1 w-full rounded-lg border border-line2 bg-card px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20">
                 <option>All</option>
                 {options.categories.map((option) => <option key={option}>{option}</option>)}
               </select>
             </label>
             <label className="block">
-              <span className="text-sm font-medium text-[#2B3642]">Staff</span>
-              <select value={filters.staff} onChange={(event) => updateFilter("staff", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
+              <span className="text-sm font-medium text-ink">Staff</span>
+              <select value={filters.staff} onChange={(event) => updateFilter("staff", event.target.value)} className="mt-1 w-full rounded-lg border border-line2 bg-card px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20">
                 <option>All</option>
                 {options.staff.map((option) => <option key={option}>{option}</option>)}
               </select>
             </label>
             <label className="block">
-              <span className="text-sm font-medium text-[#2B3642]">Termination Status</span>
-              <select value={filters.termination_status} onChange={(event) => updateFilter("termination_status", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
+              <span className="text-sm font-medium text-ink">Termination Status</span>
+              <select value={filters.termination_status} onChange={(event) => updateFilter("termination_status", event.target.value)} className="mt-1 w-full rounded-lg border border-line2 bg-card px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20">
                 <option>All</option>
                 <option>Active</option>
                 <option>Terminated</option>
@@ -239,23 +239,23 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
             </label>
           </div>
 
-          <div className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-sm text-[#4B5563]">
+          <div className="rounded-lg border border-line bg-card-2 px-4 py-3 text-sm text-muted">
             {exportRows.length} record{exportRows.length === 1 ? "" : "s"} will be exported.
           </div>
         </div>
 
-        <div className="sticky bottom-0 flex justify-between border-t border-[#E5E7EB] bg-[#F8FAFC] px-6 py-4">
+        <div className="sticky bottom-0 flex justify-between border-t border-line bg-card-2 px-6 py-4">
           <button
             type="button"
             onClick={() => setFilters(initialFilters)}
-            className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#F8FAFC]"
+            className="rounded-lg border border-line bg-card px-4 py-2 text-sm font-medium text-muted transition duration-200 hover:bg-card-2"
           >
             Reset
           </button>
           <button
             type="button"
             onClick={handleExport}
-            className="rounded-lg bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-brand-700"
           >
             Export {exportType.toUpperCase()}
           </button>

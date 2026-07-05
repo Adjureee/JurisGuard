@@ -1,67 +1,29 @@
+import {
+  Archive,
+  BarChart3,
+  ClipboardList,
+  FileText,
+  Gavel,
+  LayoutDashboard,
+  ShieldCheck,
+} from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import type { ReactNode } from "react";
 
-function DashboardIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path fill="currentColor" d="M3 3h6v6H3V3Zm8 0h6v6h-6V3ZM3 11h6v6H3v-6Zm8 0h6v6h-6v-6Z" />
-    </svg>
-  );
+interface NavItem {
+  label: string;
+  path: string;
+  icon: ReactNode;
 }
 
-function GavelIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path fill="currentColor" d="m7.4 2 4.6 4.6-1.4 1.4L9.4 6.8 6.8 9.4 8 10.6 6.6 12 2 7.4 3.4 6l1.2 1.2 2.6-2.6L6 3.4 7.4 2Zm5.2 7.4 5 5-1.4 1.4-5-5 1.4-1.4ZM4 16h8v2H4v-2Z" />
-    </svg>
-  );
-}
+const iconClass = "h-[18px] w-[18px]";
 
-function AnalyticsIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path fill="currentColor" d="M3 16.5h14V18H3v-1.5ZM5 9h2.5v6H5V9Zm4 3h2.5v3H9v-3Zm4-7h2.5v10H13V5Zm-8.5-.5h5v1.8h-5V4.5Zm7 0h4v1.8h-4V4.5Z" />
-    </svg>
-  );
-}
-
-function ShieldIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path fill="currentColor" d="M10 2 3.5 4.3v5.2c0 4.1 2.7 7 6.5 8.5 3.8-1.5 6.5-4.4 6.5-8.5V4.3L10 2Zm2.9 6.7-3.4 3.4-1.6-1.6 1.1-1.1.5.5 2.3-2.3 1.1 1.1Z" />
-    </svg>
-  );
-}
-
-function AuditIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path fill="currentColor" d="M4 2h9l3 3v13H4V2Zm8 1.5V6h2.5L12 3.5ZM7 8h6v1.5H7V8Zm0 3h6v1.5H7V11Zm0 3h4v1.5H7V14Z" />
-    </svg>
-  );
-}
-
-function ArchiveIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path fill="currentColor" d="M3 4h14v4H3V4Zm1.5 5h11v7.5A1.5 1.5 0 0 1 14 18H6a1.5 1.5 0 0 1-1.5-1.5V9ZM8 11v2h4v-2H8Z" />
-    </svg>
-  );
-}
-
-function SubmissionIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path fill="currentColor" d="M4 2h8l4 4v12H4V2Zm7 1.5V7h3.5L11 3.5ZM7 9h6v1.5H7V9Zm0 3h6v1.5H7V12Zm0 3h4v1.5H7V15Z" />
-    </svg>
-  );
-}
-
-const navigation = [
-  { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
-  { label: "Criminal Cases", path: "/cases", icon: <GavelIcon /> },
-  { label: "Terminated Cases", path: "/terminated-cases", icon: <ArchiveIcon /> },
-  { label: "Audit Logs", path: "/audit-logs", icon: <AuditIcon /> },
+const navigation: NavItem[] = [
+  { label: "Dashboard", path: "/dashboard", icon: <LayoutDashboard className={iconClass} /> },
+  { label: "Criminal Cases", path: "/cases", icon: <Gavel className={iconClass} /> },
+  { label: "Terminated Cases", path: "/terminated-cases", icon: <Archive className={iconClass} /> },
+  { label: "Audit Logs", path: "/audit-logs", icon: <FileText className={iconClass} /> },
 ];
 
 interface SidebarProps {
@@ -76,11 +38,11 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const primaryNavigation = user?.role === "admin"
     ? [
         navigation[0],
-        { label: "Analytics", path: "/analytics", icon: <AnalyticsIcon /> },
+        { label: "Analytics", path: "/analytics", icon: <BarChart3 className={iconClass} /> },
       ]
     : [
         navigation[0],
-        { label: "Analytics & Reports", path: "/staff/analytics", icon: <AnalyticsIcon /> },
+        { label: "Analytics & Reports", path: "/staff/analytics", icon: <BarChart3 className={iconClass} /> },
       ];
   const manageNavigation = [
     navigation[1],
@@ -88,9 +50,11 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     {
       label: user?.role === "admin" ? "Case Review Center" : "Case Submissions",
       path: user?.role === "admin" ? "/case-review-center" : "/case-submissions",
-      icon: <SubmissionIcon />,
+      icon: <ClipboardList className={iconClass} />,
     },
-    ...(user?.role === "admin" ? [{ label: "Verification", path: "/admin/verification", icon: <ShieldIcon /> }] : []),
+    ...(user?.role === "admin"
+      ? [{ label: "Verification", path: "/admin/verification", icon: <ShieldCheck className={iconClass} /> }]
+      : []),
   ];
   const recordsNavigation = [navigation[3]];
   const navigationSections = [
@@ -99,10 +63,8 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     { label: "Records", items: recordsNavigation },
   ].filter((section) => section.items.length > 0);
 
-  const itemClass = (path: string) =>
-    location.pathname === path || (path !== "/dashboard" && location.pathname.startsWith(path))
-      ? "border border-[#E7D7EE] bg-[#F7F0FA] font-semibold text-[#704389] shadow-[0_4px_20px_rgba(0,0,0,0.04)]"
-      : "border border-transparent text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#111827]";
+  const isActive = (path: string) =>
+    location.pathname === path || (path !== "/dashboard" && location.pathname.startsWith(path));
 
   return (
     <>
@@ -111,51 +73,69 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           type="button"
           aria-label="Close sidebar"
           onClick={onClose}
-          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          className="fixed inset-0 z-30 bg-gray-900/60 backdrop-blur-[2px] md:hidden"
         />
       )}
-      <aside className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-[#E5E7EB] bg-white px-5 py-5 text-[#111827] transition duration-200 md:translate-x-0 ${
-        isOpen ? "translate-x-0" : "-translate-x-full"
-      }`}>
-      <div className="mb-7 flex justify-center">
-        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <img
-            src="/paologo.png"
-            alt="PAO Panabo logo"
-            className="h-full w-full object-contain p-2"
-            onError={(event) => {
-              event.currentTarget.style.display = "none";
-            }}
-          />
-        </div>
-      </div>
-
-      <nav className="flex flex-1 flex-col gap-5 overflow-y-auto">
-        {navigationSections.map((section) => (
-          <div key={section.label}>
-            <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#9CA3AF]">
-              {section.label}
-            </p>
-            <div className="space-y-1.5">
-              {section.items.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={onClose}
-                  className={`flex h-[40px] items-center gap-2.5 whitespace-nowrap rounded-lg px-3 text-sm font-medium transition duration-150 ${itemClass(item.path)}`}
-                >
-                  <span className="shrink-0">
-                    {item.icon}
-                  </span>
-                  {item.label}
-                </Link>
-              ))}
-            </div>
+      <aside
+        aria-label="Primary navigation"
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-line bg-card px-4 py-5 text-ink transition-transform duration-200 ease-out md:translate-x-0 ${
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="mb-6 flex items-center justify-center gap-3 border-b border-line px-1 pb-5">
+          <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-line bg-card-2">
+            <img
+              src="/paologo.png"
+              alt="PAO Panabo logo"
+              className="h-full w-full object-contain p-2"
+              onError={(event) => {
+                event.currentTarget.style.display = "none";
+              }}
+            />
           </div>
-        ))}
-      </nav>
-    </aside>
+          <div>
+            <p className="text-sm font-bold tracking-tight text-ink">JurisGuard</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-600 dark:text-brand-400">PAO Panabo</p>
+          </div>
+        </div>
+
+        <nav className="flex flex-1 flex-col gap-5 overflow-y-auto">
+          {navigationSections.map((section) => (
+            <div key={section.label}>
+              <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-faint">
+                {section.label}
+              </p>
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const active = isActive(item.path);
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={onClose}
+                      aria-current={active ? "page" : undefined}
+                      className={`group relative flex h-10 items-center gap-2.5 whitespace-nowrap rounded-lg px-3 text-sm font-medium transition-colors duration-150 ${
+                        active
+                          ? "bg-brand-600 font-semibold text-white shadow-sm"
+                          : "text-muted hover:bg-card-2 hover:text-ink"
+                      }`}
+                    >
+                      <span
+                        className={`shrink-0 transition-colors ${
+                          active ? "text-white" : "text-faint group-hover:text-ink"
+                        }`}
+                      >
+                        {item.icon}
+                      </span>
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </aside>
     </>
   );
 }
-
