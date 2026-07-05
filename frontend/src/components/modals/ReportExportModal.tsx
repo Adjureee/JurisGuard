@@ -222,44 +222,44 @@ export default function ReportExportModal({
     }
   };
 
-  const selectClass = "mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20";
-  const labelClass = "text-xs font-semibold uppercase tracking-wide text-[#2B3642]";
+  const selectClass = "mt-1 h-10 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20";
+  const labelClass = "text-xs font-semibold uppercase tracking-wide text-ink";
 
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-        <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
+      <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-line bg-card shadow-xl">
+        <div className="shrink-0 border-b border-line bg-card-2 px-6 py-5">
           <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold text-[#2B3642]">{title}</h2>
-            <p className="mt-1 max-w-2xl text-sm text-[#4B5563]">{description}</p>
+            <h2 className="text-lg font-bold text-ink">{title}</h2>
+            <p className="mt-1 max-w-2xl text-sm text-muted">{description}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg border border-[#D1D5DB] bg-white px-3 py-1.5 text-sm font-semibold text-[#2B3642] hover:bg-[#F3F7FB]">
+          <button type="button" onClick={onClose} className="rounded-lg border border-line2 bg-card px-3 py-1.5 text-sm font-semibold text-ink hover:bg-card-2">
             Close
           </button>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Available Rows</p>
-              <p className="mt-1 text-xl font-bold text-[#111827]">{rows.length}</p>
+            <div className="rounded-xl border border-line bg-card px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Available Rows</p>
+              <p className="mt-1 text-xl font-bold text-ink">{rows.length}</p>
             </div>
-            <div className="rounded-xl border border-[#E7D7EE] bg-[#F7F0FA] px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">Rows After Filters</p>
-              <p className="mt-1 text-xl font-bold text-[#5F3675]">{filteredRows.length}</p>
+            <div className="rounded-xl border border-brand-200 dark:border-brand-400/30 bg-brand-50 dark:bg-brand-400/10 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-400">Rows After Filters</p>
+              <p className="mt-1 text-xl font-bold text-brand-700 dark:text-brand-300">{filteredRows.length}</p>
             </div>
-            <div className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Export Scope</p>
-              <p className="mt-1 text-xl font-bold capitalize text-[#111827]">{scope}</p>
+            <div className="rounded-xl border border-line bg-card px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Export Scope</p>
+              <p className="mt-1 text-xl font-bold capitalize text-ink">{scope}</p>
             </div>
           </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          <div className="mb-5 rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
+          <div className="mb-5 rounded-xl border border-line bg-card-2 p-4">
             <div className="mb-3">
-              <p className="text-sm font-bold text-[#111827]">Export Format</p>
-              <p className="mt-1 text-xs font-medium text-[#6B7280]">Choose the file type before applying filters.</p>
+              <p className="text-sm font-bold text-ink">Export Format</p>
+              <p className="mt-1 text-xs font-medium text-muted">Choose the file type before applying filters.</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
             {exportTypes.map((type) => (
@@ -269,8 +269,8 @@ export default function ReportExportModal({
                 onClick={() => setExportType(type)}
                 className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold capitalize transition ${
                   exportType === type
-                    ? "border-[#704389] bg-[#704389] text-white"
-                    : "border-[#D1D5DB] bg-white text-[#2B3642] hover:bg-[#F3F7FB]"
+                    ? "border-brand-600 bg-brand-600 text-white"
+                    : "border-line2 bg-card text-ink hover:bg-card-2"
                 }`}
               >
                 {type === "csv" && <FileDown className="h-4 w-4" />}
@@ -281,10 +281,10 @@ export default function ReportExportModal({
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
+          <div className="rounded-xl border border-line bg-card p-4">
             <div className="mb-4">
-              <p className="text-sm font-bold text-[#111827]">Report Filters</p>
-              <p className="mt-1 text-xs font-medium text-[#6B7280]">Filter first, then export the matching report rows.</p>
+              <p className="text-sm font-bold text-ink">Report Filters</p>
+              <p className="mt-1 text-xs font-medium text-muted">Filter first, then export the matching report rows.</p>
             </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <label className="block">
@@ -355,16 +355,16 @@ export default function ReportExportModal({
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-[#E5E7EB] bg-[#F8FAFC] px-6 py-4">
+        <div className="shrink-0 border-t border-line bg-card-2 px-6 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-medium text-[#4B5563]">
-            <span className="font-bold text-[#2B3642]">{filteredRows.length}</span> matching rows will be exported.
+          <p className="text-sm font-medium text-muted">
+            <span className="font-bold text-ink">{filteredRows.length}</span> matching rows will be exported.
           </p>
           <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setFilters(initialFilters)} className="rounded-lg border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-semibold text-[#2B3642] hover:bg-[#F3F7FB]">
+          <button type="button" onClick={() => setFilters(initialFilters)} className="rounded-lg border border-line2 bg-card px-4 py-2 text-sm font-semibold text-ink hover:bg-card-2">
             Reset Filters
           </button>
-          <button type="button" onClick={handleExport} className="rounded-lg bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#5F3675]">
+          <button type="button" onClick={handleExport} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700">
             Export Report
           </button>
           </div>

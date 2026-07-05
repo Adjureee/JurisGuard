@@ -12,11 +12,11 @@ import { getApplicant, updateApplicantApproval } from "../../services/adminServi
 import type { AdminUserDetails, ApprovalStatus } from "../../types/auth";
 
 const statusClass: Record<ApprovalStatus, string> = {
-  pending: "bg-[#FFF7D6] text-[#92400E]",
-  under_review: "bg-[#FEF3C7] text-[#B45309]",
-  approved: "bg-[#DCFCE7] text-[#15803D]",
-  rejected: "bg-[#FEE2E2] text-[#B91C1C]",
-  suspended: "bg-[#FEE2E2] text-[#B91C1C]",
+  pending: "bg-amber-100 dark:bg-amber-400/15 text-amber-800 dark:text-amber-300",
+  under_review: "bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300",
+  approved: "bg-green-100 dark:bg-green-400/15 text-green-700 dark:text-green-300",
+  rejected: "bg-red-100 dark:bg-red-400/15 text-red-700 dark:text-red-300",
+  suspended: "bg-red-100 dark:bg-red-400/15 text-red-700 dark:text-red-300",
 };
 
 function formatDate(value: string | null) {
@@ -29,8 +29,8 @@ function formatDate(value: string | null) {
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">{label}</p>
-      <p className="mt-1 text-sm font-medium text-[#2B3642]">{value || "Not provided"}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+      <p className="mt-1 text-sm font-medium text-ink">{value || "Not provided"}</p>
     </div>
   );
 }
@@ -150,21 +150,21 @@ export default function ApplicantDetailsPage() {
       />
 
       {error && (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="mb-4 rounded-lg border border-red-200 dark:border-red-400/25 bg-red-50 dark:bg-red-400/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
           {error}
         </div>
       )}
 
       {isLoading || !applicant ? (
-        <div className="rounded-[14px] border border-[#E5E7EB] bg-white p-10 text-center text-sm text-[#4B5563]">
+        <div className="rounded-[14px] border border-line bg-card p-10 text-center text-sm text-muted">
           Loading applicant...
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4">
-            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm ">
-              <div className="mb-4 flex items-center justify-between border-b border-[#E5E7EB] pb-4">
-                <h2 className="text-base font-semibold text-[#2B3642]">Account Info</h2>
+            <section className="rounded-[14px] border border-line bg-card p-5 shadow-sm ">
+              <div className="mb-4 flex items-center justify-between border-b border-line pb-4">
+                <h2 className="text-base font-semibold text-ink">Account Info</h2>
                 <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass[applicant.approval_status]}`}>
                   {applicant.approval_status.replace("_", " ")}
                 </span>
@@ -177,8 +177,8 @@ export default function ApplicantDetailsPage() {
               </div>
             </section>
 
-            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm ">
-              <h2 className="mb-4 border-b border-[#E5E7EB] pb-4 text-base font-semibold text-[#2B3642]">
+            <section className="rounded-[14px] border border-line bg-card p-5 shadow-sm ">
+              <h2 className="mb-4 border-b border-line pb-4 text-base font-semibold text-ink">
                 Profile Info
               </h2>
               <div className="grid gap-4 md:grid-cols-2">
@@ -193,10 +193,10 @@ export default function ApplicantDetailsPage() {
             </section>
           </div>
 
-          <aside className="h-fit rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm ">
-            <div className="mb-5 border-b border-[#E5E7EB] pb-5">
-              <h2 className="text-base font-semibold text-[#2B3642]">Employee ID</h2>
-              <div className="mt-3 overflow-hidden rounded-xl border border-[#E5E7EB] bg-[#F9FAFB]">
+          <aside className="h-fit rounded-[14px] border border-line bg-card p-5 shadow-sm ">
+            <div className="mb-5 border-b border-line pb-5">
+              <h2 className="text-base font-semibold text-ink">Employee ID</h2>
+              <div className="mt-3 overflow-hidden rounded-xl border border-line bg-card-2">
                 {employeeIdEvidence.imageSrc ? (
                   <button
                     type="button"
@@ -211,8 +211,8 @@ export default function ApplicantDetailsPage() {
                     />
                   </button>
                 ) : employeeIdEvidence.reference ? (
-                  <div className="flex h-52 flex-col items-center justify-center gap-2 px-4 text-center text-sm text-[#4B5563]">
-                    <span className="font-semibold text-[#2B3642]">
+                  <div className="flex h-52 flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted">
+                    <span className="font-semibold text-ink">
                       Employee ID was submitted
                     </span>
                     <span className="break-all text-xs">
@@ -220,7 +220,7 @@ export default function ApplicantDetailsPage() {
                     </span>
                   </div>
                 ) : (
-                  <div className="flex h-52 items-center justify-center px-4 text-center text-sm text-[#4B5563]">
+                  <div className="flex h-52 items-center justify-center px-4 text-center text-sm text-muted">
                     Employee ID image is not available.
                   </div>
                 )}
@@ -232,14 +232,14 @@ export default function ApplicantDetailsPage() {
                   setPreviewImage(employeeIdEvidence.imageSrc)
                 }
                 disabled={!employeeIdEvidence.imageSrc}
-                className="mt-3 w-full rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-3 w-full rounded-lg border border-brand-600 bg-card px-4 py-2 text-sm font-semibold text-brand-600 dark:text-brand-400 transition hover:bg-brand-50 dark:hover:bg-brand-400/10 hover:text-brand-700 dark:hover:text-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Preview ID
               </button>
             </div>
-            <h2 className="text-base font-semibold text-[#2B3642]">Actions</h2>
+            <h2 className="text-base font-semibold text-ink">Actions</h2>
             {isFinalStatus(applicant.approval_status) ? (
-              <p className="mt-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm text-[#4B5563]">
+              <p className="mt-3 rounded-lg border border-line bg-card-2 px-3 py-2 text-sm text-muted">
                 This application is finalized and available for viewing only.
               </p>
             ) : (
@@ -247,14 +247,14 @@ export default function ApplicantDetailsPage() {
                 <button
                   onClick={() => changeStatus("approved")}
                   disabled={isUpdating}
-                  className="rounded-md bg-[#15803D] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#166534] disabled:opacity-60"
+                  className="rounded-lg bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800 disabled:opacity-60"
                 >
                   Approve
                 </button>
                 <button
                   onClick={() => changeStatus("rejected")}
                   disabled={isUpdating}
-                  className="rounded-md border border-[#DC2626] bg-white px-4 py-2.5 text-sm font-semibold text-[#DC2626] transition hover:bg-[#DC2626] hover:text-white disabled:opacity-60"
+                  className="rounded-lg border border-red-600 bg-card px-4 py-2.5 text-sm font-semibold text-red-600 dark:text-red-400 transition hover:bg-red-600 hover:text-white disabled:opacity-60"
                 >
                   Reject
                 </button>

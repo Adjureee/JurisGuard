@@ -2,6 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+  --jg-canvas: 238 243 240;
+  --jg-card: 255 255 255;
+  --jg-card-2: 244 247 245;
+  --jg-line: 227 233 229;
+  --jg-line-2: 203 213 208;
+  --jg-ink: 17 24 39;
+  --jg-muted: 90 103 97;
+  --jg-faint: 148 158 152;
+  --jg-shadow: 18 33 26;
+  --jg-ring: #23875C;
+  --jg-field: #FFFFFF;
+  --jg-selection-bg: #D6EEE2;
+  --jg-selection-fg: #123F2D;
+}
+
+html.dark {
+  color-scheme: dark;
+  --jg-canvas: 11 13 18;
+  --jg-card: 21 24 35;
+  --jg-card-2: 28 32 48;
+  --jg-line: 38 43 59;
+  --jg-line-2: 58 65 88;
+  --jg-ink: 231 234 242;
+  --jg-muted: 153 161 179;
+  --jg-faint: 108 116 137;
+  --jg-shadow: 0 0 0;
+  --jg-ring: #4FAE81;
+  --jg-field: #10131C;
+  --jg-selection-bg: #175A3F;
+  --jg-selection-fg: #ECF7F1;
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;
@@ -9,10 +43,31 @@ html, body, #root {
 }
 
 body {
-  background: #F9FAFB;
-  color: #2B3642;
+  background: rgb(var(--jg-canvas));
+  color: rgb(var(--jg-ink));
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+}
+
+/* Smooth theme switching. */
+body,
+button,
+input,
+select,
+textarea,
+aside,
+header,
+main,
+div,
+section,
+table,
+th,
+td,
+tr,
+a,
+span,
+p {
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease;
 }
 
 button,
@@ -25,7 +80,98 @@ textarea {
 input,
 select,
 textarea {
-  background: #ffffff;
+  background: var(--jg-field);
+  color: rgb(var(--jg-ink));
+}
+
+/* Accessible, consistent keyboard focus for every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--jg-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+::selection {
+  background: var(--jg-selection-bg);
+  color: var(--jg-selection-fg);
+}
+
+/* Tasteful micro-interactions (all disabled under prefers-reduced-motion). */
+button {
+  transition: transform 120ms ease;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.jg-lift {
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.jg-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px rgb(var(--jg-shadow) / 0.12);
+}
+
+.jg-hairline {
+  position: relative;
+  overflow: hidden;
+}
+
+.jg-hairline::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, #23875c, #4fae81 55%, #7c5cfc);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.jg-hairline:hover::before,
+.jg-hairline.jg-hairline-on::before {
+  opacity: 1;
+}
+
+.jg-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(var(--jg-card-2)) 25%,
+    rgb(var(--jg-line) / 0.55) 50%,
+    rgb(var(--jg-card-2)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s linear infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.jg-stagger > * {
+  animation: fade-up 0.3s ease-out both;
+}
+
+.jg-stagger > *:nth-child(2) { animation-delay: 50ms; }
+.jg-stagger > *:nth-child(3) { animation-delay: 100ms; }
+.jg-stagger > *:nth-child(4) { animation-delay: 150ms; }
+.jg-stagger > *:nth-child(5) { animation-delay: 200ms; }
+.jg-stagger > *:nth-child(6) { animation-delay: 250ms; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @keyframes modalIn {
@@ -67,6 +213,21 @@ textarea {
 }
 
 @media print {
+  :root,
+  html.dark {
+    color-scheme: light;
+    --jg-canvas: 255 255 255;
+    --jg-card: 255 255 255;
+    --jg-card-2: 244 247 245;
+    --jg-line: 227 233 229;
+    --jg-line-2: 203 213 208;
+    --jg-ink: 17 24 39;
+    --jg-muted: 90 103 97;
+    --jg-faint: 148 158 152;
+    --jg-shadow: 18 33 26;
+    --jg-field: #FFFFFF;
+  }
+
   body * {
     visibility: hidden !important;
   }

@@ -102,13 +102,13 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 px-4 py-5">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-canvas via-card to-canvas px-4 py-5">
       <motion.div
         initial={{ opacity: 0, y: 18, scale: 0.985 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -12, scale: 0.985 }}
         transition={{ duration: 0.32, ease: "easeOut" }}
-        className="grid w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.12)] lg:grid-cols-[0.9fr_1.25fr]"
+        className="grid w-full max-w-6xl overflow-hidden rounded-2xl border border-line bg-card shadow-[0_24px_80px_rgba(15,23,42,0.12)] lg:grid-cols-[0.9fr_1.25fr]"
       >
         <AuthImagePanel
           headline="Join the PAO Panabo legal records workspace."
@@ -123,13 +123,13 @@ export default function RegisterPage() {
             className="w-full max-w-2xl"
           >
             <div className="mb-5 text-center">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#704389]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600 dark:text-brand-400">
                 JurisGuard
               </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-ink">
                 Create Account
               </h1>
-              <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
+              <p className="mt-2 text-sm font-medium leading-6 text-muted">
                 Your account request must be approved by an admin before access
                 is enabled.
               </p>
@@ -137,12 +137,12 @@ export default function RegisterPage() {
 
             <form onSubmit={handleRegister} className="space-y-3">
               <label className="block">
-                <span className="text-sm font-medium text-[#111827]">
+                <span className="text-sm font-medium text-ink">
                   Full Name
                 </span>
                 <input
                   type="text"
-                  className="mt-1.5 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition-all duration-200 ease-in-out placeholder:text-slate-400 hover:border-slate-400 focus:border-[#704389] focus:ring-4 focus:ring-[#704389]/10"
+                  className="mt-1.5 h-11 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none transition-all duration-200 ease-in-out placeholder:text-faint hover:border-line2 focus:border-brand-600 focus:ring-4 focus:ring-brand-600/10"
                   value={fullName}
                   onChange={(event) => setFullName(event.target.value)}
                   autoComplete="name"
@@ -151,12 +151,12 @@ export default function RegisterPage() {
               </label>
 
               <label className="block">
-                <span className="text-sm font-medium text-[#111827]">
+                <span className="text-sm font-medium text-ink">
                   Email
                 </span>
                 <input
                   type="email"
-                  className="mt-1.5 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition-all duration-200 ease-in-out placeholder:text-slate-400 hover:border-slate-400 focus:border-[#704389] focus:ring-4 focus:ring-[#704389]/10"
+                  className="mt-1.5 h-11 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none transition-all duration-200 ease-in-out placeholder:text-faint hover:border-line2 focus:border-brand-600 focus:ring-4 focus:ring-brand-600/10"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   autoComplete="email"
@@ -165,10 +165,10 @@ export default function RegisterPage() {
               </label>
 
               <div>
-                <span className="text-sm font-medium text-[#111827]">
+                <span className="text-sm font-medium text-ink">
                   Upload Employee ID
                 </span>
-                <div className="mt-1.5 rounded-xl border border-slate-200 bg-slate-50/80 p-3 shadow-sm">
+                <div className="mt-1.5 rounded-xl border border-line bg-card-2/80 p-3 shadow-sm">
                   <AnimatePresence mode="wait" initial={false}>
                     {employeeIdPreview ? (
                     <motion.div
@@ -182,26 +182,26 @@ export default function RegisterPage() {
                       <button
                         type="button"
                         onClick={() => setPreviewImage(employeeIdPreview)}
-                        className="group rounded-lg text-left outline-none transition-transform active:scale-[0.98] focus:ring-4 focus:ring-[#704389]/10"
+                        className="group rounded-lg text-left outline-none transition-transform active:scale-[0.98] focus:ring-4 focus:ring-brand-600/10"
                         aria-label="Open employee ID preview"
                       >
                         <img
                           src={employeeIdPreview}
                           alt="Employee ID preview"
-                          className="h-20 w-32 rounded-md border border-slate-200 bg-white object-cover shadow-sm transition duration-200 group-hover:brightness-95"
+                          className="h-20 w-32 rounded-lg border border-line bg-card object-cover shadow-sm transition duration-200 group-hover:brightness-95"
                         />
                       </button>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-[#111827]">
+                        <p className="truncate text-sm font-semibold text-ink">
                           {employeeIdFileName}
                         </p>
-                        <p className="mt-1 text-xs text-[#4B5563]">
+                        <p className="mt-1 text-xs text-muted">
                           Image selected for verification.
                         </p>
                         <button
                           type="button"
                           onClick={removeEmployeeId}
-                          className="mt-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:text-slate-950 active:scale-[0.98]"
+                          className="mt-2 rounded-lg border border-line2 bg-card px-3 py-1.5 text-xs font-semibold text-muted transition-all duration-200 hover:bg-card-2 hover:text-ink active:scale-[0.98]"
                         >
                           Remove / Change Image
                         </button>
@@ -214,12 +214,12 @@ export default function RegisterPage() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.2, ease: "easeOut" }}
-                      className="block cursor-pointer rounded-lg border border-dashed border-slate-300 bg-white px-4 py-4 text-center transition-all duration-200 hover:border-[#704389] hover:bg-[#F7F0FA] active:scale-[0.99]"
+                      className="block cursor-pointer rounded-lg border border-dashed border-line2 bg-card px-4 py-4 text-center transition-all duration-200 hover:border-brand-600 hover:bg-brand-50 dark:hover:bg-brand-400/10 active:scale-[0.99]"
                     >
-                      <span className="text-sm font-semibold text-slate-950">
+                      <span className="text-sm font-semibold text-ink">
                         Select employee ID image
                       </span>
-                      <span className="mt-1 block text-xs text-slate-600">
+                      <span className="mt-1 block text-xs text-muted">
                         JPG, PNG, or other image file.
                       </span>
                       <input
@@ -237,12 +237,12 @@ export default function RegisterPage() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
-                  <span className="text-sm font-medium text-[#111827]">
+                  <span className="text-sm font-medium text-ink">
                     Password
                   </span>
                   <input
                     type={showPassword ? "text" : "password"}
-                    className="mt-1.5 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition-all duration-200 ease-in-out placeholder:text-slate-400 hover:border-slate-400 focus:border-[#704389] focus:ring-4 focus:ring-[#704389]/10"
+                    className="mt-1.5 h-11 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none transition-all duration-200 ease-in-out placeholder:text-faint hover:border-line2 focus:border-brand-600 focus:ring-4 focus:ring-brand-600/10"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     autoComplete="new-password"
@@ -252,12 +252,12 @@ export default function RegisterPage() {
                 </label>
 
                 <label className="block">
-                  <span className="text-sm font-medium text-[#111827]">
+                  <span className="text-sm font-medium text-ink">
                     Confirm Password
                   </span>
                   <input
                     type={showPassword ? "text" : "password"}
-                    className="mt-1.5 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition-all duration-200 ease-in-out placeholder:text-slate-400 hover:border-slate-400 focus:border-[#704389] focus:ring-4 focus:ring-[#704389]/10"
+                    className="mt-1.5 h-11 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none transition-all duration-200 ease-in-out placeholder:text-faint hover:border-line2 focus:border-brand-600 focus:ring-4 focus:ring-brand-600/10"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     autoComplete="new-password"
@@ -267,24 +267,24 @@ export default function RegisterPage() {
                 </label>
               </div>
 
-              <label className="flex items-center gap-2 text-sm font-medium text-[#111827]">
+              <label className="flex items-center gap-2 text-sm font-medium text-ink">
                 <input
                   type="checkbox"
                   checked={showPassword}
                   onChange={(event) => setShowPassword(event.target.checked)}
-                  className="h-4 w-4 rounded border-[#D1D5DB] text-[#704389] focus:ring-[#704389]"
+                  className="h-4 w-4 rounded border-line2 text-brand-600 dark:text-brand-400 focus:ring-brand-600"
                 />
                 Show Password
               </label>
 
               {error && (
-                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 shadow-sm">
+                <div role="alert" className="rounded-lg border border-rose-200 dark:border-rose-400/25 bg-rose-50 dark:bg-rose-400/10 px-3 py-2 text-sm font-medium text-rose-700 dark:text-rose-300 shadow-sm">
                   {error}
                 </div>
               )}
 
               {success && (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 shadow-sm">
+                <div className="rounded-lg border border-emerald-200 dark:border-emerald-400/25 bg-emerald-50 dark:bg-emerald-400/10 px-3 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-300 shadow-sm">
                   {success}
                 </div>
               )}
@@ -292,17 +292,17 @@ export default function RegisterPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="h-11 w-full rounded-lg bg-[#704389] px-4 text-sm font-bold text-white shadow-sm transition-all duration-200 ease-in-out hover:bg-[#5F3675] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 disabled:active:scale-100"
+                className="h-11 w-full rounded-lg bg-brand-600 px-4 text-sm font-bold text-white shadow-sm transition-all duration-200 ease-in-out hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 disabled:active:scale-100"
               >
                 {isSubmitting ? "Submitting..." : "Register"}
               </button>
             </form>
 
-            <p className="mt-4 text-center text-sm font-medium text-[#6B7280]">
+            <p className="mt-4 text-center text-sm font-medium text-muted">
               Already have an account?{" "}
               <Link
                 to="/login"
-                className="font-semibold text-[#704389] hover:text-[#5F3675]"
+                className="font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300"
               >
                 Login
               </Link>

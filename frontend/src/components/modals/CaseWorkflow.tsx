@@ -233,14 +233,14 @@ function TextInput({
 }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-[#4B5563]">
+      <span className="text-sm font-medium text-muted">
         {label}
         <FieldStatus status={status} />
       </span>
       <input
         type={type}
         {...registration}
-        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+        className="mt-1 w-full rounded-lg border border-line2 bg-card px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
       />
       <FieldError message={error} />
     </label>
@@ -260,14 +260,14 @@ function TextArea({
 }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-[#4B5563]">
+      <span className="text-sm font-medium text-muted">
         {label}
         <FieldStatus status={status} />
       </span>
       <textarea
         {...registration}
         rows={4}
-        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+        className="mt-1 w-full rounded-lg border border-line2 bg-card px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
       />
       <FieldError message={error} />
     </label>
@@ -284,11 +284,11 @@ function CheckboxInput({
   status?: ExtractionStatus;
 }) {
   return (
-    <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#111827]/80">
+    <label className="flex items-center gap-3 rounded-lg border border-line bg-card-2 px-3 py-2 text-sm font-medium text-ink/80">
       <input
         type="checkbox"
         {...registration}
-        className="h-4 w-4 rounded border-[#E5E7EB] text-[#2F80ED] focus:ring-[#2F80ED]"
+        className="h-4 w-4 rounded border-line text-brand-500 focus:ring-brand-500"
       />
       <span>
         {label}
@@ -352,17 +352,17 @@ function MethodCard({
     <button
       type="button"
       onClick={() => onSelect(value)}
-      className={`rounded-lg border bg-white p-5 text-left shadow-sm  transition duration-200 hover:-translate-y-px hover:shadow-md ${
+      className={`rounded-lg border bg-card p-5 text-left shadow-sm  transition duration-200 hover:shadow-md ${
         selected
-          ? "border-[#704389] shadow-[#704389]/20"
-          : "border-[#E5E7EB] hover:border-[#704389]"
+          ? "border-brand-600 shadow-brand-600/20"
+          : "border-line hover:border-brand-600"
       }`}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#704389]/10 text-[#704389]">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600/10 text-brand-600 dark:text-brand-400">
         <i className={`fa-solid ${icon}`} aria-hidden="true" />
       </div>
-      <p className="mt-4 text-base font-semibold text-[#2B3642]">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-[#4B5563]">{description}</p>
+      <p className="mt-4 text-base font-semibold text-ink">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-muted">{description}</p>
     </button>
   );
 }
@@ -379,21 +379,21 @@ function SelectedClientCard({
   onRemove?: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-sm ">
+    <div className="rounded-lg border border-line bg-card p-4 shadow-sm ">
       {locked && (
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#704389]">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-400">
           Client selected automatically
         </p>
       )}
       <div className="flex items-start gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#704389] text-sm font-semibold text-white">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-white">
           {initials(client.client.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-semibold text-[#2B3642]">
+          <p className="truncate text-base font-semibold text-ink">
             {client.client.name}
           </p>
-          <div className="mt-2 grid gap-2 text-sm text-[#4B5563] sm:grid-cols-2">
+          <div className="mt-2 grid gap-2 text-sm text-muted sm:grid-cols-2">
             <span>Sex: {client.client.sex || "-"}</span>
             <span>Age: {client.client.age || "-"}</span>
             <span className="sm:col-span-2">
@@ -407,14 +407,14 @@ function SelectedClientCard({
           <button
             type="button"
             onClick={onChange}
-            className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
+            className="rounded-lg border border-brand-600 bg-card px-3 py-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400 transition duration-200 hover:bg-brand-50 dark:hover:bg-brand-400/10 hover:text-brand-700 dark:hover:text-brand-300"
           >
             Change Client
           </button>
           <button
             type="button"
             onClick={onRemove}
-            className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
+            className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-semibold text-muted transition duration-200 hover:bg-card-2"
           >
             Remove Selection
           </button>
@@ -724,16 +724,16 @@ export function CaseWorkflow({
       )}
       className="flex max-h-[calc(92vh-138px)] flex-col"
     >
-      <div className="border-b border-[#E5E7EB] bg-white px-6 py-4">
+      <div className="border-b border-line bg-card px-6 py-4">
         <StepIndicator steps={steps} currentStep={step} />
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-white px-6 py-5">
+      <div className="flex-1 overflow-y-auto bg-card px-6 py-5">
         {!lockedClient && step === 0 && (
           <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="space-y-4">
               <label className="block">
-                <span className="text-sm font-medium text-[#4B5563]">
+                <span className="text-sm font-medium text-muted">
                   Search existing client
                 </span>
                 <input
@@ -742,11 +742,11 @@ export function CaseWorkflow({
                   onChange={(event) => setQuery(event.target.value)}
                   onKeyDown={handleClientSearchKeyDown}
                   placeholder="Search by name or client id"
-                  className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                  className="mt-1 w-full rounded-lg border border-line2 bg-card px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
                   aria-label="Search existing clients"
                 />
               </label>
-              <p className="text-sm text-[#4B5563]">
+              <p className="text-sm text-muted">
                 Search by client name or client ID to locate an existing client.
               </p>
               <FieldError message={errors.client_id?.message} />
@@ -755,7 +755,7 @@ export function CaseWorkflow({
                 <button
                   type="button"
                   onClick={clearClient}
-                  className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#E5E7EB] hover:text-[#2B3642]"
+                  className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-semibold text-muted transition duration-200 hover:bg-line hover:text-ink"
                 >
                   Cancel Selection
                 </button>
@@ -773,17 +773,17 @@ export function CaseWorkflow({
               )}
             </div>
 
-            <div className="overflow-hidden rounded-lg border border-[#E5E7EB]">
-              <div className="sticky top-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3 text-sm font-semibold text-[#4B5563]">
+            <div className="overflow-hidden rounded-lg border border-line">
+              <div className="sticky top-0 border-b border-line bg-card-2 px-4 py-3 text-sm font-semibold text-muted">
                 Existing Clients
               </div>
-              <div className="max-h-96 divide-y divide-[#E5E7EB] overflow-y-auto">
+              <div className="max-h-96 divide-y divide-line overflow-y-auto">
                 {!hasSearch ? (
-                  <div className="px-4 py-8 text-center text-sm text-[#4B5563]">
+                  <div className="px-4 py-8 text-center text-sm text-muted">
                     Start typing to search clients.
                   </div>
                 ) : visibleClients.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-sm text-[#4B5563]">
+                  <div className="px-4 py-8 text-center text-sm text-muted">
                     No matching clients found.
                   </div>
                 ) : (
@@ -792,23 +792,23 @@ export function CaseWorkflow({
                       type="button"
                       key={client.client_id}
                       onClick={() => selectClient(client)}
-                      className={`block w-full px-4 py-3 text-left transition duration-200 hover:bg-[#F8FAFC] ${
+                      className={`block w-full px-4 py-3 text-left transition duration-200 hover:bg-card-2 ${
                         selectedClientId === client.client_id ||
                         activeClientIndex === index
-                          ? "bg-[#F7F0FA]"
-                          : "bg-white"
+                          ? "bg-brand-50 dark:bg-brand-400/10"
+                          : "bg-card"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold text-[#2B3642]">
+                          <p className="text-sm font-semibold text-ink">
                             {client.client.name}
                           </p>
-                          <p className="mt-1 text-xs text-[#4B5563]">
+                          <p className="mt-1 text-xs text-muted">
                             {client.client_id}
                           </p>
                         </div>
-                        <span className="text-xs font-medium text-[#4B5563]">
+                        <span className="text-xs font-medium text-muted">
                           {client.client.sex}
                         </span>
                       </div>
@@ -865,19 +865,19 @@ export function CaseWorkflow({
 
         {isCaseFormStep && (
           <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-card-2 px-4 py-3">
               <div>
-                <p className="text-sm font-semibold text-[#2B3642]">
+                <p className="text-sm font-semibold text-ink">
                   {lockedClient
                     ? "Client selected automatically"
                     : selectedClient?.client.name || "No client selected"}
                 </p>
                 {lockedClient && (
-                  <p className="text-sm text-[#2B3642]">
+                  <p className="text-sm text-ink">
                     {lockedClient.client.name}
                   </p>
                 )}
-                <p className="text-xs text-[#4B5563]">
+                <p className="text-xs text-muted">
                   Method:{" "}
                   {method === "manual"
                     ? "Manual Entry"
@@ -891,7 +891,7 @@ export function CaseWorkflow({
                   <button
                     type="button"
                     onClick={() => setStep(0)}
-                    className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
+                    className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-semibold text-muted transition duration-200 hover:bg-card-2"
                   >
                     Change Client
                   </button>
@@ -899,7 +899,7 @@ export function CaseWorkflow({
                 <button
                   type="button"
                   onClick={() => setStep(lockedClient ? 0 : 1)}
-                  className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
+                  className="rounded-lg border border-brand-600 bg-card px-3 py-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400 transition duration-200 hover:bg-brand-50 dark:hover:bg-brand-400/10 hover:text-brand-700 dark:hover:text-brand-300"
                 >
                   Change Method
                 </button>
@@ -907,7 +907,7 @@ export function CaseWorkflow({
             </div>
 
             {method !== "manual" && (
-              <div className="grid gap-3 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3 text-sm text-[#1E3A8A] md:grid-cols-[minmax(0,1fr)_220px]">
+              <div className="grid gap-3 rounded-lg border border-brand-200 dark:border-brand-400/30 bg-brand-50 dark:bg-brand-400/10 px-4 py-3 text-sm text-brand-900 dark:text-brand-100 md:grid-cols-[minmax(0,1fr)_220px]">
                 <label className="flex items-start gap-3">
                   <input
                     type="checkbox"
@@ -915,20 +915,20 @@ export function CaseWorkflow({
                     onChange={(event) =>
                       setReplaceExistingWithOcr(event.target.checked)
                     }
-                    className="mt-0.5 h-4 w-4 rounded border-[#2F80ED] text-[#2F80ED] focus:ring-[#2F80ED]"
+                    className="mt-0.5 h-4 w-4 rounded border-brand-500 text-brand-500 focus:ring-brand-500"
                   />
                   <span>
                     <span className="block font-semibold">
                       Replace existing fields with scanned values
                     </span>
-                    <span className="mt-1 block text-[#1E40AF]">
+                    <span className="mt-1 block text-brand-800 dark:text-brand-200">
                       Leave this off to fill only blank fields. Form Date is
                       always updated from Petsa when the scan finds it.
                     </span>
                   </span>
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase text-[#1E3A8A]">
+                  <span className="text-xs font-semibold uppercase text-brand-900 dark:text-brand-100">
                     OCR Engine
                   </span>
                   <select
@@ -938,7 +938,7 @@ export function CaseWorkflow({
                         event.target.value as ExtractionEngineMode,
                       )
                     }
-                    className="mt-1 h-10 w-full rounded-md border border-[#93C5FD] bg-white px-3 text-sm font-semibold text-[#111827] outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
+                    className="mt-1 h-10 w-full rounded-lg border border-brand-300 bg-card px-3 text-sm font-semibold text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                   >
                     {Object.entries(extractionEngineLabels).map(
                       ([value, label]) => (
@@ -953,26 +953,26 @@ export function CaseWorkflow({
             )}
 
             {method === "camera" && (
-              <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+              <div className="rounded-lg border border-line bg-card-2 p-4">
                 <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
                   <video
                     ref={videoRef}
                     muted
                     playsInline
-                    className="aspect-video w-full rounded-md border border-[#E5E7EB] bg-white object-cover"
+                    className="aspect-video w-full rounded-lg border border-line bg-card object-cover"
                   />
                   <div className="space-y-3">
                     <button
                       type="button"
                       onClick={startCamera}
-                      className="w-full rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:bg-[#5F3675]"
+                      className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:bg-brand-700"
                     >
                       Start Camera
                     </button>
                     <button
                       type="button"
                       onClick={stopCamera}
-                      className="w-full rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] transition duration-200 hover:bg-[#F8FAFC]"
+                      className="w-full rounded-lg border border-line bg-card px-4 py-2 text-sm font-semibold text-muted transition duration-200 hover:bg-card-2"
                     >
                       Stop Camera
                     </button>
@@ -980,12 +980,12 @@ export function CaseWorkflow({
                       type="button"
                       disabled={!isCameraActive || isExtracting}
                       onClick={handleCapture}
-                      className="w-full rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#704389] hover:text-white disabled:opacity-50"
+                      className="w-full rounded-lg border border-brand-600 bg-card px-4 py-2 text-sm font-semibold text-brand-600 dark:text-brand-400 transition duration-200 hover:bg-brand-50 dark:hover:bg-brand-400/10 hover:text-brand-700 dark:hover:text-brand-300 disabled:opacity-50"
                     >
                       {isExtracting ? "Extracting..." : "Capture Case Fields"}
                     </button>
                     {cameraError && (
-                      <p className="text-sm text-red-600">{cameraError}</p>
+                      <p className="text-sm text-red-600 dark:text-red-400">{cameraError}</p>
                     )}
                   </div>
                 </div>
@@ -993,41 +993,41 @@ export function CaseWorkflow({
             )}
 
             {method === "upload" && (
-              <div className="rounded-lg border border-dashed border-[#E5E7EB] bg-[#F9FAFB] p-4">
+              <div className="rounded-lg border border-dashed border-line bg-card-2 p-4">
                 <label className="block">
-                  <span className="text-sm font-semibold text-[#4B5563]">
+                  <span className="text-sm font-semibold text-muted">
                     Upload case document image
                   </span>
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleUpload}
-                    className="mt-3 block w-full text-sm text-[#4B5563] file:mr-4 file:rounded-md file:border-0 file:bg-[#704389] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
+                    className="mt-3 block w-full text-sm text-muted file:mr-4 file:rounded-lg file:border-0 file:bg-brand-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
                   />
                 </label>
               </div>
             )}
 
             {hasOcrResult && (
-              <div className="grid gap-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 lg:grid-cols-[220px_1fr]">
+              <div className="grid gap-4 rounded-lg border border-emerald-200 dark:border-emerald-400/25 bg-emerald-50 dark:bg-emerald-400/10 p-4 lg:grid-cols-[220px_1fr]">
                 <div>
                   {documentPreview ? (
                     <img
                       src={documentPreview}
                       alt="Document preview"
-                      className="max-h-40 w-full rounded-md border border-emerald-200 object-cover"
+                      className="max-h-40 w-full rounded-lg border border-emerald-200 dark:border-emerald-400/25 object-cover"
                     />
                   ) : (
-                    <div className="flex h-32 items-center justify-center rounded-md border border-emerald-200 bg-white text-sm font-medium text-emerald-700">
+                    <div className="flex h-32 items-center justify-center rounded-lg border border-emerald-200 dark:border-emerald-400/25 bg-card text-sm font-medium text-emerald-700 dark:text-emerald-300">
                       {documentLabel || "PDF document"}
                     </div>
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-emerald-800">
+                  <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
                     Review extracted case fields before saving.
                   </p>
-                  <p className="mt-1 text-sm text-emerald-700">
+                  <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">
                     OCR maps Filipino PAO labels like Petsa, Control No.,
                     Rehiyon, and request details into the case fields.
                   </p>
@@ -1035,8 +1035,8 @@ export function CaseWorkflow({
               </div>
             )}
 
-            <section className="border-t border-[#E5E7EB] pt-4 first:border-t-0 first:pt-0">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+              <h3 className="text-sm font-semibold text-ink">
                 Case Identification
               </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1082,8 +1082,8 @@ export function CaseWorkflow({
               </div>
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#111827]">
+            <section className="border-t border-line pt-4">
+              <h3 className="text-sm font-semibold text-ink">
                 Conflict of Interest Agreement
               </h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1126,8 +1126,8 @@ export function CaseWorkflow({
               </div>
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#111827]">
+            <section className="border-t border-line pt-4">
+              <h3 className="text-sm font-semibold text-ink">
                 Proof of Qualification
               </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1179,8 +1179,8 @@ export function CaseWorkflow({
               </div>
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="border-t border-line pt-4">
+              <h3 className="text-sm font-semibold text-ink">
                 VIII Applicant Case Involvement
               </h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -1196,13 +1196,13 @@ export function CaseWorkflow({
                 ].map((role) => (
                   <label
                     key={role}
-                    className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]"
+                    className="flex items-center gap-3 rounded-lg border border-line bg-card-2 px-3 py-2 text-sm font-medium text-muted"
                   >
                     <input
                       type="radio"
                       value={role}
                       {...register("intake_record.applicant_role")}
-                      className="h-4 w-4 border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                      className="h-4 w-4 border-line text-brand-600 dark:text-brand-400 focus:ring-brand-600"
                     />
                     {role}
                   </label>
@@ -1267,28 +1267,28 @@ export function CaseWorkflow({
               </div>
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
+            <section className="border-t border-line pt-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-[#2B3642]">
+                  <h3 className="text-sm font-semibold text-ink">
                     Representative
                   </h3>
                   {lockedClient && useClientRepresentative && (
-                    <p className="mt-1 text-sm text-[#4B5563]">
+                    <p className="mt-1 text-sm text-muted">
                       Using representative details already saved on the client
                       record.
                     </p>
                   )}
                 </div>
                 {lockedClient && (
-                  <label className="flex items-center gap-2 rounded-md border border-[#E5E7EB] bg-white px-3 py-2 text-sm font-semibold text-[#4B5563]">
+                  <label className="flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-2 text-sm font-semibold text-muted">
                     <input
                       type="checkbox"
                       checked={!useClientRepresentative}
                       onChange={(event) =>
                         setUseClientRepresentative(!event.target.checked)
                       }
-                      className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                      className="h-4 w-4 rounded border-line text-brand-600 dark:text-brand-400 focus:ring-brand-600"
                     />
                     Use Different Representative
                   </label>
@@ -1311,12 +1311,12 @@ export function CaseWorkflow({
                     error={errors.representative?.rep_age?.message}
                   />
                   <label className="block">
-                    <span className="text-sm font-medium text-[#4B5563]">
+                    <span className="text-sm font-medium text-muted">
                       Representative Sex
                     </span>
                     <select
                       {...register("representative.rep_sex")}
-                      className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                      className="mt-1 w-full rounded-lg border border-line2 px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
                     >
                       <option value="">Select</option>
                       <option>Male</option>
@@ -1352,13 +1352,13 @@ export function CaseWorkflow({
                   />
                 </div>
               ) : (
-                <div className="mt-3 rounded-lg border border-[#E7D7EE] bg-[#F7F0FA] p-4">
-                  <p className="text-sm font-semibold text-[#5F3675]">
+                <div className="mt-3 rounded-lg border border-brand-200 dark:border-brand-400/30 bg-brand-50 dark:bg-brand-400/10 p-4">
+                  <p className="text-sm font-semibold text-brand-700 dark:text-brand-300">
                     {selectedClient?.client_details.representative_name ||
                       selectedClient?.client.name ||
                       "Client representative"}
                   </p>
-                  <p className="mt-1 text-sm text-[#5F3675]">
+                  <p className="mt-1 text-sm text-brand-700 dark:text-brand-300">
                     {selectedClient?.client_details
                       .representative_relationship ||
                       "Representative details will be copied into this case."}
@@ -1367,8 +1367,8 @@ export function CaseWorkflow({
               )}
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="border-t border-line pt-4">
+              <h3 className="text-sm font-semibold text-ink">
                 VIII-A Adverse Party
               </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2">
@@ -1392,19 +1392,19 @@ export function CaseWorkflow({
               </div>
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="border-t border-line pt-4">
+              <h3 className="text-sm font-semibold text-ink">
                 Case Status
               </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <label className="block">
-                  <span className="text-sm font-medium text-[#4B5563]">
+                  <span className="text-sm font-medium text-muted">
                     Status of Case
                     <FieldStatus status={indicators["cases.status_of_case"]} />
                   </span>
                   <select
                     {...register("cases.status_of_case")}
-                    className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                    className="mt-1 w-full rounded-lg border border-line2 px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
                   >
                     <option>Pending</option>
                     <option>Ongoing</option>
@@ -1428,23 +1428,23 @@ export function CaseWorkflow({
                   registration={register("cases.place_of_detention")}
                 />
                 <label className="block">
-                  <span className="text-sm font-medium text-[#4B5563]">
+                  <span className="text-sm font-medium text-muted">
                     Location Type
                   </span>
                   <select
                     {...register("cases.location_type")}
-                    className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                    className="mt-1 w-full rounded-lg border border-line2 px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
                   >
                     <option value="">Select</option>
                     <option>Urban</option>
                     <option>Rural</option>
                   </select>
                 </label>
-                <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
+                <label className="flex items-center gap-3 rounded-lg border border-line bg-card-2 px-3 py-2 text-sm font-medium text-muted">
                   <input
                     type="checkbox"
                     {...register("cases.pending_in_court")}
-                    className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                    className="h-4 w-4 rounded border-line text-brand-600 dark:text-brand-400 focus:ring-brand-600"
                   />
                   Pending in Court?
                 </label>
@@ -1466,7 +1466,7 @@ export function CaseWorkflow({
                 </div>
                 {pendingInCourt && (
                   <div className="md:col-span-2 lg:col-span-3">
-                    <h4 className="mb-3 text-sm font-semibold text-[#2B3642]">
+                    <h4 className="mb-3 text-sm font-semibold text-ink">
                       VIII-D Pending Court Details
                     </h4>
                     <div className="grid gap-4 md:grid-cols-3">
@@ -1509,18 +1509,18 @@ export function CaseWorkflow({
               </div>
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="border-t border-line pt-4">
+              <h3 className="text-sm font-semibold text-ink">
                 Incident Location
               </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <label className="block">
-                  <span className="text-sm font-medium text-[#4B5563]">
+                  <span className="text-sm font-medium text-muted">
                     Barangay
                   </span>
                   <select
                     {...register("cases.incident_barangay")}
-                    className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                    className="mt-1 w-full rounded-lg border border-line2 px-3 py-2 text-sm text-ink outline-none transition duration-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
                   >
                     <option value="">Select barangay</option>
                     {panaboBarangays.map((barangay) => (
@@ -1552,12 +1552,12 @@ export function CaseWorkflow({
         )}
       </div>
 
-      <div className="sticky bottom-0 flex justify-between border-t border-[#E5E7EB] bg-white px-6 py-4">
+      <div className="sticky bottom-0 flex justify-between border-t border-line bg-card px-6 py-4">
         <button
           type="button"
           onClick={() => setStep((current) => Math.max(current - 1, 0))}
           disabled={step === 0}
-          className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#2B3642] disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg border border-line bg-card px-4 py-2 text-sm font-medium text-muted transition duration-200 hover:bg-line hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
         >
           Back
         </button>
@@ -1567,7 +1567,7 @@ export function CaseWorkflow({
             <button
               type="button"
               onClick={() => setStep(0)}
-              className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#2B3642]"
+              className="rounded-lg border border-line bg-card px-4 py-2 text-sm font-medium text-muted transition duration-200 hover:bg-line hover:text-ink"
             >
               Change Client
             </button>
@@ -1576,7 +1576,7 @@ export function CaseWorkflow({
             <button
               type="button"
               onClick={() => setStep(lockedClient ? 0 : 1)}
-              className="rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#704389] hover:text-white"
+              className="rounded-lg border border-brand-600 bg-card px-4 py-2 text-sm font-semibold text-brand-600 dark:text-brand-400 transition duration-200 hover:bg-brand-50 dark:hover:bg-brand-400/10 hover:text-brand-700 dark:hover:text-brand-300"
             >
               Change Method
             </button>
@@ -1585,7 +1585,7 @@ export function CaseWorkflow({
             <button
               type="button"
               onClick={continueFromClient}
-              className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675]"
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-brand-700"
             >
               Continue
             </button>
@@ -1595,7 +1595,7 @@ export function CaseWorkflow({
               type="button"
               onClick={continueFromMethod}
               disabled={!method}
-              className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Continue
             </button>
@@ -1603,7 +1603,7 @@ export function CaseWorkflow({
           {isCaseFormStep && (
             <button
               type="submit"
-              className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675]"
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-brand-700"
             >
               {submitLabel}
             </button>

@@ -1,7 +1,39 @@
-import type { ReactNode } from "react";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowDownRight, ArrowUpRight, Inbox } from "lucide-react";
 import { Link } from "react-router-dom";
 import ErrorBoundary from "../ErrorBoundary";
+
+export function useCountUp(target: number, durationMs = 900) {
+  const [display, setDisplay] = useState(target);
+  const previous = useRef(0);
+
+  useEffect(() => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const from = previous.current;
+    previous.current = target;
+    if (reduceMotion || !Number.isFinite(target) || from === target) {
+      setDisplay(target);
+      return;
+    }
+    let frame = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min((now - start) / durationMs, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(from + (target - from) * eased);
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, durationMs]);
+
+  return display;
+}
+
+export function AnimatedNumber({ value }: { value: number }) {
+  const display = useCountUp(Number.isFinite(value) ? value : 0);
+  return <>{new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Math.round(display))}</>;
+}
 
 export function AnalyticsPanel({
   title,
@@ -16,11 +48,14 @@ export function AnalyticsPanel({
 }) {
   return (
     <section
-      className={`flex flex-col rounded-xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] ${className}`}
+      className={`jg-lift flex flex-col rounded-2xl border border-line bg-card shadow-card ${className}`}
     >
-      <div className="border-b border-[#E5E7EB] px-5 py-4">
-        <h3 className="text-base font-bold text-[#2B3642]">{title}</h3>
-        {subtitle && <p className="mt-1 text-sm font-medium leading-6 text-[#4B5563]">{subtitle}</p>}
+      <div className="border-b border-line px-5 py-4">
+        <h3 className="flex items-center gap-2 text-base font-bold text-ink">
+          <span aria-hidden="true" className="h-4 w-1 rounded-full bg-gradient-to-b from-brand-600 to-brand-500" />
+          {title}
+        </h3>
+        {subtitle && <p className="mt-1 text-sm font-medium leading-6 text-muted">{subtitle}</p>}
       </div>
       <div className="min-h-0 flex-1 p-5">
         <ErrorBoundary fallback={<EmptyState message="This dashboard widget could not render. Other widgets remain available." />}>
@@ -53,33 +88,32 @@ export function IntelligenceMetricCard({
   actionLabel?: string;
 }) {
   const safeValue = Number.isFinite(value) ? value : 0;
-  const formattedValue = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(safeValue);
   const tones = {
-    blue: "border-[#E7D7EE] text-[#5F3675]",
-    green: "border-[#A7F3D0] text-[#065F46]",
-    red: "border-[#FECACA] text-[#9F1239]",
-    yellow: "border-[#FEF3C7] text-[#92400E]",
-    purple: "border-[#DDD6FE] text-[#5B21B6]",
-    dark: "border-[#D1D5DB] text-[#2B3642]",
+    blue: "border-brand-200 dark:border-brand-400/30 text-brand-700 dark:text-brand-300",
+    green: "border-emerald-200 dark:border-emerald-400/25 text-emerald-800 dark:text-emerald-300",
+    red: "border-red-200 dark:border-red-400/25 text-rose-800 dark:text-rose-300",
+    yellow: "border-amber-100 dark:border-amber-400/20 text-amber-800 dark:text-amber-300",
+    purple: "border-brand-200 dark:border-brand-400/30 text-brand-800 dark:text-brand-200",
+    dark: "border-line2 text-ink",
   };
   const iconTones = {
-    blue: "bg-[#F7F0FA] text-[#5F3675]",
-    green: "bg-[#ECFDF5] text-[#065F46]",
-    red: "bg-[#FFF1F2] text-[#9F1239]",
-    yellow: "bg-[#FFFBEB] text-[#92400E]",
-    purple: "bg-[#F5F3FF] text-[#5B21B6]",
-    dark: "bg-[#F8FAFC] text-[#2B3642]",
+    blue: "bg-brand-50 dark:bg-brand-400/10 text-brand-700 dark:text-brand-300",
+    green: "bg-emerald-50 dark:bg-emerald-400/10 text-emerald-800 dark:text-emerald-300",
+    red: "bg-rose-50 dark:bg-rose-400/10 text-rose-800 dark:text-rose-300",
+    yellow: "bg-amber-50 dark:bg-amber-400/10 text-amber-800 dark:text-amber-300",
+    purple: "bg-brand-50 dark:bg-brand-400/10 text-brand-800 dark:text-brand-200",
+    dark: "bg-card-2 text-ink",
   };
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border bg-white ${tones[tone]} p-5 shadow-[0_4px_20px_rgba(0,0,0,0.04)] transition duration-200 hover:-translate-y-0.5`}
+      className={`jg-lift jg-hairline relative overflow-hidden rounded-2xl border bg-card ${tones[tone]} p-5 shadow-card`}
     >
-      <div className="absolute right-0 top-0 h-24 w-24 rounded-bl-[80px] bg-[#F9FAFB]" />
+      <div aria-hidden="true" className="absolute right-0 top-0 h-24 w-24 rounded-bl-[80px] bg-gradient-to-bl from-brand-50 to-transparent" />
       <div className="relative flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">{label}</p>
-          <h3 className="mt-2 text-3xl font-bold">
-            {formattedValue}
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+          <h3 className="mt-2 text-3xl font-bold tabular-nums tracking-tight">
+            <AnimatedNumber value={safeValue} />
           </h3>
         </div>
         <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${iconTones[tone]} shadow-inner`}>
@@ -87,7 +121,7 @@ export function IntelligenceMetricCard({
         </div>
       </div>
       <div className="relative mt-5 flex items-center justify-between gap-3 text-xs">
-        <span className="font-medium text-[#4B5563]">{detail}</span>
+        <span className="font-medium text-muted">{detail}</span>
         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold ${iconTones[tone]}`}>
           {positive ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
           {trend}
@@ -96,7 +130,7 @@ export function IntelligenceMetricCard({
       {to && (
         <Link
           to={to}
-          className="relative mt-4 inline-flex text-xs font-bold text-[#704389] hover:text-[#5F3675]"
+          className="relative mt-4 inline-flex text-xs font-bold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300"
         >
           {actionLabel}
         </Link>
@@ -106,13 +140,16 @@ export function IntelligenceMetricCard({
 }
 
 export function SkeletonBlock({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-xl bg-[#E5E7EB] ${className}`} />;
+  return <div aria-hidden="true" className={`jg-shimmer rounded-xl ${className}`} />;
 }
 
 export function EmptyState({ message }: { message: string }) {
   return (
-    <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed border-[#D1D5DB] bg-[#F9FAFB] px-4 text-center text-sm font-medium text-[#4B5563]">
-      {message}
+    <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line2 bg-card-2/70 px-4 py-6 text-center">
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-card text-faint shadow-card">
+        <Inbox className="h-4 w-4" aria-hidden="true" />
+      </span>
+      <p className="text-sm font-medium text-muted">{message}</p>
     </div>
   );
 }

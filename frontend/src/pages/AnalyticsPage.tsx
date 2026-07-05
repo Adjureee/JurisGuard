@@ -33,7 +33,7 @@ import { useDashboardAnalytics } from "./dashboard/useDashboardAnalytics";
 
 const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsMap"));
 
-const COLORS = ["#704389", "#9F5AA6", "#F59E0B", "#DC2626", "#7C3AED", "#0F766E"];
+const COLORS = ["#23875C", "#7C5CFC", "#14B8A6", "#DC2626", "#F59E0B", "#0F766E"];
 type DatePreset = "last7" | "last30" | "month" | "year" | "custom";
 
 function isoDate(date: Date) {
@@ -64,10 +64,10 @@ function ChartTooltip({
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm shadow-xl ">
-      <p className="font-semibold text-[#2B3642]">{label}</p>
+    <div className="rounded-lg border border-line bg-card px-3 py-2 text-sm shadow-xl ">
+      <p className="font-semibold text-ink">{label}</p>
       {payload.map((item) => (
-        <p key={item.name ?? "value"} className="text-[#4B5563]">
+        <p key={item.name ?? "value"} className="text-muted">
           {item.name ?? "Cases"}: <span className="font-semibold">{item.value}</span>
         </p>
       ))}
@@ -259,7 +259,7 @@ export default function AnalyticsPage() {
           <button
             type="button"
             onClick={() => setExportOpen(true)}
-            className="inline-flex h-10 items-center justify-center rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={exportRows.length === 0}
           >
             Advanced Report Export
@@ -268,7 +268,7 @@ export default function AnalyticsPage() {
       />
 
       {isLoading ? (
-        <div className="grid gap-6">
+        <div className="jg-stagger grid gap-6">
           <SkeletonBlock className="h-[520px]" />
           <div className="grid gap-6 xl:grid-cols-2">
             <SkeletonBlock className="h-80" />
@@ -281,11 +281,11 @@ export default function AnalyticsPage() {
             <div ref={hotspotPanelRef}>
               <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay.">
                 <div className="mb-4 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
+                  <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-brand-600 text-white" : "border border-line text-muted"}`}>
                     All Barangays
                   </button>
                   {topBarangays.slice(0, 8).map((barangay) => (
-                    <button type="button" key={barangay.barangay} onClick={() => setSelectedBarangay(barangay.barangay)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === barangay.barangay ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
+                    <button type="button" key={barangay.barangay} onClick={() => setSelectedBarangay(barangay.barangay)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === barangay.barangay ? "bg-brand-600 text-white" : "border border-line text-muted"}`}>
                       {barangay.barangay}
                     </button>
                   ))}
@@ -306,13 +306,13 @@ export default function AnalyticsPage() {
               <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-full min-h-0">
                 <div className="h-full min-h-0 space-y-3 overflow-y-auto pr-2">
                   {topBarangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : topBarangays.map((barangay, index) => (
-                    <button key={barangay.barangay} type="button" onClick={() => setSelectedBarangay(barangay.barangay)} className="flex w-full items-center gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3 text-left hover:bg-[#F8FAFC]">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#704389] text-sm font-bold text-white">{index + 1}</span>
+                    <button key={barangay.barangay} type="button" onClick={() => setSelectedBarangay(barangay.barangay)} className="flex w-full items-center gap-3 rounded-lg border border-line bg-card-2 p-3 text-left hover:bg-card-2">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">{index + 1}</span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-[#2B3642]">{barangay.barangay}</span>
-                        <span className="text-xs text-[#4B5563]">{barangay.most_common_category}</span>
+                        <span className="block truncate text-sm font-semibold text-ink">{barangay.barangay}</span>
+                        <span className="text-xs text-muted">{barangay.most_common_category}</span>
                       </span>
-                      <span className="rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-bold text-[#704389]">{barangay.total_cases}</span>
+                      <span className="rounded-full bg-brand-50 dark:bg-brand-400/10 px-2.5 py-1 text-xs font-bold text-brand-600 dark:text-brand-400">{barangay.total_cases}</span>
                     </button>
                   ))}
                 </div>
@@ -320,11 +320,11 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          <div className="mt-6 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+          <div className="mt-6 rounded-xl border border-line bg-card p-4 shadow-sm">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
-                <p className="text-sm font-bold text-[#111827]">Analytics Date Range</p>
-                <p className="mt-1 text-xs font-medium text-[#6B7280]">Trends, intake load, and closure analytics refresh from this range.</p>
+                <p className="text-sm font-bold text-ink">Analytics Date Range</p>
+                <p className="mt-1 text-xs font-medium text-muted">Trends, intake load, and closure analytics refresh from this range.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {([
@@ -340,8 +340,8 @@ export default function AnalyticsPage() {
                     onClick={() => applyPreset(value)}
                     className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                       datePreset === value
-                        ? "border-[#704389] bg-[#F7F0FA] text-[#704389]"
-                        : "border-[#D1D5DB] bg-white text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#111827]"
+                        ? "border-brand-600 bg-brand-50 dark:bg-brand-400/10 text-brand-600 dark:text-brand-400"
+                        : "border-line2 bg-card text-muted hover:bg-card-2 hover:text-ink"
                     }`}
                   >
                     {label}
@@ -351,7 +351,7 @@ export default function AnalyticsPage() {
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
               <label className="block">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Start Date</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted">Start Date</span>
                 <input
                   type="date"
                   value={dateRange.dateFrom}
@@ -359,11 +359,11 @@ export default function AnalyticsPage() {
                     setDatePreset("custom");
                     setDateRange((current) => ({ ...current, dateFrom: event.target.value }));
                   }}
-                  className="mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                  className="mt-1 h-10 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
                 />
               </label>
               <label className="block">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">End Date</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted">End Date</span>
                 <input
                   type="date"
                   value={dateRange.dateTo}
@@ -371,7 +371,7 @@ export default function AnalyticsPage() {
                     setDatePreset("custom");
                     setDateRange((current) => ({ ...current, dateTo: event.target.value }));
                   }}
-                  className="mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                  className="mt-1 h-10 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
                 />
               </label>
             </div>
@@ -380,28 +380,28 @@ export default function AnalyticsPage() {
           <div className="mt-6 grid gap-6 xl:grid-cols-2">
             <AnalyticsPanel title="Case Intake Trends" subtitle="Case and client movement for the selected date range.">
               <div className="mb-4 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Intake Volume</p>
-                  <p className="mt-1 text-xl font-bold text-[#111827]">{intakeTotal}</p>
+                <div className="rounded-lg border border-line bg-card-2 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">Intake Volume</p>
+                  <p className="mt-1 text-xl font-bold text-ink">{intakeTotal}</p>
                 </div>
-                <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Client Growth</p>
-                  <p className="mt-1 text-xl font-bold text-[#111827]">{overview?.clients_in_range ?? 0}</p>
+                <div className="rounded-lg border border-line bg-card-2 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">Client Growth</p>
+                  <p className="mt-1 text-xl font-bold text-ink">{overview?.clients_in_range ?? 0}</p>
                 </div>
-                <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Peak Spike</p>
-                  <p className="mt-1 truncate text-xl font-bold text-[#111827]">{intakePeak ? `${intakePeak.month}: ${intakePeak.total_cases}` : "-"}</p>
+                <div className="rounded-lg border border-line bg-card-2 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">Peak Spike</p>
+                  <p className="mt-1 truncate text-xl font-bold text-ink">{intakePeak ? `${intakePeak.month}: ${intakePeak.total_cases}` : "-"}</p>
                 </div>
               </div>
               <div className="h-80">
                 {displayMonthlyTrends.length === 0 ? <EmptyState message="No intake records match the selected date range." /> : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={displayMonthlyTrends}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#94A3B8" />
                       <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
                       <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
                       <Tooltip content={<ChartTooltip />} />
-                      <Line type="monotone" dataKey="total_cases" name="Cases" stroke="#704389" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 7 }} />
+                      <Line type="monotone" dataKey="total_cases" name="Cases" stroke="#23875C" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 7 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 )}
@@ -410,27 +410,27 @@ export default function AnalyticsPage() {
 
             <AnalyticsPanel title="Weekly Volume Distribution" subtitle="Busiest intake days from encoded form dates.">
               <div className="mb-4 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg bg-[#F7F0FA] p-3 text-[#704389]">
+                <div className="rounded-lg bg-brand-50 dark:bg-brand-400/10 p-3 text-brand-600 dark:text-brand-400">
                   <p className="text-xs font-semibold uppercase tracking-wide">Most Crowded</p>
                   <p className="mt-1 text-lg font-bold">{intakeLoad?.busiest_day?.day ?? "-"}</p>
                 </div>
-                <div className="rounded-lg bg-[#F9FAFB] p-3 text-[#111827]">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Average Daily</p>
+                <div className="rounded-lg bg-card-2 p-3 text-ink">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">Average Daily</p>
                   <p className="mt-1 text-lg font-bold">{averageDailyIntake}</p>
                 </div>
-                <div className="rounded-lg bg-[#F9FAFB] p-3 text-[#111827]">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Range Cases</p>
+                <div className="rounded-lg bg-card-2 p-3 text-ink">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">Range Cases</p>
                   <p className="mt-1 text-lg font-bold">{intakeLoad?.total_weekly_cases ?? 0}</p>
                 </div>
               </div>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={intakeLoad?.weekly ?? []}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#94A3B8" />
                     <XAxis dataKey="day" stroke="#6B7280" fontSize={11} />
                     <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
                     <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill="#704389" />
+                    <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill="#23875C" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -440,13 +440,13 @@ export default function AnalyticsPage() {
           <div className="mt-6 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
             <AnalyticsPanel title="Hourly Intake Heat Analytics" subtitle="Actual encoded intake hours only.">
               <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-[#FEF3C7] bg-[#FFFBEB] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#92400E]">Peak Intake Window</p>
-                  <p className="mt-1 text-lg font-bold text-[#111827]">{busiestHour ? busiestHour.hour : "-"}</p>
+                <div className="rounded-xl border border-amber-100 dark:border-amber-400/20 bg-amber-50 dark:bg-amber-400/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">Peak Intake Window</p>
+                  <p className="mt-1 text-lg font-bold text-ink">{busiestHour ? busiestHour.hour : "-"}</p>
                 </div>
-                <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Recorded Time Blocks</p>
-                  <p className="mt-1 text-lg font-bold text-[#111827]">{hourlyRows.length}</p>
+                <div className="rounded-xl border border-line bg-card-2 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">Recorded Time Blocks</p>
+                  <p className="mt-1 text-lg font-bold text-ink">{hourlyRows.length}</p>
                 </div>
               </div>
               {hourlyRows.length === 0 ? (
@@ -457,11 +457,11 @@ export default function AnalyticsPage() {
                   const max = Math.max(...hourlyRows.map((row) => row.total_cases), 1);
                   return (
                     <div key={item.hour} className="grid grid-cols-[64px_1fr_42px] items-center gap-3 text-sm">
-                      <span className="font-semibold text-[#4B5563]">{item.hour}</span>
-                      <div className="h-3 overflow-hidden rounded-full bg-[#E5E7EB]">
-                        <div className="h-full rounded-full bg-[#F59E0B]" style={{ width: `${Math.max((item.total_cases / max) * 100, 8)}%` }} />
+                      <span className="font-semibold text-muted">{item.hour}</span>
+                      <div className="h-3 overflow-hidden rounded-full bg-line">
+                        <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.max((item.total_cases / max) * 100, 8)}%` }} />
                       </div>
-                      <span className="text-right font-bold text-[#2B3642]">{item.total_cases}</span>
+                      <span className="text-right font-bold text-ink">{item.total_cases}</span>
                     </div>
                   );
                   })}
@@ -471,23 +471,23 @@ export default function AnalyticsPage() {
 
             <AnalyticsPanel title="Legal Service Demand" subtitle="Most common encoded case types.">
               <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-[#E7D7EE] bg-[#F7F0FA] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">Leading Demand</p>
-                  <p className="mt-1 truncate text-lg font-bold text-[#111827]">{leadingCategory?.category ?? "-"}</p>
+                <div className="rounded-xl border border-brand-200 dark:border-brand-400/30 bg-brand-50 dark:bg-brand-400/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-400">Leading Demand</p>
+                  <p className="mt-1 truncate text-lg font-bold text-ink">{leadingCategory?.category ?? "-"}</p>
                 </div>
-                <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Categorized Cases</p>
-                  <p className="mt-1 text-lg font-bold text-[#111827]">{categoryTotal}</p>
+                <div className="rounded-xl border border-line bg-card-2 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">Categorized Cases</p>
+                  <p className="mt-1 text-lg font-bold text-ink">{categoryTotal}</p>
                 </div>
               </div>
               <div className="space-y-3">
                 {caseCategories.length === 0 ? <EmptyState message="No case category data is available yet." /> : caseCategories.slice(0, 6).map((item, index) => (
                   <div key={item.category}>
                     <div className="mb-1 flex justify-between text-sm">
-                      <span className="font-semibold text-[#2B3642]">{item.category}</span>
-                      <span className="text-[#4B5563]">{item.total_cases}</span>
+                      <span className="font-semibold text-ink">{item.category}</span>
+                      <span className="text-muted">{item.total_cases}</span>
                     </div>
-                    <div className="h-2 rounded-full bg-[#E5E7EB]">
+                    <div className="h-2 rounded-full bg-line">
                       <div className="h-2 rounded-full" style={{ width: `${Math.max((item.total_cases / Math.max(...caseCategories.map((row) => row.total_cases), 1)) * 100, 4)}%`, backgroundColor: COLORS[index % COLORS.length] }} />
                     </div>
                   </div>
@@ -498,9 +498,9 @@ export default function AnalyticsPage() {
 
           <div className="mt-6 grid gap-6 xl:grid-cols-3">
             <AnalyticsPanel title="Case Category Analytics" subtitle="Common criminal case categories and distribution.">
-              <div className="mb-3 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Distribution Base</p>
-                <p className="mt-1 text-sm font-bold text-[#111827]">{categoryTotal} categorized case record(s)</p>
+              <div className="mb-3 rounded-xl border border-line bg-card-2 px-3 py-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Distribution Base</p>
+                <p className="mt-1 text-sm font-bold text-ink">{categoryTotal} categorized case record(s)</p>
               </div>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
@@ -514,26 +514,26 @@ export default function AnalyticsPage() {
               </div>
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Terminated Case Analytics" subtitle="Closure volume, archive movement, and reason patterns." className="border-[#FECACA] xl:col-span-2">
+            <AnalyticsPanel title="Terminated Case Analytics" subtitle="Closure volume, archive movement, and reason patterns." className="border-red-200 dark:border-red-400/25 xl:col-span-2">
               <div className="mb-4 grid gap-3 sm:grid-cols-3">
-                <div className="flex items-center gap-3 rounded-xl bg-[#FEF2F2] p-4 text-[#991B1B] sm:col-span-1">
+                <div className="flex items-center gap-3 rounded-xl bg-red-50 dark:bg-red-400/10 p-4 text-red-800 dark:text-red-300 sm:col-span-1">
                 <FolderCheck className="h-6 w-6" />
                 <div>
                   <p className="text-2xl font-bold">{terminatedStats?.total ?? 0}</p>
                   <p className="text-xs font-semibold uppercase tracking-wide">Archived closures</p>
                 </div>
                 </div>
-                <div className="rounded-xl border border-[#FECACA] bg-white p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#991B1B]">Common Reason</p>
-                  <p className="mt-1 truncate text-sm font-bold text-[#111827]">{mostCommonReason}</p>
+                <div className="rounded-xl border border-red-200 dark:border-red-400/25 bg-card p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-800 dark:text-red-300">Common Reason</p>
+                  <p className="mt-1 truncate text-sm font-bold text-ink">{mostCommonReason}</p>
                 </div>
-                <div className="rounded-xl border border-[#FECACA] bg-white p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#991B1B]">Closure Rate</p>
-                  <p className="mt-1 text-sm font-bold text-[#111827]">{terminatedStats?.closure_rate ?? 0}%</p>
+                <div className="rounded-xl border border-red-200 dark:border-red-400/25 bg-card p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-800 dark:text-red-300">Closure Rate</p>
+                  <p className="mt-1 text-sm font-bold text-ink">{terminatedStats?.closure_rate ?? 0}%</p>
                 </div>
               </div>
               <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-                <div className="rounded-xl border border-[#FECACA] bg-[#FFF7F7] p-3">
+                <div className="rounded-xl border border-red-200 dark:border-red-400/25 bg-red-50 dark:bg-red-400/10 p-3">
                   {displayTerminatedMonthly.length === 0 ? (
                     <EmptyState message="No terminated case records match the selected date range." />
                   ) : (
@@ -545,7 +545,7 @@ export default function AnalyticsPage() {
                             <stop offset="95%" stopColor="#DC2626" stopOpacity={0} />
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#FECACA" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#94A3B8" />
                         <XAxis dataKey="month" stroke="#6B7280" fontSize={11} />
                         <YAxis allowDecimals={false} stroke="#6B7280" fontSize={12} />
                         <Tooltip content={<ChartTooltip />} />
@@ -554,9 +554,9 @@ export default function AnalyticsPage() {
                     </ResponsiveContainer>
                   )}
                 </div>
-                <div className="rounded-xl border border-[#FECACA] bg-white p-4">
-                  <p className="text-sm font-bold text-[#111827]">Closure Reasons</p>
-                  <p className="mt-1 text-xs font-medium text-[#6B7280]">Ranked from the selected date range.</p>
+                <div className="rounded-xl border border-red-200 dark:border-red-400/25 bg-card p-4">
+                  <p className="text-sm font-bold text-ink">Closure Reasons</p>
+                  <p className="mt-1 text-xs font-medium text-muted">Ranked from the selected date range.</p>
                   <div className="mt-4 max-h-[220px] space-y-3 overflow-y-auto pr-2">
                     {terminationReasons.length === 0 ? (
                       <EmptyState message="No closure reasons available." />
@@ -564,11 +564,11 @@ export default function AnalyticsPage() {
                       terminationReasons.map((row) => (
                         <div key={row.reason}>
                           <div className="mb-1 flex items-center justify-between gap-3 text-sm">
-                            <span className="min-w-0 truncate font-semibold text-[#2B3642]">{row.reason}</span>
-                            <span className="shrink-0 rounded-full bg-[#FEE2E2] px-2.5 py-1 text-xs font-bold text-[#991B1B]">{row.total_cases}</span>
+                            <span className="min-w-0 truncate font-semibold text-ink">{row.reason}</span>
+                            <span className="shrink-0 rounded-full bg-red-100 dark:bg-red-400/15 px-2.5 py-1 text-xs font-bold text-red-800 dark:text-red-300">{row.total_cases}</span>
                           </div>
-                          <div className="h-2 rounded-full bg-[#FEE2E2]">
-                            <div className="h-2 rounded-full bg-[#DC2626]" style={{ width: `${Math.max((row.total_cases / maxTerminationReason) * 100, 8)}%` }} />
+                          <div className="h-2 rounded-full bg-red-100 dark:bg-red-400/15">
+                            <div className="h-2 rounded-full bg-red-600" style={{ width: `${Math.max((row.total_cases / maxTerminationReason) * 100, 8)}%` }} />
                           </div>
                         </div>
                       ))
@@ -582,9 +582,9 @@ export default function AnalyticsPage() {
         </>
       )}
 
-      <div className="mt-6 rounded-xl border border-[#E5E7EB] bg-white p-5 text-sm text-[#4B5563] shadow-sm ">
+      <div className="mt-6 rounded-xl border border-line bg-card p-5 text-sm text-muted shadow-sm ">
         <div className="flex items-start gap-3">
-          <BarChart3 className="mt-0.5 h-5 w-5 shrink-0 text-[#704389]" />
+          <BarChart3 className="mt-0.5 h-5 w-5 shrink-0 text-brand-600 dark:text-brand-400" />
           <p>
             Export includes monthly trends, weekly volume, category distribution, barangay density, and terminated case movement from the live database.
           </p>

@@ -18,8 +18,12 @@ const StaffAnalyticsPage = lazy(() => import("../pages/StaffAnalyticsPage"));
 
 function RouteLoadingFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] text-sm font-semibold text-[#4B5563]">
-      Loading analytics workspace...
+    <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-canvas">
+      <span
+        aria-hidden="true"
+        className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-200 dark:border-brand-400/30 border-t-brand-600"
+      />
+      <p className="text-sm font-semibold text-muted">Loading analytics workspace...</p>
     </div>
   );
 }

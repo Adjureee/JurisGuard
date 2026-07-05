@@ -123,21 +123,21 @@ export default function FormViewPage() {
       <MainLayout>
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#704389]">Official PAO Intake Form</p>
-          <h1 className="text-2xl font-bold text-[#2B3642]">
+          <p className="text-sm font-semibold text-brand-600 dark:text-brand-400">Official PAO Intake Form</p>
+          <h1 className="text-2xl font-bold text-ink">
             {data?.client.client.name ?? "Printable Form"}
           </h1>
-          <p className="mt-1 text-sm text-[#4B5563]">
+          <p className="mt-1 text-sm text-muted">
             Case: {data?.selected_case.intake_record.control_no ?? caseId}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <div className="inline-flex rounded-md border border-[#E5E7EB] bg-white p-1">
+          <div className="inline-flex rounded-lg border border-line bg-card p-1">
             <button
               type="button"
               onClick={() => setLanguage("english")}
               className={`rounded px-3 py-1.5 text-sm font-semibold ${
-                language === "english" ? "bg-[#704389] text-white" : "text-[#4B5563]"
+                language === "english" ? "bg-brand-600 text-white" : "text-muted"
               }`}
             >
               English
@@ -146,7 +146,7 @@ export default function FormViewPage() {
               type="button"
               onClick={() => setLanguage("filipino")}
               className={`rounded px-3 py-1.5 text-sm font-semibold ${
-                language === "filipino" ? "bg-[#704389] text-white" : "text-[#4B5563]"
+                language === "filipino" ? "bg-brand-600 text-white" : "text-muted"
               }`}
             >
               Filipino
@@ -156,13 +156,13 @@ export default function FormViewPage() {
             type="button"
             onClick={printPreview}
             disabled={!data || !printMarkup}
-            className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#5F3675] disabled:opacity-50"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
           >
             {printMarkup ? "Print Form" : "Preparing Form..."}
           </button>
           <Link
             to="/criminal-cases"
-            className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] hover:bg-[#F9FAFB]"
+            className="rounded-lg border border-line bg-card px-4 py-2 text-sm font-semibold text-muted hover:bg-card-2"
           >
             Back to Cases
           </Link>
@@ -170,7 +170,7 @@ export default function FormViewPage() {
       </div>
 
       {isLoading ? (
-        <div className="h-[720px] animate-pulse rounded-lg bg-[#E5E7EB]" />
+        <div className="h-[720px] animate-pulse rounded-lg bg-line" />
       ) : data && printableData ? (
         language === "english" ? (
           <PrintableFormEnglish
@@ -186,7 +186,7 @@ export default function FormViewPage() {
           />
         )
       ) : (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+        <div className="rounded-lg border border-red-200 dark:border-red-400/25 bg-red-50 dark:bg-red-400/10 px-4 py-3 text-sm font-semibold text-red-700 dark:text-red-300">
           Printable form data could not be loaded.
         </div>
       )}

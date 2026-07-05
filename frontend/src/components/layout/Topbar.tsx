@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Bell, ChevronDown, Menu, Moon, Sun } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { useTheme } from "../../hooks/useTheme";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { resolveProfileImageUrl } from "../../services/authService";
@@ -14,29 +16,6 @@ interface TopbarProps {
   onToggleSidebar: () => void;
 }
 
-function MenuIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-5 w-5">
-      <path fill="currentColor" d="M3 5h14v2H3V5Zm0 4h14v2H3V9Zm0 4h14v2H3v-2Z" />
-    </svg>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-5 w-5">
-      <path fill="currentColor" d="M10 2a5 5 0 0 0-5 5v2.4L3.5 12v1h13v-1L15 9.4V7a5 5 0 0 0-5-5Zm-2 12a2 2 0 0 0 4 0H8Z" />
-    </svg>
-  );
-}
-
-function ChevronIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path fill="currentColor" d="m5.5 7.5 4.5 4.5 4.5-4.5-1.4-1.4-3.1 3.1-3.1-3.1-1.4 1.4Z" />
-    </svg>
-  );
-}
 
 function notificationSymbol(type: NotificationType) {
   if (type === "new_registration" || type === "rejection_notice") return "!";
@@ -68,6 +47,7 @@ function relativeTime(value: string) {
 
 export default function Topbar({ onToggleSidebar }: TopbarProps) {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const addLog = useAuditLogStore((state) => state.addLog);
   const notifications = useNotificationStore((state) => state.notifications);
@@ -109,8 +89,19 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
       }
     }
 
+    function handleKeydown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setProfileOpen(false);
+        setNotificationsOpen(false);
+      }
+    }
+
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKeydown);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKeydown);
+    };
   }, []);
 
   useEffect(() => {
@@ -223,20 +214,20 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   };
 
   return (
-    <header className="sticky top-0 z-50 shrink-0 overflow-visible border-b border-[#E5E7EB] bg-white/95 px-4 py-3 backdrop-blur sm:px-6 lg:px-[30px]">
+    <header className="sticky top-0 z-50 shrink-0 overflow-visible border-b border-line bg-card/90 px-4 py-3 backdrop-blur-md sm:px-6 lg:px-8">
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#E5E7EB] bg-white text-[#2B3642] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC] md:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-card text-muted transition-colors duration-150 hover:bg-card-2 hover:text-ink md:hidden"
             aria-label="Toggle sidebar"
           >
-            <MenuIcon />
+            <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-bold text-[#2B3642]">JurisGuard</h1>
-            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.15em] text-[#704389]">
+            <h1 className="truncate text-lg font-bold tracking-tight text-ink">JurisGuard</h1>
+            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.15em] text-brand-600 dark:text-brand-400">
               PAO Panabo
             </p>
           </div>
@@ -246,39 +237,50 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
           <div ref={notificationRef} className="relative">
             <button
               type="button"
+              onClick={toggleTheme}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-card text-muted transition-colors duration-150 hover:bg-card-2 hover:text-ink"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={theme === "dark" ? "Light mode" : "Dark mode"}
+            >
+              {theme === "dark" ? <Sun className="h-5 w-5" aria-hidden="true" /> : <Moon className="h-5 w-5" aria-hidden="true" />}
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setNotificationsOpen((current) => !current);
                 setProfileOpen(false);
               }}
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#E5E7EB] bg-white text-[#2B3642] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-card text-muted transition-colors duration-150 hover:bg-card-2 hover:text-ink"
               aria-label="Open notifications"
+              aria-haspopup="true"
+              aria-expanded={notificationsOpen}
             >
-              <BellIcon />
+              <Bell className="h-5 w-5" aria-hidden="true" />
               {unreadCount > 0 && (
-                <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#DC2626] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-white ring-2 ring-card">
                   {unreadCount}
                 </span>
               )}
             </button>
 
             {notificationsOpen && (
-              <div className="absolute right-0 z-[9999] mt-2 w-80 rounded-xl border border-[#E5E7EB] bg-white shadow-xl">
-                <div className="border-b border-[#E5E7EB] bg-white px-4 py-3">
+              <div className="absolute right-0 z-[9999] mt-2 w-80 animate-fade-up overflow-hidden rounded-xl border border-line bg-card shadow-pop">
+                <div className="border-b border-line bg-card px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-bold text-[#2B3642]">Notifications</p>
+                    <p className="text-sm font-bold text-ink">Notifications</p>
                     {visibleNotifications.length > 0 && (
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => markAllRead(visibleNotificationIds)}
-                          className="text-xs font-semibold text-[#704389] hover:text-[#704389]"
+                          className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300"
                         >
                           Mark all read
                         </button>
                         <button
                           type="button"
                           onClick={() => clearNotifications(visibleNotificationIds)}
-                          className="text-xs font-semibold text-[#DC2626] hover:text-[#B91C1C]"
+                          className="text-xs font-semibold text-red-600 dark:text-red-400 hover:text-red-700"
                         >
                           Clear all
                         </button>
@@ -286,22 +288,22 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                     )}
                   </div>
                 </div>
-                <div className="max-h-80 divide-y divide-[#E5E7EB] overflow-y-auto">
+                <div className="max-h-80 divide-y divide-line overflow-y-auto">
                   {recentNotifications.length === 0 ? (
-                    <div className="px-4 py-6 text-sm text-[#4B5563]">No notifications yet.</div>
+                    <div className="px-4 py-6 text-sm text-muted">No notifications yet.</div>
                   ) : (
                     recentNotifications.map((notification) => (
                       <div
                         key={notification.id}
                         className={`flex gap-3 px-4 py-3 transition ${
-                          notification.isRead ? "bg-white text-[#4B5563]" : "bg-[#F7F0FA] text-[#2B3642]"
+                          notification.isRead ? "bg-card text-muted" : "bg-brand-50 dark:bg-brand-400/10 text-ink"
                         }`}
                       >
                         <span
                           className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
                             notification.isRead
-                              ? "bg-[#F8FAFC] text-[#6B7280]"
-                              : "bg-[#704389]/10 text-[#704389]"
+                              ? "bg-card-2 text-muted"
+                              : "bg-brand-600/10 text-brand-600 dark:text-brand-400"
                           }`}
                         >
                           {notificationSymbol(notification.type)}
@@ -314,25 +316,25 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                           >
                             <span className="flex items-start gap-2">
                               {!notification.isRead && (
-                                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#704389]" />
+                                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-600" />
                               )}
                               <span className="min-w-0">
                                 <span
                                   className={`block text-sm ${
                                     notification.isRead
-                                      ? "font-medium text-[#4B5563]"
-                                      : "font-bold text-[#2B3642]"
+                                      ? "font-medium text-muted"
+                                      : "font-bold text-ink"
                                   }`}
                                 >
                                   {notification.title}
                                 </span>
-                                <span className="mt-1 block text-sm text-[#4B5563]">
+                                <span className="mt-1 block text-sm text-muted">
                                   {notification.message}
                                 </span>
                               </span>
                             </span>
                           </button>
-                          <p className="mt-1 text-xs text-[#6B7280]">
+                          <p className="mt-1 text-xs text-muted">
                             {relativeTime(notification.createdAt)}
                           </p>
                           <div className="mt-2 flex flex-wrap gap-2">
@@ -340,7 +342,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                               <button
                                 type="button"
                                 onClick={() => markRead(notification.id)}
-                                className="text-xs font-semibold text-[#704389] hover:text-[#704389]"
+                                className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300"
                               >
                                 Mark as Read
                               </button>
@@ -349,7 +351,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                               <button
                                 type="button"
                                 onClick={() => removeNotification(notification.id)}
-                                className="text-xs font-semibold text-[#DC2626] hover:text-[#B91C1C]"
+                                className="text-xs font-semibold text-red-600 dark:text-red-400 hover:text-red-700"
                               >
                                 Remove
                               </button>
@@ -362,7 +364,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                 </div>
                 <button
                   type="button"
-                  className="w-full border-t border-[#E5E7EB] bg-white px-4 py-3 text-center text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#F8FAFC]"
+                  className="w-full border-t border-line bg-card px-4 py-3 text-center text-sm font-semibold text-brand-600 dark:text-brand-400 transition duration-200 hover:bg-card-2"
                 >
                   View all notifications
                 </button>
@@ -377,9 +379,11 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                 setProfileOpen((current) => !current);
                 setNotificationsOpen(false);
               }}
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-[#E5E7EB] bg-white px-2 text-[#2B3642] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC] sm:px-3"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-card px-2 text-ink transition-colors duration-150 hover:bg-card-2 sm:px-3"
+              aria-haspopup="true"
+              aria-expanded={profileOpen}
             >
-              <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#704389] text-xs font-semibold text-white">
+              <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-brand-600 text-xs font-bold text-white">
                 {profileImageSrc ? (
                   <img src={profileImageSrc} alt="" className="h-full w-full object-cover" />
                 ) : (
@@ -389,29 +393,29 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
               <span className="hidden max-w-40 truncate text-sm font-semibold sm:inline">
                 {user?.full_name || user?.email || "User"}
               </span>
-              <ChevronIcon />
+              <ChevronDown className={`h-4 w-4 text-faint transition-transform duration-150 ${profileOpen ? "rotate-180" : ""}`} aria-hidden="true" />
             </button>
 
             {profileOpen && (
-              <div className="absolute right-0 z-[9999] mt-2 w-56 overflow-hidden rounded-xl border border-[#E5E7EB] bg-white py-2 shadow-xl">
+              <div className="absolute right-0 z-[9999] mt-2 w-56 animate-fade-up overflow-hidden rounded-xl border border-line bg-card py-2 shadow-pop">
                 <Link
                   to="/profile"
                   onClick={() => setProfileOpen(false)}
-                  className="block px-4 py-2.5 text-sm font-medium text-[#2B3642] transition duration-200 hover:bg-[#F8FAFC] hover:text-[#2B3642]"
+                  className="block px-4 py-2.5 text-sm font-medium text-ink transition duration-200 hover:bg-card-2 hover:text-ink"
                 >
                   Profile
                 </Link>
                 <Link
                   to="/profile#security"
                   onClick={() => setProfileOpen(false)}
-                  className="block px-4 py-2.5 text-sm font-medium text-[#2B3642] transition duration-200 hover:bg-[#F8FAFC] hover:text-[#2B3642]"
+                  className="block px-4 py-2.5 text-sm font-medium text-ink transition duration-200 hover:bg-card-2 hover:text-ink"
                 >
                   Settings
                 </Link>
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="mt-2 block w-full border-t border-[#E5E7EB] px-4 py-2.5 text-left text-sm font-semibold text-rose-700 transition duration-200 hover:bg-rose-50"
+                  className="mt-2 block w-full border-t border-line px-4 py-2.5 text-left text-sm font-semibold text-rose-700 dark:text-rose-300 transition duration-200 hover:bg-rose-50 dark:hover:bg-rose-400/10"
                 >
                   Logout
                 </button>

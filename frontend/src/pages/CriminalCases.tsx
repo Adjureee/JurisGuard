@@ -30,11 +30,11 @@ import type {
 } from "../features/criminalCases/schemas";
 
 const accordionBorderClass: Record<CaseStatus, string> = {
-  Pending: "border-amber-200",
-  Ongoing: "border-emerald-200",
-  Active: "border-emerald-200",
-  Terminated: "border-red-200",
-  Archived: "border-gray-300",
+  Pending: "border-amber-200 dark:border-amber-400/25",
+  Ongoing: "border-emerald-200 dark:border-emerald-400/25",
+  Active: "border-emerald-200 dark:border-emerald-400/25",
+  Terminated: "border-red-200 dark:border-red-400/25",
+  Archived: "border-line2",
 };
 
 const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
@@ -131,11 +131,11 @@ function EyeIcon() {
 
 function InfoTile({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-md border border-[#E5E7EB] bg-white p-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-[#6B7280]">
+    <div className="rounded-lg border border-line bg-card p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted">
         {label}
       </p>
-      <p className="mt-1 text-sm font-semibold text-[#2B3642]">
+      <p className="mt-1 text-sm font-semibold text-ink">
         {value || "-"}
       </p>
     </div>
@@ -185,14 +185,14 @@ function TextField({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted">
         {label}
       </span>
       <input
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+        className="mt-1 h-10 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
       />
     </label>
   );
@@ -209,14 +209,14 @@ function TextAreaField({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted">
         {label}
       </span>
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
         rows={3}
-        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+        className="mt-1 w-full rounded-lg border border-line2 bg-card px-3 py-2 text-sm text-ink outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
       />
     </label>
   );
@@ -233,10 +233,10 @@ function CaseFilterSelect({
     filterOptions.find((option) => option.value === value) ?? filterOptions[0];
 
   return (
-    <div className="flex h-10 items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-3 text-[#2B3642]">
+    <div className="flex h-10 items-center gap-2 rounded-lg border border-line2 bg-card px-3 text-ink">
       <SlidersIcon />
       <select
-        className="h-8 min-w-32 bg-white text-sm font-medium text-[#2B3642] outline-none"
+        className="h-8 min-w-32 bg-card text-sm font-medium text-ink outline-none"
         value={value}
         onChange={(event) => onChange(event.target.value as CaseTableFilter)}
         aria-label="Filter criminal cases"
@@ -247,7 +247,7 @@ function CaseFilterSelect({
           </option>
         ))}
       </select>
-      <span className="hidden rounded-full bg-[#F9FAFB] px-2 py-0.5 text-xs font-medium text-[#4B5563] lg:inline-flex">
+      <span className="hidden rounded-full bg-card-2 px-2 py-0.5 text-xs font-medium text-muted lg:inline-flex">
         {selected.label}
       </span>
     </div>
@@ -259,18 +259,18 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
 
   return (
     <div
-      className={`rounded-[10px] border bg-white ${accordionBorderClass[record.cases.status_of_case]}`}
+      className={`rounded-[10px] border bg-card ${accordionBorderClass[record.cases.status_of_case]}`}
     >
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#F9FAFB]"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-card-2"
       >
         <div>
-          <p className="text-sm font-semibold text-[#2B3642]">
+          <p className="text-sm font-semibold text-ink">
             {record.intake_record.control_no}
           </p>
-          <p className="mt-1 text-xs text-[#6B7280]">
+          <p className="mt-1 text-xs text-muted">
             {record.cases.title_of_case}
           </p>
         </div>
@@ -278,9 +278,9 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
       </button>
 
       {open && (
-        <div className="space-y-5 border-t border-[#E5E7EB] px-4 py-4">
+        <div className="space-y-5 border-t border-line px-4 py-4">
           <section>
-            <h4 className="text-sm font-semibold text-[#2B3642]">
+            <h4 className="text-sm font-semibold text-ink">
               Case Identification
             </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -307,7 +307,7 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
           </section>
 
           <section>
-            <h4 className="text-sm font-semibold text-[#2B3642]">
+            <h4 className="text-sm font-semibold text-ink">
               Adverse Party
             </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -318,7 +318,7 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
           </section>
 
           <section>
-            <h4 className="text-sm font-semibold text-[#2B3642]">
+            <h4 className="text-sm font-semibold text-ink">
               Detention & Location
             </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -350,7 +350,7 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
           </section>
 
           <section>
-            <h4 className="text-sm font-semibold text-[#2B3642]">
+            <h4 className="text-sm font-semibold text-ink">
               Case Status
             </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -440,15 +440,15 @@ function UpdateClientInfoModal({
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <h3 className="text-base font-bold text-[#2B3642]">
+      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-line bg-card shadow-xl">
+        <div className="flex items-center justify-between border-b border-line bg-card-2 px-5 py-4">
+          <h3 className="text-base font-bold text-ink">
             Update Client Info
           </h3>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]"
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-muted hover:bg-card-2"
           >
             Close
           </button>
@@ -510,11 +510,11 @@ function UpdateClientInfoModal({
             </div>
           </div>
         </div>
-        <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+        <div className="flex justify-end gap-2 border-t border-line bg-card-2 px-5 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]"
+            className="rounded-lg border border-line bg-card px-4 py-2 text-sm font-medium text-muted hover:bg-card-2"
           >
             Cancel
           </button>
@@ -522,7 +522,7 @@ function UpdateClientInfoModal({
             type="button"
             onClick={submit}
             disabled={saving}
-            className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:opacity-60"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
           >
             {saving ? "Saving..." : "Save Client Info"}
           </button>
@@ -585,13 +585,13 @@ function UpdateCaseModal({
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <h3 className="text-base font-bold text-[#2B3642]">Update Case</h3>
+      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-line bg-card shadow-xl">
+        <div className="flex items-center justify-between border-b border-line bg-card-2 px-5 py-4">
+          <h3 className="text-base font-bold text-ink">Update Case</h3>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]"
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-muted hover:bg-card-2"
           >
             Close
           </button>
@@ -609,7 +609,7 @@ function UpdateCaseModal({
               onChange={(value) => updateCase("case_no", value)}
             />
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted">
                 Case Status
               </span>
               <select
@@ -617,7 +617,7 @@ function UpdateCaseModal({
                 onChange={(event) =>
                   updateCase("status_of_case", event.target.value as CaseStatus)
                 }
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                className="mt-1 h-10 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
               >
                 <option>Pending</option>
                 <option>Ongoing</option>
@@ -648,7 +648,7 @@ function UpdateCaseModal({
               onChange={(value) => updateCase("hearing_schedule", value)}
             />
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted">
                 Barangay
               </span>
               <select
@@ -656,7 +656,7 @@ function UpdateCaseModal({
                 onChange={(event) =>
                   updateCase("incident_barangay", event.target.value)
                 }
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                className="mt-1 h-10 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
               >
                 <option value="">Select barangay</option>
                 {panaboBarangays.map((barangay) => (
@@ -711,11 +711,11 @@ function UpdateCaseModal({
             </div>
           </div>
         </div>
-        <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+        <div className="flex justify-end gap-2 border-t border-line bg-card-2 px-5 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]"
+            className="rounded-lg border border-line bg-card px-4 py-2 text-sm font-medium text-muted hover:bg-card-2"
           >
             Cancel
           </button>
@@ -723,7 +723,7 @@ function UpdateCaseModal({
             type="button"
             onClick={submit}
             disabled={saving}
-            className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:opacity-60"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
           >
             {saving ? "Saving..." : "Save Case"}
           </button>
@@ -776,13 +776,13 @@ function TerminationModal({
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/75 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface w-full max-w-2xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <h3 className="text-base font-bold text-[#2B3642]">Terminate Case</h3>
+      <div className="jurisguard-modal-surface w-full max-w-2xl overflow-hidden rounded-2xl border border-line bg-card shadow-xl">
+        <div className="flex items-center justify-between border-b border-line bg-card-2 px-5 py-4">
+          <h3 className="text-base font-bold text-ink">Terminate Case</h3>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]"
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-muted hover:bg-card-2"
           >
             Close
           </button>
@@ -799,7 +799,7 @@ function TerminationModal({
             }
           />
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted">
               Resolution Type
             </span>
             <select
@@ -810,7 +810,7 @@ function TerminationModal({
                   resolution_type: event.target.value,
                 }))
               }
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              className="mt-1 h-10 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
             >
               <option value="">Select resolution</option>
               <option>Dismissed</option>
@@ -853,11 +853,11 @@ function TerminationModal({
             }
           />
         </div>
-        <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+        <div className="flex justify-end gap-2 border-t border-line bg-card-2 px-5 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]"
+            className="rounded-lg border border-line bg-card px-4 py-2 text-sm font-medium text-muted hover:bg-card-2"
           >
             Cancel
           </button>
@@ -865,7 +865,7 @@ function TerminationModal({
             type="button"
             onClick={submit}
             disabled={saving}
-            className="rounded-md bg-[#DC2626] px-4 py-2 text-sm font-semibold text-white hover:bg-[#B91C1C] disabled:opacity-60"
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
           >
             {saving ? "Terminating..." : "Confirm Termination"}
           </button>
@@ -910,52 +910,52 @@ function ClientRecordModal({
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
+      <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-line bg-card shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line bg-card-2 px-6 py-5">
           <div className="min-w-0">
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">
+            <p className="text-sm font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-400">
               Criminal Cases
             </p>
-            <h2 className="mt-1 text-xl font-bold text-[#2B3642]">
+            <h2 className="mt-1 text-xl font-bold text-ink">
               {mode === "view" ? "Criminal Case Record" : "Update Record"}
             </h2>
-            <p className="mt-2 truncate text-sm text-[#6B7280]">
+            <p className="mt-2 truncate text-sm text-muted">
               {client.client.name}
             </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden gap-2 sm:flex">
-              <span className="rounded-full bg-[#F7F0FA] px-3 py-1 text-xs font-bold text-[#704389]">
+              <span className="rounded-full bg-brand-50 dark:bg-brand-400/10 px-3 py-1 text-xs font-bold text-brand-600 dark:text-brand-400">
                 {cases.length} case(s)
               </span>
-              <span className="rounded-full bg-[#ECFDF5] px-3 py-1 text-xs font-bold text-[#065F46]">
+              <span className="rounded-full bg-emerald-50 dark:bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-800 dark:text-emerald-300">
                 {activeCount} active
               </span>
-              <span className="rounded-full bg-[#FFF1F2] px-3 py-1 text-xs font-bold text-[#9F1239]">
+              <span className="rounded-full bg-rose-50 dark:bg-rose-400/10 px-3 py-1 text-xs font-bold text-rose-800 dark:text-rose-300">
                 {terminatedCount} closed
               </span>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-[#D1D5DB] bg-white px-3 py-1.5 text-sm font-semibold text-[#4B5563] transition duration-200 hover:bg-[#F3F4F6] hover:text-[#2B3642]"
+              className="rounded-lg border border-line2 bg-card px-3 py-1.5 text-sm font-semibold text-muted transition duration-200 hover:bg-card-2 hover:text-ink"
             >
               Close
             </button>
           </div>
         </div>
 
-        <div className="max-h-[calc(92vh-90px)] overflow-y-auto bg-white px-6 py-5">
-          <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm ">
+        <div className="max-h-[calc(92vh-90px)] overflow-y-auto bg-card px-6 py-5">
+          <section className="rounded-[14px] border border-line bg-card p-5 shadow-sm ">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-base font-semibold text-[#2B3642]">
+              <h3 className="text-base font-semibold text-ink">
                 Person Information
               </h3>
               {mode === "update" && (
                 <button
                   type="button"
                   onClick={() => setClientUpdateOpen(true)}
-                  className="rounded-md bg-[#704389] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#5F3675]"
+                  className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-700"
                 >
                   Update Client Info
                 </button>
@@ -991,20 +991,20 @@ function ClientRecordModal({
 
           <section className="mt-5">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-[#2B3642]">
+              <h3 className="text-base font-semibold text-ink">
                 Criminal Cases
               </h3>
-              <p className="text-sm text-[#6B7280]">{cases.length} records</p>
+              <p className="text-sm text-muted">{cases.length} records</p>
             </div>
 
             <div className="space-y-3">
               {cases.map((record) => (
                 <div
                   key={record.case_id}
-                  className="rounded-[10px] border border-[#E5E7EB] bg-white"
+                  className="rounded-[10px] border border-line bg-card"
                 >
                   <CaseAccordion record={record} />
-                  <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
+                  <div className="flex flex-wrap justify-end gap-2 border-t border-line bg-card-2 px-4 py-3">
                     {mode === "view" && (
                       <>
                         <button
@@ -1014,7 +1014,7 @@ function ClientRecordModal({
                               `/criminal-cases/form-view/${record.case_id}`,
                             )
                           }
-                          className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
+                          className="rounded-lg border border-brand-600 bg-card px-3 py-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400 transition hover:bg-brand-50 dark:hover:bg-brand-400/10 hover:text-brand-700 dark:hover:text-brand-300"
                         >
                           View Form
                         </button>
@@ -1025,7 +1025,7 @@ function ClientRecordModal({
                               `/criminal-cases/form-view/${record.case_id}?autoPrint=1`,
                             )
                           }
-                          className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
+                          className="rounded-lg border border-brand-600 bg-card px-3 py-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400 transition hover:bg-brand-50 dark:hover:bg-brand-400/10 hover:text-brand-700 dark:hover:text-brand-300"
                         >
                           Print Form
                         </button>
@@ -1041,14 +1041,14 @@ function ClientRecordModal({
                             <button
                               type="button"
                               onClick={() => setCaseUpdateRecord(record)}
-                              className="rounded-md bg-[#704389] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#5F3675]"
+                              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-700"
                             >
                               Update Case
                             </button>
                             <button
                               type="button"
                               onClick={() => setTerminationRecord(record)}
-                              className="rounded-md border border-[#DC2626] bg-white px-3 py-1.5 text-xs font-semibold text-[#B91C1C] transition hover:bg-[#DC2626] hover:text-white"
+                              className="rounded-lg border border-red-600 bg-card px-3 py-1.5 text-xs font-semibold text-red-700 dark:text-red-300 transition hover:bg-red-600 hover:text-white"
                             >
                               Terminate
                             </button>
@@ -1216,7 +1216,7 @@ export default function CriminalCasesPage() {
           <button
             type="button"
             onClick={() => setShowCaseModal(true)}
-            className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]"
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
           >
             <PlusIcon />
             Add Case
@@ -1224,7 +1224,7 @@ export default function CriminalCasesPage() {
           <button
             type="button"
             onClick={() => setShowClientModal(true)}
-            className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#15803D] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#166534]"
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-green-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-green-800"
           >
             <UserPlusIcon />
             Add Client
@@ -1233,20 +1233,20 @@ export default function CriminalCasesPage() {
         }
       />
 
-      <div className="rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
+      <div className="rounded-xl border border-line bg-card p-5 shadow-sm">
         <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <CaseFilterSelect value={filter} onChange={setFilter} />
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-[#4B5563]">Total:</span>
-              <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
+              <span className="font-semibold text-muted">Total:</span>
+              <span className="rounded-lg bg-brand-600 px-2.5 py-1 text-base font-semibold leading-none text-white">
                 {filteredRows.length}
               </span>
             </div>
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
-              className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-brand-700"
             >
               Export CSV
             </button>
@@ -1255,7 +1255,7 @@ export default function CriminalCasesPage() {
           <input
             type="text"
             placeholder="Search case..."
-            className="h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition placeholder:text-[#4B5563] focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20 lg:w-1/4"
+            className="h-10 w-full rounded-lg border border-line2 bg-card px-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 lg:w-1/4"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -1263,7 +1263,7 @@ export default function CriminalCasesPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1040px] text-sm">
-            <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
+            <thead className="sticky top-0 z-10 border-b border-line2 bg-card-2 text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-3 py-3 text-left font-semibold">
                   Control No.
@@ -1280,12 +1280,12 @@ export default function CriminalCasesPage() {
                 <th className="px-3 py-3 text-right font-semibold"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E5E7EB]">
+            <tbody className="divide-y divide-line">
               {filteredRows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-5 py-10 text-center text-[#2B3642]/50"
+                    className="px-5 py-10 text-center text-ink/50"
                   >
                     No criminal cases found.
                   </td>
@@ -1294,30 +1294,30 @@ export default function CriminalCasesPage() {
                 filteredRows.map(({ record, client, clientName }) => (
                   <tr
                     key={record.case_id}
-                    className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]"
+                    className="odd:bg-card even:bg-card-2 transition duration-200 hover:bg-card-2"
                   >
-                    <td className="px-3 py-4 text-[#2B3642]">
+                    <td className="px-3 py-4 text-ink">
                       {record.intake_record.control_no}
                     </td>
-                    <td className="px-3 py-4 text-[#4B5563]">
+                    <td className="px-3 py-4 text-muted">
                       {record.intake_record.party_represented}
                     </td>
-                    <td className="px-3 py-4 text-[#4B5563]">
+                    <td className="px-3 py-4 text-muted">
                       {client?.client.sex ?? "-"}
                     </td>
-                    <td className="px-3 py-4 text-[#4B5563]">
+                    <td className="px-3 py-4 text-muted">
                       {record.cases.title_of_case}
                     </td>
                     <td className="px-5 py-4">
                       <StatusBadge status={record.cases.status_of_case} />
                     </td>
-                    <td className="px-3 py-4 text-[#4B5563]">{clientName}</td>
+                    <td className="px-3 py-4 text-muted">{clientName}</td>
                     <td className="px-3 py-4">
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"
                           onClick={() => openRecord(record, "view")}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-brand-600 bg-card px-3 py-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400 transition duration-200 hover:bg-brand-50 dark:hover:bg-brand-400/10 hover:text-brand-700 dark:hover:text-brand-300"
                         >
                           <EyeIcon />
                           View
@@ -1325,7 +1325,7 @@ export default function CriminalCasesPage() {
                         <button
                           type="button"
                           onClick={() => openRecord(record, "update")}
-                          className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
+                          className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-semibold text-muted transition duration-200 hover:bg-card-2"
                         >
                           Update
                         </button>

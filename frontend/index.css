@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #F3F0E7;
+  color: #1F2937;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  background: #fffefa;
+}
+
+/* Accessible, consistent keyboard focus for every interactive element. */
+:focus-visible {
+  outline: 2px solid #C0972F;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+::selection {
+  background: #e6ebf4;
+  color: #121d30;
+}
+
+/* Tasteful micro-interactions (all disabled under prefers-reduced-motion). */
+button {
+  transition: transform 120ms ease;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.jg-lift {
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.jg-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px rgba(18, 29, 48, 0.1);
+}
+
+.jg-hairline {
+  position: relative;
+  overflow: hidden;
+}
+
+.jg-hairline::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, #2e486f, #c0972f 60%, #dfc377);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.jg-hairline:hover::before,
+.jg-hairline.jg-hairline-on::before {
+  opacity: 1;
+}
+
+.jg-shimmer {
+  background: linear-gradient(90deg, #ece7d9 25%, #f6f2e8 50%, #ece7d9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s linear infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.jg-stagger > * {
+  animation: fade-up 0.3s ease-out both;
+}
+
+.jg-stagger > *:nth-child(2) { animation-delay: 50ms; }
+.jg-stagger > *:nth-child(3) { animation-delay: 100ms; }
+.jg-stagger > *:nth-child(4) { animation-delay: 150ms; }
+.jg-stagger > *:nth-child(5) { animation-delay: 200ms; }
+.jg-stagger > *:nth-child(6) { animation-delay: 250ms; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.jurisguard-modal-overlay {
+  align-items: center;
+  display: grid;
+  inset: 0;
+  justify-items: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(1rem, 3vh, 1.5rem) 1rem;
+  position: fixed;
+  z-index: 2147483647;
+}
+
+.jurisguard-modal-surface {
+  margin: auto;
+}
+
+.jurisguard-print-root {
+  height: 0;
+  left: -10000px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: 8in;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .jurisguard-print-root,
+  .jurisguard-print-root * {
+    visibility: visible !important;
+  }
+
+  .jurisguard-print-root {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    height: auto;
+    left: 0;
+    opacity: 1;
+    overflow: visible;
+    pointer-events: auto;
+    position: absolute;
+    top: 0;
+    width: 100%;
+  }
+
+}
