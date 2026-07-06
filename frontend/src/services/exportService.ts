@@ -16,6 +16,7 @@ export const criminalCaseExportFilterSchema = z.object({
   location_type: z.enum(["All", "Urban", "Rural"]).default("All"),
   barangay: z.string().optional(),
   case_category: z.string().optional(),
+  gender: z.enum(["All", "Male", "Female"]).default("All"),
   staff: z.string().optional(),
   ocr_status: z.string().optional(),
   termination_status: z.string().optional(),
@@ -96,11 +97,13 @@ export function filterCriminalCaseRows(
       locationType === "All" || record.cases.location_type === locationType;
     const barangay = filters.barangay ?? "All";
     const category = filters.case_category ?? "All";
+    const gender = filters.gender ?? "All";
     const staff = filters.staff ?? "All";
     const terminationStatus = filters.termination_status ?? "All";
     const matchesBarangay = barangay === "All" || (record.cases.incident_barangay ?? "") === barangay;
     const rowCategory = record.cases.cause_of_action || record.intake_record.nature_of_case;
     const matchesCategory = category === "All" || rowCategory === category;
+    const matchesGender = gender === "All" || client?.client.sex === gender;
     const rowStaff = record.created_by_user_id === null ? "Unassigned" : `User #${record.created_by_user_id}`;
     const matchesStaff = staff === "All" || rowStaff === staff;
     const rowTerminationStatus =
@@ -120,6 +123,7 @@ export function filterCriminalCaseRows(
       matchesLocation &&
       matchesBarangay &&
       matchesCategory &&
+      matchesGender &&
       matchesStaff &&
       matchesTerminationStatus &&
       matchesDateFrom &&

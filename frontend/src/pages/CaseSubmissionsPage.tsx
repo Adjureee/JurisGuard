@@ -415,6 +415,7 @@ export default function CaseSubmissionsPage() {
       location_type: "All" as const,
       barangay: "All",
       case_category: "All",
+      gender: "All" as const,
       staff: "All",
       ocr_status: "All",
       termination_status: "All",
@@ -453,7 +454,7 @@ export default function CaseSubmissionsPage() {
 
   return (
     <MainLayout>
-      <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-3 overflow-hidden">
+      <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-4 overflow-hidden">
         <div className="shrink-0">
           <PageHeader
             eyebrow={isAdmin ? "Case Review Center" : "Case Submissions"}
@@ -474,8 +475,8 @@ export default function CaseSubmissionsPage() {
           />
         </div>
 
-      <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-        <div className="grid shrink-0 gap-2 border-b border-[#E5E7EB] bg-white px-4 py-3 md:grid-cols-[minmax(220px,360px)_200px_190px_auto] md:items-end">
+      <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#CBD5E1] bg-white p-4 shadow-sm">
+        <div className="mb-3 grid shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_200px_190px_auto] xl:items-end">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
               Search
@@ -510,12 +511,14 @@ export default function CaseSubmissionsPage() {
             </select>
           </label>
           <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
-          <div className="flex h-9 items-center rounded-lg border border-[#E5E7EB] bg-[#F8FAFC] px-3 text-sm font-semibold text-[#4B5563]">
-            {filteredSubmissions.length} result
-            {filteredSubmissions.length === 1 ? "" : "s"}
+          <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-[#F8FAFC] px-3">
+            <span className="font-semibold text-[#4B5563]">Total:</span>
+            <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
+              {filteredSubmissions.length}
+            </span>
           </div>
         </div>
-        <div className="min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto">
+        <div className="relative min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto rounded-lg border border-[#CBD5E1]">
           {isAdmin ? (
             <AdminSubmissionTable
               error={loadError}
@@ -690,7 +693,7 @@ export default function CaseSubmissionsPage() {
             role="dialog"
             aria-modal="true"
           >
-            <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+            <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
               <ReportHeader submission={selected} />
               <div className="min-h-0 flex-1 overflow-y-auto p-6">
                 {selected.notes && (
@@ -878,14 +881,14 @@ function StaffSubmissionTable({
 }) {
   return (
     <table className="w-full min-w-[860px] text-sm">
-      <thead className="bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
+      <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
         <tr>
-          <th className="px-5 py-3 text-left">Report</th>
-          <th className="px-5 py-3 text-left">Period</th>
-          <th className="px-5 py-3 text-left">Cases</th>
-          <th className="px-5 py-3 text-left">Status</th>
-          <th className="px-5 py-3 text-left">Last Updated</th>
-          <th className="px-5 py-3 text-right">Actions</th>
+          <th className="px-3 py-3 text-left font-semibold">Report</th>
+          <th className="px-3 py-3 text-left font-semibold">Period</th>
+          <th className="px-3 py-3 text-left font-semibold">Cases</th>
+          <th className="px-3 py-3 text-left font-semibold">Status</th>
+          <th className="px-3 py-3 text-left font-semibold">Last Updated</th>
+          <th className="px-3 py-3 text-right font-semibold">Actions</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-[#E5E7EB]">
@@ -899,28 +902,28 @@ function StaffSubmissionTable({
           {submissions.map((submission) => {
             const status = normalizeStatus(submission.status);
             return (
-              <tr key={submission.submission_id} className="hover:bg-[#F9FAFB]">
-                <td className="px-5 py-4 font-semibold text-[#2B3642]">
+              <tr key={submission.submission_id} className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]">
+                <td className="px-3 py-4 font-semibold text-[#2B3642]">
                   {submission.title}
                 </td>
-                <td className="px-5 py-4 text-[#4B5563]">
+                <td className="px-3 py-4 text-[#4B5563]">
                   {formatDate(submission.date_from)} -{" "}
                   {formatDate(submission.date_to)}
                 </td>
-                <td className="px-5 py-4 text-[#4B5563]">
+                <td className="px-3 py-4 text-[#4B5563]">
                   {submission.case_count}
                 </td>
-                <td className="px-5 py-4">
+                <td className="px-3 py-4">
                   <span
                     className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusClass(status)}`}
                   >
                     {status}
                   </span>
                 </td>
-                <td className="px-5 py-4 text-[#4B5563]">
+                <td className="px-3 py-4 text-[#4B5563]">
                   {formatDate(submission.updated_at)}
                 </td>
-                <td className="px-5 py-4">
+                <td className="px-3 py-4">
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
@@ -982,15 +985,15 @@ function AdminSubmissionTable({
 }) {
   return (
     <table className="w-full min-w-[920px] text-sm">
-      <thead className="bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
+      <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
         <tr>
-          <th className="px-5 py-3 text-left">Submitted By</th>
-          <th className="px-5 py-3 text-left">Submission</th>
-          <th className="px-5 py-3 text-left">Period</th>
-          <th className="px-5 py-3 text-left">Cases</th>
-          <th className="px-5 py-3 text-left">Status</th>
-          <th className="px-5 py-3 text-left">Submitted</th>
-          <th className="px-5 py-3 text-right">Actions</th>
+          <th className="px-3 py-3 text-left font-semibold">Submitted By</th>
+          <th className="px-3 py-3 text-left font-semibold">Submission</th>
+          <th className="px-3 py-3 text-left font-semibold">Period</th>
+          <th className="px-3 py-3 text-left font-semibold">Cases</th>
+          <th className="px-3 py-3 text-left font-semibold">Status</th>
+          <th className="px-3 py-3 text-left font-semibold">Submitted</th>
+          <th className="px-3 py-3 text-right font-semibold">Actions</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-[#E5E7EB]">
@@ -1004,31 +1007,31 @@ function AdminSubmissionTable({
           {submissions.map((submission) => {
             const status = normalizeStatus(submission.status);
             return (
-              <tr key={submission.submission_id} className="hover:bg-[#F9FAFB]">
-                <td className="px-5 py-4">
+              <tr key={submission.submission_id} className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]">
+                <td className="px-3 py-4">
                   <StaffIdentity submission={submission} />
                 </td>
-                <td className="px-5 py-4 font-semibold text-[#2B3642]">
+                <td className="px-3 py-4 font-semibold text-[#2B3642]">
                   {submission.title}
                 </td>
-                <td className="px-5 py-4 text-[#4B5563]">
+                <td className="px-3 py-4 text-[#4B5563]">
                   {formatDate(submission.date_from)} -{" "}
                   {formatDate(submission.date_to)}
                 </td>
-                <td className="px-5 py-4 text-[#4B5563]">
+                <td className="px-3 py-4 text-[#4B5563]">
                   {submission.case_count}
                 </td>
-                <td className="px-5 py-4">
+                <td className="px-3 py-4">
                   <span
                     className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusClass(status)}`}
                   >
                     {status}
                   </span>
                 </td>
-                <td className="px-5 py-4 text-[#4B5563]">
+                <td className="px-3 py-4 text-[#4B5563]">
                   {formatDate(submission.submitted_at)}
                 </td>
-                <td className="px-5 py-4 text-right">
+                <td className="px-3 py-4 text-right">
                   <button
                     type="button"
                     onClick={() => onOpen(submission)}

@@ -455,7 +455,7 @@ function UpdateClientInfoModal({
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h3 className="text-base font-bold text-[#2B3642]">
             Update Client Info
@@ -600,7 +600,7 @@ function UpdateCaseModal({
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h3 className="text-base font-bold text-[#2B3642]">Update Case</h3>
           <button
@@ -791,7 +791,7 @@ function TerminationModal({
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/75 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface w-full max-w-2xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+      <div className="jurisguard-modal-surface w-full max-w-2xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <h3 className="text-base font-bold text-[#2B3642]">Terminate Case</h3>
           <button
@@ -925,7 +925,7 @@ function ClientRecordModal({
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+      <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div className="min-w-0">
             <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">
@@ -1274,7 +1274,7 @@ export default function CriminalCasesPage() {
         </div>
 
         {/* 3. Main Content Card: flex-1 min-h-0 allows it to absorb remaining screen space */}
-        <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+        <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#CBD5E1] bg-white p-4 shadow-sm">
           
           {/* 4. Filters Area: shrink-0 preserves its height */}
           <div className="mb-3 grid min-w-0 shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_170px_165px_165px_auto_auto] xl:items-end">
@@ -1312,7 +1312,7 @@ export default function CriminalCasesPage() {
             <div className="pt-5 xl:pt-4">
               <CaseFilterSelect value={filter} onChange={setFilter} />
             </div>
-            <div className="flex h-9 items-center gap-2 rounded-md border border-[#E5E7EB] bg-[#F8FAFC] px-3">
+            <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-[#F8FAFC] px-3">
               <span className="font-semibold text-[#4B5563]">Total:</span>
               <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
                 {filteredRows.length}
@@ -1323,12 +1323,12 @@ export default function CriminalCasesPage() {
               onClick={() => setShowExportModal(true)}
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
             >
-              Export CSV
+              Export Excel
             </button>
           </div>
 
           {/* 5. Scrollable Table Container: Flex-1 fills the rest of the card perfectly */}
-          <div className="relative min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto rounded-lg border border-[#E5E7EB]">
+          <div className="relative min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto rounded-lg border border-[#CBD5E1]">
             <table className="w-full min-w-[1040px] text-sm">
               <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
                 <tr>

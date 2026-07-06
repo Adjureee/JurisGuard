@@ -159,7 +159,7 @@ export default function AuditLogsPage() {
 
   return (
     <MainLayout>
-      <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-3 overflow-hidden">
+      <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-4 overflow-hidden">
         <div className="min-w-0 shrink-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">
             System Activity
@@ -172,8 +172,8 @@ export default function AuditLogsPage() {
           </p>
         </div>
 
-        <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
-          <div className="grid min-w-0 shrink-0 gap-2 border-b border-[#E5E7EB] bg-white px-4 py-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#CBD5E1] bg-white p-4 shadow-sm">
+          <div className="mb-3 grid min-w-0 shrink-0 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[repeat(6,minmax(0,1fr))_auto] xl:items-end">
             {user?.role === "admin" && (
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
@@ -256,20 +256,23 @@ export default function AuditLogsPage() {
               className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             />
             </label>
+            <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-[#F8FAFC] px-3">
+              <span className="font-semibold text-[#4B5563]">Total:</span>
+              <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
+                {visibleLogs.length}
+              </span>
+            </div>
           </div>
-          <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-4 py-2">
-            <h3 className="font-semibold text-[#2B3642]">Recent Activity</h3>
-          </div>
-          <div className="min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto">
+          <div className="relative min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto rounded-lg border border-[#CBD5E1]">
             <table className="w-full min-w-[860px] text-sm">
             <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
               <tr>
-                <th className="px-5 py-3 text-left font-semibold">Timestamp</th>
-                <th className="px-5 py-3 text-left font-semibold">User</th>
-                <th className="px-5 py-3 text-left font-semibold">User Type</th>
-                <th className="px-5 py-3 text-left font-semibold">Module</th>
-                <th className="px-5 py-3 text-left font-semibold">Action</th>
-                <th className="px-5 py-3 text-left font-semibold">
+                <th className="px-3 py-3 text-left font-semibold">Timestamp</th>
+                <th className="px-3 py-3 text-left font-semibold">User</th>
+                <th className="px-3 py-3 text-left font-semibold">User Type</th>
+                <th className="px-3 py-3 text-left font-semibold">Module</th>
+                <th className="px-3 py-3 text-left font-semibold">Action</th>
+                <th className="px-3 py-3 text-left font-semibold">
                   Description
                 </th>
               </tr>
@@ -279,7 +282,7 @@ export default function AuditLogsPage() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-5 py-10 text-center text-[#4B5563]"
+                    className="px-5 py-10 text-center text-[#2B3642]/50"
                   >
                     No audit logs recorded yet.
                   </td>
@@ -290,20 +293,20 @@ export default function AuditLogsPage() {
                     key={log.id}
                     className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]"
                   >
-                    <td className="px-5 py-4 text-[#2B3642]">
+                    <td className="px-3 py-4 text-[#2B3642]">
                       {formatDate(log.timestamp)}
                     </td>
-                    <td className="px-5 py-4 text-[#4B5563]">{log.user}</td>
-                    <td className="px-5 py-4">
+                    <td className="px-3 py-4 text-[#4B5563]">{log.user}</td>
+                    <td className="px-3 py-4">
                       <UserTypeBadge role={log.userRole ?? log.user_role} />
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-3 py-4">
                       <ModuleBadge module={log.module} />
                     </td>
-                    <td className="px-5 py-4 font-medium text-[#2B3642]">
+                    <td className="px-3 py-4 font-medium text-[#2B3642]">
                       {log.action}
                     </td>
-                    <td className="px-5 py-4 text-[#4B5563]">
+                    <td className="px-3 py-4 text-[#4B5563]">
                       {log.description}
                     </td>
                   </tr>

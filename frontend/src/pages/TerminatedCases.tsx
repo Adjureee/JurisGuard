@@ -8,9 +8,7 @@ import ModalPortal from "../components/modals/ModalPortal";
 import { listCaseRecords, listClientRecords } from "../services/recordService";
 import type { ClientRecord, CriminalCaseRecord } from "../types";
 import {
-  buildCriminalCasesCsv,
   buildCriminalCasesExcelHtml,
-  downloadCsv,
   type CriminalCaseExportFilterDto,
   type CriminalCaseRow,
 } from "../services/exportService";
@@ -66,6 +64,7 @@ const terminatedExportFilters: CriminalCaseExportFilterDto = {
   location_type: "All",
   barangay: "All",
   case_category: "All",
+  gender: "All",
   staff: "All",
   ocr_status: "All",
   termination_status: "All",
@@ -241,13 +240,6 @@ export default function TerminatedCasesPage() {
     [clientById, filteredRows],
   );
 
-  const exportCsv = () => {
-    downloadCsv(
-      "terminated-cases.csv",
-      buildCriminalCasesCsv(exportRows, terminatedExportFilters),
-    );
-  };
-
   const exportExcel = () => {
     downloadText(
       "terminated-cases.xls",
@@ -265,37 +257,19 @@ export default function TerminatedCasesPage() {
 
 return (
     <MainLayout>
-      <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-3 overflow-hidden">
+      <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-4 overflow-hidden">
         <div className="shrink-0">
           <PageHeader
             eyebrow="Case Archive"
             title="Terminated Cases"
             description="Review closed criminal case records, termination reasons, archive details, and official export outputs."
             compact
-            actions={
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={exportCsv}
-                  className="h-9 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white transition hover:bg-[#5F3675]"
-                >
-                  Export CSV
-                </button>
-                <button
-                  type="button"
-                  onClick={exportExcel}
-                  className="h-9 rounded-md border border-[#704389] bg-white px-3.5 text-sm font-semibold text-[#704389] transition hover:bg-[#F7F0FA]"
-                >
-                  Export Excel
-                </button>
-              </div>
-            }
           />
         </div>
 
-      <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
+      <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#CBD5E1] bg-white p-4 shadow-sm">
         {/* Filters remain fixed at the top of the section */}
-        <div className="grid shrink-0 gap-2 border-b border-[#E5E7EB] px-4 py-3 md:grid-cols-[minmax(220px,360px)_200px_190px] md:items-end">
+        <div className="mb-3 grid shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_200px_190px_auto_auto] xl:items-end">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
               Search
@@ -336,15 +310,28 @@ return (
               setPage(1);
             }}
           />
+          <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-[#F8FAFC] px-3">
+            <span className="font-semibold text-[#4B5563]">Total:</span>
+            <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
+              {filteredRows.length}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={exportExcel}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
+          >
+            Export Excel
+          </button>
         </div>
 
         {/* NEW: Scrollable Table Container */}
-        <div className="relative min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto">
+        <div className="relative min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto rounded-lg border border-[#CBD5E1]">
           <table className="w-full min-w-[980px] text-sm">
             {/* NEW: Sticky Table Header */}
             <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
               <tr>
-                <th className="px-5 py-3 text-left">
+                <th className="px-3 py-3 text-left font-semibold">
                   <SortHeader
                     column="client"
                     label="Client Name"
@@ -353,7 +340,7 @@ return (
                     onSort={changeSort}
                   />
                 </th>
-                <th className="px-5 py-3 text-left">
+                <th className="px-3 py-3 text-left font-semibold">
                   <SortHeader
                     column="title"
                     label="Case Title"
@@ -362,7 +349,7 @@ return (
                     onSort={changeSort}
                   />
                 </th>
-                <th className="px-5 py-3 text-left">
+                <th className="px-3 py-3 text-left font-semibold">
                   <SortHeader
                     column="reason"
                     label="Termination Reason"
@@ -371,7 +358,7 @@ return (
                     onSort={changeSort}
                   />
                 </th>
-                <th className="px-5 py-3 text-left">
+                <th className="px-3 py-3 text-left font-semibold">
                   <SortHeader
                     column="date"
                     label="Date Terminated"
@@ -380,10 +367,10 @@ return (
                     onSort={changeSort}
                   />
                 </th>
-                <th className="px-5 py-3 text-left font-semibold">
+                <th className="px-3 py-3 text-left font-semibold">
                   Terminated By
                 </th>
-                <th className="px-5 py-3 text-left">
+                <th className="px-3 py-3 text-left font-semibold">
                   <SortHeader
                     column="status"
                     label="Status"
@@ -392,7 +379,7 @@ return (
                     onSort={changeSort}
                   />
                 </th>
-                <th className="px-5 py-3 text-right font-semibold">Action</th>
+                <th className="px-3 py-3 text-right font-semibold">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E5E7EB]">
@@ -400,7 +387,7 @@ return (
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-5 py-10 text-center text-[#4B5563]"
+                    className="px-5 py-10 text-center text-[#2B3642]/50"
                   >
                     No terminated cases found.
                   </td>
@@ -411,28 +398,28 @@ return (
                     key={record.case_id}
                     className="odd:bg-white even:bg-[#F9FAFB] hover:bg-[#F3F7FB]"
                   >
-                    <td className="px-5 py-4 font-medium text-[#2B3642]">
+                    <td className="px-3 py-4 font-medium text-[#2B3642]">
                       {clientById.get(record.client_id)?.client.name ??
                         "Unknown client"}
                     </td>
-                    <td className="px-5 py-4 text-[#4B5563]">
+                    <td className="px-3 py-4 text-[#4B5563]">
                       {record.cases.title_of_case || "-"}
                     </td>
-                    <td className="px-5 py-4 text-[#4B5563]">
+                    <td className="px-3 py-4 text-[#4B5563]">
                       {record.cases.termination_reason || "-"}
                     </td>
-                    <td className="px-5 py-4 text-[#4B5563]">
+                    <td className="px-3 py-4 text-[#4B5563]">
                       {formatDate(record.cases.terminated_at)}
                     </td>
-                    <td className="px-5 py-4 text-[#4B5563]">
+                    <td className="px-3 py-4 text-[#4B5563]">
                       {record.cases.handled_by || "-"}
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-3 py-4">
                       <span className="rounded-full bg-[#FEE2E2] px-2.5 py-1 text-xs font-semibold text-[#991B1B]">
                         {record.cases.status_of_case}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-right">
+                    <td className="px-3 py-4 text-right">
                       <button
                         type="button"
                         onClick={() => setSelectedRecord(record)}
@@ -449,7 +436,7 @@ return (
         </div>
 
         {/* Pagination remains fixed at the bottom of the section */}
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#E5E7EB] px-5 py-3">
+        <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#E5E7EB] px-1 pt-3">
           <p className="text-sm text-[#4B5563]">
             Page {page} of {totalPages} - {filteredRows.length} records
           </p>
@@ -481,7 +468,7 @@ return (
       {selectedRecord && (
         <ModalPortal>
         <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+          <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
               <h2 className="text-base font-bold text-[#2B3642]">
                 Terminated Case Details

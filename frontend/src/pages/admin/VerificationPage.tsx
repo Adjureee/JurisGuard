@@ -232,47 +232,48 @@ export default function VerificationPage() {
 
   return (
     <MainLayout>
-      <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-3 overflow-hidden">
+      <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-4 overflow-hidden">
         <div className="shrink-0">
           <PageHeader
             eyebrow="Application Review"
             title="User Verification"
             description="Review registration requests, validate uploaded identification, and manage account approval decisions."
             compact
-            actions={
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                <select
-                  value={filter}
-                  onChange={(event) =>
-                    setFilter(event.target.value as ApprovalStatus | "all")
-                  }
-                  className="h-9 rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-                >
-                  <option value="all">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="under_review">Under Review</option>
-                  <option value="suspended">Suspended</option>
-                </select>
-                <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
-                <span className="inline-flex h-9 items-center rounded-full bg-[#704389] px-3 text-xs font-semibold text-white">
-                  {requestCount}
-                </span>
-              </div>
-            }
           />
         </div>
 
-      <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
-        <div className="shrink-0 border-b border-[#E5E7EB] bg-white px-4 py-2">
-          <h2 className="text-base font-semibold text-[#2B3642]">
-            Account Requests
-          </h2>
+      <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#CBD5E1] bg-white p-4 shadow-sm">
+        <div className="mb-3 grid shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[170px_190px_auto] xl:items-end">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+              Status
+            </span>
+            <select
+              value={filter}
+              onChange={(event) =>
+                setFilter(event.target.value as ApprovalStatus | "all")
+              }
+              className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="under_review">Under Review</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </label>
+          <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
+          <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-[#F8FAFC] px-3">
+            <span className="font-semibold text-[#4B5563]">Total:</span>
+            <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
+              {requestCount}
+            </span>
+          </div>
         </div>
 
         {error && (
-          <div className="mx-5 mt-4 shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="mb-3 shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
           </div>
         )}
@@ -354,17 +355,17 @@ export default function VerificationPage() {
           )}
         </div>
 
-        <div className="hidden min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto md:block">
+        <div className="relative hidden min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto rounded-lg border border-[#CBD5E1] md:block">
           <table className="w-full min-w-[760px] text-sm">
-            <thead className="sticky top-0 z-10 border-b border-[#D6DEE7] bg-[#E9EEF3] text-xs uppercase tracking-wide text-[#2B3642]">
+            <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
               <tr>
-                <th className="px-5 py-3 text-left font-semibold">Applicant</th>
-                <th className="px-5 py-3 text-left font-semibold">Role</th>
-                <th className="px-5 py-3 text-left font-semibold">
+                <th className="px-3 py-3 text-left font-semibold">Applicant</th>
+                <th className="px-3 py-3 text-left font-semibold">Role</th>
+                <th className="px-3 py-3 text-left font-semibold">
                   Date Requested
                 </th>
-                <th className="px-5 py-3 text-left font-semibold">Status</th>
-                <th className="px-5 py-3 text-right font-semibold">Actions</th>
+                <th className="px-3 py-3 text-left font-semibold">Status</th>
+                <th className="px-3 py-3 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E5E7EB]">
@@ -372,7 +373,7 @@ export default function VerificationPage() {
                 <tr>
                   <td
                     colSpan={5}
-                    className="px-5 py-10 text-center text-[#4B5563]"
+                    className="px-5 py-10 text-center text-[#2B3642]/50"
                   >
                     Loading applications...
                   </td>
@@ -381,7 +382,7 @@ export default function VerificationPage() {
                 <tr>
                   <td
                     colSpan={5}
-                    className="px-5 py-10 text-center text-[#4B5563]"
+                    className="px-5 py-10 text-center text-[#2B3642]/50"
                   >
                     No applications found.
                   </td>
@@ -392,7 +393,7 @@ export default function VerificationPage() {
                     key={user.user_id}
                     className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]"
                   >
-                    <td className="px-5 py-4">
+                    <td className="px-3 py-4">
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#704389] text-sm font-semibold text-white">
                           {initials(user.full_name, user.email)}
@@ -407,20 +408,20 @@ export default function VerificationPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 capitalize text-[#2B3642]">
+                    <td className="px-3 py-4 capitalize text-[#2B3642]">
                       {user.role}
                     </td>
-                    <td className="px-5 py-4 text-[#2B3642]">
+                    <td className="px-3 py-4 text-[#2B3642]">
                       {formatDate(user.created_at)}
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-3 py-4">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClass[user.approval_status]}`}
                       >
                         {statusLabel[user.approval_status]}
                       </span>
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-3 py-4">
                       <div className="flex flex-wrap justify-end gap-2">
                         <button
                           type="button"
@@ -469,7 +470,7 @@ export default function VerificationPage() {
       {selectedUser && (
         <ModalPortal>
         <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+          <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">

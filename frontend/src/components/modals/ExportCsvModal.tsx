@@ -6,9 +6,7 @@ import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
 import { createAuditLog } from "../../services/auditService";
 import {
-  buildCriminalCasesCsv,
   buildCriminalCasesExcelHtml,
-  downloadCsv,
   filterCriminalCaseRows,
   type CriminalCaseExportFilterDto,
   type CriminalCaseRow,
@@ -27,12 +25,10 @@ const initialFilters: CriminalCaseExportFilterDto = {
   location_type: "All",
   barangay: "All",
   case_category: "All",
-  staff: "All",
+  gender: "All",
   ocr_status: "All",
   termination_status: "All",
 };
-
-type ExportType = "csv" | "excel";
 
 function uniqueValues(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
@@ -53,13 +49,11 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
   const addLog = useAuditLogStore((state) => state.addLog);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const [filters, setFilters] = useState<CriminalCaseExportFilterDto>(initialFilters);
-  const [exportType, setExportType] = useState<ExportType>("csv");
   const exportRows = useMemo(() => filterCriminalCaseRows(rows, filters), [filters, rows]);
   const options = useMemo(
     () => ({
       barangays: uniqueValues(rows.map(({ record }) => record.cases.incident_barangay ?? "")),
       categories: uniqueValues(rows.map(({ record }) => record.cases.cause_of_action || record.intake_record.nature_of_case)),
-      staff: uniqueValues(rows.map(({ record }) => record.created_by_user_id === null ? "Unassigned" : `User #${record.created_by_user_id}`)),
     }),
     [rows]
   );
@@ -78,8 +72,8 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
     const toastId = toast.loading("Preparing report export...");
     try {
       const stamp = new Date().toISOString().slice(0, 10);
-      const action = exportType === "csv" ? "Export CSV" : "Export Excel";
-      const description = `${user?.full_name || user?.email || "User"} exported ${exportRows.length} criminal case record${exportRows.length === 1 ? "" : "s"} as ${exportType.toUpperCase()}`;
+      const action = "Export Excel";
+      const description = `${user?.full_name || user?.email || "User"} exported ${exportRows.length} criminal case record${exportRows.length === 1 ? "" : "s"} as EXCEL`;
       const entityId = new Date().toISOString();
       await createAuditLog({
         action,
@@ -88,12 +82,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
         entity_type: "criminal_case_export",
         entity_id: entityId,
       });
-      if (exportType === "csv") {
-        const csv = buildCriminalCasesCsv(rows, filters);
-        downloadCsv(`jurisguard-criminal-cases_${stamp}.csv`, csv);
-      } else {
-        downloadText(`jurisguard-criminal-cases_${stamp}.xls`, buildCriminalCasesExcelHtml(rows, filters), "application/vnd.ms-excel;charset=utf-8");
-      }
+      downloadText(`jurisguard-criminal-cases_${stamp}.xls`, buildCriminalCasesExcelHtml(rows, filters), "application/vnd.ms-excel;charset=utf-8");
       addLog({
         userId: user?.user_id,
         user: user?.full_name || user?.email,
@@ -107,7 +96,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
         type: "export_completed",
         userId: user?.user_id,
         title: "Report Export",
-        message: `${exportType.toUpperCase()} exported`,
+        message: "EXCEL exported",
         redirectTo: "/criminal-cases",
         entityType: "criminal_case_export",
         entityId,
@@ -122,12 +111,12 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface w-full max-w-3xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+      <div className="jurisguard-modal-surface w-full max-w-3xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
         <div className="flex items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div>
             <h2 className="text-lg font-bold text-[#2B3642]">Advanced Criminal Cases Export</h2>
             <p className="mt-1 text-sm text-[#4B5563]">
-              Filter legal records and export to CSV or Excel.
+              Filter legal records and export to Excel.
             </p>
           </div>
           <button
@@ -140,23 +129,6 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
         </div>
 
         <div className="space-y-4 bg-white px-6 py-5">
-          <div className="grid gap-3 rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] p-3 sm:grid-cols-2">
-            {(["csv", "excel"] as ExportType[]).map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setExportType(type)}
-                className={`rounded-lg border px-3 py-2 text-sm font-semibold uppercase ${
-                  exportType === type
-                    ? "border-[#704389] bg-[#704389] text-white"
-                    : "border-[#D1D5DB] bg-white text-[#2B3642] hover:bg-[#F3F7FB]"
-                }`}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-
           <label className="block">
             <span className="text-sm font-medium text-[#2B3642]">Case Status</span>
             <select
@@ -223,10 +195,11 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
               </select>
             </label>
             <label className="block">
-              <span className="text-sm font-medium text-[#2B3642]">Staff</span>
-              <select value={filters.staff} onChange={(event) => updateFilter("staff", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
+              <span className="text-sm font-medium text-[#2B3642]">Gender</span>
+              <select value={filters.gender} onChange={(event) => updateFilter("gender", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
                 <option>All</option>
-                {options.staff.map((option) => <option key={option}>{option}</option>)}
+                <option>Male</option>
+                <option>Female</option>
               </select>
             </label>
             <label className="block">
@@ -257,7 +230,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
             onClick={handleExport}
             className="rounded-lg bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
           >
-            Export {exportType.toUpperCase()}
+            Export Excel
           </button>
         </div>
       </div>
