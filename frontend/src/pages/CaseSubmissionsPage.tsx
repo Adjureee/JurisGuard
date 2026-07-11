@@ -25,9 +25,7 @@ import {
   type SubmissionSnapshot,
 } from "../services/caseSubmissionService";
 import {
-  buildCriminalCasesCsv,
   buildCriminalCasesExcelHtml,
-  downloadCsv,
   type CriminalCaseRow,
 } from "../services/exportService";
 import {
@@ -405,7 +403,7 @@ export default function CaseSubmissionsPage() {
     await openSubmission(updated);
   };
 
-  const exportSubmission = async (type: "csv" | "excel") => {
+  const exportSubmission = async () => {
     if (!selected || selected.status === "Draft") return;
     const rows = snapshotRows(selected.items.map((item) => item.snapshot));
     const filters = {
@@ -421,20 +419,13 @@ export default function CaseSubmissionsPage() {
       termination_status: "All",
     };
     const stamp = new Date().toISOString().slice(0, 10);
-    if (type === "csv") {
-      downloadCsv(
-        `report-submission-${selected.submission_id}_${stamp}.csv`,
-        buildCriminalCasesCsv(rows, filters),
-      );
-    } else {
-      downloadText(
-        `report-submission-${selected.submission_id}_${stamp}.xls`,
-        buildCriminalCasesExcelHtml(rows, filters),
-        "application/vnd.ms-excel;charset=utf-8",
-      );
-    }
+    downloadText(
+      `report-submission-${selected.submission_id}_${stamp}.xls`,
+      buildCriminalCasesExcelHtml(rows, filters),
+      "application/vnd.ms-excel;charset=utf-8",
+    );
     await createAuditLog({
-      action: type === "csv" ? "Export CSV" : "Export Excel",
+      action: "Export Excel",
       module: "Export",
       description: `${user?.full_name || user?.email} exported report submission ${selected.title} version ${selected.version}`,
       entity_type: "case_submission",
@@ -445,11 +436,11 @@ export default function CaseSubmissionsPage() {
       user: user?.full_name || user?.email,
       action: "Version Exported",
       module: "Export",
-      description: `Exported ${selected.title} version ${selected.version} as ${type.toUpperCase()}`,
+      description: `Exported ${selected.title} version ${selected.version} as EXCEL`,
       entityType: "case_submission",
       entityId: selected.submission_id,
     });
-    toast.success(`${type.toUpperCase()} exported`);
+    toast.success("EXCEL exported");
   };
 
   return (
@@ -549,7 +540,7 @@ export default function CaseSubmissionsPage() {
 
       {reportModalOpen && (
         <ModalPortal>
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#EEF2F6]/90 px-4 py-6 backdrop-blur-sm">
             <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
               <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
                 <div className="min-w-0">
@@ -836,16 +827,7 @@ export default function CaseSubmissionsPage() {
                 {isAdmin && selectedStatus !== "Draft" && (
                   <button
                     type="button"
-                    onClick={() => void exportSubmission("csv")}
-                    className="rounded-lg border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] hover:bg-[#F7F0FA]"
-                  >
-                    Export CSV
-                  </button>
-                )}
-                {isAdmin && selectedStatus !== "Draft" && (
-                  <button
-                    type="button"
-                    onClick={() => void exportSubmission("excel")}
+                    onClick={() => void exportSubmission()}
                     className="rounded-lg bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675]"
                   >
                     Export Excel

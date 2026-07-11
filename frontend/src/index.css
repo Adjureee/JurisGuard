@@ -5,12 +5,12 @@
 html, body, #root {
   height: 100%;
   margin: 0;
-  padding: 0;
+  padding: 0px;
 }
 
 body {
-  background: #F9FAFB;
-  color: #2B3642;
+  background: #EEF2F6;
+  color: #707070;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -41,6 +41,9 @@ textarea {
 
 .jurisguard-modal-overlay {
   align-items: center;
+  background-color: rgba(238, 242, 246, 0.9);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   display: grid;
   inset: 0;
   justify-items: center;

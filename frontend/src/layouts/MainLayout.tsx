@@ -11,7 +11,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="h-screen overflow-hidden bg-[#F9FAFB] text-[#2B3642] md:flex">
+    <div className="h-screen overflow-hidden bg-[#EEF2F6] text-[#2B3642] md:flex">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       <div className="flex h-screen min-w-0 flex-1 flex-col md:pl-60">
         <Topbar onToggleSidebar={() => setIsSidebarOpen((current) => !current)} />

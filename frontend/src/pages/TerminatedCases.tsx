@@ -87,10 +87,10 @@ function SortHeader({
     <button
       type="button"
       onClick={() => onSort(column)}
-      className="inline-flex items-center gap-1 font-semibold text-[#4B5563] hover:text-[#2B3642]"
+      className="inline-flex items-center gap-1 font-semibold leading-none text-[#4B5563] hover:text-[#2B3642]"
     >
       {label}
-      <span className="text-[10px]">
+      <span className="text-[10px] leading-none">
         {sortBy === column ? (sortDirection === "asc" ? "UP" : "DOWN") : ""}
       </span>
     </button>
@@ -104,12 +104,10 @@ export default function TerminatedCasesPage() {
   const [search, setSearch] = useState("");
   const [resolutionFilter, setResolutionFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
-  const [page, setPage] = useState(1);
   const [selectedRecord, setSelectedRecord] =
     useState<CriminalCaseRecord | null>(null);
   const [sortBy, setSortBy] = useState<TerminatedSortColumn>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const pageSize = 8;
 
   useEffect(() => {
     let cancelled = false;
@@ -224,9 +222,6 @@ export default function TerminatedCasesPage() {
     sortBy,
     sortDirection,
   ]);
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
-
   const exportRows = useMemo<CriminalCaseRow[]>(
     () =>
       filteredRows.map((record) => {
@@ -277,10 +272,7 @@ return (
             <input
               type="text"
               value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="Search terminated cases..."
               className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] px-3 text-sm outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             />
@@ -291,10 +283,7 @@ return (
             </span>
             <select
               value={resolutionFilter}
-              onChange={(event) => {
-                setResolutionFilter(event.target.value);
-                setPage(1);
-              }}
+              onChange={(event) => setResolutionFilter(event.target.value)}
               className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             >
               <option value="all">All resolutions</option>
@@ -305,10 +294,7 @@ return (
           </label>
           <DateFilterSelect
             value={dateFilter}
-            onChange={(value) => {
-              setDateFilter(value);
-              setPage(1);
-            }}
+            onChange={setDateFilter}
           />
           <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-[#F8FAFC] px-3">
             <span className="font-semibold text-[#4B5563]">Total:</span>
@@ -383,7 +369,7 @@ return (
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E5E7EB]">
-              {pageRows.length === 0 ? (
+              {filteredRows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
@@ -393,7 +379,7 @@ return (
                   </td>
                 </tr>
               ) : (
-                pageRows.map((record) => (
+                filteredRows.map((record) => (
                   <tr
                     key={record.case_id}
                     className="odd:bg-white even:bg-[#F9FAFB] hover:bg-[#F3F7FB]"
@@ -435,32 +421,6 @@ return (
           </table>
         </div>
 
-        {/* Pagination remains fixed at the bottom of the section */}
-        <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#E5E7EB] px-1 pt-3">
-          <p className="text-sm text-[#4B5563]">
-            Page {page} of {totalPages} - {filteredRows.length} records
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-              disabled={page === 1}
-              className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-sm font-medium text-[#4B5563] disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setPage((current) => Math.min(totalPages, current + 1))
-              }
-              disabled={page === totalPages}
-              className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-sm font-medium text-[#4B5563] disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
       </section>
       </div>
 
