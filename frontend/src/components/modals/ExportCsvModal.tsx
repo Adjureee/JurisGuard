@@ -137,11 +137,8 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
               className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             >
               <option>All</option>
-              <option>Active</option>
               <option>Pending</option>
-              <option>Ongoing</option>
               <option>Terminated</option>
-              <option>Archived</option>
             </select>
           </label>
 
@@ -206,7 +203,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
               <span className="text-sm font-medium text-[#2B3642]">Termination Status</span>
               <select value={filters.termination_status} onChange={(event) => updateFilter("termination_status", event.target.value)} className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20">
                 <option>All</option>
-                <option>Active</option>
+                <option>Pending</option>
                 <option>Terminated</option>
               </select>
             </label>

@@ -84,6 +84,28 @@ export async function updateCaseRecord(
   }
 }
 
+export interface AttachCaseClientPayload {
+  client_id: string;
+  applicant_role?: string;
+  applicant_role_other?: string;
+  party_represented?: string;
+}
+
+export async function attachClientToCase(
+  caseId: string,
+  values: AttachCaseClientPayload
+): Promise<CriminalCaseRecord> {
+  try {
+    const response = await apiClient.post<CriminalCaseRecord>(
+      `/cases/${caseId}/clients`,
+      values
+    );
+    return response.data;
+  } catch (error) {
+    throw new Error(getRecordErrorMessage(error, "Unable to attach client to case"));
+  }
+}
+
 export interface TerminationPayload {
   termination_reason: string;
   resolution_type: string;

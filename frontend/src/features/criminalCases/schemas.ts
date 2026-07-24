@@ -80,9 +80,9 @@ export const caseFormSchema = z
     intake_record: z.object({
       control_no: requiredText("Control number"),
       form_date: requiredText("Form date"),
-      region: requiredText("Region"),
+      region: optionalText,
       district_office: requiredText("District office"),
-      party_represented: requiredText("Party represented"),
+      party_represented: optionalText,
       applicant_role: requiredText("Applicant case involvement"),
       applicant_role_other: optionalText,
       nature_of_request: requiredText("Nature of request"),
@@ -92,9 +92,14 @@ export const caseFormSchema = z
       coi_waive_right_to_complain: z.boolean(),
       coi_trust_assigned_counsel: z.boolean(),
       proof_submission_deadline: optionalText,
+      proof_submission_satisfied: z.boolean().optional(),
+      proof_itr_satisfied: z.boolean().optional(),
       proof_itr_date: optionalText,
+      proof_brgy_satisfied: z.boolean().optional(),
       proof_brgy_date: optionalText,
+      proof_dswd_satisfied: z.boolean().optional(),
       proof_dswd_date: optionalText,
+      proof_others_satisfied: z.boolean().optional(),
       proof_others_details: optionalText,
       proof_others_date: optionalText,
       inv_plaintiff: z.boolean(),
@@ -107,30 +112,24 @@ export const caseFormSchema = z
       inv_others: optionalText,
     }),
     representative: z.object({
-      rep_name: requiredText("Representative name"),
-      rep_age: z.number().int().min(0, "Age must be 0 or higher"),
-      rep_sex: requiredText("Representative sex"),
-      civil_status: requiredText("Civil status"),
-      rep_address: requiredText("Representative address"),
-      rep_contact_no: requiredText("Representative contact number"),
-      relationship_to_applicant: requiredText("Relationship to applicant"),
+      rep_name: optionalText,
+      rep_age: optionalNumber("Representative age"),
+      rep_sex: optionalText,
+      civil_status: optionalText,
+      rep_address: optionalText,
+      rep_contact_no: optionalText,
+      relationship_to_applicant: optionalText,
     }),
     adverse_party: z.object({
-      role: requiredText("Adverse party role"),
-      name: requiredText("Adverse party name"),
-      address: requiredText("Adverse party address"),
+      role: optionalText,
+      name: optionalText,
+      address: optionalText,
     }),
     cases: z.object({
       title_of_case: optionalText,
-      case_no: optionalText,
-      court_body: optionalText,
-      status_of_case: z.enum([
-        "Pending",
-        "Ongoing",
-        "Active",
-        "Terminated",
-        "Archived",
-      ]),
+      case_no: requiredText("Case number"),
+      court_body: requiredText("Court / body"),
+      status_of_case: z.enum(["Pending", "Terminated"]),
       case_status: optionalText,
       incident_barangay: optionalText,
       incident_city: optionalText,
@@ -138,6 +137,7 @@ export const caseFormSchema = z
       latitude: optionalText,
       longitude: optionalText,
       last_action_taken: requiredText("Last action taken"),
+      detained: z.boolean().optional(),
       date_of_confinement: optionalText,
       place_of_detention: optionalText,
       location_type: z.enum(["Urban", "Rural", ""]),
@@ -163,26 +163,41 @@ export const caseFormSchema = z
         message: "Specify role is required",
       });
     }
-    if (data.cases.pending_in_court) {
-      if (!data.cases.title_of_case.trim()) {
+    const representativeNotApplicable =
+      data.representative.civil_status.trim().toLowerCase() === "none";
+    if (!representativeNotApplicable) {
+      (
+        [
+          ["rep_name", "Representative name is required"],
+          ["rep_sex", "Representative sex is required"],
+          ["civil_status", "Civil status is required"],
+          ["rep_address", "Representative address is required"],
+          ["rep_contact_no", "Representative contact number is required"],
+          ["relationship_to_applicant", "Relationship to applicant is required"],
+        ] as const
+      ).forEach(([field, message]) => {
+        if (!data.representative[field].trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["representative", field],
+            message,
+          });
+        }
+      });
+    }
+    if (data.cases.detained) {
+      if (!data.cases.date_of_confinement.trim()) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["cases", "title_of_case"],
-          message: "Title of case is required",
+          path: ["cases", "date_of_confinement"],
+          message: "Date of detention is required",
         });
       }
-      if (!data.cases.case_no.trim()) {
+      if (!data.cases.place_of_detention.trim()) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["cases", "case_no"],
-          message: "Docket number is required",
-        });
-      }
-      if (!data.cases.court_body.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["cases", "court_body"],
-          message: "Court / body / tribunal is required",
+          path: ["cases", "place_of_detention"],
+          message: "Place of detention is required",
         });
       }
     }

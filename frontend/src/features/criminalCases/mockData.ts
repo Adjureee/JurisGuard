@@ -175,7 +175,7 @@ export const mockCases: CriminalCaseRecord[] = [
       title_of_case: "People v. Santos",
       case_no: "RTC-25-1938",
       court_body: "Regional Trial Court Branch 17",
-      status_of_case: "Ongoing",
+      status_of_case: "Pending",
       last_action_taken: "Arraignment completed; pre-trial scheduled.",
       date_of_confinement: "",
       place_of_detention: "",

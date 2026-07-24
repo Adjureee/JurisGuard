@@ -131,7 +131,7 @@ export default function StaffAnalyticsPage() {
       barangay: record.cases.incident_barangay ?? "",
       staff: "Me",
       ocr_status: "",
-      termination_status: record.cases.is_terminated ? "Terminated" : "Active",
+      termination_status: record.cases.is_terminated ? "Terminated" : "Pending",
       control_no: record.intake_record.control_no,
       case_title: record.cases.title_of_case,
       value: 1,

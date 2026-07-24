@@ -17,6 +17,7 @@ import {
   type CriminalCaseRow,
 } from "../services/exportService";
 import {
+  attachClientToCase,
   listCaseRecords,
   listClientRecords,
   terminateCaseRecord,
@@ -36,10 +37,7 @@ import {
 
 const accordionBorderClass: Record<CaseStatus, string> = {
   Pending: "border-amber-200",
-  Ongoing: "border-emerald-200",
-  Active: "border-emerald-200",
   Terminated: "border-red-200",
-  Archived: "border-gray-300",
 };
 
 const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
@@ -50,11 +48,7 @@ const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
   { value: "female", label: "Female" },
 ];
 
-type CriminalStatusFilter =
-  | "all"
-  | "Pending"
-  | "Active"
-  | "Ongoing";
+type CriminalStatusFilter = "all" | CaseStatus;
 
 const statusFilterOptions: Array<{
   value: CriminalStatusFilter;
@@ -62,45 +56,57 @@ const statusFilterOptions: Array<{
 }> = [
   { value: "all", label: "All Cases" },
   { value: "Pending", label: "Pending" },
-  { value: "Active", label: "Active" },
-  { value: "Ongoing", label: "Ongoing" },
+  { value: "Terminated", label: "Terminated" },
 ];
 
-const panaboBarangays = [
+const religionOptions = [
+  "Roman Catholic",
+  "Christian",
+  "Iglesia ni Cristo",
+  "Islam",
+  "Buddhist",
+  "Indigenous Belief",
+  "None",
+];
+
+const urbanBarangays = [
+  "Cagangohan",
+  "Datu Abdul Dadia",
+  "Gredu (Poblacion)",
+  "J.P. Laurel",
+  "New Pandan (Poblacion)",
+  "New Visayas",
+  "Quezon",
+  "San Francisco (Poblacion)",
+  "San Vicente",
+  "Salvacion",
+  "Santo Nino (Poblacion)",
+];
+
+const ruralBarangays = [
   "A. O. Floirendo",
   "Buenavista",
   "Cacao",
-  "Cagangohan",
   "Consolacion",
   "Dapco",
-  "Datu Abdul Dadia",
-  "Gredu",
-  "J. P. Laurel",
   "Kasilak",
   "Katipunan",
   "Katualan",
   "Kauswagan",
   "Kiotoy",
   "Little Panay",
-  "Lower Panaga",
+  "Lower Panaga (Roxas)",
   "Mabunao",
   "Maduao",
   "Malativas",
   "Manay",
   "Nanyo",
-  "New Malaga",
+  "New Malaga (Dalisay)",
   "New Malitbog",
-  "New Pandan",
-  "New Visayas",
-  "Quezon",
-  "Salvacion",
-  "San Francisco",
   "San Nicolas",
   "San Pedro",
   "San Roque",
-  "San Vicente",
   "Santa Cruz",
-  "Santo Nino",
   "Sindaton",
   "Southern Davao",
   "Tagpore",
@@ -108,6 +114,76 @@ const panaboBarangays = [
   "Upper Licanan",
   "Waterfall",
 ];
+
+const panaboBarangays = [...urbanBarangays, ...ruralBarangays];
+
+const courtBodyOptions = [
+  "RTC Branch 4",
+  "RTC Branch 34",
+  "Family Court - Panabo District",
+  "MTCC - Panabo District",
+];
+
+const natureOfRequestOptions = [
+  "Legal Advice",
+  "Inquest/Legal Assistance",
+  "Legal Documentation",
+  "Mediation/Conciliation",
+  "Representation in Court/Quasi-Judicial Bodies",
+  "Administration of Oath",
+  "Others",
+];
+
+const natureOfCaseOptions = [
+  "Criminal",
+  "Administrative",
+  "Civil",
+  "Labor",
+  "Appeal",
+];
+
+const applicantRoleOptions = [
+  "Plaintiff",
+  "Defendant",
+  "Oppositor",
+  "Petitioner",
+  "Respondent",
+  "Complainant",
+  "Accused",
+  "Others",
+];
+
+const civilStatusOptions = [
+  "Single",
+  "Married",
+  "Widowed",
+  "Separated",
+  "Divorced",
+  "None",
+];
+
+const classificationOptions = [
+  ["flag_senior", "Senior Citizen"],
+  ["flag_cicl", "Child in Conflict with the Law"],
+  ["flag_female", "Female"],
+  ["flag_urban", "Urban"],
+  ["flag_rural", "Rural"],
+  ["flag_drugs", "Drug-related"],
+  ["flag_foreign_national", "Foreign National"],
+  ["flag_vawc_victim", "VAWC Victim"],
+  ["flag_refugee_evacuee", "Refugee / Evacuee"],
+  ["flag_law_enforcer", "Law Enforcer"],
+  ["flag_tenant_agrarian", "Tenant in Agrarian Case"],
+  ["flag_ofw_land_based", "OFW Land-Based"],
+  ["flag_ofw_sea_based", "OFW Sea-Based"],
+  ["flag_arrested_terrorism", "Arrested for Terrorism"],
+  ["flag_indigenous_people", "Indigenous People"],
+  ["flag_pwd", "PWD"],
+  ["flag_former_rebel_fve", "Former Rebel / FVE"],
+  ["flag_torture_victim", "Victim of Torture"],
+  ["flag_trafficking_victim", "Victim of Trafficking"],
+  ["flag_voluntary_rehab_petitioner", "Petitioner for Voluntary Rehab"],
+] as const;
 
 function PlusIcon() {
   return (
@@ -185,6 +261,12 @@ function toCaseFormValues(record: CriminalCaseRecord): CaseFormValues {
       incident_address: record.cases.incident_address ?? "",
       latitude: record.cases.latitude ?? "",
       longitude: record.cases.longitude ?? "",
+      detained: Boolean(record.cases.detained),
+      date_of_confinement: record.cases.date_of_confinement ?? "",
+      place_of_detention: record.cases.place_of_detention ?? "",
+      location_type: record.cases.location_type ?? "",
+      cause_of_action: record.cases.cause_of_action ?? "",
+      facts_of_case: record.cases.facts_of_case ?? "",
       assigned_pao: record.cases.assigned_pao ?? "",
       filing_date: record.cases.filing_date ?? "",
       hearing_schedule: record.cases.hearing_schedule ?? "",
@@ -193,16 +275,51 @@ function toCaseFormValues(record: CriminalCaseRecord): CaseFormValues {
   };
 }
 
+function caseParticipants(record: CriminalCaseRecord, fallbackClient?: ClientRecord) {
+  if (record.participants?.length) return record.participants;
+  return fallbackClient
+    ? [
+        {
+          case_client_id: "",
+          client_id: fallbackClient.client_id,
+          name: fallbackClient.client.name,
+          sex: fallbackClient.client.sex,
+          age: fallbackClient.client.age,
+          party_represented: record.intake_record.party_represented,
+          applicant_role: record.intake_record.applicant_role,
+          applicant_role_other: record.intake_record.applicant_role_other,
+          address: fallbackClient.client_details.address,
+          contact_no: fallbackClient.client_details.contact_no,
+          classification: fallbackClient.client_classification,
+        },
+      ]
+    : [];
+}
+
+function participantNames(record: CriminalCaseRecord, fallbackClient?: ClientRecord) {
+  return caseParticipants(record, fallbackClient)
+    .map((participant) => participant.name)
+    .filter(Boolean);
+}
+
+function participantSexes(record: CriminalCaseRecord, fallbackClient?: ClientRecord) {
+  return caseParticipants(record, fallbackClient)
+    .map((participant) => participant.sex)
+    .filter(Boolean);
+}
+
 function TextField({
   label,
   value,
   onChange,
   type = "text",
+  list,
 }: {
   label: string;
   value: string | number;
   onChange: (value: string) => void;
   type?: string;
+  list?: string;
 }) {
   return (
     <label className="block">
@@ -211,6 +328,7 @@ function TextField({
       </span>
       <input
         type={type}
+        list={list}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
@@ -323,12 +441,29 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
 
           <section>
             <h4 className="text-sm font-semibold text-[#2B3642]">
-              Adverse Party
+              Participants
             </h4>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <InfoTile label="Role" value={record.adverse_party.role} />
-              <InfoTile label="Name" value={record.adverse_party.name} />
-              <InfoTile label="Address" value={record.adverse_party.address} />
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {(record.participants ?? []).map((participant) => (
+                <div
+                  key={participant.case_client_id || participant.client_id}
+                  className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] p-3"
+                >
+                  <p className="text-sm font-semibold text-[#2B3642]">
+                    {participant.name}
+                  </p>
+                  <p className="mt-1 text-xs text-[#4B5563]">
+                    {participant.sex || "Sex not set"} -{" "}
+                    {participant.party_represented || "Role not set"}
+                  </p>
+                </div>
+              ))}
+              {(record.participants ?? []).length === 0 && (
+                <InfoTile
+                  label="Party Represented"
+                  value={record.intake_record.party_represented}
+                />
+              )}
             </div>
           </section>
 
@@ -435,6 +570,18 @@ function UpdateClientInfoModal({
       },
     }));
   };
+  const updateClassification = (
+    field: keyof ClientFormValues["client_classification"],
+    value: boolean | string,
+  ) => {
+    setValues((current) => ({
+      ...current,
+      client_classification: {
+        ...current.client_classification,
+        [field]: value,
+      },
+    }));
+  };
 
   const submit = async () => {
     setSaving(true);
@@ -492,6 +639,17 @@ function UpdateClientInfoModal({
               onChange={(value) => updateClient("civil_status", value)}
             />
             <TextField
+              label="Religion"
+              value={values.client.religion}
+              onChange={(value) => updateClient("religion", value)}
+              list="client-update-religion-options"
+            />
+            <datalist id="client-update-religion-options">
+              {religionOptions.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+            <TextField
               label="Contact"
               value={values.client_details.contact_no}
               onChange={(value) => updateDetails("contact_no", value)}
@@ -509,17 +667,34 @@ function UpdateClientInfoModal({
               />
             </div>
             <div className="md:col-span-2">
+              <h4 className="mb-3 text-sm font-semibold text-[#2B3642]">
+                Applicant's Classification
+              </h4>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {classificationOptions.map(([name, label]) => (
+                  <label
+                    key={name}
+                    className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={Boolean(values.client_classification[name])}
+                      onChange={(event) =>
+                        updateClassification(name, event.target.checked)
+                      }
+                      className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="md:col-span-2">
               <TextAreaField
                 label="Notes"
                 value={values.client_classification.classification_notes}
                 onChange={(value) =>
-                  setValues((current) => ({
-                    ...current,
-                    client_classification: {
-                      ...current.client_classification,
-                      classification_notes: value,
-                    },
-                  }))
+                  updateClassification("classification_notes", value)
                 }
               />
             </div>
@@ -561,6 +736,19 @@ function UpdateCaseModal({
     toCaseFormValues(record),
   );
   const [saving, setSaving] = useState(false);
+  const filteredBarangays =
+    values.cases.location_type === "Urban"
+      ? urbanBarangays
+      : values.cases.location_type === "Rural"
+        ? ruralBarangays
+        : panaboBarangays;
+  const caseDetained = Boolean(values.cases.detained);
+  const natureOfRequestValue = values.intake_record.nature_of_request.startsWith("Others:")
+    ? "Others"
+    : values.intake_record.nature_of_request;
+  const natureOfRequestOther = values.intake_record.nature_of_request.startsWith("Others:")
+    ? values.intake_record.nature_of_request.replace(/^Others:\s*/, "")
+    : "";
   const updateCase = (
     field: keyof CaseFormValues["cases"],
     value: string | boolean,
@@ -573,7 +761,44 @@ function UpdateCaseModal({
       },
     }));
   };
-
+  const updateIntake = (
+    field: keyof CaseFormValues["intake_record"],
+    value: string | boolean,
+  ) => {
+    setValues((current) => ({
+      ...current,
+      intake_record: {
+        ...current.intake_record,
+        [field]: value,
+      },
+    }));
+  };
+  const updateRepresentative = (
+    field: keyof CaseFormValues["representative"],
+    value: string | number,
+  ) => {
+    setValues((current) => ({
+      ...current,
+      representative: {
+        ...current.representative,
+        [field]: value,
+      },
+    }));
+  };
+  const updateLocationType = (value: "Urban" | "Rural" | "") => {
+    const nextBarangays =
+      value === "Urban" ? urbanBarangays : value === "Rural" ? ruralBarangays : panaboBarangays;
+    setValues((current) => ({
+      ...current,
+      cases: {
+        ...current.cases,
+        location_type: value,
+        incident_barangay: nextBarangays.includes(current.cases.incident_barangay ?? "")
+          ? current.cases.incident_barangay
+          : "",
+      },
+    }));
+  };
   const submit = async () => {
     setSaving(true);
     try {
@@ -582,7 +807,11 @@ function UpdateCaseModal({
         cases: {
           ...values.cases,
           case_status: values.cases.status_of_case,
+          pending_in_court: values.cases.status_of_case === "Pending",
           incident_city: values.cases.incident_city || "Panabo City",
+          detained: caseDetained,
+          date_of_confinement: caseDetained ? values.cases.date_of_confinement : "",
+          place_of_detention: caseDetained ? values.cases.place_of_detention : "",
         },
       });
       onSaved(updated);
@@ -614,15 +843,25 @@ function UpdateCaseModal({
         <div className="max-h-[calc(90vh-140px)] overflow-y-auto p-5">
           <div className="grid gap-4 md:grid-cols-2">
             <TextField
-              label="Case Title"
-              value={values.cases.title_of_case}
-              onChange={(value) => updateCase("title_of_case", value)}
-            />
-            <TextField
               label="Case Number"
               value={values.cases.case_no}
               onChange={(value) => updateCase("case_no", value)}
             />
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+                Court / Body
+              </span>
+              <select
+                value={values.cases.court_body}
+                onChange={(event) => updateCase("court_body", event.target.value)}
+                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              >
+                <option value="">Select court/body</option>
+                {courtBodyOptions.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </select>
+            </label>
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
                 Case Status
@@ -635,11 +874,33 @@ function UpdateCaseModal({
                 className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               >
                 <option>Pending</option>
-                <option>Ongoing</option>
-                <option>Active</option>
-                <option>Archived</option>
+                <option>Terminated</option>
               </select>
             </label>
+            <label className="flex h-10 items-center gap-3 self-end rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 text-sm font-medium text-[#4B5563]">
+              <input
+                type="checkbox"
+                checked={caseDetained}
+                onChange={(event) => updateCase("detained", event.target.checked)}
+                className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+              />
+              Detained
+            </label>
+            {caseDetained && (
+              <>
+                <TextField
+                  label="Date of Detention"
+                  type="date"
+                  value={values.cases.date_of_confinement}
+                  onChange={(value) => updateCase("date_of_confinement", value)}
+                />
+                <TextField
+                  label="Place of Detention"
+                  value={values.cases.place_of_detention}
+                  onChange={(value) => updateCase("place_of_detention", value)}
+                />
+              </>
+            )}
             <TextField
               label="Assigned PAO"
               value={values.cases.assigned_pao ?? ""}
@@ -664,6 +925,22 @@ function UpdateCaseModal({
             />
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+                Location Type
+              </span>
+              <select
+                value={values.cases.location_type ?? ""}
+                onChange={(event) =>
+                  updateLocationType(event.target.value as "Urban" | "Rural" | "")
+                }
+                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              >
+                <option value="">Select</option>
+                <option>Urban</option>
+                <option>Rural</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
                 Barangay
               </span>
               <select
@@ -674,7 +951,7 @@ function UpdateCaseModal({
                 className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               >
                 <option value="">Select barangay</option>
-                {panaboBarangays.map((barangay) => (
+                {filteredBarangays.map((barangay) => (
                   <option key={barangay}>{barangay}</option>
                 ))}
               </select>
@@ -722,6 +999,13 @@ function UpdateCaseModal({
                 label="Facts of Case"
                 value={values.cases.facts_of_case}
                 onChange={(value) => updateCase("facts_of_case", value)}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <TextAreaField
+                label="Cause of Action"
+                value={values.cases.cause_of_action}
+                onChange={(value) => updateCase("cause_of_action", value)}
               />
             </div>
           </div>
@@ -891,28 +1175,161 @@ function TerminationModal({
   );
 }
 
+function AttachClientModal({
+  record,
+  clients,
+  onClose,
+  onAttached,
+  onCreateClient,
+}: {
+  record: CriminalCaseRecord;
+  clients: ClientRecord[];
+  onClose: () => void;
+  onAttached: (record: CriminalCaseRecord) => void;
+  onCreateClient: () => void;
+}) {
+  const attachedIds = new Set(record.participants?.map((participant) => participant.client_id) ?? [record.client_id]);
+  const availableClients = clients.filter((client) => !attachedIds.has(client.client_id));
+  const [clientId, setClientId] = useState(availableClients[0]?.client_id ?? "");
+  const [applicantRole, setApplicantRole] = useState("Accused");
+  const [applicantRoleOther, setApplicantRoleOther] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!clientId) {
+      toast.error("Select a client to attach");
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await attachClientToCase(record.case_id, {
+        client_id: clientId,
+        applicant_role: applicantRole,
+        applicant_role_other: applicantRole === "Others" ? applicantRoleOther : "",
+        party_represented: applicantRole === "Others" ? applicantRoleOther : applicantRole,
+      });
+      onAttached(updated);
+      toast.success("Client attached to case");
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to attach client");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalPortal>
+      <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
+        <div className="jurisguard-modal-surface w-full max-w-xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
+          <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+            <h3 className="text-base font-bold text-[#2B3642]">Attach Client / Party</h3>
+            <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]">
+              Close
+            </button>
+          </div>
+          <div className="space-y-4 p-5">
+            {availableClients.length === 0 ? (
+              <div className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] p-4 text-sm text-[#4B5563]">
+                No unattached clients are available.
+              </div>
+            ) : (
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+                  Existing Client
+                </span>
+                <select
+                  value={clientId}
+                  onChange={(event) => setClientId(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                >
+                  {availableClients.map((client) => (
+                    <option key={client.client_id} value={client.client_id}>
+                      {client.client.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+                Applicant Case Involvement
+              </span>
+              <select
+                value={applicantRole}
+                onChange={(event) => setApplicantRole(event.target.value)}
+                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              >
+                {["Plaintiff", "Defendant", "Oppositor", "Petitioner", "Respondent", "Complainant", "Accused", "Others"].map((role) => (
+                  <option key={role}>{role}</option>
+                ))}
+              </select>
+            </label>
+            {applicantRole === "Others" && (
+              <TextField
+                label="Specify Role"
+                value={applicantRoleOther}
+                onChange={setApplicantRoleOther}
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onCreateClient();
+              }}
+              className="rounded-md border border-[#15803D] bg-white px-3 py-2 text-sm font-semibold text-[#166534] hover:bg-[#ECFDF5]"
+            >
+              Create New Client First
+            </button>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+            <button type="button" onClick={onClose} className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={saving || !clientId}
+              className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:opacity-60"
+            >
+              {saving ? "Attaching..." : "Attach Client"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
 function ClientRecordModal({
   client,
   cases,
+  clients,
   mode,
   onClose,
   onClientUpdated,
   onCaseUpdated,
   onCaseTerminated,
+  onCreateClient,
 }: {
   client: ClientRecord | null;
   cases: CriminalCaseRecord[];
+  clients: ClientRecord[];
   mode: "view" | "update";
   onClose: () => void;
   onClientUpdated: (client: ClientRecord) => void;
   onCaseUpdated: (record: CriminalCaseRecord) => void;
   onCaseTerminated: (record: CriminalCaseRecord) => void;
+  onCreateClient: () => void;
 }) {
   const navigate = useNavigate();
   const [clientUpdateOpen, setClientUpdateOpen] = useState(false);
   const [caseUpdateRecord, setCaseUpdateRecord] =
     useState<CriminalCaseRecord | null>(null);
   const [terminationRecord, setTerminationRecord] =
+    useState<CriminalCaseRecord | null>(null);
+  const [attachRecord, setAttachRecord] =
     useState<CriminalCaseRecord | null>(null);
   if (!client) return null;
   const terminatedCount = cases.filter(
@@ -994,7 +1411,7 @@ function ClientRecordModal({
                       record.cases.status_of_case === "Terminated",
                   )
                     ? "Has terminated case"
-                    : "Active"
+                    : "Pending"
                 }
               />
               <InfoTile
@@ -1062,6 +1479,13 @@ function ClientRecordModal({
                             </button>
                             <button
                               type="button"
+                              onClick={() => setAttachRecord(record)}
+                              className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
+                            >
+                              Attach Client
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => setTerminationRecord(record)}
                               className="rounded-md border border-[#DC2626] bg-white px-3 py-1.5 text-xs font-semibold text-[#B91C1C] transition hover:bg-[#DC2626] hover:text-white"
                             >
@@ -1097,6 +1521,15 @@ function ClientRecordModal({
           record={terminationRecord}
           onClose={() => setTerminationRecord(null)}
           onTerminated={onCaseTerminated}
+        />
+      )}
+      {attachRecord && (
+        <AttachClientModal
+          record={attachRecord}
+          clients={clients}
+          onClose={() => setAttachRecord(null)}
+          onAttached={onCaseUpdated}
+          onCreateClient={onCreateClient}
         />
       )}
     </div>
@@ -1198,10 +1631,11 @@ export default function CriminalCasesPage() {
         const client = visibleClients.find(
           (item) => item.client_id === record.client_id,
         );
+        const names = participantNames(record, client);
         return {
           record,
           client,
-          clientName: client?.client.name ?? "Unknown client",
+          clientName: names.join(" ") || client?.client.name || "Unknown client",
         };
       }),
     [tableCases, visibleClients],
@@ -1230,7 +1664,9 @@ export default function CriminalCasesPage() {
     visibleClients.find((client) => client.client_id === activeClientId) ??
     null;
   const activeCases = visibleCases.filter(
-    (record) => record.client_id === activeClientId,
+    (record) =>
+      record.client_id === activeClientId ||
+      record.participants?.some((participant) => participant.client_id === activeClientId),
   );
 
   const openRecord = (record: CriminalCaseRecord, mode: "view" | "update") => {
@@ -1336,8 +1772,8 @@ export default function CriminalCasesPage() {
                   <th className="px-3 py-3 text-left font-semibold">Party Represented</th>
                   <th className="px-3 py-3 text-left font-semibold">Gender / Sex</th>
                   <th className="px-3 py-3 text-left font-semibold">Title</th>
-                  <th className="px-5 py-3 text-left font-semibold">Status</th>
-                  <th className="px-3 py-3 text-left font-semibold">Person</th>
+                  <th className="px-3 py-3 text-left font-semibold">Case No.</th>
+                  <th className="px-3 py-3 text-left font-semibold">Court / Body</th>
                   <th className="px-3 py-3 text-right font-semibold"></th>
                 </tr>
               </thead>
@@ -1352,7 +1788,10 @@ export default function CriminalCasesPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredRows.map(({ record, client, clientName }) => (
+                  filteredRows.map(({ record, client }) => {
+                    const names = participantNames(record, client);
+                    const sexes = participantSexes(record, client);
+                    return (
                     <tr
                       key={record.case_id}
                       className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]"
@@ -1361,18 +1800,24 @@ export default function CriminalCasesPage() {
                         {record.intake_record.control_no}
                       </td>
                       <td className="px-3 py-4 text-[#4B5563]">
-                        {record.intake_record.party_represented}
+                        <div className="space-y-1">
+                          {names.length ? names.map((name) => <div key={name}>{name}</div>) : "-"}
+                        </div>
                       </td>
                       <td className="px-3 py-4 text-[#4B5563]">
-                        {client?.client.sex ?? "-"}
+                        <div className="space-y-1">
+                          {sexes.length ? sexes.map((sex, index) => <div key={`${sex}-${index}`}>{sex}</div>) : "-"}
+                        </div>
                       </td>
                       <td className="px-3 py-4 text-[#4B5563]">
                         {record.cases.title_of_case}
                       </td>
-                      <td className="px-5 py-4">
-                        <StatusBadge status={record.cases.status_of_case} />
+                      <td className="px-3 py-4 text-[#4B5563]">
+                        {record.cases.case_no}
                       </td>
-                      <td className="px-3 py-4 text-[#4B5563]">{clientName}</td>
+                      <td className="px-3 py-4 text-[#4B5563]">
+                        {record.cases.court_body}
+                      </td>
                       <td className="px-3 py-4">
                         <div className="flex justify-end gap-2">
                           <button
@@ -1393,7 +1838,8 @@ export default function CriminalCasesPage() {
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1419,10 +1865,12 @@ export default function CriminalCasesPage() {
         mode={actionMode}
         client={activeClient}
         cases={activeCases}
+        clients={visibleClients}
         onClose={() => setActiveClientId(null)}
         onClientUpdated={upsertClient}
         onCaseUpdated={upsertCase}
         onCaseTerminated={upsertCase}
+        onCreateClient={() => setShowClientModal(true)}
       />
     </MainLayout>
   );

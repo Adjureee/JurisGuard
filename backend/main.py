@@ -58,6 +58,7 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".jfif", ".webp"}
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 DEFAULT_INCIDENT_CITY = "Panabo City"
+DEFAULT_DISTRICT_OFFICE = "Panabo City Public Attorney's Office"
 PANABO_CENTER = {"lat": 7.3081, "lng": 125.6841}
 BARANGAY_CENTROIDS: dict[str, tuple[float, float]] = {
     "A. O. Floirendo": (7.3977, 125.5802),
@@ -146,6 +147,13 @@ class CasePayload(BaseModel):
     representative: dict[str, Any]
     adverse_party: dict[str, Any]
     cases: dict[str, Any]
+
+
+class CaseClientPayload(BaseModel):
+    client_id: int | str
+    applicant_role: str | None = None
+    applicant_role_other: str | None = None
+    party_represented: str | None = None
 
 
 class TerminationPayload(BaseModel):
@@ -271,9 +279,14 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS coi_waive_right_to_complain BOOLEAN DEFAULT false",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS coi_trust_assigned_counsel BOOLEAN DEFAULT false",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_submission_deadline TIMESTAMP",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_submission_satisfied BOOLEAN DEFAULT false",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_itr_satisfied BOOLEAN DEFAULT false",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_itr_date TIMESTAMP",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_brgy_satisfied BOOLEAN DEFAULT false",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_brgy_date TIMESTAMP",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_dswd_satisfied BOOLEAN DEFAULT false",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_dswd_date TIMESTAMP",
+        "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_others_satisfied BOOLEAN DEFAULT false",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_others_details TEXT",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS proof_others_date TIMESTAMP",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS inv_plaintiff BOOLEAN DEFAULT false",
@@ -297,12 +310,14 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE adverse_party ADD COLUMN IF NOT EXISTS name TEXT",
         "ALTER TABLE adverse_party ADD COLUMN IF NOT EXISTS address TEXT",
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS court_body VARCHAR(255)',
+        'ALTER TABLE "case" ALTER COLUMN title_of_case TYPE VARCHAR(255)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS case_status VARCHAR(30)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS incident_barangay VARCHAR(120)',
         f'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS incident_city VARCHAR(120) DEFAULT \'{DEFAULT_INCIDENT_CITY}\'',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS incident_address TEXT',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS latitude VARCHAR(50)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS longitude VARCHAR(50)',
+        'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS detained BOOLEAN DEFAULT false',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS date_of_confinement TIMESTAMP',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS place_of_detention VARCHAR(255)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS location_type VARCHAR(20)',
@@ -323,6 +338,29 @@ def ensure_schema_compatibility() -> None:
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS supporting_document_path TEXT',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS is_terminated BOOLEAN DEFAULT false',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+        """
+        CREATE TABLE IF NOT EXISTS case_client (
+            case_client_id SERIAL PRIMARY KEY,
+            case_id INTEGER NOT NULL REFERENCES "case"(case_id),
+            client_id INTEGER NOT NULL REFERENCES client(client_id),
+            party_represented VARCHAR(100),
+            applicant_role VARCHAR(100),
+            applicant_role_other VARCHAR(255),
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT uq_case_client_case_client UNIQUE (case_id, client_id)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_case_client_case_client_id ON case_client (case_client_id)",
+        "CREATE INDEX IF NOT EXISTS ix_case_client_case_id ON case_client (case_id)",
+        "CREATE INDEX IF NOT EXISTS ix_case_client_client_id ON case_client (client_id)",
+        """
+        INSERT INTO case_client (case_id, client_id, party_represented, applicant_role, applicant_role_other)
+        SELECT c.case_id, c.client_id, i.party_represented, i.applicant_role, i.applicant_role_other
+        FROM "case" c
+        LEFT JOIN intake_record i ON i.intake_id = c.intake_id
+        WHERE c.client_id IS NOT NULL
+        ON CONFLICT ON CONSTRAINT uq_case_client_case_client DO NOTHING
+        """,
         """
         CREATE TABLE IF NOT EXISTS case_history (
             history_id SERIAL PRIMARY KEY,
@@ -722,6 +760,137 @@ def normalize_sex(value: Any) -> str | None:
     return None
 
 
+def normalize_case_status(value: Any) -> str:
+    return "Terminated" if str(value or "").strip().lower() == "terminated" else "Pending"
+
+
+def is_none_value(value: Any) -> bool:
+    return str(value or "").strip().lower() in {"none", "not applicable", "n/a"}
+
+
+def none_if_not_applicable(value: Any, fallback: str | None = None) -> str | None:
+    if is_none_value(value):
+        return "None"
+    if value in (None, ""):
+        return fallback
+    return str(value)
+
+
+def normalize_spouse_details(details_data: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(details_data)
+    if is_none_value(normalized.get("spouse")):
+        normalized["spouse"] = "None"
+        normalized["address_of_spouse"] = "None"
+        normalized["contact_no_of_spouse"] = "None"
+    return normalized
+
+
+def normalize_representative_details(details_data: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(details_data)
+    if is_none_value(normalized.get("representative_civil_status")):
+        normalized["representative_civil_status"] = "None"
+        normalized["representative_name"] = "None"
+        normalized["representative_sex"] = "None"
+        normalized["representative_address"] = "None"
+        normalized["representative_contact_no"] = "None"
+        normalized["representative_relationship"] = "None"
+    return normalized
+
+
+def generated_case_title(client: models.Client | None) -> str:
+    name = (client.name if client else "") or "Client"
+    return limit_text(f"PP vs. {name.strip() or 'Client'}", 50, "PP vs. Client") or "PP vs. Client"
+
+
+def represented_party_from_role(applicant_role: Any, applicant_role_other: Any = None) -> str | None:
+    if applicant_role == "Others":
+        return limit_text(applicant_role_other, 100)
+    return limit_text(applicant_role, 100)
+
+
+def case_participants(record: models.Case) -> list[models.CaseClient]:
+    participants = list(record.participants or [])
+    if participants:
+        return participants
+    if record.client:
+        return [
+            models.CaseClient(
+                case_id=record.case_id,
+                client_id=record.client.client_id,
+                client=record.client,
+                party_represented=record.intake.party_represented if record.intake else None,
+                applicant_role=record.intake.applicant_role if record.intake else None,
+                applicant_role_other=record.intake.applicant_role_other if record.intake else None,
+            )
+        ]
+    return []
+
+
+def generated_case_title_for_case(record: models.Case) -> str:
+    names = [
+        participant.client.name.strip()
+        for participant in case_participants(record)
+        if participant.client and participant.client.name and participant.client.name.strip()
+    ]
+    if not names:
+        return generated_case_title(record.client)
+    if len(names) == 1:
+        represented = names[0]
+    elif len(names) == 2:
+        represented = f"{names[0]} and {names[1]}"
+    else:
+        represented = f"{', '.join(names[:-1])}, and {names[-1]}"
+    return limit_text(f"PP vs. {represented}", 255, "PP vs. Client") or "PP vs. Client"
+
+
+def case_participant_payload(participant: models.CaseClient) -> dict[str, Any]:
+    client = participant.client
+    classification = client.classification if client and client.classification else None
+    details = client.details if client and client.details else None
+    return {
+        "case_client_id": str(participant.case_client_id or ""),
+        "client_id": str(participant.client_id or (client.client_id if client else "")),
+        "name": client.name if client else "",
+        "sex": client.sex if client else "",
+        "age": (client.age or 0) if client else 0,
+        "party_represented": participant.party_represented
+        or represented_party_from_role(participant.applicant_role, participant.applicant_role_other)
+        or "",
+        "applicant_role": participant.applicant_role or "",
+        "applicant_role_other": participant.applicant_role_other or "",
+        "address": details.address if details else "",
+        "contact_no": details.contact_no if details else "",
+        "classification": {
+            "flag_senior": bool(classification.class_senior_citizen) if classification else False,
+            "flag_cicl": bool(classification.class_cicl) if classification else False,
+            "flag_female": bool(classification.class_female or classification.class_woman) if classification else False,
+            "flag_urban": bool(classification.class_urban) if classification else False,
+            "flag_rural": bool(classification.class_rural) if classification else False,
+            "flag_drugs": bool(classification.class_drug_related or classification.class_9165) if classification else False,
+        },
+    }
+
+
+def detention_fields_for_client(
+    client: models.Client | None,
+    case_data: dict[str, Any],
+) -> tuple[datetime | None, str | None]:
+    if "detained" in case_data:
+        if not bool(case_data.get("detained")):
+            return None, None
+        return (
+            parse_date(case_data.get("date_of_confinement")),
+            case_data.get("place_of_detention"),
+        )
+    details = client.details if client else None
+    if not details or not details.detained:
+        return None, None
+    return (
+        parse_date(case_data.get("date_of_confinement")) or details.detained_since,
+        case_data.get("place_of_detention") or details.place_of_detention,
+    )
+
+
 def user_to_auth(user: models.User) -> dict[str, Any]:
     employee_id_path = user.profile_picture_path
     return {
@@ -836,6 +1005,7 @@ def get_case_payload(record: models.Case) -> dict[str, Any]:
     representative = intake.representatives[0] if intake.representatives else None
     adverse_party = intake.adverse_parties[0] if intake.adverse_parties else None
     terminated_at = record.terminated_at or record.date_of_termination
+    display_status = normalize_case_status(record.status_of_case or record.case_status)
     return {
         "case_id": str(record.case_id),
         "client_id": str(record.client_id or ""),
@@ -855,9 +1025,14 @@ def get_case_payload(record: models.Case) -> dict[str, Any]:
             "coi_waive_right_to_complain": bool(intake.coi_waive_right_to_complain),
             "coi_trust_assigned_counsel": bool(intake.coi_trust_assigned_counsel),
             "proof_submission_deadline": format_date(intake.proof_submission_deadline),
+            "proof_submission_satisfied": bool(getattr(intake, "proof_submission_satisfied", False)),
+            "proof_itr_satisfied": bool(getattr(intake, "proof_itr_satisfied", False)),
             "proof_itr_date": format_date(intake.proof_itr_date),
+            "proof_brgy_satisfied": bool(getattr(intake, "proof_brgy_satisfied", False)),
             "proof_brgy_date": format_date(intake.proof_brgy_date),
+            "proof_dswd_satisfied": bool(getattr(intake, "proof_dswd_satisfied", False)),
             "proof_dswd_date": format_date(intake.proof_dswd_date),
+            "proof_others_satisfied": bool(getattr(intake, "proof_others_satisfied", False)),
             "proof_others_details": intake.proof_others_details or "",
             "proof_others_date": format_date(intake.proof_others_date),
             "inv_plaintiff": bool(intake.inv_plaintiff),
@@ -892,17 +1067,22 @@ def get_case_payload(record: models.Case) -> dict[str, Any]:
             "address": adverse_party.address if adverse_party else "",
         },
         "cases": {
-            "title_of_case": record.title_of_case or "",
+            "title_of_case": generated_case_title_for_case(record),
             "case_no": record.case_no or "",
             "court_body": record.court_body or "",
-            "status_of_case": record.status_of_case or "Pending",
-            "case_status": record.case_status or record.status_of_case or "Pending",
+            "status_of_case": display_status,
+            "case_status": display_status,
             "incident_barangay": record.incident_barangay or "",
             "incident_city": record.incident_city or DEFAULT_INCIDENT_CITY,
             "incident_address": record.incident_address or "",
             "latitude": record.latitude or "",
             "longitude": record.longitude or "",
             "last_action_taken": record.last_action_taken or "",
+            "detained": bool(
+                getattr(record, "detained", False)
+                or record.date_of_confinement
+                or record.place_of_detention
+            ),
             "date_of_confinement": record.date_of_confinement.date().isoformat()
             if record.date_of_confinement
             else "",
@@ -910,12 +1090,12 @@ def get_case_payload(record: models.Case) -> dict[str, Any]:
             "location_type": record.location_type or "",
             "cause_of_action": record.cause_of_action or "",
             "facts_of_case": record.facts_of_case or "",
-            "pending_in_court": bool(record.pending_in_court),
+            "pending_in_court": display_status == "Pending",
             "cause_of_termination": record.cause_of_termination or "",
             "date_of_termination": record.date_of_termination.date().isoformat()
             if record.date_of_termination
             else "",
-            "is_terminated": bool(record.is_terminated or record.status_of_case == "Terminated"),
+            "is_terminated": bool(record.is_terminated or display_status == "Terminated"),
             "terminated_at": terminated_at.date().isoformat() if terminated_at else "",
             "termination_reason": record.termination_reason or record.cause_of_termination or "",
             "termination_remarks": record.termination_remarks or "",
@@ -928,6 +1108,10 @@ def get_case_payload(record: models.Case) -> dict[str, Any]:
             "hearing_schedule": record.hearing_schedule or "",
             "remarks": record.remarks or record.last_action_taken or "",
         },
+        "participants": [
+            case_participant_payload(participant)
+            for participant in case_participants(record)
+        ],
         "last_updated": record.last_updated.date().isoformat() if record.last_updated else "",
     }
 
@@ -1068,7 +1252,7 @@ def populate_submission_items(
 
 def apply_client_payload(client: models.Client, payload: ClientPayload) -> None:
     client_data = payload.client
-    details_data = payload.client_details
+    details_data = normalize_representative_details(normalize_spouse_details(payload.client_details))
     class_data = payload.client_classification
     details = client.details
     classification = client.classification
@@ -1092,16 +1276,16 @@ def apply_client_payload(client: models.Client, payload: ClientPayload) -> None:
     details.contact_no = details_data.get("contact_no")
     details.email = details_data.get("email")
     details.individual_monthly_income = details_data.get("individual_monthly_income")
-    details.spouse = details_data.get("spouse")
-    details.address_of_spouse = details_data.get("address_of_spouse")
-    details.contact_no_of_spouse = details_data.get("contact_no_of_spouse")
-    details.representative_name = details_data.get("representative_name")
+    details.spouse = none_if_not_applicable(details_data.get("spouse"))
+    details.address_of_spouse = none_if_not_applicable(details_data.get("address_of_spouse"))
+    details.contact_no_of_spouse = none_if_not_applicable(details_data.get("contact_no_of_spouse"))
+    details.representative_name = none_if_not_applicable(details_data.get("representative_name"))
     details.representative_age = details_data.get("representative_age") or None
-    details.representative_sex = details_data.get("representative_sex")
-    details.representative_civil_status = details_data.get("representative_civil_status")
-    details.representative_address = details_data.get("representative_address")
-    details.representative_contact_no = details_data.get("representative_contact_no")
-    details.representative_relationship = details_data.get("representative_relationship")
+    details.representative_sex = none_if_not_applicable(details_data.get("representative_sex"))
+    details.representative_civil_status = none_if_not_applicable(details_data.get("representative_civil_status"))
+    details.representative_address = none_if_not_applicable(details_data.get("representative_address"))
+    details.representative_contact_no = none_if_not_applicable(details_data.get("representative_contact_no"))
+    details.representative_relationship = none_if_not_applicable(details_data.get("representative_relationship"))
     details.representative_email = details_data.get("representative_email")
     details.detained = bool(details_data.get("detained"))
     details.detained_since = parse_date(details_data.get("detained_since"))
@@ -1170,60 +1354,82 @@ def apply_case_payload(record: models.Case, payload: CasePayload) -> None:
     if intake is None:
         raise HTTPException(status_code=400, detail="Case intake record is missing")
     representative = intake.representatives[0] if intake.representatives else None
-    adverse_party = intake.adverse_parties[0] if intake.adverse_parties else None
     intake_data = payload.intake_record
     rep_data = payload.representative
-    adverse_data = payload.adverse_party
     case_data = payload.cases
+    normalized_status = normalize_case_status(case_data.get("status_of_case") or case_data.get("case_status"))
+    confinement_date, detention_place = detention_fields_for_client(record.client, case_data)
+    case_detained = (
+        bool(case_data.get("detained"))
+        if "detained" in case_data
+        else bool(confinement_date or detention_place)
+    )
 
     intake.control_no = limit_text(intake_data.get("control_no"), 20)
     intake.form_date = parse_date(intake_data.get("form_date"), intake.form_date) or intake.form_date
     intake.region = intake_data.get("region")
-    intake.district_office = intake_data.get("district_office")
-    intake.party_represented = limit_text(intake_data.get("party_represented"), 50)
+    intake.district_office = intake_data.get("district_office") or DEFAULT_DISTRICT_OFFICE
+    represented_party = intake_data.get("party_represented") or (
+        intake_data.get("applicant_role_other")
+        if intake_data.get("applicant_role") == "Others"
+        else intake_data.get("applicant_role")
+    )
+    intake.party_represented = limit_text(represented_party, 50)
     intake.applicant_role = intake_data.get("applicant_role")
     intake.applicant_role_other = intake_data.get("applicant_role_other")
     intake.nature_of_request = intake_data.get("nature_of_request")
     intake.nature_of_case = limit_text(intake_data.get("nature_of_case"), 50)
+    intake.proof_submission_deadline = parse_date(intake_data.get("proof_submission_deadline"))
+    intake.proof_submission_satisfied = bool(intake_data.get("proof_submission_satisfied"))
+    intake.proof_itr_satisfied = bool(intake_data.get("proof_itr_satisfied"))
+    intake.proof_itr_date = parse_date(intake_data.get("proof_itr_date"))
+    intake.proof_brgy_satisfied = bool(intake_data.get("proof_brgy_satisfied"))
+    intake.proof_brgy_date = parse_date(intake_data.get("proof_brgy_date"))
+    intake.proof_dswd_satisfied = bool(intake_data.get("proof_dswd_satisfied"))
+    intake.proof_dswd_date = parse_date(intake_data.get("proof_dswd_date"))
+    intake.proof_others_satisfied = bool(intake_data.get("proof_others_satisfied"))
+    intake.proof_others_details = intake_data.get("proof_others_details")
+    intake.proof_others_date = parse_date(intake_data.get("proof_others_date"))
 
     if representative is None:
         representative = models.Representative(intake_id=intake.intake_id, rep_name="Not applicable")
         intake.representatives.append(representative)
-    representative.rep_name = rep_data.get("rep_name") or "Not applicable"
+    representative_none = is_none_value(rep_data.get("civil_status"))
+    representative.rep_name = "None" if representative_none else rep_data.get("rep_name") or "Not applicable"
     representative.rep_age = rep_data.get("rep_age") or None
-    representative.rep_sex = normalize_sex(rep_data.get("rep_sex"))
-    representative.civil_status = rep_data.get("civil_status")
-    representative.rep_address = rep_data.get("rep_address")
-    representative.rep_contact_no = rep_data.get("rep_contact_no")
-    representative.relationship_to_applicant = limit_text(rep_data.get("relationship_to_applicant"), 50)
+    representative.rep_sex = "None" if representative_none else normalize_sex(rep_data.get("rep_sex"))
+    representative.civil_status = "None" if representative_none else rep_data.get("civil_status")
+    representative.rep_address = "None" if representative_none else rep_data.get("rep_address")
+    representative.rep_contact_no = "None" if representative_none else rep_data.get("rep_contact_no")
+    representative.relationship_to_applicant = "None" if representative_none else limit_text(rep_data.get("relationship_to_applicant"), 50)
 
-    if adverse_party is None:
-        adverse_party = models.AdverseParty(intake_id=intake.intake_id, name="Not provided")
-        intake.adverse_parties.append(adverse_party)
-    role = (adverse_data.get("role") or "").lower()
-    adverse_party.role_plaintiff_complainant = "plaintiff" in role or "complainant" in role
-    adverse_party.role_defendant_respondent_accused = any(key in role for key in ["defendant", "respondent", "accused"])
-    adverse_party.role_oppositor_others = "oppositor" in role or "other" in role
-    adverse_party.name = adverse_data.get("name") or "Not provided"
-    adverse_party.address = adverse_data.get("address")
+    primary_participant = next(
+        (participant for participant in record.participants if participant.client_id == record.client_id),
+        None,
+    )
+    if primary_participant is not None:
+        primary_participant.applicant_role = intake.applicant_role
+        primary_participant.applicant_role_other = intake.applicant_role_other
+        primary_participant.party_represented = limit_text(represented_party, 100)
 
-    record.title_of_case = limit_text(case_data.get("title_of_case"), 50, "Untitled Case")
+    record.title_of_case = generated_case_title_for_case(record)
     record.case_no = limit_text(case_data.get("case_no"), 20)
     record.court_body = case_data.get("court_body")
-    record.status_of_case = case_data.get("status_of_case") or "Pending"
-    record.case_status = case_data.get("case_status") or record.status_of_case
+    record.status_of_case = normalized_status
+    record.case_status = normalized_status
     record.incident_barangay = case_data.get("incident_barangay")
     record.incident_city = case_data.get("incident_city") or DEFAULT_INCIDENT_CITY
     record.incident_address = case_data.get("incident_address")
     record.latitude = str(case_data.get("latitude")) if case_data.get("latitude") not in (None, "") else None
     record.longitude = str(case_data.get("longitude")) if case_data.get("longitude") not in (None, "") else None
     record.last_action_taken = case_data.get("last_action_taken")
-    record.date_of_confinement = parse_date(case_data.get("date_of_confinement"))
-    record.place_of_detention = case_data.get("place_of_detention")
+    record.detained = case_detained
+    record.date_of_confinement = confinement_date
+    record.place_of_detention = detention_place
     record.location_type = case_data.get("location_type")
     record.cause_of_action = case_data.get("cause_of_action")
     record.facts_of_case = case_data.get("facts_of_case")
-    record.pending_in_court = bool(case_data.get("pending_in_court"))
+    record.pending_in_court = normalized_status == "Pending"
     record.cause_of_termination = case_data.get("cause_of_termination")
     record.date_of_termination = parse_date(case_data.get("date_of_termination"))
     record.assigned_pao = case_data.get("assigned_pao")
@@ -1574,7 +1780,7 @@ def dashboard_heatmap(user: models.User = Depends(current_user), db: Session = D
                 "longitude": lng,
                 "weight": 1,
                 "source": source,
-                "status": record.status_of_case or record.case_status or "Pending",
+                "status": normalize_case_status(record.status_of_case or record.case_status),
                 "category": case_category(record),
             }
         )
@@ -1703,7 +1909,7 @@ def dashboard_staff_workload(user: models.User = Depends(current_user), db: Sess
     status_counts: dict[str, int] = {}
     client_ids = []
     for record in cases:
-        status = record.status_of_case or "Pending"
+        status = normalize_case_status(record.status_of_case)
         status_counts[status] = status_counts.get(status, 0) + 1
         if record.client_id:
             client_ids.append(record.client_id)
@@ -2268,8 +2474,10 @@ def get_client_cases(client_id: int, user: models.User = Depends(current_user), 
     ensure_client_access(db.get(models.Client, client_id), user, db)
     records = (
         scoped_case_query(db, user)
-        .filter(models.Case.client_id == client_id)
+        .outerjoin(models.CaseClient)
+        .filter(or_(models.Case.client_id == client_id, models.CaseClient.client_id == client_id))
         .order_by(models.Case.last_updated.desc())
+        .distinct()
         .all()
     )
     return [get_case_payload(record) for record in records]
@@ -2284,7 +2492,7 @@ def create_client(
 ):
     try:
         client_data = payload.client
-        details_data = payload.client_details
+        details_data = normalize_representative_details(normalize_spouse_details(payload.client_details))
         class_data = payload.client_classification
         client = models.Client(
             name=client_data.get("name") or "Unnamed Client",
@@ -2305,16 +2513,16 @@ def create_client(
                 contact_no=details_data.get("contact_no"),
                 email=details_data.get("email"),
                 individual_monthly_income=details_data.get("individual_monthly_income"),
-                spouse=details_data.get("spouse"),
-                address_of_spouse=details_data.get("address_of_spouse"),
-                contact_no_of_spouse=details_data.get("contact_no_of_spouse"),
-                representative_name=details_data.get("representative_name"),
+                spouse=none_if_not_applicable(details_data.get("spouse")),
+                address_of_spouse=none_if_not_applicable(details_data.get("address_of_spouse")),
+                contact_no_of_spouse=none_if_not_applicable(details_data.get("contact_no_of_spouse")),
+                representative_name=none_if_not_applicable(details_data.get("representative_name")),
                 representative_age=details_data.get("representative_age") or None,
-                representative_sex=details_data.get("representative_sex"),
-                representative_civil_status=details_data.get("representative_civil_status"),
-                representative_address=details_data.get("representative_address"),
-                representative_contact_no=details_data.get("representative_contact_no"),
-                representative_relationship=details_data.get("representative_relationship"),
+                representative_sex=none_if_not_applicable(details_data.get("representative_sex")),
+                representative_civil_status=none_if_not_applicable(details_data.get("representative_civil_status")),
+                representative_address=none_if_not_applicable(details_data.get("representative_address")),
+                representative_contact_no=none_if_not_applicable(details_data.get("representative_contact_no")),
+                representative_relationship=none_if_not_applicable(details_data.get("representative_relationship")),
                 representative_email=details_data.get("representative_email"),
                 detained=bool(details_data.get("detained")),
                 detained_since=parse_date(details_data.get("detained_since")),
@@ -2429,12 +2637,24 @@ def create_case(
 ):
     try:
         client_id = int(payload.client_id)
-        ensure_client_access(db.get(models.Client, client_id), user, db)
+        client = ensure_client_access(db.get(models.Client, client_id), user, db)
 
         intake_data = payload.intake_record
         rep_data = payload.representative
-        adverse_data = payload.adverse_party
         case_data = payload.cases
+        normalized_status = normalize_case_status(case_data.get("status_of_case") or case_data.get("case_status"))
+        confinement_date, detention_place = detention_fields_for_client(client, case_data)
+        case_detained = (
+            bool(case_data.get("detained"))
+            if "detained" in case_data
+            else bool(confinement_date or detention_place)
+        )
+        represented_party = intake_data.get("party_represented") or (
+            intake_data.get("applicant_role_other")
+            if intake_data.get("applicant_role") == "Others"
+            else intake_data.get("applicant_role")
+        )
+        representative_none = is_none_value(rep_data.get("civil_status"))
 
         intake = models.IntakeRecord(
             client_id=client_id,
@@ -2442,20 +2662,25 @@ def create_case(
             control_no=limit_text(intake_data.get("control_no"), 20),
             form_date=parse_date(intake_data.get("form_date"), datetime.now()) or datetime.now(),
             region=intake_data.get("region"),
-            district_office=intake_data.get("district_office"),
-            party_represented=limit_text(intake_data.get("party_represented"), 50),
+            district_office=intake_data.get("district_office") or DEFAULT_DISTRICT_OFFICE,
+            party_represented=limit_text(represented_party, 50),
             applicant_role=intake_data.get("applicant_role"),
             applicant_role_other=intake_data.get("applicant_role_other"),
             nature_of_request=intake_data.get("nature_of_request"),
             nature_of_case=limit_text(intake_data.get("nature_of_case"), 50),
-            coi_agree_different_office=bool(intake_data.get("coi_agree_different_office")),
-            coi_agree_same_dept_appeal=bool(intake_data.get("coi_agree_same_dept_appeal")),
-            coi_waive_right_to_complain=bool(intake_data.get("coi_waive_right_to_complain")),
-            coi_trust_assigned_counsel=bool(intake_data.get("coi_trust_assigned_counsel")),
+            coi_agree_different_office=False,
+            coi_agree_same_dept_appeal=False,
+            coi_waive_right_to_complain=False,
+            coi_trust_assigned_counsel=False,
             proof_submission_deadline=parse_date(intake_data.get("proof_submission_deadline")),
+            proof_submission_satisfied=bool(intake_data.get("proof_submission_satisfied")),
+            proof_itr_satisfied=bool(intake_data.get("proof_itr_satisfied")),
             proof_itr_date=parse_date(intake_data.get("proof_itr_date")),
+            proof_brgy_satisfied=bool(intake_data.get("proof_brgy_satisfied")),
             proof_brgy_date=parse_date(intake_data.get("proof_brgy_date")),
+            proof_dswd_satisfied=bool(intake_data.get("proof_dswd_satisfied")),
             proof_dswd_date=parse_date(intake_data.get("proof_dswd_date")),
+            proof_others_satisfied=bool(intake_data.get("proof_others_satisfied")),
             proof_others_details=intake_data.get("proof_others_details"),
             proof_others_date=parse_date(intake_data.get("proof_others_date")),
             inv_plaintiff=bool(intake_data.get("inv_plaintiff")),
@@ -2473,48 +2698,37 @@ def create_case(
         db.add(
             models.Representative(
                 intake_id=intake.intake_id,
-                rep_name=rep_data.get("rep_name") or "Not applicable",
+                rep_name="None" if representative_none else rep_data.get("rep_name") or "Not applicable",
                 rep_age=rep_data.get("rep_age") or None,
-                rep_sex=normalize_sex(rep_data.get("rep_sex")),
-                civil_status=rep_data.get("civil_status"),
-                rep_address=rep_data.get("rep_address"),
-                rep_contact_no=rep_data.get("rep_contact_no"),
-                relationship_to_applicant=limit_text(rep_data.get("relationship_to_applicant"), 50),
-            )
-        )
-
-        role = (adverse_data.get("role") or "").lower()
-        db.add(
-            models.AdverseParty(
-                intake_id=intake.intake_id,
-                role_plaintiff_complainant="plaintiff" in role or "complainant" in role,
-                role_defendant_respondent_accused=any(key in role for key in ["defendant", "respondent", "accused"]),
-                role_oppositor_others="oppositor" in role or "other" in role,
-                name=adverse_data.get("name") or "Not provided",
-                address=adverse_data.get("address"),
+                rep_sex="None" if representative_none else normalize_sex(rep_data.get("rep_sex")),
+                civil_status="None" if representative_none else rep_data.get("civil_status"),
+                rep_address="None" if representative_none else rep_data.get("rep_address"),
+                rep_contact_no="None" if representative_none else rep_data.get("rep_contact_no"),
+                relationship_to_applicant="None" if representative_none else limit_text(rep_data.get("relationship_to_applicant"), 50),
             )
         )
 
         record = models.Case(
             intake_id=intake.intake_id,
             client_id=client_id,
-            title_of_case=limit_text(case_data.get("title_of_case"), 50, "Untitled Case"),
+            title_of_case=generated_case_title(client),
             case_no=limit_text(case_data.get("case_no"), 20),
             court_body=case_data.get("court_body"),
-            status_of_case=case_data.get("status_of_case") or "Pending",
-            case_status=case_data.get("case_status") or case_data.get("status_of_case") or "Pending",
+            status_of_case=normalized_status,
+            case_status=normalized_status,
             incident_barangay=case_data.get("incident_barangay"),
             incident_city=case_data.get("incident_city") or DEFAULT_INCIDENT_CITY,
             incident_address=case_data.get("incident_address"),
             latitude=str(case_data.get("latitude")) if case_data.get("latitude") not in (None, "") else None,
             longitude=str(case_data.get("longitude")) if case_data.get("longitude") not in (None, "") else None,
             last_action_taken=case_data.get("last_action_taken"),
-            date_of_confinement=parse_date(case_data.get("date_of_confinement")),
-            place_of_detention=case_data.get("place_of_detention"),
+            detained=case_detained,
+            date_of_confinement=confinement_date,
+            place_of_detention=detention_place,
             location_type=case_data.get("location_type"),
             cause_of_action=case_data.get("cause_of_action"),
             facts_of_case=case_data.get("facts_of_case"),
-            pending_in_court=bool(case_data.get("pending_in_court")),
+            pending_in_court=normalized_status == "Pending",
             cause_of_termination=case_data.get("cause_of_termination"),
             date_of_termination=parse_date(case_data.get("date_of_termination")),
             assigned_pao=case_data.get("assigned_pao"),
@@ -2523,6 +2737,16 @@ def create_case(
         )
         db.add(record)
         db.flush()
+        record.participants.append(
+            models.CaseClient(
+                client=client,
+                party_represented=limit_text(represented_party, 100),
+                applicant_role=intake.applicant_role,
+                applicant_role_other=intake.applicant_role_other,
+            )
+        )
+        db.flush()
+        record.title_of_case = generated_case_title_for_case(record)
         db.add(
             models.CaseHistory(
                 case_id=record.case_id,
@@ -2593,6 +2817,66 @@ def update_case(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=500, detail="Database error while updating case. Please retry after refreshing the page.") from exc
+    db.refresh(record)
+    return get_case_payload(record)
+
+
+@app.post("/api/cases/{case_id}/clients")
+def attach_client_to_case(
+    case_id: int,
+    payload: CaseClientPayload,
+    request: Request,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    record = ensure_case_access(db.get(models.Case, case_id), user)
+    try:
+        client_id = int(payload.client_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid client id") from exc
+    client = ensure_client_access(db.get(models.Client, client_id), user, db)
+    existing = (
+        db.query(models.CaseClient)
+        .filter(models.CaseClient.case_id == record.case_id, models.CaseClient.client_id == client.client_id)
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="Client is already attached to this case")
+
+    applicant_role = payload.applicant_role or payload.party_represented or "Accused"
+    represented_party = payload.party_represented or represented_party_from_role(
+        applicant_role,
+        payload.applicant_role_other,
+    )
+    try:
+        record.participants.append(
+            models.CaseClient(
+                client=client,
+                party_represented=limit_text(represented_party, 100),
+                applicant_role=applicant_role,
+                applicant_role_other=payload.applicant_role_other,
+            )
+        )
+        db.flush()
+        record.title_of_case = generated_case_title_for_case(record)
+        record.last_updated = datetime.now()
+        write_audit(
+            db,
+            user.user_id,
+            "Attach Client to Case",
+            "case",
+            f"{user.full_name or user.email or user.username} attached client #{client.client_id} to Criminal Case #{record.case_id}",
+            str(record.case_id),
+            request,
+        )
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Client is already attached to this case") from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database error while attaching client to case") from exc
+
+    commit_or_case_error(db, "attach client to")
     db.refresh(record)
     return get_case_payload(record)
 

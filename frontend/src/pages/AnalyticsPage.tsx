@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
+  Download,
   FolderCheck,
 } from "lucide-react";
 import {
@@ -75,6 +76,76 @@ function ChartTooltip({
   );
 }
 
+async function downloadChartPng(
+  container: HTMLElement | null,
+  filename: string,
+) {
+  const svg = container?.querySelector("svg");
+  if (!svg) {
+    window.alert("No chart is available to download yet.");
+    return;
+  }
+
+  const bounds = svg.getBoundingClientRect();
+  const width = Math.max(Math.ceil(bounds.width), 1);
+  const height = Math.max(Math.ceil(bounds.height), 1);
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("width", String(width));
+  clone.setAttribute("height", String(height));
+
+  const svgText = new XMLSerializer().serializeToString(clone);
+  const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  await new Promise<void>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("Canvas is not available."));
+        return;
+      }
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = filename;
+      link.click();
+      resolve();
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Unable to render chart image."));
+    };
+    image.src = url;
+  });
+}
+
+function ChartDownloadButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-3 text-xs font-semibold text-[#4B5563] transition hover:border-[#704389] hover:text-[#704389]"
+    >
+      <Download className="h-4 w-4" />
+      {label}
+    </button>
+  );
+}
+
 export default function AnalyticsPage() {
   const [datePreset, setDatePreset] = useState<DatePreset>("last30");
   const [dateRange, setDateRange] = useState(() => presetRange("last30"));
@@ -92,6 +163,10 @@ export default function AnalyticsPage() {
   const [selectedBarangay, setSelectedBarangay] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const hotspotPanelRef = useRef<HTMLDivElement>(null);
+  const monthlyChartRef = useRef<HTMLDivElement>(null);
+  const weeklyChartRef = useRef<HTMLDivElement>(null);
+  const categoryChartRef = useRef<HTMLDivElement>(null);
+  const terminatedChartRef = useRef<HTMLDivElement>(null);
   const [hotspotPanelHeight, setHotspotPanelHeight] = useState<number | null>(null);
 
   const intakeTotal = useMemo(() => monthlyTrends.reduce((sum, row) => sum + row.total_cases, 0), [monthlyTrends]);
@@ -186,7 +261,7 @@ export default function AnalyticsPage() {
       date: "",
       label: row.barangay,
       value: row.total_cases,
-      case_status: row.terminated_cases === row.total_cases ? "Terminated" : "Active",
+      case_status: row.terminated_cases === row.total_cases ? "Terminated" : "Pending",
       barangay: row.barangay,
       staff: "",
       ocr_status: "",
@@ -379,6 +454,17 @@ export default function AnalyticsPage() {
 
           <div className="mt-6 grid gap-6 xl:grid-cols-2">
             <AnalyticsPanel title="Case Intake Trends" subtitle="Case and client movement for the selected date range.">
+              <div className="mb-4 flex justify-end">
+                <ChartDownloadButton
+                  label="Download PNG"
+                  onClick={() =>
+                    void downloadChartPng(
+                      monthlyChartRef.current,
+                      "jurisguard-case-intake-trends.png",
+                    )
+                  }
+                />
+              </div>
               <div className="mb-4 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Intake Volume</p>
@@ -393,7 +479,7 @@ export default function AnalyticsPage() {
                   <p className="mt-1 truncate text-xl font-bold text-[#111827]">{intakePeak ? `${intakePeak.month}: ${intakePeak.total_cases}` : "-"}</p>
                 </div>
               </div>
-              <div className="h-80">
+              <div ref={monthlyChartRef} className="h-80">
                 {displayMonthlyTrends.length === 0 ? <EmptyState message="No intake records match the selected date range." /> : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={displayMonthlyTrends}>
@@ -409,6 +495,17 @@ export default function AnalyticsPage() {
             </AnalyticsPanel>
 
             <AnalyticsPanel title="Weekly Volume Distribution" subtitle="Busiest intake days from encoded form dates.">
+              <div className="mb-4 flex justify-end">
+                <ChartDownloadButton
+                  label="Download PNG"
+                  onClick={() =>
+                    void downloadChartPng(
+                      weeklyChartRef.current,
+                      "jurisguard-weekly-volume-distribution.png",
+                    )
+                  }
+                />
+              </div>
               <div className="mb-4 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-lg bg-[#F7F0FA] p-3 text-[#704389]">
                   <p className="text-xs font-semibold uppercase tracking-wide">Most Crowded</p>
@@ -423,7 +520,7 @@ export default function AnalyticsPage() {
                   <p className="mt-1 text-lg font-bold">{intakeLoad?.total_weekly_cases ?? 0}</p>
                 </div>
               </div>
-              <div className="h-80">
+              <div ref={weeklyChartRef} className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={intakeLoad?.weekly ?? []}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -498,11 +595,22 @@ export default function AnalyticsPage() {
 
           <div className="mt-6 grid gap-6 xl:grid-cols-3">
             <AnalyticsPanel title="Case Category Analytics" subtitle="Common criminal case categories and distribution.">
+              <div className="mb-4 flex justify-end">
+                <ChartDownloadButton
+                  label="Download PNG"
+                  onClick={() =>
+                    void downloadChartPng(
+                      categoryChartRef.current,
+                      "jurisguard-case-category-analytics.png",
+                    )
+                  }
+                />
+              </div>
               <div className="mb-3 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Distribution Base</p>
                 <p className="mt-1 text-sm font-bold text-[#111827]">{categoryTotal} categorized case record(s)</p>
               </div>
-              <div className="h-72">
+              <div ref={categoryChartRef} className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={categoryPie} dataKey="total_cases" nameKey="category" innerRadius={58} outerRadius={96} paddingAngle={3}>
@@ -515,12 +623,23 @@ export default function AnalyticsPage() {
             </AnalyticsPanel>
 
             <AnalyticsPanel title="Terminated Case Analytics" subtitle="Closure volume, archive movement, and reason patterns." className="border-[#FECACA] xl:col-span-2">
+              <div className="mb-4 flex justify-end">
+                <ChartDownloadButton
+                  label="Download PNG"
+                  onClick={() =>
+                    void downloadChartPng(
+                      terminatedChartRef.current,
+                      "jurisguard-terminated-case-analytics.png",
+                    )
+                  }
+                />
+              </div>
               <div className="mb-4 grid gap-3 sm:grid-cols-3">
                 <div className="flex items-center gap-3 rounded-xl bg-[#FEF2F2] p-4 text-[#991B1B] sm:col-span-1">
                 <FolderCheck className="h-6 w-6" />
                 <div>
                   <p className="text-2xl font-bold">{terminatedStats?.total ?? 0}</p>
-                  <p className="text-xs font-semibold uppercase tracking-wide">Archived closures</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide">Terminated closures</p>
                 </div>
                 </div>
                 <div className="rounded-xl border border-[#FECACA] bg-white p-4">
@@ -533,7 +652,7 @@ export default function AnalyticsPage() {
                 </div>
               </div>
               <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-                <div className="rounded-xl border border-[#FECACA] bg-[#FFF7F7] p-3">
+                <div ref={terminatedChartRef} className="rounded-xl border border-[#FECACA] bg-[#FFF7F7] p-3">
                   {displayTerminatedMonthly.length === 0 ? (
                     <EmptyState message="No terminated case records match the selected date range." />
                   ) : (

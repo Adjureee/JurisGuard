@@ -3,7 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useForm } from "react-hook-form";
 import type { ChangeEvent, KeyboardEvent } from "react";
-import type { FieldPath, UseFormRegisterReturn } from "react-hook-form";
+import type {
+  FieldPath,
+  Resolver,
+  UseFormRegisterReturn,
+} from "react-hook-form";
 import { useAuth } from "../../contexts/AuthContext";
 import { FieldStatus } from "../../features/criminalCases/components/FieldStatus";
 import { StepIndicator } from "../../features/criminalCases/components/StepIndicator";
@@ -51,7 +55,7 @@ const createDefaultValues = (clientId = ""): CaseFormValues => ({
       year: "numeric",
     }),
     region: "",
-    district_office: "",
+    district_office: "Panabo City Public Attorney's Office",
     party_represented: "",
     applicant_role: "",
     applicant_role_other: "",
@@ -62,9 +66,14 @@ const createDefaultValues = (clientId = ""): CaseFormValues => ({
     coi_waive_right_to_complain: false,
     coi_trust_assigned_counsel: false,
     proof_submission_deadline: "",
+    proof_submission_satisfied: false,
+    proof_itr_satisfied: false,
     proof_itr_date: "",
+    proof_brgy_satisfied: false,
     proof_brgy_date: "",
+    proof_dswd_satisfied: false,
     proof_dswd_date: "",
+    proof_others_satisfied: false,
     proof_others_details: "",
     proof_others_date: "",
     inv_plaintiff: false,
@@ -102,12 +111,13 @@ const createDefaultValues = (clientId = ""): CaseFormValues => ({
     latitude: "",
     longitude: "",
     last_action_taken: "",
+    detained: false,
     date_of_confinement: "",
     place_of_detention: "",
     location_type: "",
     cause_of_action: "",
     facts_of_case: "",
-    pending_in_court: false,
+    pending_in_court: true,
     cause_of_termination: "",
     date_of_termination: "",
     assigned_pao: "",
@@ -120,20 +130,19 @@ const createDefaultValues = (clientId = ""): CaseFormValues => ({
 const caseOcrFields = [
   "intake_record.control_no",
   "intake_record.form_date",
-  "intake_record.region",
   "intake_record.district_office",
-  "intake_record.party_represented",
   "intake_record.applicant_role",
   "intake_record.nature_of_request",
   "intake_record.nature_of_case",
-  "intake_record.coi_agree_different_office",
-  "intake_record.coi_agree_same_dept_appeal",
-  "intake_record.coi_waive_right_to_complain",
-  "intake_record.coi_trust_assigned_counsel",
+  "intake_record.proof_submission_satisfied",
   "intake_record.proof_submission_deadline",
+  "intake_record.proof_itr_satisfied",
   "intake_record.proof_itr_date",
+  "intake_record.proof_brgy_satisfied",
   "intake_record.proof_brgy_date",
+  "intake_record.proof_dswd_satisfied",
   "intake_record.proof_dswd_date",
+  "intake_record.proof_others_satisfied",
   "intake_record.proof_others_details",
   "intake_record.proof_others_date",
   "intake_record.inv_plaintiff",
@@ -151,17 +160,13 @@ const caseOcrFields = [
   "representative.rep_address",
   "representative.rep_contact_no",
   "representative.relationship_to_applicant",
-  "adverse_party.role",
-  "adverse_party.name",
-  "adverse_party.address",
   "cases.case_no",
   "cases.court_body",
-  "cases.title_of_case",
   "cases.facts_of_case",
   "cases.cause_of_action",
   "cases.status_of_case",
   "cases.last_action_taken",
-  "cases.pending_in_court",
+  "cases.detained",
   "cases.cause_of_termination",
   "cases.date_of_termination",
 ] as Array<FieldPath<CaseFormValues>>;
@@ -170,41 +175,44 @@ const overwriteDefaultOcrFields = new Set<FieldPath<CaseFormValues>>([
   "intake_record.form_date",
 ]);
 
-const panaboBarangays = [
+const urbanBarangays = [
+  "Cagangohan",
+  "Datu Abdul Dadia",
+  "Gredu (Poblacion)",
+  "J.P. Laurel",
+  "New Pandan (Poblacion)",
+  "New Visayas",
+  "Quezon",
+  "San Francisco (Poblacion)",
+  "San Vicente",
+  "Salvacion",
+  "Santo Nino (Poblacion)",
+];
+
+const ruralBarangays = [
   "A. O. Floirendo",
   "Buenavista",
   "Cacao",
-  "Cagangohan",
   "Consolacion",
   "Dapco",
-  "Datu Abdul Dadia",
-  "Gredu",
-  "J. P. Laurel",
   "Kasilak",
   "Katipunan",
   "Katualan",
   "Kauswagan",
   "Kiotoy",
   "Little Panay",
-  "Lower Panaga",
+  "Lower Panaga (Roxas)",
   "Mabunao",
   "Maduao",
   "Malativas",
   "Manay",
   "Nanyo",
-  "New Malaga",
+  "New Malaga (Dalisay)",
   "New Malitbog",
-  "New Pandan",
-  "New Visayas",
-  "Quezon",
-  "Salvacion",
-  "San Francisco",
   "San Nicolas",
   "San Pedro",
   "San Roque",
-  "San Vicente",
   "Santa Cruz",
-  "Santo Nino",
   "Sindaton",
   "Southern Davao",
   "Tagpore",
@@ -212,6 +220,79 @@ const panaboBarangays = [
   "Upper Licanan",
   "Waterfall",
 ];
+
+const panaboBarangays = [...urbanBarangays, ...ruralBarangays];
+
+const courtBodyOptions = [
+  "RTC Branch 4",
+  "RTC Branch 34",
+  "Family Court - Panabo District",
+  "MTCC - Panabo District",
+];
+
+const civilStatusOptions = [
+  "Single",
+  "Married",
+  "Widowed",
+  "Separated",
+  "Annulled",
+  "Divorced",
+  "None",
+];
+
+const natureOfRequestOptions = [
+  "Legal Advice",
+  "Inquest/Legal Assistance",
+  "Legal Documentation",
+  "Mediation/Conciliation",
+  "Representation in Court/Quasi-Judicial Bodies",
+  "Administration of Oath",
+];
+
+const natureOfCaseOptions = [
+  "Criminal",
+  "Administrative",
+  "Civil",
+  "Labor",
+  "Appeal",
+];
+
+const applicantRoleOptions = [
+  "Plaintiff",
+  "Defendant",
+  "Oppositor",
+  "Petitioner",
+  "Respondent",
+  "Complainant",
+  "Accused",
+  "Others",
+];
+
+function generatedCaseTitle(client?: ClientRecord) {
+  return `PP vs. ${client?.client.name?.trim() || "Client"}`;
+}
+
+function splitSelectedOptions(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function hasSelectedOption(value: string, option: string) {
+  const selected = splitSelectedOptions(value);
+  if (option === "Others") {
+    return selected.some((item) => item === "Others" || item.startsWith("Others:"));
+  }
+  return selected.includes(option);
+}
+
+function getOtherOptionText(value: string) {
+  const selected = splitSelectedOptions(value).find((item) =>
+    item.startsWith("Others:"),
+  );
+  return selected ? selected.replace(/^Others:\s*/, "") : "";
+}
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
@@ -224,12 +305,14 @@ function TextInput({
   error,
   type = "text",
   status,
+  disabled = false,
 }: {
   label: string;
   registration: UseFormRegisterReturn;
   error?: string;
   type?: string;
   status?: ExtractionStatus;
+  disabled?: boolean;
 }) {
   return (
     <label className="block">
@@ -239,8 +322,9 @@ function TextInput({
       </span>
       <input
         type={type}
+        disabled={disabled}
         {...registration}
-        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20 disabled:cursor-not-allowed disabled:bg-[#F3F4F6] disabled:text-[#6B7280]"
       />
       <FieldError message={error} />
     </label>
@@ -270,30 +354,6 @@ function TextArea({
         className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
       />
       <FieldError message={error} />
-    </label>
-  );
-}
-
-function CheckboxInput({
-  label,
-  registration,
-  status,
-}: {
-  label: string;
-  registration: UseFormRegisterReturn;
-  status?: ExtractionStatus;
-}) {
-  return (
-    <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#111827]/80">
-      <input
-        type="checkbox"
-        {...registration}
-        className="h-4 w-4 rounded border-[#E5E7EB] text-[#2F80ED] focus:ring-[#2F80ED]"
-      />
-      <span>
-        {label}
-        <FieldStatus status={status} />
-      </span>
     </label>
   );
 }
@@ -468,7 +528,7 @@ export function CaseWorkflow({
     getValues,
     formState: { errors },
   } = useForm<CaseFormValues>({
-    resolver: zodResolver(caseFormSchema),
+    resolver: zodResolver(caseFormSchema) as Resolver<CaseFormValues>,
     defaultValues: createDefaultValues(lockedClient?.client_id ?? ""),
     mode: "onBlur",
   });
@@ -477,9 +537,14 @@ export function CaseWorkflow({
   const selectedClient =
     lockedClient ??
     clients.find((client) => client.client_id === selectedClientId);
-  const status = watch("cases.status_of_case");
   const applicantRole = watch("intake_record.applicant_role");
-  const pendingInCourt = watch("cases.pending_in_court");
+  const natureOfRequest = watch("intake_record.nature_of_request");
+  const natureOfCase = watch("intake_record.nature_of_case");
+  const representativeCivilStatus = watch("representative.civil_status");
+  const caseStatus = watch("cases.status_of_case");
+  const caseDetained = Boolean(watch("cases.detained"));
+  const locationType = watch("cases.location_type");
+  const incidentBarangay = watch("cases.incident_barangay");
   const hasSearch = query.trim().length > 0;
   const filteredClients = useMemo(() => {
     if (!hasSearch) return [];
@@ -494,6 +559,16 @@ export function CaseWorkflow({
   const hasOcrResult = Object.keys(indicators).length > 0;
   const isCaseFormStep = lockedClient ? step === 1 : step === 2;
   const isMethodStep = lockedClient ? step === 0 : step === 1;
+  const selectedClientIsDetained = Boolean(
+    selectedClient?.client_details.detained,
+  );
+  const representativeNotApplicable = representativeCivilStatus === "None";
+  const filteredBarangays =
+    locationType === "Urban"
+      ? urbanBarangays
+      : locationType === "Rural"
+        ? ruralBarangays
+        : panaboBarangays;
 
   useEffect(() => {
     setActiveClientIndex(0);
@@ -550,6 +625,54 @@ export function CaseWorkflow({
       { shouldDirty: true, shouldValidate: true },
     );
   }, [selectedClient, setValue, useClientRepresentative]);
+
+  useEffect(() => {
+    if (!representativeNotApplicable) return;
+    setValue("representative.rep_name", "", { shouldDirty: true });
+    setValue("representative.rep_age", 0, { shouldDirty: true });
+    setValue("representative.rep_sex", "", { shouldDirty: true });
+    setValue("representative.rep_address", "", { shouldDirty: true });
+    setValue("representative.rep_contact_no", "", { shouldDirty: true });
+    setValue("representative.relationship_to_applicant", "", {
+      shouldDirty: true,
+    });
+  }, [representativeNotApplicable, setValue]);
+
+  useEffect(() => {
+    if (!selectedClient) return;
+    if (!selectedClientIsDetained) return;
+    setValue("cases.detained", true, { shouldDirty: true, shouldValidate: true });
+    const detentionDate = selectedClient.client_details.detained_since;
+    const detentionPlace = selectedClient.client_details.place_of_detention;
+    if (detentionDate) {
+      setValue("cases.date_of_confinement", detentionDate, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+    if (detentionPlace) {
+      setValue("cases.place_of_detention", detentionPlace, {
+        shouldDirty: true,
+      });
+    }
+  }, [selectedClient, selectedClientIsDetained, setValue]);
+
+  useEffect(() => {
+    if (caseDetained) return;
+    setValue("cases.date_of_confinement", "", { shouldDirty: true, shouldValidate: true });
+    setValue("cases.place_of_detention", "", { shouldDirty: true, shouldValidate: true });
+  }, [caseDetained, setValue]);
+
+  useEffect(() => {
+    const pending = caseStatus !== "Terminated";
+    setValue("cases.pending_in_court", pending, { shouldDirty: true });
+    setValue("cases.case_status", caseStatus, { shouldDirty: true });
+  }, [caseStatus, setValue]);
+
+  useEffect(() => {
+    if (!incidentBarangay || filteredBarangays.includes(incidentBarangay)) return;
+    setValue("cases.incident_barangay", "", { shouldDirty: true, shouldValidate: true });
+  }, [filteredBarangays, incidentBarangay, setValue]);
 
   useEffect(() => () => stopCamera(), [stopCamera]);
 
@@ -697,14 +820,64 @@ export function CaseWorkflow({
     }
   };
 
+  const updateOtherOption = (
+    text: string,
+  ) => {
+    setValue("intake_record.nature_of_request", text.trim() ? `Others: ${text}` : "Others", {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+
   const submitCase = async (values: CaseFormValues) => {
     try {
+      const generatedTitle = generatedCaseTitle(selectedClient);
+      const normalizedStatus = values.cases.status_of_case === "Terminated"
+        ? "Terminated"
+        : "Pending";
+      const representedParty =
+        values.intake_record.applicant_role === "Others"
+          ? values.intake_record.applicant_role_other
+          : values.intake_record.applicant_role;
       await onSubmit({
         ...values,
+        intake_record: {
+          ...values.intake_record,
+          district_office:
+            values.intake_record.district_office ||
+            "Panabo City Public Attorney's Office",
+          party_represented: representedParty,
+          inv_plaintiff: values.intake_record.applicant_role === "Plaintiff",
+          inv_defendant: values.intake_record.applicant_role === "Defendant",
+          inv_oppositor: values.intake_record.applicant_role === "Oppositor",
+          inv_petitioner: values.intake_record.applicant_role === "Petitioner",
+          inv_respondent: values.intake_record.applicant_role === "Respondent",
+          inv_complainant: values.intake_record.applicant_role === "Complainant",
+          inv_accused: values.intake_record.applicant_role === "Accused",
+          inv_others:
+            values.intake_record.applicant_role === "Others"
+              ? values.intake_record.applicant_role_other
+              : "",
+        },
+        adverse_party: {
+          role: "",
+          name: "",
+          address: "",
+        },
         cases: {
           ...values.cases,
-          case_status: values.cases.status_of_case,
+          title_of_case: generatedTitle,
+          status_of_case: normalizedStatus,
+          case_status: normalizedStatus,
+          pending_in_court: normalizedStatus === "Pending",
           incident_city: values.cases.incident_city || "Panabo City",
+          detained: caseDetained,
+          date_of_confinement: caseDetained
+            ? values.cases.date_of_confinement
+            : "",
+          place_of_detention: caseDetained
+            ? values.cases.place_of_detention
+            : "",
         },
       });
     } catch (error) {
@@ -1046,17 +1219,27 @@ export function CaseWorkflow({
                   error={errors.intake_record?.control_no?.message}
                   status={indicators["intake_record.control_no"]}
                 />
+                <label className="block">
+                  <span className="text-sm font-medium text-[#4B5563]">
+                    Court/Body
+                    <FieldStatus status={indicators["cases.court_body"]} />
+                  </span>
+                  <select
+                    {...register("cases.court_body")}
+                    className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                  >
+                    <option value="">Select court/body</option>
+                    {courtBodyOptions.map((option) => (
+                      <option key={option}>{option}</option>
+                    ))}
+                  </select>
+                  <FieldError message={errors.cases?.court_body?.message} />
+                </label>
                 <TextInput
-                  label="Form Date"
-                  registration={register("intake_record.form_date")}
-                  error={errors.intake_record?.form_date?.message}
-                  status={indicators["intake_record.form_date"]}
-                />
-                <TextInput
-                  label="Region"
-                  registration={register("intake_record.region")}
-                  error={errors.intake_record?.region?.message}
-                  status={indicators["intake_record.region"]}
+                  label="Case No."
+                  registration={register("cases.case_no")}
+                  error={errors.cases?.case_no?.message}
+                  status={indicators["cases.case_no"]}
                 />
                 <TextInput
                   label="District Office"
@@ -1065,135 +1248,103 @@ export function CaseWorkflow({
                   status={indicators["intake_record.district_office"]}
                 />
                 <TextInput
-                  label="Party Represented"
-                  registration={register("intake_record.party_represented")}
-                  error={errors.intake_record?.party_represented?.message}
-                />
-                <TextInput
-                  label="Nature of Request"
-                  registration={register("intake_record.nature_of_request")}
-                  error={errors.intake_record?.nature_of_request?.message}
-                />
-                <TextInput
-                  label="Nature of Case"
-                  registration={register("intake_record.nature_of_case")}
-                  error={errors.intake_record?.nature_of_case?.message}
+                  label="Form Date"
+                  registration={register("intake_record.form_date")}
+                  error={errors.intake_record?.form_date?.message}
+                  status={indicators["intake_record.form_date"]}
                 />
               </div>
-            </section>
-
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#111827]">
-                Conflict of Interest Agreement
-              </h3>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <CheckboxInput
-                  label="Different office may assist if conflict exists"
-                  registration={register(
-                    "intake_record.coi_agree_different_office",
-                  )}
-                  status={
-                    indicators["intake_record.coi_agree_different_office"]
-                  }
-                />
-                <CheckboxInput
-                  label="Same department appeal may proceed"
-                  registration={register(
-                    "intake_record.coi_agree_same_dept_appeal",
-                  )}
-                  status={
-                    indicators["intake_record.coi_agree_same_dept_appeal"]
-                  }
-                />
-                <CheckboxInput
-                  label="Waives right to complain on conflict handling"
-                  registration={register(
-                    "intake_record.coi_waive_right_to_complain",
-                  )}
-                  status={
-                    indicators["intake_record.coi_waive_right_to_complain"]
-                  }
-                />
-                <CheckboxInput
-                  label="Trusts assigned counsel"
-                  registration={register(
-                    "intake_record.coi_trust_assigned_counsel",
-                  )}
-                  status={
-                    indicators["intake_record.coi_trust_assigned_counsel"]
-                  }
-                />
-              </div>
-            </section>
-
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#111827]">
-                Proof of Qualification
-              </h3>
-              <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <TextInput
-                  label="Submission Deadline"
-                  type="date"
-                  registration={register(
-                    "intake_record.proof_submission_deadline",
-                  )}
-                  error={
-                    errors.intake_record?.proof_submission_deadline?.message
-                  }
-                  status={indicators["intake_record.proof_submission_deadline"]}
-                />
-                <TextInput
-                  label="ITR Date"
-                  type="date"
-                  registration={register("intake_record.proof_itr_date")}
-                  error={errors.intake_record?.proof_itr_date?.message}
-                  status={indicators["intake_record.proof_itr_date"]}
-                />
-                <TextInput
-                  label="Barangay Certification Date"
-                  type="date"
-                  registration={register("intake_record.proof_brgy_date")}
-                  error={errors.intake_record?.proof_brgy_date?.message}
-                  status={indicators["intake_record.proof_brgy_date"]}
-                />
-                <TextInput
-                  label="DSWD Certification Date"
-                  type="date"
-                  registration={register("intake_record.proof_dswd_date")}
-                  error={errors.intake_record?.proof_dswd_date?.message}
-                  status={indicators["intake_record.proof_dswd_date"]}
-                />
-                <TextInput
-                  label="Other Proof Date"
-                  type="date"
-                  registration={register("intake_record.proof_others_date")}
-                  error={errors.intake_record?.proof_others_date?.message}
-                  status={indicators["intake_record.proof_others_date"]}
-                />
-                <TextInput
-                  label="Other Proof Details"
-                  registration={register("intake_record.proof_others_details")}
-                  error={errors.intake_record?.proof_others_details?.message}
-                  status={indicators["intake_record.proof_others_details"]}
-                />
+              <div className="mt-3 rounded-md border border-[#E7D7EE] bg-[#F7F0FA] px-3 py-2 text-sm font-semibold text-[#5F3675]">
+                Case title will be generated automatically as{" "}
+                {generatedCaseTitle(selectedClient)}.
               </div>
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
               <h3 className="text-sm font-semibold text-[#2B3642]">
-                VIII Applicant Case Involvement
+                Nature of Request
+              </h3>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {natureOfRequestOptions.map((option) => (
+                  <label
+                    key={option}
+                    className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]"
+                  >
+                    <input
+                      type="radio"
+                      value={option}
+                      {...register("intake_record.nature_of_request")}
+                      className="h-4 w-4 border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                    />
+                    {option}
+                  </label>
+                ))}
+                <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
+                  <input
+                    type="radio"
+                    value="Others"
+                    {...register("intake_record.nature_of_request")}
+                    checked={hasSelectedOption(natureOfRequest, "Others")}
+                    onChange={() =>
+                      setValue("intake_record.nature_of_request", "Others", {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
+                    }
+                    className="h-4 w-4 border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                  />
+                  Others
+                </label>
+                {hasSelectedOption(natureOfRequest, "Others") && (
+                  <label className="block">
+                    <span className="text-sm font-medium text-[#4B5563]">
+                      Specify Other Request
+                    </span>
+                    <input
+                      type="text"
+                      value={getOtherOptionText(natureOfRequest)}
+                      onChange={(event) =>
+                        updateOtherOption(event.target.value)
+                      }
+                      className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                    />
+                  </label>
+                )}
+              </div>
+              <FieldError
+                message={errors.intake_record?.nature_of_request?.message}
+              />
+            </section>
+
+            <section className="border-t border-[#E5E7EB] pt-4">
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                I. Nature of the Case
+              </h3>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                {natureOfCaseOptions.map((option) => (
+                  <label
+                    key={option}
+                    className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]"
+                  >
+                    <input
+                      type="radio"
+                      value={option}
+                      {...register("intake_record.nature_of_case")}
+                      className="h-4 w-4 border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                    />
+                    {option}
+                  </label>
+                ))}
+              </div>
+              <FieldError message={errors.intake_record?.nature_of_case?.message} />
+            </section>
+
+            <section className="border-t border-[#E5E7EB] pt-4">
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                Applicant Case Involvement (Party Represented)
               </h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {[
-                  "Plaintiff",
-                  "Defendant",
-                  "Oppositor",
-                  "Petitioner",
-                  "Respondent",
-                  "Others",
-                  "Complainant",
-                  "Accused",
-                ].map((role) => (
+                {applicantRoleOptions.map((role) => (
                   <label
                     key={role}
                     className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]"
@@ -1222,48 +1373,70 @@ export function CaseWorkflow({
                   />
                 </div>
               )}
-              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <CheckboxInput
-                  label="Plaintiff"
-                  registration={register("intake_record.inv_plaintiff")}
-                  status={indicators["intake_record.inv_plaintiff"]}
-                />
-                <CheckboxInput
-                  label="Defendant"
-                  registration={register("intake_record.inv_defendant")}
-                  status={indicators["intake_record.inv_defendant"]}
-                />
-                <CheckboxInput
-                  label="Oppositor"
-                  registration={register("intake_record.inv_oppositor")}
-                  status={indicators["intake_record.inv_oppositor"]}
-                />
-                <CheckboxInput
-                  label="Petitioner"
-                  registration={register("intake_record.inv_petitioner")}
-                  status={indicators["intake_record.inv_petitioner"]}
-                />
-                <CheckboxInput
-                  label="Respondent"
-                  registration={register("intake_record.inv_respondent")}
-                  status={indicators["intake_record.inv_respondent"]}
-                />
-                <CheckboxInput
-                  label="Complainant"
-                  registration={register("intake_record.inv_complainant")}
-                  status={indicators["intake_record.inv_complainant"]}
-                />
-                <CheckboxInput
-                  label="Accused"
-                  registration={register("intake_record.inv_accused")}
-                  status={indicators["intake_record.inv_accused"]}
-                />
+            </section>
+
+            <section className="border-t border-[#E5E7EB] pt-4">
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                Case Status
+              </h3>
+              <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <label className="block">
+                  <span className="text-sm font-medium text-[#4B5563]">
+                    Status of Case
+                    <FieldStatus status={indicators["cases.status_of_case"]} />
+                  </span>
+                  <select
+                    {...register("cases.status_of_case")}
+                    className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                  >
+                    <option>Pending</option>
+                    <option>Terminated</option>
+                  </select>
+                </label>
                 <TextInput
-                  label="Others"
-                  registration={register("intake_record.inv_others")}
-                  error={errors.intake_record?.inv_others?.message}
-                  status={indicators["intake_record.inv_others"]}
+                  label="Last Action Taken"
+                  registration={register("cases.last_action_taken")}
+                  error={errors.cases?.last_action_taken?.message}
                 />
+                <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
+                  <input
+                    type="checkbox"
+                    {...register("cases.detained")}
+                    className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                  />
+                  Detained
+                  <FieldStatus status={indicators["cases.detained"]} />
+                </label>
+                {caseDetained && (
+                  <>
+                    <TextInput
+                      label="Date of Detention"
+                      type="date"
+                      registration={register("cases.date_of_confinement")}
+                      error={errors.cases?.date_of_confinement?.message}
+                    />
+                    <TextInput
+                      label="Place of Detention"
+                      registration={register("cases.place_of_detention")}
+                      error={errors.cases?.place_of_detention?.message}
+                    />
+                  </>
+                )}
+                {caseStatus === "Terminated" && (
+                  <>
+                    <TextInput
+                      label="Cause of Termination"
+                      registration={register("cases.cause_of_termination")}
+                      status={indicators["cases.cause_of_termination"]}
+                    />
+                    <TextInput
+                      label="Date of Termination"
+                      type="date"
+                      registration={register("cases.date_of_termination")}
+                      status={indicators["cases.date_of_termination"]}
+                    />
+                  </>
+                )}
               </div>
             </section>
 
@@ -1312,6 +1485,7 @@ export function CaseWorkflow({
                     label="Representative Name"
                     registration={register("representative.rep_name")}
                     error={errors.representative?.rep_name?.message}
+                    disabled={representativeNotApplicable}
                   />
                   <TextInput
                     label="Representative Age"
@@ -1320,6 +1494,7 @@ export function CaseWorkflow({
                       valueAsNumber: true,
                     })}
                     error={errors.representative?.rep_age?.message}
+                    disabled={representativeNotApplicable}
                   />
                   <label className="block">
                     <span className="text-sm font-medium text-[#4B5563]">
@@ -1327,6 +1502,7 @@ export function CaseWorkflow({
                     </span>
                     <select
                       {...register("representative.rep_sex")}
+                      disabled={representativeNotApplicable}
                       className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
                     >
                       <option value="">Select</option>
@@ -1337,20 +1513,34 @@ export function CaseWorkflow({
                       message={errors.representative?.rep_sex?.message}
                     />
                   </label>
-                  <TextInput
-                    label="Civil Status"
-                    registration={register("representative.civil_status")}
-                    error={errors.representative?.civil_status?.message}
-                  />
+                  <label className="block">
+                    <span className="text-sm font-medium text-[#4B5563]">
+                      Civil Status
+                    </span>
+                    <select
+                      {...register("representative.civil_status")}
+                      className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                    >
+                      <option value="">Select</option>
+                      {civilStatusOptions.map((option) => (
+                        <option key={option}>{option}</option>
+                      ))}
+                    </select>
+                    <FieldError
+                      message={errors.representative?.civil_status?.message}
+                    />
+                  </label>
                   <TextInput
                     label="Representative Address"
                     registration={register("representative.rep_address")}
                     error={errors.representative?.rep_address?.message}
+                    disabled={representativeNotApplicable}
                   />
                   <TextInput
                     label="Representative Contact No."
                     registration={register("representative.rep_contact_no")}
                     error={errors.representative?.rep_contact_no?.message}
+                    disabled={representativeNotApplicable}
                   />
                   <TextInput
                     label="Relationship to Applicant"
@@ -1360,6 +1550,7 @@ export function CaseWorkflow({
                     error={
                       errors.representative?.relationship_to_applicant?.message
                     }
+                    disabled={representativeNotApplicable}
                   />
                 </div>
               ) : (
@@ -1379,25 +1570,96 @@ export function CaseWorkflow({
             </section>
 
             <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
-                VIII-A Adverse Party
+              <h3 className="text-sm font-semibold text-[#111827]">
+                Proof of Qualification
               </h3>
-              <div className="mt-3 grid gap-4 md:grid-cols-2">
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
+                  <input
+                    type="checkbox"
+                    {...register("intake_record.proof_submission_satisfied")}
+                    className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                  />
+                  Will submit proof later
+                  <FieldStatus status={indicators["intake_record.proof_submission_satisfied"]} />
+                </label>
                 <TextInput
-                  label="Adverse Party Role"
-                  registration={register("adverse_party.role")}
-                  error={errors.adverse_party?.role?.message}
+                  label="Submission Deadline (optional)"
+                  type="date"
+                  registration={register("intake_record.proof_submission_deadline")}
+                  error={errors.intake_record?.proof_submission_deadline?.message}
+                  status={indicators["intake_record.proof_submission_deadline"]}
                 />
+                <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
+                  <input
+                    type="checkbox"
+                    {...register("intake_record.proof_itr_satisfied")}
+                    className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                  />
+                  Income Tax Return / proof of income satisfied
+                  <FieldStatus status={indicators["intake_record.proof_itr_satisfied"]} />
+                </label>
                 <TextInput
-                  label="Adverse Party Name"
-                  registration={register("adverse_party.name")}
-                  error={errors.adverse_party?.name?.message}
+                  label="ITR Date (optional)"
+                  type="date"
+                  registration={register("intake_record.proof_itr_date")}
+                  error={errors.intake_record?.proof_itr_date?.message}
+                  status={indicators["intake_record.proof_itr_date"]}
+                />
+                <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
+                  <input
+                    type="checkbox"
+                    {...register("intake_record.proof_brgy_satisfied")}
+                    className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                  />
+                  Barangay certification / indigency satisfied
+                  <FieldStatus status={indicators["intake_record.proof_brgy_satisfied"]} />
+                </label>
+                <TextInput
+                  label="Barangay Certification Date (optional)"
+                  type="date"
+                  registration={register("intake_record.proof_brgy_date")}
+                  error={errors.intake_record?.proof_brgy_date?.message}
+                  status={indicators["intake_record.proof_brgy_date"]}
+                />
+                <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
+                  <input
+                    type="checkbox"
+                    {...register("intake_record.proof_dswd_satisfied")}
+                    className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                  />
+                  DSWD certification satisfied
+                  <FieldStatus status={indicators["intake_record.proof_dswd_satisfied"]} />
+                </label>
+                <TextInput
+                  label="DSWD Certification Date (optional)"
+                  type="date"
+                  registration={register("intake_record.proof_dswd_date")}
+                  error={errors.intake_record?.proof_dswd_date?.message}
+                  status={indicators["intake_record.proof_dswd_date"]}
+                />
+                <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
+                  <input
+                    type="checkbox"
+                    {...register("intake_record.proof_others_satisfied")}
+                    className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                  />
+                  Other accepted proof satisfied
+                  <FieldStatus status={indicators["intake_record.proof_others_satisfied"]} />
+                </label>
+                <TextInput
+                  label="Other Proof Date (optional)"
+                  type="date"
+                  registration={register("intake_record.proof_others_date")}
+                  error={errors.intake_record?.proof_others_date?.message}
+                  status={indicators["intake_record.proof_others_date"]}
                 />
                 <div className="md:col-span-2">
                   <TextInput
-                    label="Adverse Party Address"
-                    registration={register("adverse_party.address")}
-                    error={errors.adverse_party?.address?.message}
+                    label="Other Proof Details"
+                    registration={register("intake_record.proof_others_details")}
+                    error={errors.intake_record?.proof_others_details?.message}
+                    status={indicators["intake_record.proof_others_details"]}
                   />
                 </div>
               </div>
@@ -1405,39 +1667,29 @@ export function CaseWorkflow({
 
             <section className="border-t border-[#E5E7EB] pt-4">
               <h3 className="text-sm font-semibold text-[#2B3642]">
-                Case Status
+                Case Facts and Cause
+              </h3>
+              <div className="mt-3 grid gap-4">
+                <TextArea
+                  label="Fact of the Case"
+                  registration={register("cases.facts_of_case")}
+                  error={errors.cases?.facts_of_case?.message}
+                  status={indicators["cases.facts_of_case"]}
+                />
+                <TextArea
+                  label="Cause of Action"
+                  registration={register("cases.cause_of_action")}
+                  error={errors.cases?.cause_of_action?.message}
+                  status={indicators["cases.cause_of_action"]}
+                />
+              </div>
+            </section>
+
+            <section className="border-t border-[#E5E7EB] pt-4">
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                Incident Location
               </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-[#4B5563]">
-                    Status of Case
-                    <FieldStatus status={indicators["cases.status_of_case"]} />
-                  </span>
-                  <select
-                    {...register("cases.status_of_case")}
-                    className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-                  >
-                    <option>Pending</option>
-                    <option>Ongoing</option>
-                    <option>Active</option>
-                    <option>Terminated</option>
-                    <option>Archived</option>
-                  </select>
-                </label>
-                <TextInput
-                  label="Last Action Taken"
-                  registration={register("cases.last_action_taken")}
-                  error={errors.cases?.last_action_taken?.message}
-                />
-                <TextInput
-                  label="Date of Confinement"
-                  type="date"
-                  registration={register("cases.date_of_confinement")}
-                />
-                <TextInput
-                  label="Place of Detention"
-                  registration={register("cases.place_of_detention")}
-                />
                 <label className="block">
                   <span className="text-sm font-medium text-[#4B5563]">
                     Location Type
@@ -1451,90 +1703,19 @@ export function CaseWorkflow({
                     <option>Rural</option>
                   </select>
                 </label>
-                <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
-                  <input
-                    type="checkbox"
-                    {...register("cases.pending_in_court")}
-                    className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
-                  />
-                  Pending in Court?
-                </label>
-                <div className="md:col-span-2 lg:col-span-3">
-                  <TextArea
-                    label="VIII-B Facts of Case"
-                    registration={register("cases.facts_of_case")}
-                    error={errors.cases?.facts_of_case?.message}
-                    status={indicators["cases.facts_of_case"]}
-                  />
-                </div>
-                <div className="md:col-span-2 lg:col-span-3">
-                  <TextArea
-                    label="VIII-C Cause of Action / Nature of Offense"
-                    registration={register("cases.cause_of_action")}
-                    error={errors.cases?.cause_of_action?.message}
-                    status={indicators["cases.cause_of_action"]}
-                  />
-                </div>
-                {pendingInCourt && (
-                  <div className="md:col-span-2 lg:col-span-3">
-                    <h4 className="mb-3 text-sm font-semibold text-[#2B3642]">
-                      VIII-D Pending Court Details
-                    </h4>
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <TextInput
-                        label="Title of Case"
-                        registration={register("cases.title_of_case")}
-                        error={errors.cases?.title_of_case?.message}
-                        status={indicators["cases.title_of_case"]}
-                      />
-                      <TextInput
-                        label="Docket Number"
-                        registration={register("cases.case_no")}
-                        error={errors.cases?.case_no?.message}
-                        status={indicators["cases.case_no"]}
-                      />
-                      <TextInput
-                        label="Court / Body / Tribunal"
-                        registration={register("cases.court_body")}
-                        error={errors.cases?.court_body?.message}
-                        status={indicators["cases.court_body"]}
-                      />
-                    </div>
-                  </div>
-                )}
-                {status === "Terminated" && (
-                  <>
-                    <TextInput
-                      label="Cause of Termination"
-                      registration={register("cases.cause_of_termination")}
-                      status={indicators["cases.cause_of_termination"]}
-                    />
-                    <TextInput
-                      label="Date of Termination"
-                      type="date"
-                      registration={register("cases.date_of_termination")}
-                      status={indicators["cases.date_of_termination"]}
-                    />
-                  </>
-                )}
-              </div>
-            </section>
-
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
-                Incident Location
-              </h3>
-              <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <label className="block">
                   <span className="text-sm font-medium text-[#4B5563]">
                     Barangay
                   </span>
                   <select
                     {...register("cases.incident_barangay")}
+                    disabled={!locationType}
                     className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
                   >
-                    <option value="">Select barangay</option>
-                    {panaboBarangays.map((barangay) => (
+                    <option value="">
+                      {locationType ? "Select barangay" : "Select location type first"}
+                    </option>
+                    {filteredBarangays.map((barangay) => (
                       <option key={barangay}>{barangay}</option>
                     ))}
                   </select>

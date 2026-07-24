@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CaseStatus, ClientRecord, CriminalCaseRecord } from "../types";
+import type { ClientRecord, CriminalCaseRecord } from "../types";
 
 export type CaseTableFilter = "all" | "urban" | "rural" | "male" | "female" | "terminated";
 
@@ -10,7 +10,7 @@ export interface CriminalCaseRow {
 }
 
 export const criminalCaseExportFilterSchema = z.object({
-  status: z.enum(["All", "Active", "Pending", "Ongoing", "Terminated", "Archived"]).default("All"),
+  status: z.enum(["All", "Pending", "Terminated"]).default("All"),
   date_from: z.string().optional(),
   date_to: z.string().optional(),
   location_type: z.enum(["All", "Urban", "Rural"]).default("All"),
@@ -70,6 +70,11 @@ export function filterCriminalCaseRows(
   const locationType = filters.location_type ?? "All";
 
   return rows.filter(({ record, clientName, client }) => {
+    const participantSexValues = record.participants?.length
+      ? record.participants.map((participant) => participant.sex)
+      : client
+        ? [client.client.sex]
+        : [];
     const matchesSearch =
       !normalized ||
       [
@@ -88,8 +93,8 @@ export function filterCriminalCaseRows(
       tableFilter === "all" ||
       (tableFilter === "urban" && record.cases.location_type === "Urban") ||
       (tableFilter === "rural" && record.cases.location_type === "Rural") ||
-      (tableFilter === "male" && client?.client.sex === "Male") ||
-      (tableFilter === "female" && client?.client.sex === "Female") ||
+      (tableFilter === "male" && participantSexValues.includes("Male")) ||
+      (tableFilter === "female" && participantSexValues.includes("Female")) ||
       (tableFilter === "terminated" && record.cases.status_of_case === "Terminated");
 
     const matchesStatus = status === "All" || record.cases.status_of_case === status;
@@ -103,13 +108,13 @@ export function filterCriminalCaseRows(
     const matchesBarangay = barangay === "All" || (record.cases.incident_barangay ?? "") === barangay;
     const rowCategory = record.cases.cause_of_action || record.intake_record.nature_of_case;
     const matchesCategory = category === "All" || rowCategory === category;
-    const matchesGender = gender === "All" || client?.client.sex === gender;
+    const matchesGender = gender === "All" || participantSexValues.includes(gender);
     const rowStaff = record.created_by_user_id === null ? "Unassigned" : `User #${record.created_by_user_id}`;
     const matchesStaff = staff === "All" || rowStaff === staff;
     const rowTerminationStatus =
       record.cases.is_terminated || record.cases.status_of_case === "Terminated"
         ? "Terminated"
-        : "Active";
+        : "Pending";
     const matchesTerminationStatus =
       terminationStatus === "All" || rowTerminationStatus === terminationStatus;
     const date = recordDate(record);

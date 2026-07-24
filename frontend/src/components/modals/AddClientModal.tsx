@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useForm } from "react-hook-form";
 import type {
@@ -46,6 +46,38 @@ const extractionEngineLabels: Record<ExtractionEngineMode, string> = {
   offline: "Offline PaddleOCR",
   cloud: "Cloud Vision",
 };
+
+const civilStatusOptions = [
+  "Single",
+  "Married",
+  "Widowed",
+  "Separated",
+  "Annulled",
+  "Divorced",
+  "None",
+];
+
+const educationalAttainmentOptions = [
+  "None",
+  "Elementary Level",
+  "Elementary Graduate",
+  "High School Level",
+  "High School Graduate",
+  "Vocational",
+  "College Level",
+  "College Graduate",
+  "Postgraduate",
+];
+
+const religionOptions = [
+  "Roman Catholic",
+  "Christian",
+  "Iglesia ni Cristo",
+  "Islam",
+  "Buddhist",
+  "Indigenous Belief",
+  "None",
+];
 
 const defaultValues: ClientFormValues = {
   client: {
@@ -143,12 +175,14 @@ function TextInput({
   error,
   type = "text",
   status,
+  disabled = false,
 }: {
   label: string;
   registration: UseFormRegisterReturn;
   error?: string;
   type?: string;
   status?: ExtractionMap[string];
+  disabled?: boolean;
 }) {
   return (
     <label className="block">
@@ -158,8 +192,9 @@ function TextInput({
       </span>
       <input
         type={type}
+        disabled={disabled}
         {...registration}
-        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20 disabled:cursor-not-allowed disabled:bg-[#F3F4F6] disabled:text-[#6B7280]"
       />
       <FieldError message={error} />
     </label>
@@ -172,12 +207,14 @@ function SelectInput({
   error,
   status,
   options,
+  disabled = false,
 }: {
   label: string;
   registration: UseFormRegisterReturn;
   error?: string;
   status?: ExtractionMap[string];
   options: string[];
+  disabled?: boolean;
 }) {
   return (
     <label className="block">
@@ -187,13 +224,51 @@ function SelectInput({
       </span>
       <select
         {...registration}
-        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+        disabled={disabled}
+        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20 disabled:cursor-not-allowed disabled:bg-[#F3F4F6] disabled:text-[#6B7280]"
       >
         <option value="">Select</option>
         {options.map((option) => (
           <option key={option}>{option}</option>
         ))}
       </select>
+      <FieldError message={error} />
+    </label>
+  );
+}
+
+function ComboInput({
+  label,
+  registration,
+  error,
+  status,
+  options,
+  listId,
+}: {
+  label: string;
+  registration: UseFormRegisterReturn;
+  error?: string;
+  status?: ExtractionMap[string];
+  options: string[];
+  listId: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-[#4B5563]">
+        {label}
+        <FieldStatus status={status} />
+      </span>
+      <input
+        type="text"
+        list={listId}
+        {...registration}
+        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+      />
+      <datalist id={listId}>
+        {options.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
       <FieldError message={error} />
     </label>
   );
@@ -326,9 +401,47 @@ export default function AddClientModal({
     mode: "onBlur",
   });
 
+  const spouseValue = watch("client_details.spouse");
+  const representativeCivilStatus = watch(
+    "client_details.representative_civil_status",
+  );
+  const clientDetained = watch("client_details.detained");
+
+  useEffect(() => {
+    if (spouseValue !== "None") return;
+    setValue("client_details.address_of_spouse", "None", { shouldDirty: true });
+    setValue("client_details.contact_no_of_spouse", "None", { shouldDirty: true });
+  }, [setValue, spouseValue]);
+
+  useEffect(() => {
+    if (representativeCivilStatus !== "None") return;
+    setValue("client_details.representative_name", "None", { shouldDirty: true });
+    setValue("client_details.representative_age", 0, { shouldDirty: true });
+    setValue("client_details.representative_sex", "None", { shouldDirty: true });
+    setValue("client_details.representative_address", "None", {
+      shouldDirty: true,
+    });
+    setValue("client_details.representative_contact_no", "None", {
+      shouldDirty: true,
+    });
+    setValue("client_details.representative_relationship", "None", {
+      shouldDirty: true,
+    });
+    setValue("client_details.representative_email", "", { shouldDirty: true });
+  }, [representativeCivilStatus, setValue]);
+
+  useEffect(() => {
+    if (clientDetained) return;
+    setValue("client_details.detained_since", "", { shouldDirty: true });
+    setValue("client_details.place_of_detention", "", { shouldDirty: true });
+  }, [clientDetained, setValue]);
+
   if (!isOpen) return null;
 
   const values = watch();
+  const spouseNotApplicable = values.client_details.spouse === "None";
+  const representativeNotApplicable =
+    values.client_details.representative_civil_status === "None";
   const hasOcrResult = Object.keys(indicators).length > 0;
 
   const closeModal = () => {
@@ -498,7 +611,43 @@ export default function AddClientModal({
 
   const onSubmit = async (data: ClientFormValues) => {
     try {
-      const client = await createClientRecord(data);
+      const spouseNotApplicable = data.client_details.spouse === "None";
+      const representativeNotApplicable =
+        data.client_details.representative_civil_status === "None";
+      const client = await createClientRecord({
+        ...data,
+        client_details: {
+          ...data.client_details,
+          address_of_spouse: spouseNotApplicable
+            ? "None"
+            : data.client_details.address_of_spouse,
+          contact_no_of_spouse: spouseNotApplicable
+            ? "None"
+            : data.client_details.contact_no_of_spouse,
+          representative_name: representativeNotApplicable
+            ? "None"
+            : data.client_details.representative_name,
+          representative_sex: representativeNotApplicable
+            ? "None"
+            : data.client_details.representative_sex,
+          representative_address: representativeNotApplicable
+            ? "None"
+            : data.client_details.representative_address,
+          representative_contact_no: representativeNotApplicable
+            ? "None"
+            : data.client_details.representative_contact_no,
+          representative_relationship: representativeNotApplicable
+            ? "None"
+            : data.client_details.representative_relationship,
+          detained: Boolean(data.client_details.detained),
+          detained_since: data.client_details.detained
+            ? data.client_details.detained_since
+            : "",
+          place_of_detention: data.client_details.detained
+            ? data.client_details.place_of_detention
+            : "",
+        },
+      });
       upsertClient(client);
       addLog({
         userId: user?.user_id,
@@ -536,8 +685,8 @@ export default function AddClientModal({
         role="dialog"
         aria-modal="true"
       >
-        <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-          <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
+        <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+          <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-[#2B3642]">
@@ -560,6 +709,7 @@ export default function AddClientModal({
           </div>
 
           {phase === "case" && createdClient ? (
+            <div className="min-h-0 flex-1 overflow-y-auto">
             <CaseWorkflow
               clients={[]}
               lockedClient={createdClient}
@@ -589,9 +739,10 @@ export default function AddClientModal({
                 closeModal();
               }}
             />
+            </div>
           ) : !method ? (
-            <>
-              <div className="border-b border-[#E5E7EB] bg-white px-6 py-4">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="shrink-0 border-b border-[#E5E7EB] bg-white px-6 py-4">
                 <StepIndicator steps={workflowSteps} currentStep={0} />
               </div>
               <div className="grid gap-4 bg-white p-6 md:grid-cols-3">
@@ -620,7 +771,7 @@ export default function AddClientModal({
                   onSelect={setMethod}
                 />
               </div>
-            </>
+            </div>
           ) : (
             <form
               onSubmit={handleSubmit(onSubmit, () =>
@@ -793,23 +944,27 @@ export default function AddClientModal({
                       status={indicators["client.sex"]}
                       options={["Female", "Male"]}
                     />
-                    <TextInput
+                    <SelectInput
                       label="Civil Status"
                       registration={register("client.civil_status")}
                       error={errors.client?.civil_status?.message}
                       status={indicators["client.civil_status"]}
+                      options={civilStatusOptions}
                     />
-                    <TextInput
+                    <ComboInput
                       label="Religion"
                       registration={register("client.religion")}
                       error={errors.client?.religion?.message}
                       status={indicators["client.religion"]}
+                      options={religionOptions}
+                      listId="client-religion-options"
                     />
-                    <TextInput
+                    <SelectInput
                       label="Educational Attainment"
                       registration={register("client.educational_attainment")}
                       error={errors.client?.educational_attainment?.message}
                       status={indicators["client.educational_attainment"]}
+                      options={educationalAttainmentOptions}
                     />
                     <TextInput
                       label="Citizenship"
@@ -862,17 +1017,60 @@ export default function AddClientModal({
                         indicators["client_details.individual_monthly_income"]
                       }
                     />
-                    <TextInput
-                      label="Spouse"
-                      registration={register("client_details.spouse")}
-                      status={indicators["client_details.spouse"]}
-                    />
+                    <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
+                      <input
+                        type="checkbox"
+                        {...register("client_details.detained")}
+                        className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389]"
+                      />
+                      Detained
+                      <FieldStatus status={indicators["client_details.detained"]} />
+                    </label>
+                    {clientDetained && (
+                      <>
+                        <TextInput
+                          label="Detained Since"
+                          type="date"
+                          registration={register("client_details.detained_since")}
+                          status={indicators["client_details.detained_since"]}
+                        />
+                        <TextInput
+                          label="Place of Detention"
+                          registration={register("client_details.place_of_detention")}
+                          status={indicators["client_details.place_of_detention"]}
+                        />
+                      </>
+                    )}
+                    <div>
+                      <TextInput
+                        label="Spouse"
+                        registration={register("client_details.spouse")}
+                        status={indicators["client_details.spouse"]}
+                        disabled={spouseNotApplicable}
+                      />
+                      <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-[#4B5563]">
+                        <input
+                          type="checkbox"
+                          checked={spouseNotApplicable}
+                          onChange={(event) =>
+                            setValue(
+                              "client_details.spouse",
+                              event.target.checked ? "None" : "",
+                              { shouldDirty: true, shouldValidate: true },
+                            )
+                          }
+                          className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389]"
+                        />
+                        None
+                      </label>
+                    </div>
                     <TextInput
                       label="Address of Spouse"
                       registration={register(
                         "client_details.address_of_spouse",
                       )}
                       status={indicators["client_details.address_of_spouse"]}
+                      disabled={spouseNotApplicable}
                     />
                     <TextInput
                       label="Contact No. of Spouse"
@@ -880,6 +1078,7 @@ export default function AddClientModal({
                         "client_details.contact_no_of_spouse",
                       )}
                       status={indicators["client_details.contact_no_of_spouse"]}
+                      disabled={spouseNotApplicable}
                     />
                     <TextInput
                       label="Representative Name"
@@ -887,6 +1086,7 @@ export default function AddClientModal({
                         "client_details.representative_name",
                       )}
                       status={indicators["client_details.representative_name"]}
+                      disabled={representativeNotApplicable}
                     />
                     <TextInput
                       label="Representative Age"
@@ -897,6 +1097,7 @@ export default function AddClientModal({
                       )}
                       error={errors.client_details?.representative_age?.message}
                       status={indicators["client_details.representative_age"]}
+                      disabled={representativeNotApplicable}
                     />
                     <SelectInput
                       label="Representative Sex"
@@ -905,8 +1106,9 @@ export default function AddClientModal({
                       )}
                       status={indicators["client_details.representative_sex"]}
                       options={["Female", "Male"]}
+                      disabled={representativeNotApplicable}
                     />
-                    <TextInput
+                    <SelectInput
                       label="Representative Civil Status"
                       registration={register(
                         "client_details.representative_civil_status",
@@ -914,6 +1116,7 @@ export default function AddClientModal({
                       status={
                         indicators["client_details.representative_civil_status"]
                       }
+                      options={civilStatusOptions}
                     />
                     <TextInput
                       label="Representative Address"
@@ -923,6 +1126,7 @@ export default function AddClientModal({
                       status={
                         indicators["client_details.representative_address"]
                       }
+                      disabled={representativeNotApplicable}
                     />
                     <TextInput
                       label="Representative Contact Number"
@@ -932,6 +1136,7 @@ export default function AddClientModal({
                       status={
                         indicators["client_details.representative_contact_no"]
                       }
+                      disabled={representativeNotApplicable}
                     />
                     <TextInput
                       label="Relationship to Applicant"
@@ -941,6 +1146,7 @@ export default function AddClientModal({
                       status={
                         indicators["client_details.representative_relationship"]
                       }
+                      disabled={representativeNotApplicable}
                     />
                     <TextInput
                       label="Representative Email"
@@ -952,32 +1158,7 @@ export default function AddClientModal({
                         errors.client_details?.representative_email?.message
                       }
                       status={indicators["client_details.representative_email"]}
-                    />
-                    <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
-                      <input
-                        type="checkbox"
-                        {...register("client_details.detained")}
-                        className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389]"
-                      />
-                      Detained
-                      <FieldStatus
-                        status={indicators["client_details.detained"]}
-                      />
-                    </label>
-                    {values.client_details.detained && (
-                      <TextInput
-                        label="Detained Since"
-                        type="date"
-                        registration={register("client_details.detained_since")}
-                        status={indicators["client_details.detained_since"]}
-                      />
-                    )}
-                    <TextInput
-                      label="Place of Detention"
-                      registration={register(
-                        "client_details.place_of_detention",
-                      )}
-                      status={indicators["client_details.place_of_detention"]}
+                      disabled={representativeNotApplicable}
                     />
                   </div>
                 )}

@@ -55,6 +55,36 @@ function normalizeTemplateAssets(doc: Document) {
   }
 }
 
+function removeUntilNextGreenBar(start: Element) {
+  let current = start.nextElementSibling;
+  start.remove();
+  while (current && !current.classList.contains("green-bar") && !current.classList.contains("form-footer-code")) {
+    const next = current.nextElementSibling;
+    current.remove();
+    current = next;
+  }
+}
+
+function removeGreenBarWithContent(doc: Document, matcher: (text: string) => boolean) {
+  Array.from(doc.querySelectorAll(".green-bar")).forEach((bar) => {
+    const text = (bar.textContent ?? "").toLowerCase();
+    if (!matcher(text)) return;
+    removeUntilNextGreenBar(bar);
+  });
+}
+
+function removeObsoleteOfficialSections(doc: Document) {
+  removeGreenBarWithContent(doc, (text) =>
+    text.includes("conflict-of-interest") || text.includes("conflict of interest"),
+  );
+  removeGreenBarWithContent(doc, (text) =>
+    text.includes("viii-a") && text.includes("adverse"),
+  );
+  removeGreenBarWithContent(doc, (text) =>
+    text.includes("viii-a") && text.includes("katunggali"),
+  );
+}
+
 function hydrateEnglish(doc: Document, data: PrintableFormData) {
   const inputs = Array.from(doc.querySelectorAll("input[type='text'], input[type='email'], input[type='number'], input[type='date']")) as HTMLInputElement[];
   const textareas = Array.from(doc.querySelectorAll("textarea")) as HTMLTextAreaElement[];
@@ -105,8 +135,6 @@ function hydrateEnglish(doc: Document, data: PrintableFormData) {
   setInput(inputs, 47, details.address);
   setInput(inputs, 48, details.individual_monthly_income);
   setInput(inputs, 61, record.intake_record.applicant_role_other);
-  setInput(inputs, 62, record.adverse_party.name);
-  setInput(inputs, 63, record.adverse_party.address);
 
   setTextarea(textareas, 0, caseDetails.facts_of_case);
   setTextarea(textareas, 1, caseDetails.cause_of_action);
@@ -182,8 +210,6 @@ function hydrateFilipino(doc: Document, data: PrintableFormData) {
   setInput(inputs, 47, details.address);
   setInput(inputs, 48, details.individual_monthly_income);
   setInput(inputs, 61, record.intake_record.applicant_role_other);
-  setInput(inputs, 62, record.adverse_party.name);
-  setInput(inputs, 63, record.adverse_party.address);
 
   setTextarea(textareas, 0, caseDetails.facts_of_case);
   setTextarea(textareas, 1, caseDetails.cause_of_action);
@@ -220,6 +246,7 @@ export function hydrateOfficialTemplate(
   injectPrintSafety(doc);
   if (language === "english") hydrateEnglish(doc, data);
   else hydrateFilipino(doc, data);
+  removeObsoleteOfficialSections(doc);
   return `<!doctype html>\n${doc.documentElement.outerHTML}`;
 }
 

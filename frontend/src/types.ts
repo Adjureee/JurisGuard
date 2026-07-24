@@ -1,4 +1,4 @@
-export type CaseStatus = "Pending" | "Ongoing" | "Active" | "Terminated" | "Archived";
+export type CaseStatus = "Pending" | "Terminated";
 export type IntakeMethod = "manual" | "camera" | "upload";
 export type ExtractionStatus = "extracted" | "missing";
 
@@ -82,9 +82,14 @@ export interface IntakeRecord {
   coi_waive_right_to_complain: boolean;
   coi_trust_assigned_counsel: boolean;
   proof_submission_deadline: string;
+  proof_submission_satisfied?: boolean;
+  proof_itr_satisfied?: boolean;
   proof_itr_date: string;
+  proof_brgy_satisfied?: boolean;
   proof_brgy_date: string;
+  proof_dswd_satisfied?: boolean;
   proof_dswd_date: string;
+  proof_others_satisfied?: boolean;
   proof_others_details: string;
   proof_others_date: string;
   inv_plaintiff: boolean;
@@ -113,6 +118,20 @@ export interface AdverseParty {
   address: string;
 }
 
+export interface CaseParticipant {
+  case_client_id: string;
+  client_id: string;
+  name: string;
+  sex: string;
+  age: number;
+  party_represented: string;
+  applicant_role: string;
+  applicant_role_other: string;
+  address: string;
+  contact_no: string;
+  classification?: Partial<ClientClassification>;
+}
+
 export interface CaseDetails {
   title_of_case: string;
   case_no: string;
@@ -125,6 +144,7 @@ export interface CaseDetails {
   latitude?: string;
   longitude?: string;
   last_action_taken: string;
+  detained?: boolean;
   date_of_confinement: string;
   place_of_detention: string;
   location_type: "Urban" | "Rural" | "";
@@ -155,6 +175,7 @@ export interface CriminalCaseRecord {
   representative: Representative;
   adverse_party: AdverseParty;
   cases: CaseDetails;
+  participants?: CaseParticipant[];
   last_updated: string;
 }
 

@@ -35,7 +35,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-type CaseStatus = "Active" | "Pending" | "Terminated" | string;
+type CaseStatus = "Pending" | "Terminated" | string;
 
 interface CaseMapPoint {
   id: number | string;
@@ -63,12 +63,6 @@ const STATUS_STYLE: Record<
   string,
   { stroke: string; fill: string; label: string; badge: string }
 > = {
-  active: {
-    stroke: "#2563EB",
-    fill: "#93C5FD",
-    label: "Active",
-    badge: "bg-blue-50 text-blue-700 ring-blue-200",
-  },
   pending: {
     stroke: "#D97706",
     fill: "#FCD34D",
@@ -314,9 +308,6 @@ export default function GeoAnalyticsMap({
           </p>
         </div>
         <div className="flex gap-2 text-xs font-semibold">
-          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700 ring-1 ring-blue-200">
-            Active
-          </span>
           <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 ring-1 ring-amber-200">
             Pending
           </span>
@@ -375,7 +366,7 @@ export default function GeoAnalyticsMap({
                         {barangay.active_cases}
                       </p>
                       <p className="text-[10px] uppercase text-[#2563EB]">
-                        Active
+                        Pending
                       </p>
                     </div>
                     <div className="rounded-md bg-[#FEE2E2] p-2">

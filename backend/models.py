@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -67,6 +67,7 @@ class Client(Base):
     classification = relationship("ClientClassification", back_populates="client", uselist=False)
     intakes = relationship("IntakeRecord", back_populates="client")
     cases = relationship("Case", back_populates="client")
+    case_participations = relationship("CaseClient", back_populates="client")
 
 
 class ClientClassification(Base):
@@ -150,9 +151,14 @@ class IntakeRecord(Base):
     coi_waive_right_to_complain = Column(Boolean, default=False)
     coi_trust_assigned_counsel = Column(Boolean, default=False)
     proof_submission_deadline = Column(DateTime)
+    proof_submission_satisfied = Column(Boolean, default=False)
+    proof_itr_satisfied = Column(Boolean, default=False)
     proof_itr_date = Column(DateTime)
+    proof_brgy_satisfied = Column(Boolean, default=False)
     proof_brgy_date = Column(DateTime)
+    proof_dswd_satisfied = Column(Boolean, default=False)
     proof_dswd_date = Column(DateTime)
+    proof_others_satisfied = Column(Boolean, default=False)
     proof_others_details = Column(Text)
     proof_others_date = Column(DateTime)
     inv_plaintiff = Column(Boolean, default=False)
@@ -192,7 +198,7 @@ class Case(Base):
     client_id = Column(Integer, ForeignKey("client.client_id"))
     nature_id = Column(Integer, ForeignKey("case_nature.nature_id"))
     branch_id = Column(Integer, ForeignKey("court_branch.branch_id"))
-    title_of_case = Column(String(50), nullable=False)
+    title_of_case = Column(String(255), nullable=False)
     case_no = Column(String(20))
     court_body = Column(String(255))
     status_of_case = Column(String(20), nullable=False)
@@ -203,6 +209,7 @@ class Case(Base):
     latitude = Column(String(50))
     longitude = Column(String(50))
     last_action_taken = Column(Text)
+    detained = Column(Boolean, default=False)
     date_of_confinement = Column(DateTime)
     place_of_detention = Column(String(255))
     location_type = Column(String(20))
@@ -226,8 +233,25 @@ class Case(Base):
 
     intake = relationship("IntakeRecord", back_populates="cases")
     client = relationship("Client", back_populates="cases")
+    participants = relationship("CaseClient", back_populates="case", cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="case")
     history = relationship("CaseHistory", back_populates="case")
+
+
+class CaseClient(Base):
+    __tablename__ = "case_client"
+    __table_args__ = (UniqueConstraint("case_id", "client_id", name="uq_case_client_case_client"),)
+
+    case_client_id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, ForeignKey("case.case_id"), nullable=False, index=True)
+    client_id = Column(Integer, ForeignKey("client.client_id"), nullable=False, index=True)
+    party_represented = Column(String(100))
+    applicant_role = Column(String(100))
+    applicant_role_other = Column(String(255))
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    case = relationship("Case", back_populates="participants")
+    client = relationship("Client", back_populates="case_participations")
 
 
 class CaseHistory(Base):
