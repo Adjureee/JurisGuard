@@ -2252,7 +2252,10 @@ class JurisGuardExtractionEngine:
 # ==========================================
 _engine_instance = None
 
-def process_document(file_path: str, extraction_mode: str = "auto"):
+def process_document(file_path: str, extraction_mode: str = "auto", include_benchmarks: bool = False):
+    import time
+    start_time = time.perf_counter()
+    
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Image not found at {file_path}")
 
@@ -2260,4 +2263,12 @@ def process_document(file_path: str, extraction_mode: str = "auto"):
     if _engine_instance is None:
         _engine_instance = JurisGuardExtractionEngine()
 
-    return _engine_instance.execute_extraction(file_path=file_path, extraction_mode=extraction_mode)
+    result = _engine_instance.execute_extraction(file_path=file_path, extraction_mode=extraction_mode)
+    
+    if include_benchmarks:
+        latency = time.perf_counter() - start_time
+        result["_benchmarks"] = {
+            "processing_latency_seconds": latency
+        }
+        
+    return result
