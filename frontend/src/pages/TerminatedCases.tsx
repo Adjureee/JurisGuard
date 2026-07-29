@@ -467,10 +467,6 @@ return (
                 value={formatDate(selectedRecord.cases.terminated_at)}
               />
               <DetailField
-                label="Terminated By"
-                value={selectedRecord.cases.handled_by}
-              />
-              <DetailField
                 label="Status"
                 value={selectedRecord.cases.status_of_case}
               />

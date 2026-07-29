@@ -143,6 +143,7 @@ class ClientPayload(BaseModel):
 
 class CasePayload(BaseModel):
     client_id: int | str
+    client_ids: list[int | str] | None = None
     intake_record: dict[str, Any]
     representative: dict[str, Any]
     adverse_party: dict[str, Any]
@@ -2607,19 +2608,80 @@ def list_terminated_cases(user: models.User = Depends(current_user), db: Session
 
 
 @app.get("/api/printable-intake/{case_id}")
-def get_printable_intake(case_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def get_printable_intake(
+    case_id: int,
+    client_id: int | None = Query(default=None),
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
     record = ensure_case_access(db.get(models.Case, case_id), user)
-    if not record.client:
+    selected_client = record.client
+    selected_participant = None
+    if client_id is not None:
+        selected_participant = next(
+            (
+                participant
+                for participant in case_participants(record)
+                if participant.client_id == client_id
+            ),
+            None,
+        )
+        if selected_participant is None:
+            raise HTTPException(status_code=404, detail="Case participant not found")
+        selected_client = ensure_client_access(
+            selected_participant.client or db.get(models.Client, client_id),
+            user,
+            db,
+        )
+    if not selected_client:
         raise HTTPException(status_code=404, detail="Case client not found")
     cases = (
         scoped_case_query(db, user)
-        .filter(models.Case.client_id == record.client_id)
+        .outerjoin(models.CaseClient, models.Case.case_id == models.CaseClient.case_id)
+        .filter(
+            or_(
+                models.Case.client_id == selected_client.client_id,
+                models.CaseClient.client_id == selected_client.client_id,
+            )
+        )
+        .distinct()
         .order_by(models.Case.last_updated.desc())
         .all()
     )
+    selected_case = get_case_payload(record)
+    if selected_participant is not None:
+        involvement = selected_participant.applicant_role or ""
+        selected_case["client_id"] = str(selected_client.client_id)
+        selected_case["intake_record"]["party_represented"] = (
+            selected_participant.party_represented
+            or represented_party_from_role(
+                selected_participant.applicant_role,
+                selected_participant.applicant_role_other,
+            )
+            or ""
+        )
+        selected_case["intake_record"]["applicant_role"] = involvement
+        selected_case["intake_record"]["applicant_role_other"] = (
+            selected_participant.applicant_role_other or ""
+        )
+        for role_key, role_name in [
+            ("inv_plaintiff", "Plaintiff"),
+            ("inv_defendant", "Defendant"),
+            ("inv_oppositor", "Oppositor"),
+            ("inv_petitioner", "Petitioner"),
+            ("inv_respondent", "Respondent"),
+            ("inv_complainant", "Complainant"),
+            ("inv_accused", "Accused"),
+        ]:
+            selected_case["intake_record"][role_key] = involvement == role_name
+        selected_case["intake_record"]["inv_others"] = (
+            selected_participant.applicant_role_other
+            if involvement == "Others"
+            else ""
+        )
     return {
-        "client": get_client_payload(record.client),
-        "selected_case": get_case_payload(record),
+        "client": get_client_payload(selected_client),
+        "selected_case": selected_case,
         "cases": [get_case_payload(case) for case in cases],
         "templates": {
             "english": read_form_template("english"),
@@ -2636,8 +2698,18 @@ def create_case(
     db: Session = Depends(get_db),
 ):
     try:
-        client_id = int(payload.client_id)
-        client = ensure_client_access(db.get(models.Client, client_id), user, db)
+        primary_client_id = int(payload.client_id)
+        participant_ids: list[int] = []
+        for raw_client_id in [primary_client_id, *(payload.client_ids or [])]:
+            participant_id = int(raw_client_id)
+            if participant_id not in participant_ids:
+                participant_ids.append(participant_id)
+        client = ensure_client_access(db.get(models.Client, primary_client_id), user, db)
+        participant_clients = []
+        for participant_id in participant_ids:
+            participant_clients.append(
+                ensure_client_access(db.get(models.Client, participant_id), user, db)
+            )
 
         intake_data = payload.intake_record
         rep_data = payload.representative
@@ -2657,7 +2729,7 @@ def create_case(
         representative_none = is_none_value(rep_data.get("civil_status"))
 
         intake = models.IntakeRecord(
-            client_id=client_id,
+            client_id=primary_client_id,
             interviewer_id=user.user_id,
             control_no=limit_text(intake_data.get("control_no"), 20),
             form_date=parse_date(intake_data.get("form_date"), datetime.now()) or datetime.now(),
@@ -2710,7 +2782,7 @@ def create_case(
 
         record = models.Case(
             intake_id=intake.intake_id,
-            client_id=client_id,
+            client_id=primary_client_id,
             title_of_case=generated_case_title(client),
             case_no=limit_text(case_data.get("case_no"), 20),
             court_body=case_data.get("court_body"),
@@ -2737,14 +2809,15 @@ def create_case(
         )
         db.add(record)
         db.flush()
-        record.participants.append(
-            models.CaseClient(
-                client=client,
-                party_represented=limit_text(represented_party, 100),
-                applicant_role=intake.applicant_role,
-                applicant_role_other=intake.applicant_role_other,
+        for participant_client in participant_clients:
+            record.participants.append(
+                models.CaseClient(
+                    client=participant_client,
+                    party_represented=limit_text(represented_party, 100),
+                    applicant_role=intake.applicant_role,
+                    applicant_role_other=intake.applicant_role_other,
+                )
             )
-        )
         db.flush()
         record.title_of_case = generated_case_title_for_case(record)
         db.add(

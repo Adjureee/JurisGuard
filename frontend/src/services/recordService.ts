@@ -133,8 +133,14 @@ export interface PrintableIntakeResponse {
   };
 }
 
-export async function getPrintableIntake(caseId: string): Promise<PrintableIntakeResponse> {
-  const response = await apiClient.get<PrintableIntakeResponse>(`/printable-intake/${caseId}`);
+export async function getPrintableIntake(
+  caseId: string,
+  clientId?: string,
+): Promise<PrintableIntakeResponse> {
+  const response = await apiClient.get<PrintableIntakeResponse>(
+    `/printable-intake/${caseId}`,
+    { params: clientId ? { client_id: clientId } : undefined },
+  );
   return response.data;
 }
 

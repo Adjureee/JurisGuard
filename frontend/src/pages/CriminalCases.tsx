@@ -25,7 +25,12 @@ import {
   updateClientRecord,
   type TerminationPayload,
 } from "../services/recordService";
-import type { CaseStatus, ClientRecord, CriminalCaseRecord } from "../types";
+import type {
+  CaseParticipant,
+  CaseStatus,
+  ClientRecord,
+  CriminalCaseRecord,
+} from "../types";
 import type {
   CaseFormValues,
   ClientFormValues,
@@ -46,17 +51,6 @@ const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
   { value: "rural", label: "Rural" },
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
-];
-
-type CriminalStatusFilter = "all" | CaseStatus;
-
-const statusFilterOptions: Array<{
-  value: CriminalStatusFilter;
-  label: string;
-}> = [
-  { value: "all", label: "All Cases" },
-  { value: "Pending", label: "Pending" },
-  { value: "Terminated", label: "Terminated" },
 ];
 
 const religionOptions = [
@@ -124,43 +118,7 @@ const courtBodyOptions = [
   "MTCC - Panabo District",
 ];
 
-const natureOfRequestOptions = [
-  "Legal Advice",
-  "Inquest/Legal Assistance",
-  "Legal Documentation",
-  "Mediation/Conciliation",
-  "Representation in Court/Quasi-Judicial Bodies",
-  "Administration of Oath",
-  "Others",
-];
-
-const natureOfCaseOptions = [
-  "Criminal",
-  "Administrative",
-  "Civil",
-  "Labor",
-  "Appeal",
-];
-
-const applicantRoleOptions = [
-  "Plaintiff",
-  "Defendant",
-  "Oppositor",
-  "Petitioner",
-  "Respondent",
-  "Complainant",
-  "Accused",
-  "Others",
-];
-
-const civilStatusOptions = [
-  "Single",
-  "Married",
-  "Widowed",
-  "Separated",
-  "Divorced",
-  "None",
-];
+const courtFilterOptions = ["All Courts", ...courtBodyOptions];
 
 const classificationOptions = [
   ["flag_senior", "Senior Citizen"],
@@ -275,7 +233,10 @@ function toCaseFormValues(record: CriminalCaseRecord): CaseFormValues {
   };
 }
 
-function caseParticipants(record: CriminalCaseRecord, fallbackClient?: ClientRecord) {
+function caseParticipants(
+  record: CriminalCaseRecord,
+  fallbackClient?: ClientRecord,
+): CaseParticipant[] {
   if (record.participants?.length) return record.participants;
   return fallbackClient
     ? [
@@ -387,8 +348,22 @@ function CaseFilterSelect({
   );
 }
 
-function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
+function CaseAccordion({
+  record,
+  fallbackClient,
+  showInterviewSheets = false,
+  onInterviewSheet,
+}: {
+  record: CriminalCaseRecord;
+  fallbackClient?: ClientRecord;
+  showInterviewSheets?: boolean;
+  onInterviewSheet?: (
+    record: CriminalCaseRecord,
+    participant: CaseParticipant,
+  ) => void;
+}) {
   const [open, setOpen] = useState(false);
+  const participants = caseParticipants(record, fallbackClient);
 
   return (
     <div
@@ -444,7 +419,7 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
               Participants
             </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
-              {(record.participants ?? []).map((participant) => (
+              {participants.map((participant) => (
                 <div
                   key={participant.case_client_id || participant.client_id}
                   className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] p-3"
@@ -452,13 +427,34 @@ function CaseAccordion({ record }: { record: CriminalCaseRecord }) {
                   <p className="text-sm font-semibold text-[#2B3642]">
                     {participant.name}
                   </p>
-                  <p className="mt-1 text-xs text-[#4B5563]">
-                    {participant.sex || "Sex not set"} -{" "}
-                    {participant.party_represented || "Role not set"}
-                  </p>
+                  <dl className="mt-2 space-y-1 text-xs text-[#4B5563]">
+                    <div className="flex justify-between gap-3">
+                      <dt>Applicant Case Involvement</dt>
+                      <dd className="font-semibold text-[#2B3642]">
+                        {participant.applicant_role === "Others"
+                          ? participant.applicant_role_other
+                          : participant.applicant_role || "Role not set"}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt>Party Represented</dt>
+                      <dd className="font-semibold text-[#2B3642]">
+                        {participant.party_represented || "Not set"}
+                      </dd>
+                    </div>
+                  </dl>
+                  {showInterviewSheets && onInterviewSheet && (
+                    <button
+                      type="button"
+                      onClick={() => onInterviewSheet(record, participant)}
+                      className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
+                    >
+                      INTERVIEW SHEET
+                    </button>
+                  )}
                 </div>
               ))}
-              {(record.participants ?? []).length === 0 && (
+              {participants.length === 0 && (
                 <InfoTile
                   label="Party Represented"
                   value={record.intake_record.party_represented}
@@ -743,12 +739,6 @@ function UpdateCaseModal({
         ? ruralBarangays
         : panaboBarangays;
   const caseDetained = Boolean(values.cases.detained);
-  const natureOfRequestValue = values.intake_record.nature_of_request.startsWith("Others:")
-    ? "Others"
-    : values.intake_record.nature_of_request;
-  const natureOfRequestOther = values.intake_record.nature_of_request.startsWith("Others:")
-    ? values.intake_record.nature_of_request.replace(/^Others:\s*/, "")
-    : "";
   const updateCase = (
     field: keyof CaseFormValues["cases"],
     value: string | boolean,
@@ -757,30 +747,6 @@ function UpdateCaseModal({
       ...current,
       cases: {
         ...current.cases,
-        [field]: value,
-      },
-    }));
-  };
-  const updateIntake = (
-    field: keyof CaseFormValues["intake_record"],
-    value: string | boolean,
-  ) => {
-    setValues((current) => ({
-      ...current,
-      intake_record: {
-        ...current.intake_record,
-        [field]: value,
-      },
-    }));
-  };
-  const updateRepresentative = (
-    field: keyof CaseFormValues["representative"],
-    value: string | number,
-  ) => {
-    setValues((current) => ({
-      ...current,
-      representative: {
-        ...current.representative,
         [field]: value,
       },
     }));
@@ -1134,23 +1100,6 @@ function TerminationModal({
               setValues((current) => ({ ...current, final_remarks: value }))
             }
           />
-          <TextField
-            label="Handled By"
-            value={values.handled_by}
-            onChange={(value) =>
-              setValues((current) => ({ ...current, handled_by: value }))
-            }
-          />
-          <TextField
-            label="Supporting Document Reference"
-            value={values.supporting_document_path}
-            onChange={(value) =>
-              setValues((current) => ({
-                ...current,
-                supporting_document_path: value,
-              }))
-            }
-          />
         </div>
         <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
           <button
@@ -1338,6 +1287,20 @@ function ClientRecordModal({
       record.cases.status_of_case === "Terminated",
   ).length;
   const activeCount = Math.max(cases.length - terminatedCount, 0);
+  const titleNames = Array.from(
+    new Set(
+      cases
+        .flatMap((record) => participantNames(record, client))
+        .filter(Boolean),
+    ),
+  );
+  const openInterviewSheet = (
+    record: CriminalCaseRecord,
+    participant: CaseParticipant,
+  ) => {
+    const params = new URLSearchParams({ clientId: participant.client_id });
+    navigate(`/criminal-cases/form-view/${record.case_id}?${params.toString()}`);
+  };
 
   return (
     <ModalPortal>
@@ -1349,11 +1312,17 @@ function ClientRecordModal({
               Criminal Cases
             </p>
             <h2 className="mt-1 text-xl font-bold text-[#2B3642]">
-              {mode === "view" ? "Criminal Case Record" : "Update Record"}
+              {mode === "view"
+                ? titleNames.length
+                  ? titleNames.map((name) => <span key={name} className="block">{name}</span>)
+                  : client.client.name
+                : "Update Record"}
             </h2>
-            <p className="mt-2 truncate text-sm text-[#6B7280]">
-              {client.client.name}
-            </p>
+            {mode === "update" && (
+              <p className="mt-2 truncate text-sm text-[#6B7280]">
+                {client.client.name}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden gap-2 sm:flex">
@@ -1435,34 +1404,13 @@ function ClientRecordModal({
                   key={record.case_id}
                   className="rounded-[10px] border border-[#E5E7EB] bg-white"
                 >
-                  <CaseAccordion record={record} />
+                  <CaseAccordion
+                    record={record}
+                    fallbackClient={client}
+                    showInterviewSheets={mode === "view"}
+                    onInterviewSheet={openInterviewSheet}
+                  />
                   <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
-                    {mode === "view" && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            navigate(
-                              `/criminal-cases/form-view/${record.case_id}`,
-                            )
-                          }
-                          className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
-                        >
-                          View Form
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            navigate(
-                              `/criminal-cases/form-view/${record.case_id}?autoPrint=1`,
-                            )
-                          }
-                          className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
-                        >
-                          Print Form
-                        </button>
-                      </>
-                    )}
                     {mode === "update" && (
                       <>
                         {!(
@@ -1551,13 +1499,13 @@ export default function CriminalCasesPage() {
   const upsertCase = useCriminalCasesStore((state) => state.upsertCase);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<CaseTableFilter>("all");
-  const [statusFilter, setStatusFilter] =
-    useState<CriminalStatusFilter>("all");
+  const [courtFilter, setCourtFilter] = useState("All Courts");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
   const [showCaseModal, setShowCaseModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
+  const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [actionMode, setActionMode] = useState<"view" | "update">("view");
 
   useEffect(() => {
@@ -1647,10 +1595,9 @@ export default function CriminalCasesPage() {
       table_filter: filter,
     });
     return baseRows.filter(({ record }) => {
-      const status = record.cases.status_of_case;
-      const statusMatches =
-        statusFilter === "all" || status === statusFilter;
-      if (!statusMatches) return false;
+      const courtMatches =
+        courtFilter === "All Courts" || record.cases.court_body === courtFilter;
+      if (!courtMatches) return false;
       return matchesDateFilter(
         record.intake_record.form_date ||
           record.cases.filing_date ||
@@ -1658,19 +1605,24 @@ export default function CriminalCasesPage() {
         dateFilter,
       );
     });
-  }, [dateFilter, filter, rows, search, statusFilter]);
+  }, [courtFilter, dateFilter, filter, rows, search]);
 
   const activeClient =
     visibleClients.find((client) => client.client_id === activeClientId) ??
     null;
-  const activeCases = visibleCases.filter(
-    (record) =>
-      record.client_id === activeClientId ||
-      record.participants?.some((participant) => participant.client_id === activeClientId),
-  );
+  const activeCases = activeCaseId
+    ? visibleCases.filter((record) => record.case_id === activeCaseId)
+    : visibleCases.filter(
+        (record) =>
+          record.client_id === activeClientId ||
+          record.participants?.some(
+            (participant) => participant.client_id === activeClientId,
+          ),
+      );
 
   const openRecord = (record: CriminalCaseRecord, mode: "view" | "update") => {
     setActiveClientId(record.client_id);
+    setActiveCaseId(record.case_id);
     setActionMode(mode);
   };
 
@@ -1729,19 +1681,15 @@ export default function CriminalCasesPage() {
             <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
-                Status
+                Court / Body
               </span>
               <select
-                value={statusFilter}
-                onChange={(event) =>
-                  setStatusFilter(event.target.value as CriminalStatusFilter)
-                }
+                value={courtFilter}
+                onChange={(event) => setCourtFilter(event.target.value)}
                 className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               >
-                {statusFilterOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
+                {courtFilterOptions.map((option) => (
+                  <option key={option}>{option}</option>
                 ))}
               </select>
             </label>
@@ -1866,7 +1814,10 @@ export default function CriminalCasesPage() {
         client={activeClient}
         cases={activeCases}
         clients={visibleClients}
-        onClose={() => setActiveClientId(null)}
+        onClose={() => {
+          setActiveClientId(null);
+          setActiveCaseId(null);
+        }}
         onClientUpdated={upsertClient}
         onCaseUpdated={upsertCase}
         onCaseTerminated={upsertCase}

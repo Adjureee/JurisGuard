@@ -24,6 +24,8 @@ export default function FormViewPage() {
   const [data, setData] = useState<PrintableIntakeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const autoPrint = searchParams.get("autoPrint") === "1";
+  const selectedClientId =
+    searchParams.get("clientId") ?? searchParams.get("client_id") ?? "";
   const autoPrintDoneRef = useRef(false);
 
   useEffect(() => {
@@ -32,7 +34,7 @@ export default function FormViewPage() {
       if (!caseId) return;
       setIsLoading(true);
       try {
-        const response = await getPrintableIntake(caseId);
+        const response = await getPrintableIntake(caseId, selectedClientId);
         if (!cancelled) setData(response);
       } catch (error) {
         if (!cancelled) toast.error(error instanceof Error ? error.message : "Unable to load printable form");
@@ -44,7 +46,7 @@ export default function FormViewPage() {
     return () => {
       cancelled = true;
     };
-  }, [caseId]);
+  }, [caseId, selectedClientId]);
 
   const printableData = useMemo(() => {
     if (!data) return null;

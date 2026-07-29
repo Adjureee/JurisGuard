@@ -13,6 +13,15 @@ const optionalNumber = (label: string) =>
     },
     z.number().int().min(0, `${label} must be 0 or higher`),
   );
+const monthlyIncome = z
+  .string()
+  .trim()
+  .regex(/^\d*$/, "Monthly income must contain numbers only")
+  .max(9, "Monthly income is too large")
+  .refine(
+    (value) => value === "" || Number(value) <= 999999999,
+    "Monthly income is too large",
+  );
 
 export const clientFormSchema = z.object({
   client: z.object({
@@ -29,7 +38,7 @@ export const clientFormSchema = z.object({
     address: requiredText("Address"),
     contact_no: requiredText("Contact number"),
     email: z.string().trim().email("Enter a valid email").or(z.literal("")),
-    individual_monthly_income: optionalText,
+    individual_monthly_income: monthlyIncome,
     spouse: optionalText,
     address_of_spouse: optionalText,
     contact_no_of_spouse: optionalText,
@@ -77,6 +86,7 @@ export const clientFormSchema = z.object({
 export const caseFormSchema = z
   .object({
     client_id: requiredText("Client"),
+    client_ids: z.array(optionalText).optional(),
     intake_record: z.object({
       control_no: requiredText("Control number"),
       form_date: requiredText("Form date"),

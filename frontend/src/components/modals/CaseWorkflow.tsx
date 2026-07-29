@@ -29,6 +29,7 @@ import type {
   ExtractionStatus,
   IntakeMethod,
 } from "../../types";
+import ClientInformationModal from "./ClientInformationModal";
 
 type CaseOcrPayload = CaseExtractionResult["extracted"];
 
@@ -41,12 +42,14 @@ const extractionEngineLabels: Record<ExtractionEngineMode, string> = {
 interface CaseWorkflowProps {
   clients: ClientRecord[];
   lockedClient?: ClientRecord;
+  lockedClients?: ClientRecord[];
   submitLabel?: string;
   onSubmit: (values: CaseFormValues) => void | Promise<void>;
 }
 
 const createDefaultValues = (clientId = ""): CaseFormValues => ({
   client_id: clientId,
+  client_ids: clientId ? [clientId] : [],
   intake_record: {
     control_no: "",
     form_date: new Date().toLocaleDateString("en-US", {
@@ -268,8 +271,14 @@ const applicantRoleOptions = [
   "Others",
 ];
 
-function generatedCaseTitle(client?: ClientRecord) {
-  return `PP vs. ${client?.client.name?.trim() || "Client"}`;
+function generatedCaseTitle(clients: ClientRecord[]) {
+  const names = clients
+    .map((client) => client.client.name.trim())
+    .filter(Boolean);
+  if (names.length === 0) return "PP vs. Client";
+  if (names.length === 1) return `PP vs. ${names[0]}`;
+  if (names.length === 2) return `PP vs. ${names[0]} and ${names[1]}`;
+  return `PP vs. ${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
 }
 
 function splitSelectedOptions(value: string) {
@@ -430,56 +439,47 @@ function MethodCard({
 function SelectedClientCard({
   client,
   locked = false,
-  onChange,
+  onView,
   onRemove,
 }: {
   client: ClientRecord;
   locked?: boolean;
-  onChange?: () => void;
+  onView: () => void;
   onRemove?: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-sm ">
-      {locked && (
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#704389]">
-          Client selected automatically
-        </p>
-      )}
-      <div className="flex items-start gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#704389] text-sm font-semibold text-white">
-          {initials(client.client.name)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-semibold text-[#2B3642]">
-            {client.client.name}
-          </p>
-          <div className="mt-2 grid gap-2 text-sm text-[#4B5563] sm:grid-cols-2">
-            <span>Sex: {client.client.sex || "-"}</span>
-            <span>Age: {client.client.age || "-"}</span>
-            <span className="sm:col-span-2">
-              Address: {client.client_details.address || "-"}
-            </span>
-          </div>
-        </div>
+    <div className="flex min-w-[240px] max-w-full items-center gap-3 rounded-md border border-[#E5E7EB] bg-white px-3 py-2 shadow-sm sm:max-w-[320px]">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#704389] text-xs font-semibold text-white">
+        {initials(client.client.name)}
       </div>
-      {!locked && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onChange}
-            className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
-          >
-            Change Client
-          </button>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-[#2B3642]">
+          {client.client.name}
+        </p>
+        {locked && (
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#704389]">
+            Selected
+          </p>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onView}
+          className="rounded-md border border-[#704389] bg-white px-2.5 py-1 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
+        >
+          View
+        </button>
+        {onRemove && !locked && (
           <button
             type="button"
             onClick={onRemove}
-            className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
+            className="rounded-md border border-[#E5E7EB] bg-white px-2.5 py-1 text-xs font-semibold text-[#4B5563] transition hover:bg-[#F8FAFC]"
           >
-            Remove Selection
+            Remove
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -487,6 +487,7 @@ function SelectedClientCard({
 export function CaseWorkflow({
   clients,
   lockedClient,
+  lockedClients,
   submitLabel = "Save Case",
   onSubmit,
 }: CaseWorkflowProps) {
@@ -494,9 +495,23 @@ export function CaseWorkflow({
     (state) => state.addNotification,
   );
   const { user } = useAuth();
+  const lockedSelectionClients = useMemo(
+    () =>
+      lockedClients?.length
+        ? lockedClients
+        : lockedClient
+          ? [lockedClient]
+          : [],
+    [lockedClient, lockedClients],
+  );
+  const hasLockedSelection = lockedSelectionClients.length > 0;
   const [step, setStep] = useState(0);
   const [method, setMethod] = useState<IntakeMethod | null>(null);
   const [query, setQuery] = useState("");
+  const [viewingClient, setViewingClient] = useState<ClientRecord | null>(null);
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>(
+    lockedSelectionClients.map((client) => client.client_id),
+  );
   const [activeClientIndex, setActiveClientIndex] = useState(0);
   const [documentPreview, setDocumentPreview] = useState<string | null>(null);
   const [documentLabel, setDocumentLabel] = useState("");
@@ -518,7 +533,7 @@ export function CaseWorkflow({
   } = useCamera();
   const standaloneSteps = ["Select Client", "Encoding Method", "Case Details"];
   const lockedSteps = ["Encoding Method", "Case Details"];
-  const steps = lockedClient ? lockedSteps : standaloneSteps;
+  const steps = hasLockedSelection ? lockedSteps : standaloneSteps;
   const {
     register,
     handleSubmit,
@@ -529,17 +544,29 @@ export function CaseWorkflow({
     formState: { errors },
   } = useForm<CaseFormValues>({
     resolver: zodResolver(caseFormSchema) as Resolver<CaseFormValues>,
-    defaultValues: createDefaultValues(lockedClient?.client_id ?? ""),
+    defaultValues: createDefaultValues(lockedSelectionClients[0]?.client_id ?? ""),
     mode: "onBlur",
   });
 
   const selectedClientId = watch("client_id");
-  const selectedClient =
-    lockedClient ??
-    clients.find((client) => client.client_id === selectedClientId);
+  const selectedClientIdSet = useMemo(
+    () => new Set(selectedClientIds),
+    [selectedClientIds],
+  );
+  const selectedClients = useMemo(
+    () =>
+      hasLockedSelection
+        ? lockedSelectionClients
+        : selectedClientIds
+            .map((clientId) =>
+              clients.find((client) => client.client_id === clientId),
+            )
+            .filter((client): client is ClientRecord => Boolean(client)),
+    [clients, hasLockedSelection, lockedSelectionClients, selectedClientIds],
+  );
+  const selectedClient = selectedClients[0];
   const applicantRole = watch("intake_record.applicant_role");
   const natureOfRequest = watch("intake_record.nature_of_request");
-  const natureOfCase = watch("intake_record.nature_of_case");
   const representativeCivilStatus = watch("representative.civil_status");
   const caseStatus = watch("cases.status_of_case");
   const caseDetained = Boolean(watch("cases.detained"));
@@ -557,8 +584,8 @@ export function CaseWorkflow({
   }, [clients, hasSearch, query]);
   const visibleClients = filteredClients.slice(0, 8);
   const hasOcrResult = Object.keys(indicators).length > 0;
-  const isCaseFormStep = lockedClient ? step === 1 : step === 2;
-  const isMethodStep = lockedClient ? step === 0 : step === 1;
+  const isCaseFormStep = hasLockedSelection ? step === 1 : step === 2;
+  const isMethodStep = hasLockedSelection ? step === 0 : step === 1;
   const selectedClientIsDetained = Boolean(
     selectedClient?.client_details.detained,
   );
@@ -575,10 +602,25 @@ export function CaseWorkflow({
   }, [query]);
 
   useEffect(() => {
-    if (lockedClient) {
-      setValue("client_id", lockedClient.client_id, { shouldValidate: true });
+    if (hasLockedSelection) {
+      const clientIds = lockedSelectionClients.map((client) => client.client_id);
+      setSelectedClientIds(clientIds);
+      setValue("client_id", clientIds[0] ?? "", { shouldValidate: true });
+      setValue("client_ids", clientIds, { shouldValidate: true });
     }
-  }, [lockedClient, setValue]);
+  }, [hasLockedSelection, lockedSelectionClients, setValue]);
+
+  useEffect(() => {
+    if (hasLockedSelection) return;
+    setValue("client_id", selectedClientIds[0] ?? "", {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setValue("client_ids", selectedClientIds, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }, [hasLockedSelection, selectedClientIds, setValue]);
 
   useEffect(() => {
     if (!selectedClient || !useClientRepresentative) return;
@@ -677,16 +719,25 @@ export function CaseWorkflow({
   useEffect(() => () => stopCamera(), [stopCamera]);
 
   const selectClient = (client: ClientRecord) => {
-    setValue("client_id", client.client_id, {
-      shouldValidate: true,
-      shouldDirty: true,
+    setSelectedClientIds((current) => {
+      if (current.includes(client.client_id)) {
+        toast.error("Client is already selected.");
+        return current;
+      }
+      return [...current, client.client_id];
     });
-    setQuery(client.client.name);
+    setQuery("");
   };
 
   const clearClient = () => {
-    setValue("client_id", "", { shouldValidate: true, shouldDirty: true });
+    setSelectedClientIds([]);
     setQuery("");
+  };
+
+  const removeSelectedClient = (clientId: string) => {
+    setSelectedClientIds((current) =>
+      current.filter((selectedId) => selectedId !== clientId),
+    );
   };
 
   const handleClientSearchKeyDown = (
@@ -714,11 +765,12 @@ export function CaseWorkflow({
   };
 
   const continueFromClient = async () => {
-    const valid = await trigger("client_id");
-    if (!valid) {
-      toast.error("Select a client before continuing.");
+    if (selectedClientIds.length === 0) {
+      toast.error("Select at least one client before continuing.");
       return;
     }
+    const valid = await trigger("client_id");
+    if (!valid) return;
     setStep(1);
   };
 
@@ -727,7 +779,7 @@ export function CaseWorkflow({
       toast.error("Select an encoding method before continuing.");
       return;
     }
-    setStep(lockedClient ? 1 : 2);
+    setStep(hasLockedSelection ? 1 : 2);
   };
 
   const applyExtractedPayload = (payload: CaseOcrPayload) => {
@@ -831,7 +883,7 @@ export function CaseWorkflow({
 
   const submitCase = async (values: CaseFormValues) => {
     try {
-      const generatedTitle = generatedCaseTitle(selectedClient);
+      const generatedTitle = generatedCaseTitle(selectedClients);
       const normalizedStatus = values.cases.status_of_case === "Terminated"
         ? "Terminated"
         : "Pending";
@@ -841,6 +893,8 @@ export function CaseWorkflow({
           : values.intake_record.applicant_role;
       await onSubmit({
         ...values,
+        client_id: selectedClient?.client_id ?? values.client_id,
+        client_ids: selectedClients.map((client) => client.client_id),
         intake_record: {
           ...values.intake_record,
           district_office:
@@ -902,7 +956,7 @@ export function CaseWorkflow({
       </div>
 
       <div className="flex-1 overflow-y-auto bg-white px-6 py-5">
-        {!lockedClient && step === 0 && (
+        {!hasLockedSelection && step === 0 && (
           <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="space-y-4">
               <label className="block">
@@ -924,26 +978,27 @@ export function CaseWorkflow({
               </p>
               <FieldError message={errors.client_id?.message} />
 
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={clearClient}
-                  className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#E5E7EB] hover:text-[#2B3642]"
-                >
-                  Cancel Selection
-                </button>
+              <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB]">
+                <div className="border-b border-[#E5E7EB] px-4 py-3 text-sm font-semibold text-[#2B3642]">
+                  Selected Clients
+                </div>
+                <div className="h-64 space-y-3 overflow-y-auto p-3">
+                  {selectedClients.length === 0 ? (
+                    <div className="flex h-full items-center justify-center text-center text-sm text-[#4B5563]">
+                      No clients selected.
+                    </div>
+                  ) : (
+                    selectedClients.map((client) => (
+                      <SelectedClientCard
+                        key={client.client_id}
+                        client={client}
+                        onView={() => setViewingClient(client)}
+                        onRemove={() => removeSelectedClient(client.client_id)}
+                      />
+                    ))
+                  )}
+                </div>
               </div>
-
-              {selectedClient && (
-                <SelectedClientCard
-                  client={selectedClient}
-                  onChange={() => {
-                    clearClient();
-                    setStep(0);
-                  }}
-                  onRemove={clearClient}
-                />
-              )}
             </div>
 
             <div className="overflow-hidden rounded-lg border border-[#E5E7EB]">
@@ -961,16 +1016,21 @@ export function CaseWorkflow({
                   </div>
                 ) : (
                   visibleClients.map((client, index) => (
+                    (() => {
+                      const alreadySelected = selectedClientIdSet.has(client.client_id);
+                      return (
                     <button
                       type="button"
                       key={client.client_id}
                       onClick={() => selectClient(client)}
+                      disabled={alreadySelected}
                       className={`block w-full px-4 py-3 text-left transition duration-200 hover:bg-[#F8FAFC] ${
                         selectedClientId === client.client_id ||
+                        alreadySelected ||
                         activeClientIndex === index
                           ? "bg-[#F7F0FA]"
                           : "bg-white"
-                      }`}
+                      } disabled:cursor-not-allowed disabled:opacity-70`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
@@ -982,10 +1042,12 @@ export function CaseWorkflow({
                           </p>
                         </div>
                         <span className="text-xs font-medium text-[#4B5563]">
-                          {client.client.sex}
+                          {alreadySelected ? "Selected" : client.client.sex}
                         </span>
                       </div>
                     </button>
+                      );
+                    })()
                   ))
                 )}
               </div>
@@ -995,16 +1057,26 @@ export function CaseWorkflow({
 
         {isMethodStep && (
           <div className="space-y-5">
-            {selectedClient && (
-              <SelectedClientCard
-                client={selectedClient}
-                locked={Boolean(lockedClient)}
-                onChange={() => setStep(0)}
-                onRemove={() => {
-                  clearClient();
-                  setStep(0);
-                }}
-              />
+            {selectedClients.length > 0 && (
+              <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB]">
+                <div className="border-b border-[#E5E7EB] px-4 py-3 text-sm font-semibold text-[#2B3642]">
+                  Selected Clients
+                </div>
+                <div className="flex h-44 flex-wrap content-start gap-2 overflow-y-auto p-3">
+                  {selectedClients.map((client) => (
+                    <SelectedClientCard
+                      key={client.client_id}
+                      client={client}
+                      locked={hasLockedSelection}
+                      onView={() => setViewingClient(client)}
+                      onRemove={() => {
+                        removeSelectedClient(client.client_id);
+                        setStep(0);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
             )}
 
             <div className="grid gap-4 md:grid-cols-3">
@@ -1041,13 +1113,19 @@ export function CaseWorkflow({
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-[#2B3642]">
-                  {lockedClient
-                    ? "Client selected automatically"
-                    : selectedClient?.client.name || "No client selected"}
+                  {hasLockedSelection
+                    ? selectedClients.length === 1
+                      ? "Client selected automatically"
+                      : "Clients selected automatically"
+                    : selectedClients.length === 1
+                      ? selectedClients[0].client.name
+                      : `${selectedClients.length} clients selected`}
                 </p>
-                {lockedClient && (
+                {hasLockedSelection && (
                   <p className="text-sm text-[#2B3642]">
-                    {lockedClient.client.name}
+                    {selectedClients
+                      .map((client) => client.client.name)
+                      .join(", ")}
                   </p>
                 )}
                 <p className="text-xs text-[#4B5563]">
@@ -1058,24 +1136,6 @@ export function CaseWorkflow({
                       ? "Live OCR Scan"
                       : "Upload Document"}
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {!lockedClient && (
-                  <button
-                    type="button"
-                    onClick={() => setStep(0)}
-                    className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
-                  >
-                    Change Client
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setStep(lockedClient ? 0 : 1)}
-                  className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
-                >
-                  Change Method
-                </button>
               </div>
             </div>
 
@@ -1256,7 +1316,7 @@ export function CaseWorkflow({
               </div>
               <div className="mt-3 rounded-md border border-[#E7D7EE] bg-[#F7F0FA] px-3 py-2 text-sm font-semibold text-[#5F3675]">
                 Case title will be generated automatically as{" "}
-                {generatedCaseTitle(selectedClient)}.
+                {generatedCaseTitle(selectedClients)}.
               </div>
             </section>
 
@@ -1755,19 +1815,10 @@ export function CaseWorkflow({
         </button>
 
         <div className="flex flex-wrap justify-end gap-2">
-          {!lockedClient && step > 0 && (
-            <button
-              type="button"
-              onClick={() => setStep(0)}
-              className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#2B3642]"
-            >
-              Change Client
-            </button>
-          )}
           {isCaseFormStep && (
             <button
               type="button"
-              onClick={() => setStep(lockedClient ? 0 : 1)}
+              onClick={() => setStep(hasLockedSelection ? 0 : 1)}
               className="rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#704389] hover:text-white"
             >
               Change Method
@@ -1802,6 +1853,10 @@ export function CaseWorkflow({
           )}
         </div>
       </div>
+      <ClientInformationModal
+        client={viewingClient}
+        onClose={() => setViewingClient(null)}
+      />
     </form>
   );
 }
