@@ -1,5 +1,4 @@
 import os
-import socket
 import json
 import requests
 import base64
@@ -9,7 +8,6 @@ import traceback
 import re
 import importlib.util
 from pathlib import Path
-from requests import exceptions as requests_exceptions
 import cv2
 import numpy as np
 from PIL import Image
@@ -1446,6 +1444,20 @@ def crop_document_region(image: np.ndarray) -> np.ndarray:
     y2 = min(h, y + ch + pad)
     return image[y1:y2, x1:x2]
 
+def ocr_confidences(ocr_results: list) -> list[float]:
+    """Return PaddleOCR recognition confidence values from the actual OCR result."""
+    if not ocr_results:
+        return []
+    result = ocr_results[0]
+    if isinstance(result, dict):
+        return [float(score) for score in as_sequence(result.get("rec_scores")) if score is not None]
+    confidences: list[float] = []
+    for line in result:
+        if len(line) >= 2 and isinstance(line[1], (list, tuple)) and len(line[1]) >= 2:
+            confidences.append(float(line[1][1]))
+    return confidences
+
+
 def group_ocr_lines(ocr_results: list) -> str:
     """
     Group PaddleOCR output into logical lines instead of character-by-character.
@@ -1516,6 +1528,39 @@ def group_ocr_lines(ocr_results: list) -> str:
     
     # Step 5: Join lines with newlines for readability
     return "\n".join(grouped_lines)
+
+
+def offline_extraction_assessment(extracted: dict, confidences: list[float]) -> dict:
+    """Evaluate fallback using actual PaddleOCR scores and configured required fields.
+
+    Completeness = populated configured fields / configured required fields.  Average
+    confidence is the arithmetic mean of PaddleOCR recognition confidences.  A value
+    of 0 for OFFLINE_MIN_AVERAGE_OCR_CONFIDENCE disables confidence-triggered fallback.
+    """
+    required_fields = [
+        field.strip() for field in os.getenv("OFFLINE_REQUIRED_FIELDS", "").split(",") if field.strip()
+    ]
+    populated = [field for field in required_fields if extracted.get(field) not in (None, "", False)]
+    completeness = len(populated) / len(required_fields) if required_fields else 1.0
+    average_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+    min_confidence = float(os.getenv("OFFLINE_MIN_AVERAGE_OCR_CONFIDENCE", "0"))
+    reasons: list[str] = []
+    if not confidences:
+        reasons.append("no_paddleocr_confidences")
+    if min_confidence > 0 and average_confidence < min_confidence:
+        reasons.append("average_ocr_confidence_below_policy")
+    if required_fields and completeness < 1.0:
+        reasons.append("required_fields_incomplete")
+    return {
+        "status": "failed" if extracted.get("extraction_mode") == "OFFLINE_OCR_FAILED" else "completed",
+        "average_ocr_confidence": average_confidence,
+        "minimum_average_ocr_confidence": min_confidence,
+        "required_fields": required_fields,
+        "populated_required_fields": populated,
+        "required_field_completeness": completeness,
+        "fallback_eligible": bool(reasons),
+        "reasons": reasons,
+    }
 
 # ==========================================
 # 2. THE DUAL-HYBRID ORCHESTRATOR
@@ -1589,15 +1634,6 @@ class JurisGuardExtractionEngine:
                 print(f"[Error] Safe PaddleOCR engine also failed ({safe_exc}).")
                 traceback.print_exc()
                 raise
-
-    def _check_network_heartbeat(self) -> bool:
-        if not self.mistral_api_key:
-            return False
-        try:
-            socket.create_connection(("api.mistral.ai", 443), timeout=0.75)
-            return True
-        except OSError:
-            return False
 
     def _get_empty_schema(self) -> dict:
         return {
@@ -1992,11 +2028,11 @@ class JurisGuardExtractionEngine:
         return flat
 
     def _run_online_pipeline(self, base64_image: str) -> dict:
-        """Primary Mode: Mistral Vision AI (Cloud)"""
+        """Authorized cloud extraction path; never the automatic primary path."""
         if not self.mistral_api_key:
             raise RuntimeError("MISTRAL_API_KEY is not configured")
 
-        print("[System] Network Healthy. Routing to Cloud Pipeline (Mistral)...")
+        print("[System] Running authorized cloud extraction (Mistral)...")
         system_prompt = f"""
     You are JurisGuard's legal-document vision extraction engine for Philippine Public Attorney's Office
     interview sheets. Your behavior must be STRICTLY LITERAL, EVIDENCE-ONLY, and NON-INFERENTIAL.
@@ -2116,7 +2152,7 @@ class JurisGuardExtractionEngine:
         return extracted_data
 
     def _run_offline_pipeline(self, image_path: str) -> dict:
-        """Failover Mode: PaddleOCR + spaCy NLP extraction."""
+        """Default local path: OpenCV preprocessing, PaddleOCR, then spaCy/Regex mapping."""
         pipeline_started = time.perf_counter()
         print("[System] Routing to Air-Gapped Hybrid Pipeline...")
         
@@ -2163,7 +2199,10 @@ class JurisGuardExtractionEngine:
         except Exception as exc:
             fallback_data = self._get_empty_schema()
             fallback_data["extraction_mode"] = "OFFLINE_OCR_FAILED"
-            fallback_data["raw_text"] = f"PaddleOCR failed: {exc}"
+            fallback_data["raw_text"] = ""
+            fallback_data["offline_attempt"] = {
+                "status": "failed", "reason": "paddleocr_error", "fallback_eligible": True,
+            }
             print(f"[Timing] PaddleOCR failed after: {time.perf_counter() - ocr_started:.2f}s")
             print(f"[Timing] Offline pipeline total: {time.perf_counter() - pipeline_started:.2f}s")
             return fallback_data
@@ -2173,6 +2212,7 @@ class JurisGuardExtractionEngine:
         grouping_started = time.perf_counter()
         print("[Offline Engine] Grouping OCR output into coherent lines...")
         raw_text = group_ocr_lines(ocr_results)
+        confidences = ocr_confidences(ocr_results)
         print(f"[Timing] Grouping: {time.perf_counter() - grouping_started:.2f}s")
         
         if not raw_text:
@@ -2180,70 +2220,70 @@ class JurisGuardExtractionEngine:
             fallback_data = self._get_empty_schema()
             fallback_data["extraction_mode"] = "OFFLINE_OCR_ONLY"
             fallback_data["raw_text"] = ""
+            fallback_data["offline_attempt"] = offline_extraction_assessment(fallback_data, confidences)
             return fallback_data
             
         print(f"[Offline Engine] OCR finished. Extracted {len(raw_text)} characters in {len(raw_text.split(chr(10)))} lines.")
 
         nlp_started = time.perf_counter()
         extracted_data = spacy_extract_pao_fields(raw_text, self._get_empty_schema())
+        extracted_data["offline_attempt"] = offline_extraction_assessment(extracted_data, confidences)
         print(f"[Timing] spaCy NLP parse: {time.perf_counter() - nlp_started:.2f}s")
         print(f"[Timing] Offline pipeline total: {time.perf_counter() - pipeline_started:.2f}s")
         return extracted_data
 
-    def _cloud_failure_payload(self, exc: Exception) -> dict:
-        fallback_data = self._get_empty_schema()
-        if isinstance(exc, requests_exceptions.Timeout):
-            fallback_data["extraction_mode"] = "ONLINE_MISTRAL_TIMEOUT"
-            fallback_data["raw_text"] = (
-                "Mistral Cloud Vision timed out. "
-                f"Increase MISTRAL_READ_TIMEOUT_SECONDS if the image is large or the connection is slow. Details: {exc}"
-            )
-        else:
-            fallback_data["extraction_mode"] = "ONLINE_MISTRAL_FAILED"
-            fallback_data["raw_text"] = f"Mistral Cloud Vision failed: {exc}"
-        return fallback_data
-
-    def _run_cloud_then_offline_fallback(self, file_path: str, compressed_file_path: str) -> dict:
-        try:
-            base64_image = encode_image_to_base64(compressed_file_path)
-            return self._run_online_pipeline(base64_image)
-        except Exception as exc:
-            print(f"[Warning] Cloud extraction failed ({exc}). Executing local failover...")
-            try:
-                offline_data = self._run_offline_pipeline(file_path)
-                offline_data["extraction_mode"] = "CLOUD_FAILED_OFFLINE_FALLBACK"
-                offline_raw_text = offline_data.get("raw_text") or ""
-                offline_data["raw_text"] = f"Cloud failure: {exc}\n\nOffline OCR raw text:\n{offline_raw_text}"
-                return offline_data
-            except Exception as offline_exc:
-                print(f"[Error] Offline fallback also failed ({offline_exc}).")
-                fallback_data = self._cloud_failure_payload(exc)
-                fallback_data["fallback_reason"] = f"Offline fallback failed: {offline_exc}"
-                return fallback_data
-
-    def execute_extraction(self, file_path: str, extraction_mode: str = "auto") -> dict:
-        final_data = self._get_empty_schema()
+    def execute_extraction(
+        self,
+        file_path: str,
+        extraction_mode: str = "auto",
+        *,
+        cloud_authorized: bool = False,
+        cloud_policy_enabled: bool = False,
+        cloud_approved: bool = False,
+    ) -> dict:
         mode = (extraction_mode or "auto").strip().lower()
 
-        if mode == "offline":
-            final_data.update(self._run_offline_pipeline(file_path))
-        elif mode == "cloud":
-            compressed_file_path = compress_image_for_vlm(file_path)
-            try:
-                final_data.update(self._run_cloud_then_offline_fallback(file_path, compressed_file_path))
-            finally:
-                if compressed_file_path != file_path and os.path.exists(compressed_file_path):
-                    os.remove(compressed_file_path)
-        elif self._check_network_heartbeat():
-            compressed_file_path = compress_image_for_vlm(file_path)
-            try:
-                final_data.update(self._run_cloud_then_offline_fallback(file_path, compressed_file_path))
-            finally:
-                if compressed_file_path != file_path and os.path.exists(compressed_file_path):
-                    os.remove(compressed_file_path)
-        else:
-            final_data.update(self._run_offline_pipeline(file_path))
+        if mode not in {"auto", "offline", "cloud"}:
+            raise ValueError("extraction_mode must be auto, offline, or cloud")
 
+        offline_data = self._run_offline_pipeline(file_path) if mode in {"auto", "offline"} else None
+        if offline_data is not None:
+            offline_data["requested_extraction_mode"] = mode
+            offline_data["actual_extraction_mode"] = "offline"
+            offline_attempt = offline_data.get("offline_attempt", {})
+            fallback_eligible = bool(offline_attempt.get("fallback_eligible"))
+            fallback_reason = {"offline_assessment": offline_attempt}
+            offline_data["cloud_fallback"] = {
+                "eligible": fallback_eligible,
+                "policy_enabled": cloud_policy_enabled,
+                "authorized": cloud_authorized,
+                "approved": cloud_approved,
+                "attempted": False,
+                "reason": fallback_reason,
+            }
+            if mode == "offline" or not fallback_eligible or not (cloud_policy_enabled and cloud_authorized and cloud_approved):
+                offline_data["sections"] = self._sectioned_from_flat(offline_data)
+                return offline_data
+
+        if not (cloud_policy_enabled and cloud_authorized and cloud_approved):
+            raise PermissionError("Cloud extraction requires policy permission, authorization, and explicit approval")
+        compressed_file_path = compress_image_for_vlm(file_path)
+        try:
+            final_data = self._run_online_pipeline(encode_image_to_base64(compressed_file_path))
+        finally:
+            if compressed_file_path != file_path and os.path.exists(compressed_file_path):
+                os.remove(compressed_file_path)
+        final_data["requested_extraction_mode"] = mode
+        final_data["actual_extraction_mode"] = "cloud"
+        final_data["offline_attempt"] = offline_data.get("offline_attempt") if offline_data else None
+        final_data["cloud_fallback"] = {
+            "eligible": mode == "auto",
+            "policy_enabled": cloud_policy_enabled,
+            "authorized": cloud_authorized,
+            "approved": cloud_approved,
+            "attempted": True,
+            "reason": {"offline_assessment": final_data["offline_attempt"]} if offline_data else {"requested_mode": "cloud"},
+        }
         final_data["sections"] = self._sectioned_from_flat(final_data)
         return final_data
 
@@ -2252,7 +2292,15 @@ class JurisGuardExtractionEngine:
 # ==========================================
 _engine_instance = None
 
-def process_document(file_path: str, extraction_mode: str = "auto", include_benchmarks: bool = False):
+def process_document(
+    file_path: str,
+    extraction_mode: str = "auto",
+    include_benchmarks: bool = False,
+    *,
+    cloud_authorized: bool = False,
+    cloud_policy_enabled: bool = False,
+    cloud_approved: bool = False,
+):
     import time
     start_time = time.perf_counter()
     
@@ -2263,7 +2311,13 @@ def process_document(file_path: str, extraction_mode: str = "auto", include_benc
     if _engine_instance is None:
         _engine_instance = JurisGuardExtractionEngine()
 
-    result = _engine_instance.execute_extraction(file_path=file_path, extraction_mode=extraction_mode)
+    result = _engine_instance.execute_extraction(
+        file_path=file_path,
+        extraction_mode=extraction_mode,
+        cloud_authorized=cloud_authorized,
+        cloud_policy_enabled=cloud_policy_enabled,
+        cloud_approved=cloud_approved,
+    )
     
     if include_benchmarks:
         latency = time.perf_counter() - start_time

@@ -66,7 +66,7 @@ try:
     print("[+] PaddleOCR: OK")
 except Exception:
     print("[!] PaddleOCR: FAILED (Known Windows OneDNN/MKLDNN CPU bug).")
-    print("    PaddleOCR column will use EasyOCR text as fallback for NLP benchmarks.")
+    print("    PaddleOCR metrics will be reported as unavailable; EasyOCR remains a separate engine.")
     if os.path.exists(_test_path):
         os.remove(_test_path)
 
@@ -252,7 +252,7 @@ if __name__ == "__main__":
 
     print(f"\n[i] Found {len(image_files)} images. Ground truth entries: {len(gt_records)}.")
     if not PADDLE_AVAILABLE:
-        print("[i] PaddleOCR is disabled. Using EasyOCR text as fallback for PaddleOCR columns.")
+        print("[i] PaddleOCR is disabled. PaddleOCR metrics will be unavailable.")
     print("")
 
     master_results = []
@@ -293,23 +293,30 @@ if __name__ == "__main__":
         easy_cer = calculate_cer(ground_truth_text, easy_text)
         easy_wer = calculate_wer(ground_truth_text, easy_text)
 
-        # --- PaddleOCR (or fallback to EasyOCR) ---
+        # --- PaddleOCR (never substitute another engine's output) ---
+        paddle_status = "completed"
+        paddle_reason = ""
         if PADDLE_AVAILABLE:
             t0 = time.perf_counter()
             try:
                 paddle_res = paddle_ocr.ocr(image_path, cls=True)
                 paddle_text = " ".join([line[1][0] for line in paddle_res[0]]) if paddle_res and paddle_res[0] else ""
-            except Exception:
-                paddle_text = easy_text
-            paddle_time = time.perf_counter() - t0
+                paddle_time = time.perf_counter() - t0
+            except Exception as exc:
+                paddle_text = ""
+                paddle_time = None
+                paddle_status = "failed"
+                paddle_reason = str(exc)
         else:
-            paddle_text = easy_text  # Fallback: use EasyOCR output
-            paddle_time = 0.0
-        paddle_cer = calculate_cer(ground_truth_text, paddle_text)
-        paddle_wer = calculate_wer(ground_truth_text, paddle_text)
+            paddle_text = ""
+            paddle_time = None
+            paddle_status = "failed"
+            paddle_reason = "PaddleOCR health check failed"
+        paddle_cer = calculate_cer(ground_truth_text, paddle_text) if paddle_status == "completed" else None
+        paddle_wer = calculate_wer(ground_truth_text, paddle_text) if paddle_status == "completed" else None
 
         # --- NLP Benchmarking (using best available OCR text) ---
-        nlp_input_text = paddle_text if paddle_text else easy_text
+        nlp_input_text = paddle_text
 
         # NLTK
         t0 = time.perf_counter()
@@ -323,14 +330,21 @@ if __name__ == "__main__":
         bert_time = time.perf_counter() - t0
         bert_acc = calculate_nlp_accuracy(expected_entities, bert_data)
 
-        # spaCy
-        t0 = time.perf_counter()
-        spacy_data = extract_spacy_pao_excel(nlp_input_text)
-        spacy_time = time.perf_counter() - t0
-        spacy_acc = calculate_nlp_accuracy(expected_entities, spacy_data)
+        # spaCy/Regex field mapping is evaluated only against actual PaddleOCR text.
+        if paddle_status == "completed":
+            t0 = time.perf_counter()
+            spacy_data = extract_spacy_pao_excel(nlp_input_text)
+            spacy_time = time.perf_counter() - t0
+            spacy_acc = calculate_nlp_accuracy(expected_entities, spacy_data)
+        else:
+            spacy_data = get_empty_pao_excel_schema()
+            spacy_time = None
+            spacy_acc = None
 
         gt_label = "GT" if has_ground_truth else "NO-GT"
-        print(f"         [{gt_label}] Tess={tess_cer:.1f}% | Easy={easy_cer:.1f}% | Paddle={paddle_cer:.1f}% | spaCy NLP={spacy_acc:.0f}%")
+        paddle_summary = f"{paddle_cer:.1f}%" if paddle_cer is not None else "unavailable"
+        spacy_summary = f"{spacy_acc:.0f}%" if spacy_acc is not None else "unavailable"
+        print(f"         [{gt_label}] Tess={tess_cer:.1f}% | Easy={easy_cer:.1f}% | Paddle={paddle_summary} | spaCy NLP={spacy_summary}")
 
         master_results.append({
             "Image Filename": image_filename,
@@ -342,6 +356,8 @@ if __name__ == "__main__":
             "PaddleOCR CER (%)": paddle_cer,
             "PaddleOCR WER (%)": paddle_wer,
             "PaddleOCR Latency (s)": paddle_time,
+            "PaddleOCR Status": paddle_status,
+            "PaddleOCR Failure Reason": paddle_reason,
             "NLTK Accuracy (%)": nltk_acc,
             "NLTK Latency (s)": nltk_time,
             "BERT Accuracy (%)": bert_acc,

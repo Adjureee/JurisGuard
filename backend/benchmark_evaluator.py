@@ -4,7 +4,10 @@ import time
 import json
 import uuid
 import datetime
+import hashlib
+import platform
 from typing import Dict, Any, List
+from backend.benchmark_metrics import calculate_cer, calculate_wer
 
 # Try importing Levenshtein for fast C implementation
 try:
@@ -17,62 +20,6 @@ except ImportError:
 from backend.ai_service import process_document
 
 # --- Math & Metrics ---
-
-def levenshtein_distance(s1: str, s2: str) -> int:
-    """Pure Python Levenshtein DP fallback."""
-    if HAS_LEVENSHTEIN:
-        return Levenshtein.distance(s1, s2)
-    
-    if len(s1) < len(s2):
-        return levenshtein_distance(s2, s1)
-    
-    if len(s2) == 0:
-        return len(s1)
-    
-    previous_row = range(len(s2) + 1)
-    for i, c1 in enumerate(s1):
-        current_row = [i + 1]
-        for j, c2 in enumerate(s2):
-            insertions = previous_row[j + 1] + 1
-            deletions = current_row[j] + 1
-            substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
-    return previous_row[-1]
-
-def calculate_cer(truth: str, ocr: str) -> float:
-    """Calculate Character Error Rate."""
-    if not truth:
-        return 0.0 if not ocr else 100.0
-    distance = levenshtein_distance(truth, ocr)
-    return (distance / len(truth)) * 100
-
-def calculate_wer(truth: str, ocr: str) -> float:
-    """Calculate Word Error Rate."""
-    truth_words = truth.split()
-    ocr_words = ocr.split()
-    if not truth_words:
-        return 0.0 if not ocr_words else 100.0
-    
-    # Simple list DP for WER
-    s1, s2 = truth_words, ocr_words
-    if len(s1) < len(s2):
-        s1, s2 = s2, s1
-    if len(s2) == 0:
-        return float(len(s1) * 100) / (len(truth_words) or 1)
-        
-    prev = list(range(len(s2) + 1))
-    for i, w1 in enumerate(s1):
-        curr = [i + 1]
-        for j, w2 in enumerate(s2):
-            ins = prev[j + 1] + 1
-            dels = curr[j] + 1
-            subs = prev[j] + (w1 != w2)
-            curr.append(min(ins, dels, subs))
-        prev = curr
-    
-    distance = prev[-1]
-    return (distance / len(truth_words)) * 100
 
 def standardize_field(val: Any) -> str:
     if val is None:
@@ -195,20 +142,41 @@ def print_row(doc_id, group, cer, wer, acc, lat, is_header=False, is_summary=Fal
         
         print(f"{doc_id:<12} | {group:<8} | {cer_str} | {wer_str} | {acc_str} | {lat:10.2f}")
 
-def run_benchmark(export_results: bool = False):
+def dataset_fingerprint(dataset: list[dict]) -> str:
+    digest = hashlib.sha256()
+    for item in sorted(dataset, key=lambda row: row["doc_id"]):
+        digest.update(item["doc_id"].encode("utf-8"))
+        with open(item["file_path"], "rb") as sample:
+            for chunk in iter(lambda: sample.read(1024 * 1024), b""):
+                digest.update(chunk)
+    return digest.hexdigest()
+
+
+def run_benchmark(export_results: bool = False, allow_synthetic: bool = False):
     print(f"{Colors.BOLD}{Colors.OKCYAN}JurisGuard AI Pipeline - Benchmark Evaluator{Colors.ENDC}\n")
     
     dataset_dir = "./benchmark_data"
-    if not os.path.exists(dataset_dir) or not os.listdir(dataset_dir):
+    manifest_path = os.path.join(dataset_dir, "manifest.json")
+    if not os.path.exists(manifest_path):
+        if not allow_synthetic:
+            raise RuntimeError(
+                "Benchmark dataset manifest is unavailable. Regeneration is blocked; "
+                "do not use generated benchmark data as a production result."
+            )
+        print("WARNING: generating synthetic development-only data; do not publish these as PAO benchmark results.")
         dataset = generate_synthetic_dataset(dataset_dir)
     else:
-        print(f"Using existing dataset in {dataset_dir}. (Re-generating to ensure format)")
-        dataset = generate_synthetic_dataset(dataset_dir)
+        with open(manifest_path, "r", encoding="utf-8") as manifest_file:
+            manifest = json.load(manifest_file)
+        dataset = manifest.get("samples", [])
+        if not dataset or any(not os.path.exists(item.get("file_path", "")) for item in dataset):
+            raise RuntimeError("Benchmark manifest is missing usable sample paths")
         
     print_row("Doc ID", "Group", "CER (%)", "WER (%)", "NLP Acc(%)", "Latency(s)", is_header=True)
     
     results = []
     agg = {"cer": 0, "wer": 0, "acc": 0, "lat": 0, "count": 0}
+    avg_cer = avg_wer = avg_acc = avg_lat = None
     
     for doc in dataset:
         start_time = time.perf_counter()
@@ -224,18 +192,22 @@ def run_benchmark(export_results: bool = False):
             latency = time.perf_counter() - start_time
             service_benchmarks = extracted_data.get("_benchmarks", {})
             
-            # Simple fallback for OCR text if not present
-            ocr_text = str(extracted_data) 
-            
-            cer = calculate_cer(doc["truth_text"], ocr_text)
-            wer = calculate_wer(doc["truth_text"], ocr_text)
-            acc = calculate_nlp_accuracy(doc["truth_schema"], extracted_data)
-            
-            process_lat = service_benchmarks.get("processing_latency_seconds", latency)
+            ocr_text = extracted_data.get("raw_text", "")
+            offline_attempt = extracted_data.get("offline_attempt") or {}
+            if offline_attempt.get("status") == "failed":
+                engine_status, failure_reason = "failed", offline_attempt.get("reason", "offline_ocr_failed")
+                cer = wer = acc = process_lat = None
+            else:
+                engine_status, failure_reason = "completed", None
+                cer = calculate_cer(doc["truth_text"], ocr_text)
+                wer = calculate_wer(doc["truth_text"], ocr_text)
+                acc = calculate_nlp_accuracy(doc["truth_schema"], extracted_data)
+                process_lat = service_benchmarks.get("processing_latency_seconds", latency)
             
         except Exception as e:
             print(f"{Colors.FAIL}Error processing {doc['doc_id']}: {e}{Colors.ENDC}")
-            cer, wer, acc, process_lat = 100.0, 100.0, 0.0, 0.0
+            engine_status, failure_reason = "failed", str(e)
+            cer = wer = acc = process_lat = None
             extracted_data = {"error": str(e)}
 
         results.append({
@@ -245,17 +217,22 @@ def run_benchmark(export_results: bool = False):
             "wer": wer,
             "nlp_accuracy": acc,
             "latency": process_lat,
+            "engine_status": engine_status,
+            "failure_reason": failure_reason,
+            "raw_text": extracted_data.get("raw_text") if engine_status == "completed" else None,
             "extracted_data": extracted_data,
             "truth_schema": doc["truth_schema"]
         })
         
-        agg["cer"] += cer
-        agg["wer"] += wer
-        agg["acc"] += acc
-        agg["lat"] += process_lat
-        agg["count"] += 1
-        
-        print_row(doc["doc_id"], doc["group"], cer, wer, acc, process_lat)
+        if engine_status == "completed":
+            agg["cer"] += cer
+            agg["wer"] += wer
+            agg["acc"] += acc
+            agg["lat"] += process_lat
+            agg["count"] += 1
+            print_row(doc["doc_id"], doc["group"], cer, wer, acc, process_lat)
+        else:
+            print(f"{doc['doc_id']:<12} | {doc['group']:<8} | unavailable (engine failed: {failure_reason})")
         
     if agg["count"] > 0:
         avg_cer = agg["cer"] / agg["count"]
@@ -274,7 +251,18 @@ def run_benchmark(export_results: bool = False):
                     "avg_wer": avg_wer,
                     "avg_nlp_accuracy": avg_acc,
                     "avg_latency": avg_lat,
-                    "total_documents": agg["count"]
+                    "total_documents": len(dataset),
+                    "completed_engine_samples": agg["count"],
+                },
+                "dataset": {
+                    "sample_count": len(dataset),
+                    "sha256": dataset_fingerprint(dataset),
+                    "aggregate_formula": "arithmetic mean over completed engine samples only",
+                },
+                "runtime": {
+                    "python": sys.version,
+                    "platform": platform.platform(),
+                    "preprocessing": "backend.ai_service offline default configuration",
                 },
                 "individual_results": results
             }, f, indent=4)
@@ -282,4 +270,4 @@ def run_benchmark(export_results: bool = False):
 
 if __name__ == "__main__":
     export = "--export" in sys.argv
-    run_benchmark(export_results=export)
+    run_benchmark(export_results=export, allow_synthetic="--generate-synthetic" in sys.argv)

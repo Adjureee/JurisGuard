@@ -308,6 +308,8 @@ class Document(Base):
     uploaded_by = Column(Integer, ForeignKey("user.user_id"))
     document_type = Column(String(50))
     encrypted_file_path = Column(Text, nullable=False)
+    original_filename = Column(String(255))
+    file_size_bytes = Column(Integer)
     ocr_status = Column(String(20), default="PENDING")
     uploaded_at = Column(DateTime, nullable=False, server_default=func.now())
 
@@ -324,6 +326,7 @@ class ExtractedMetadata(Base):
     extracted_json = Column(JSONB, nullable=False)
     verification_status = Column(String(20), default="PENDING")
     verified_at = Column(DateTime)
+    verification_notes = Column(Text)
 
     document = relationship("Document", back_populates="extracted_metadata")
 
