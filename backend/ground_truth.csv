@@ -1,0 +1,3 @@
+image_filename,expected_raw_text,CASE NO.,COURT/BODY,CLIENT'S NAME,CAUSE OF ACTION
+test_image_1.png,"Republic of the Philippines SANDIGANBAYAN Fourth Division People of the Philippines Plaintiff versus Virginio E Villamor Dinah C Barriga Accused Criminal Case No 27435 For Malversation of Public Funds Decision",27435,Sandiganbayan,"Virginio E. Villamor, Dinah C. Barriga",Malversation of Public Funds
+test_image_2.png,"Republic of the Philippines REGIONAL TRIAL COURT Branch 14 People of the Philippines Plaintiff versus Juan Dela Cruz Accused Criminal Case No 12345 For Physical Injury",12345,Regional Trial Court,"Juan Dela Cruz",Physical Injury
