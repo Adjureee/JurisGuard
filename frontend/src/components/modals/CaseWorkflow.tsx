@@ -1050,10 +1050,10 @@ export function CaseWorkflow({
         <StepIndicator steps={steps} currentStep={step} />
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-white px-6 py-5">
+      <div className="flex-1 overflow-y-auto bg-[#F8FAFC] px-6 py-5">
         {!hasLockedSelection && step === 0 && (
           <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="space-y-4">
+            <div className="space-y-4 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
               <label className="block">
                 <span className="text-sm font-medium text-[#4B5563]">
                   Search existing client
@@ -1096,7 +1096,7 @@ export function CaseWorkflow({
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-lg border border-[#E5E7EB]">
+            <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
               <div className="sticky top-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3 text-sm font-semibold text-[#4B5563]">
                 Existing Clients
               </div>
@@ -1153,7 +1153,7 @@ export function CaseWorkflow({
         {isMethodStep && (
           <div className="space-y-5">
             {selectedClients.length > 0 && (
-              <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB]">
+              <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
                 <div className="border-b border-[#E5E7EB] px-4 py-3 text-sm font-semibold text-[#2B3642]">
                   Selected Clients
                 </div>
@@ -1205,7 +1205,7 @@ export function CaseWorkflow({
 
         {isCaseFormStep && (
           <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 shadow-sm">
               <div>
                 <p className="text-sm font-semibold text-[#2B3642]">
                   {hasLockedSelection
@@ -1363,8 +1363,8 @@ export function CaseWorkflow({
               </div>
             )}
 
-            <section className="border-t border-[#E5E7EB] pt-4 first:border-t-0 first:pt-0">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-[#1F2937]">
                 Case Identification
               </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1415,8 +1415,8 @@ export function CaseWorkflow({
               </div>
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-[#1F2937]">
                 Nature of Request
               </h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -1471,8 +1471,8 @@ export function CaseWorkflow({
               />
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-[#1F2937]">
                 I. Nature of the Case
               </h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -1494,8 +1494,8 @@ export function CaseWorkflow({
               <FieldError message={errors.intake_record?.nature_of_case?.message} />
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-[#1F2937]">
                 Applicant Case Involvement (Party Represented)
               </h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -1530,8 +1530,8 @@ export function CaseWorkflow({
               )}
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-[#1F2937]">
                 Case Status
               </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1595,10 +1595,10 @@ export function CaseWorkflow({
               </div>
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-[#2B3642]">
+                  <h3 className="text-base font-semibold text-[#1F2937]">
                     Representative
                   </h3>
                   {lockedClient && useClientRepresentative && (
@@ -1724,8 +1724,8 @@ export function CaseWorkflow({
               )}
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#111827]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-[#1F2937]">
                 Proof of Qualification
               </h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1820,8 +1820,8 @@ export function CaseWorkflow({
               </div>
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-[#1F2937]">
                 Case Facts and Cause
               </h3>
               <div className="mt-3 grid gap-4">
@@ -1840,8 +1840,8 @@ export function CaseWorkflow({
               </div>
             </section>
 
-            <section className="border-t border-[#E5E7EB] pt-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-[#1F2937]">
                 Incident Location
               </h3>
               <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1900,8 +1900,8 @@ export function CaseWorkflow({
 
         {isClassificationStep && (
           <div className="space-y-5">
-            <section className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-[#1F2937]">
                 Applicant Classification
               </h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1947,8 +1947,8 @@ export function CaseWorkflow({
 
         {isReviewStep && (
           <div className="space-y-5">
-            <section className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-[#1F2937]">
                 Selected Clients
               </h3>
               <div className="mt-3 flex max-h-44 flex-wrap content-start gap-2 overflow-y-auto">
@@ -1963,8 +1963,8 @@ export function CaseWorkflow({
               </div>
             </section>
 
-            <section className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-[#1F2937]">
                 Case Information
               </h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -2041,8 +2041,8 @@ export function CaseWorkflow({
               </div>
             </section>
 
-            <section className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-              <h3 className="text-sm font-semibold text-[#2B3642]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-[#1F2937]">
                 Representative
               </h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -2064,7 +2064,7 @@ export function CaseWorkflow({
         )}
       </div>
 
-      <div className="sticky bottom-0 flex justify-between border-t border-[#E5E7EB] bg-white px-6 py-4">
+      <div className="sticky bottom-0 flex justify-between border-t border-[#E5E7EB] bg-white px-6 py-4 shadow-[0_-6px_18px_rgba(17,24,39,0.04)]">
         <button
           type="button"
           onClick={() => setStep((current) => Math.max(current - 1, 0))}

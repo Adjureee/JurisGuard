@@ -373,8 +373,8 @@ function ReviewSection({
   title: string;
 }) {
   return (
-    <section className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-      <h3 className="text-sm font-semibold text-[#2B3642]">{title}</h3>
+    <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+      <h3 className="text-base font-semibold text-[#1F2937]">{title}</h3>
       <dl className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {children}
       </dl>
@@ -770,11 +770,11 @@ export default function AddClientModal({
         role="dialog"
         aria-modal="true"
       >
-        <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-          <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
+        <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] shadow-xl">
+          <div className="shrink-0 border-b border-[#E5E7EB] bg-white px-6 py-5">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-[#2B3642]">
+                <h2 className="text-xl font-bold text-[#111827]">
                   Add Client
                 </h2>
                 <p className="mt-1 text-sm text-[#4B5563]">
@@ -829,8 +829,8 @@ export default function AddClientModal({
             />
             </div>
           ) : phase === "postClient" && createdClient ? (
-            <div className="min-h-0 flex-1 overflow-y-auto bg-white p-6">
-              <div className="mx-auto max-w-2xl rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-5">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8FAFC] p-6">
+              <div className="mx-auto max-w-2xl rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
                 <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">
                   Client saved
                 </p>
@@ -900,7 +900,7 @@ export default function AddClientModal({
               <div className="shrink-0 border-b border-[#E5E7EB] bg-white px-6 py-4">
                 <StepIndicator steps={workflowSteps} currentStep={0} />
               </div>
-              <div className="grid gap-4 bg-white p-6 md:grid-cols-3">
+              <div className="grid gap-4 bg-[#F8FAFC] p-6 md:grid-cols-3">
                 <MethodCard
                   value="manual"
                   title="Manual Entry"
@@ -936,9 +936,9 @@ export default function AddClientModal({
                 <StepIndicator steps={workflowSteps} currentStep={step + 1} />
               </div>
 
-              <div className="flex-1 overflow-y-auto bg-white px-6 py-5">
+              <div className="flex-1 overflow-y-auto bg-[#F8FAFC] px-6 py-5">
                 {step !== steps.length - 1 && (
-                  <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-white px-4 py-3">
+                  <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 shadow-sm">
                   <div>
                     <p className="text-sm font-semibold text-[#2B3642]">
                       Method:{" "}
@@ -1073,7 +1073,11 @@ export default function AddClientModal({
                 )}
 
                 {step === 0 && (
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+                    <h3 className="text-base font-semibold text-[#1F2937]">
+                      Personal Information
+                    </h3>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <TextInput
                       label="Name"
                       registration={register("client.name")}
@@ -1130,11 +1134,16 @@ export default function AddClientModal({
                       error={errors.client?.language_dialect?.message}
                       status={indicators["client.language_dialect"]}
                     />
+                    </div>
                   </div>
                 )}
 
                 {step === 1 && (
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+                    <h3 className="text-base font-semibold text-[#1F2937]">
+                      Client Details
+                    </h3>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <div className="md:col-span-2">
                       <TextInput
                         label="Address"
@@ -1328,13 +1337,14 @@ export default function AddClientModal({
                       status={indicators["client_details.representative_email"]}
                       disabled={representativeNotApplicable}
                     />
+                    </div>
                   </div>
                 )}
 
                 {step === 2 && (
-                  <div className="space-y-5">
+                  <div className="space-y-5 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
                     <div>
-                      <h3 className="text-base font-semibold text-[#2B3642]">
+                      <h3 className="text-base font-semibold text-[#1F2937]">
                         Classification
                       </h3>
                       <p className="mt-1 text-sm text-[#6B7280]">
@@ -1530,7 +1540,7 @@ export default function AddClientModal({
                 )}
               </div>
 
-              <div className="sticky bottom-0 flex justify-between border-t border-[#E5E7EB] bg-white px-6 py-4">
+              <div className="sticky bottom-0 flex justify-between border-t border-[#E5E7EB] bg-white px-6 py-4 shadow-[0_-6px_18px_rgba(17,24,39,0.04)]">
                 <button
                   type="button"
                   onClick={() =>

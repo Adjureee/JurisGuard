@@ -33,12 +33,14 @@ export default function AddCaseModal({
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
-        <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
+      <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] shadow-xl">
+        <div className="shrink-0 border-b border-[#E5E7EB] bg-white px-6 py-5">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold text-[#2B3642]">
-              Add {caseLabel}
-            </h2>
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold text-[#111827]">
+                Add {caseLabel}
+              </h2>
+            </div>
             <button
               type="button"
               onClick={onClose}
