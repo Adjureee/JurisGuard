@@ -1,4 +1,5 @@
 export type CaseStatus = "Pending" | "Terminated";
+export type CaseType = "Criminal" | "Civil";
 export type IntakeMethod = "manual" | "camera" | "upload";
 export type ExtractionStatus = "extracted" | "missing";
 
@@ -170,6 +171,7 @@ export interface CaseDetails {
 export interface CriminalCaseRecord {
   case_id: string;
   client_id: string;
+  case_type?: CaseType;
   created_by_user_id: number | null;
   intake_record: IntakeRecord;
   representative: Representative;

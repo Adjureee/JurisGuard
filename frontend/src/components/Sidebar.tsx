@@ -60,6 +60,7 @@ function SubmissionIcon() {
 const navigation = [
   { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
   { label: "Criminal Cases", path: "/cases", icon: <GavelIcon /> },
+  { label: "Civil Cases", path: "/civil-cases", icon: <GavelIcon /> },
   { label: "Terminated Cases", path: "/terminated-cases", icon: <ArchiveIcon /> },
   { label: "Audit Logs", path: "/audit-logs", icon: <AuditIcon /> },
 ];
@@ -85,6 +86,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const manageNavigation = [
     navigation[1],
     navigation[2],
+    navigation[3],
     {
       label: user?.role === "admin" ? "Case Review Center" : "Case Submissions",
       path: user?.role === "admin" ? "/case-review-center" : "/case-submissions",
@@ -92,7 +94,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     },
     ...(user?.role === "admin" ? [{ label: "Verification", path: "/admin/verification", icon: <ShieldIcon /> }] : []),
   ];
-  const recordsNavigation = [navigation[3]];
+  const recordsNavigation = [navigation[4]];
   const navigationSections = [
     { label: "Overview", items: primaryNavigation },
     { label: "Manage", items: manageNavigation },

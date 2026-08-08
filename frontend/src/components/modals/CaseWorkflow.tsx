@@ -24,6 +24,7 @@ import {
   type ExtractionEngineMode,
 } from "../../services/documentExtractionService";
 import type {
+  CaseType,
   ClientRecord,
   ExtractionMap,
   ExtractionStatus,
@@ -43,13 +44,19 @@ interface CaseWorkflowProps {
   clients: ClientRecord[];
   lockedClient?: ClientRecord;
   lockedClients?: ClientRecord[];
+  caseType?: CaseType;
+  requireReviewBeforeSubmit?: boolean;
   submitLabel?: string;
   onSubmit: (values: CaseFormValues) => void | Promise<void>;
 }
 
-const createDefaultValues = (clientId = ""): CaseFormValues => ({
+const createDefaultValues = (
+  clientId = "",
+  caseType: CaseType = "Criminal",
+): CaseFormValues => ({
   client_id: clientId,
   client_ids: clientId ? [clientId] : [],
+  case_type: caseType,
   intake_record: {
     control_no: "",
     form_date: new Date().toLocaleDateString("en-US", {
@@ -271,14 +278,16 @@ const applicantRoleOptions = [
   "Others",
 ];
 
-function generatedCaseTitle(clients: ClientRecord[]) {
+function generatedCaseTitle(clients: ClientRecord[], caseType: CaseType) {
   const names = clients
     .map((client) => client.client.name.trim())
     .filter(Boolean);
-  if (names.length === 0) return "PP vs. Client";
-  if (names.length === 1) return `PP vs. ${names[0]}`;
-  if (names.length === 2) return `PP vs. ${names[0]} and ${names[1]}`;
-  return `PP vs. ${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+  const prefix = caseType === "Civil" ? "Civil Case -" : "PP vs.";
+  const fallback = caseType === "Civil" ? "Civil Case - Client" : "PP vs. Client";
+  if (names.length === 0) return fallback;
+  if (names.length === 1) return `${prefix} ${names[0]}`;
+  if (names.length === 2) return `${prefix} ${names[0]} and ${names[1]}`;
+  return `${prefix} ${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
 }
 
 function splitSelectedOptions(value: string) {
@@ -484,10 +493,62 @@ function SelectedClientCard({
   );
 }
 
+const reviewClassificationLabels: Array<
+  [keyof ClientRecord["client_classification"], string]
+> = [
+  ["flag_senior", "Senior Citizen"],
+  ["flag_cicl", "Child in Conflict with the Law"],
+  ["flag_female", "Female"],
+  ["flag_urban", "Urban"],
+  ["flag_rural", "Rural"],
+  ["flag_drugs", "Drug-related"],
+  ["flag_foreign_national", "Foreign National"],
+  ["flag_vawc_victim", "VAWC Victim"],
+  ["flag_refugee_evacuee", "Refugee / Evacuee"],
+  ["flag_law_enforcer", "Law Enforcer"],
+  ["flag_tenant_agrarian", "Tenant in Agrarian Case"],
+  ["flag_ofw_land_based", "OFW Land-Based"],
+  ["flag_ofw_sea_based", "OFW Sea-Based"],
+  ["flag_arrested_terrorism", "Arrested for Terrorism"],
+  ["flag_indigenous_people", "Indigenous People"],
+  ["flag_pwd", "PWD"],
+  ["flag_former_rebel_fve", "Former Rebel / FVE"],
+  ["flag_torture_victim", "Victim of Torture"],
+  ["flag_trafficking_victim", "Victim of Trafficking"],
+  ["flag_voluntary_rehab_petitioner", "Petitioner for Voluntary Rehab"],
+];
+
+function selectedClassificationNames(client: ClientRecord) {
+  return reviewClassificationLabels
+    .filter(([field]) => Boolean(client.client_classification[field]))
+    .map(([, label]) => label);
+}
+
+function ReviewField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number | boolean | undefined | null;
+}) {
+  return (
+    <div className="rounded-md border border-[#E5E7EB] bg-white p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
+        {label}
+      </p>
+      <p className="mt-1 break-words text-sm font-semibold text-[#2B3642]">
+        {typeof value === "boolean" ? (value ? "Yes" : "No") : value || "-"}
+      </p>
+    </div>
+  );
+}
+
 export function CaseWorkflow({
   clients,
   lockedClient,
   lockedClients,
+  caseType = "Criminal",
+  requireReviewBeforeSubmit = false,
   submitLabel = "Save Case",
   onSubmit,
 }: CaseWorkflowProps) {
@@ -531,8 +592,18 @@ export function CaseWorkflow({
     stopCamera,
     captureFrame,
   } = useCamera();
-  const standaloneSteps = ["Select Client", "Encoding Method", "Case Details"];
-  const lockedSteps = ["Encoding Method", "Case Details"];
+  const standaloneSteps = requireReviewBeforeSubmit
+    ? [
+        "Select Client",
+        "Encoding Method",
+        "Case Details",
+        "Classification",
+        "Review",
+      ]
+    : ["Select Client", "Encoding Method", "Case Details"];
+  const lockedSteps = requireReviewBeforeSubmit
+    ? ["Encoding Method", "Case Details", "Classification", "Review"]
+    : ["Encoding Method", "Case Details"];
   const steps = hasLockedSelection ? lockedSteps : standaloneSteps;
   const {
     register,
@@ -544,7 +615,10 @@ export function CaseWorkflow({
     formState: { errors },
   } = useForm<CaseFormValues>({
     resolver: zodResolver(caseFormSchema) as Resolver<CaseFormValues>,
-    defaultValues: createDefaultValues(lockedSelectionClients[0]?.client_id ?? ""),
+    defaultValues: createDefaultValues(
+      lockedSelectionClients[0]?.client_id ?? "",
+      caseType,
+    ),
     mode: "onBlur",
   });
 
@@ -585,7 +659,13 @@ export function CaseWorkflow({
   const visibleClients = filteredClients.slice(0, 8);
   const hasOcrResult = Object.keys(indicators).length > 0;
   const isCaseFormStep = hasLockedSelection ? step === 1 : step === 2;
+  const classificationStep = hasLockedSelection ? 2 : 3;
+  const reviewStep = hasLockedSelection ? 3 : 4;
+  const isClassificationStep =
+    requireReviewBeforeSubmit && step === classificationStep;
+  const isReviewStep = requireReviewBeforeSubmit && step === reviewStep;
   const isMethodStep = hasLockedSelection ? step === 0 : step === 1;
+  const reviewValues = watch();
   const selectedClientIsDetained = Boolean(
     selectedClient?.client_details.detained,
   );
@@ -782,6 +862,20 @@ export function CaseWorkflow({
     setStep(hasLockedSelection ? 1 : 2);
   };
 
+  const continueFromDetails = async () => {
+    const valid = await trigger();
+    if (!valid) {
+      toast.error(
+        getFirstValidationMessage(errors) ??
+          "Please resolve validation errors before reviewing.",
+      );
+      return;
+    }
+    setStep(classificationStep);
+  };
+
+  const continueToReview = () => setStep(reviewStep);
+
   const applyExtractedPayload = (payload: CaseOcrPayload) => {
     caseOcrFields.forEach((path) => {
       const current = getValues(path);
@@ -883,7 +977,7 @@ export function CaseWorkflow({
 
   const submitCase = async (values: CaseFormValues) => {
     try {
-      const generatedTitle = generatedCaseTitle(selectedClients);
+      const generatedTitle = generatedCaseTitle(selectedClients, caseType);
       const normalizedStatus = values.cases.status_of_case === "Terminated"
         ? "Terminated"
         : "Pending";
@@ -893,6 +987,7 @@ export function CaseWorkflow({
           : values.intake_record.applicant_role;
       await onSubmit({
         ...values,
+        case_type: caseType,
         client_id: selectedClient?.client_id ?? values.client_id,
         client_ids: selectedClients.map((client) => client.client_id),
         intake_record: {
@@ -1316,7 +1411,7 @@ export function CaseWorkflow({
               </div>
               <div className="mt-3 rounded-md border border-[#E7D7EE] bg-[#F7F0FA] px-3 py-2 text-sm font-semibold text-[#5F3675]">
                 Case title will be generated automatically as{" "}
-                {generatedCaseTitle(selectedClients)}.
+                {generatedCaseTitle(selectedClients, caseType)}.
               </div>
             </section>
 
@@ -1802,6 +1897,171 @@ export function CaseWorkflow({
             </section>
           </div>
         )}
+
+        {isClassificationStep && (
+          <div className="space-y-5">
+            <section className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                Applicant Classification
+              </h3>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {selectedClients.map((client) => {
+                  const classifications = selectedClassificationNames(client);
+                  return (
+                    <div
+                      key={client.client_id}
+                      className="rounded-md border border-[#E5E7EB] bg-white p-3"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-[#2B3642]">
+                            {client.client.name}
+                          </p>
+                          <p className="mt-1 text-xs text-[#6B7280]">
+                            {client.client_id}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setViewingClient(client)}
+                          className="shrink-0 rounded-md border border-[#704389] bg-white px-2.5 py-1 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
+                        >
+                          View
+                        </button>
+                      </div>
+                      <p className="mt-3 text-sm font-semibold text-[#2B3642]">
+                        {classifications.join(", ") || "None selected"}
+                      </p>
+                      {client.client_classification.classification_notes && (
+                        <p className="mt-2 text-xs leading-5 text-[#4B5563]">
+                          {client.client_classification.classification_notes}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {isReviewStep && (
+          <div className="space-y-5">
+            <section className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                Selected Clients
+              </h3>
+              <div className="mt-3 flex max-h-44 flex-wrap content-start gap-2 overflow-y-auto">
+                {selectedClients.map((client) => (
+                  <SelectedClientCard
+                    key={client.client_id}
+                    client={client}
+                    locked
+                    onView={() => setViewingClient(client)}
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                Case Information
+              </h3>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <ReviewField
+                  label="Control No."
+                  value={reviewValues.intake_record.control_no}
+                />
+                <ReviewField
+                  label="Case Title"
+                  value={generatedCaseTitle(selectedClients, caseType)}
+                />
+                <ReviewField
+                  label="Case No."
+                  value={reviewValues.cases.case_no}
+                />
+                <ReviewField
+                  label="Court / Body"
+                  value={reviewValues.cases.court_body}
+                />
+                <ReviewField
+                  label="Nature of Request"
+                  value={reviewValues.intake_record.nature_of_request}
+                />
+                <ReviewField
+                  label="Nature of Case"
+                  value={reviewValues.intake_record.nature_of_case}
+                />
+                <ReviewField
+                  label="Applicant Case Involvement"
+                  value={
+                    reviewValues.intake_record.applicant_role === "Others"
+                      ? reviewValues.intake_record.applicant_role_other
+                      : reviewValues.intake_record.applicant_role
+                  }
+                />
+                <ReviewField
+                  label="Status"
+                  value={reviewValues.cases.status_of_case}
+                />
+                <ReviewField
+                  label="Last Action Taken"
+                  value={reviewValues.cases.last_action_taken}
+                />
+                <ReviewField
+                  label="Cause of Action"
+                  value={reviewValues.cases.cause_of_action}
+                />
+                <ReviewField
+                  label="Location Type"
+                  value={reviewValues.cases.location_type}
+                />
+                <ReviewField
+                  label="Barangay"
+                  value={reviewValues.cases.incident_barangay}
+                />
+                <ReviewField
+                  label="Detained"
+                  value={reviewValues.cases.detained}
+                />
+                <ReviewField
+                  label="Date of Detention"
+                  value={reviewValues.cases.date_of_confinement}
+                />
+                <ReviewField
+                  label="Place of Detention"
+                  value={reviewValues.cases.place_of_detention}
+                />
+              </div>
+              <div className="mt-3">
+                <ReviewField
+                  label="Facts of Case"
+                  value={reviewValues.cases.facts_of_case}
+                />
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+              <h3 className="text-sm font-semibold text-[#2B3642]">
+                Representative
+              </h3>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <ReviewField
+                  label="Representative Name"
+                  value={reviewValues.representative.rep_name}
+                />
+                <ReviewField
+                  label="Representative Contact"
+                  value={reviewValues.representative.rep_contact_no}
+                />
+                <ReviewField
+                  label="Relationship to Applicant"
+                  value={reviewValues.representative.relationship_to_applicant}
+                />
+              </div>
+            </section>
+          </div>
+        )}
       </div>
 
       <div className="sticky bottom-0 flex justify-between border-t border-[#E5E7EB] bg-white px-6 py-4">
@@ -1843,12 +2103,38 @@ export function CaseWorkflow({
               Continue
             </button>
           )}
-          {isCaseFormStep && (
+          {isCaseFormStep && requireReviewBeforeSubmit && (
+            <button
+              type="button"
+              onClick={continueFromDetails}
+              className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675]"
+            >
+              Continue
+            </button>
+          )}
+          {isCaseFormStep && !requireReviewBeforeSubmit && (
             <button
               type="submit"
               className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675]"
             >
               {submitLabel}
+            </button>
+          )}
+          {isReviewStep && (
+            <button
+              type="submit"
+              className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675]"
+            >
+              {submitLabel}
+            </button>
+          )}
+          {isClassificationStep && (
+            <button
+              type="button"
+              onClick={continueToReview}
+              className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675]"
+            >
+              Continue
             </button>
           )}
         </div>

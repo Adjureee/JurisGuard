@@ -6,13 +6,19 @@ import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useCriminalCasesStore } from "../../features/criminalCases/criminalCasesStore";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
 import { createCaseRecord } from "../../services/recordService";
+import type { CaseType } from "../../types";
 
 interface AddCaseModalProps {
   isOpen: boolean;
   onClose: () => void;
+  caseType?: CaseType;
 }
 
-export default function AddCaseModal({ isOpen, onClose }: AddCaseModalProps) {
+export default function AddCaseModal({
+  isOpen,
+  onClose,
+  caseType = "Criminal",
+}: AddCaseModalProps) {
   const { user } = useAuth();
   const clients = useCriminalCasesStore((state) => state.clients);
   const upsertCase = useCriminalCasesStore((state) => state.upsertCase);
@@ -22,6 +28,7 @@ export default function AddCaseModal({ isOpen, onClose }: AddCaseModalProps) {
   if (!isOpen) return null;
 
   const visibleClients = clients;
+  const caseLabel = `${caseType} Case`;
 
   return (
     <ModalPortal>
@@ -29,7 +36,9 @@ export default function AddCaseModal({ isOpen, onClose }: AddCaseModalProps) {
       <div className="jurisguard-modal-surface flex max-h-[92vh] w-full max-w-6xl animate-[modalIn_200ms_ease-out] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold text-[#2B3642]">Add Criminal Case</h2>
+            <h2 className="text-lg font-semibold text-[#2B3642]">
+              Add {caseLabel}
+            </h2>
             <button
               type="button"
               onClick={onClose}
@@ -43,15 +52,18 @@ export default function AddCaseModal({ isOpen, onClose }: AddCaseModalProps) {
         <div className="min-h-0 flex-1 overflow-y-auto">
           <CaseWorkflow
             clients={visibleClients}
+            caseType={caseType}
+            requireReviewBeforeSubmit={caseType === "Civil"}
+            submitLabel={`Save ${caseLabel}`}
             onSubmit={async (values) => {
-              const record = await createCaseRecord(values);
+              const record = await createCaseRecord(values, caseType);
               upsertCase(record);
               addLog({
                 userId: user?.user_id,
                 user: user?.full_name || user?.email,
                 action: "Create Case",
                 module: "Cases",
-                description: `Case ${record.intake_record.control_no} attached to existing client`,
+                description: `${caseLabel} ${record.intake_record.control_no} attached to existing client`,
                 entityType: "case",
                 entityId: record.case_id,
               });
@@ -59,12 +71,12 @@ export default function AddCaseModal({ isOpen, onClose }: AddCaseModalProps) {
                 type: "case_created",
                 userId: user?.user_id,
                 title: "Case Update",
-                message: "Case attached",
-                redirectTo: `/criminal-cases?case=${encodeURIComponent(record.case_id)}`,
+                message: `${caseLabel} attached`,
+                redirectTo: `/${caseType === "Civil" ? "civil-cases" : "criminal-cases"}?case=${encodeURIComponent(record.case_id)}`,
                 entityType: "case",
                 entityId: record.case_id,
               });
-              toast.success("Case attached");
+              toast.success(`${caseLabel} attached`);
               onClose();
             }}
           />

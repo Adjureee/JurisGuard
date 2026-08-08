@@ -11,10 +11,12 @@ import {
   type CriminalCaseExportFilterDto,
   type CriminalCaseRow,
 } from "../../services/exportService";
+import type { CaseType } from "../../types";
 
 interface ExportCsvModalProps {
   isOpen: boolean;
   rows: CriminalCaseRow[];
+  caseType?: CaseType;
   onClose: () => void;
 }
 
@@ -44,7 +46,12 @@ function downloadText(filename: string, content: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModalProps) {
+export default function ExportCsvModal({
+  isOpen,
+  rows,
+  caseType = "Criminal",
+  onClose,
+}: ExportCsvModalProps) {
   const { user } = useAuth();
   const addLog = useAuditLogStore((state) => state.addLog);
   const addNotification = useNotificationStore((state) => state.addNotification);
@@ -73,7 +80,8 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
     try {
       const stamp = new Date().toISOString().slice(0, 10);
       const action = "Export Excel";
-      const description = `${user?.full_name || user?.email || "User"} exported ${exportRows.length} criminal case record${exportRows.length === 1 ? "" : "s"} as EXCEL`;
+      const caseLabel = caseType.toLowerCase();
+      const description = `${user?.full_name || user?.email || "User"} exported ${exportRows.length} ${caseLabel} case record${exportRows.length === 1 ? "" : "s"} as EXCEL`;
       const entityId = new Date().toISOString();
       await createAuditLog({
         action,
@@ -82,7 +90,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
         entity_type: "criminal_case_export",
         entity_id: entityId,
       });
-      downloadText(`jurisguard-criminal-cases_${stamp}.xls`, buildCriminalCasesExcelHtml(rows, filters), "application/vnd.ms-excel;charset=utf-8");
+      downloadText(`jurisguard-${caseLabel}-cases_${stamp}.xls`, buildCriminalCasesExcelHtml(rows, filters), "application/vnd.ms-excel;charset=utf-8");
       addLog({
         userId: user?.user_id,
         user: user?.full_name || user?.email,
@@ -97,7 +105,7 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
         userId: user?.user_id,
         title: "Report Export",
         message: "EXCEL exported",
-        redirectTo: "/criminal-cases",
+        redirectTo: caseType === "Civil" ? "/civil-cases" : "/criminal-cases",
         entityType: "criminal_case_export",
         entityId,
       });
@@ -114,7 +122,9 @@ export default function ExportCsvModal({ isOpen, rows, onClose }: ExportCsvModal
       <div className="jurisguard-modal-surface w-full max-w-3xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
         <div className="flex items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div>
-            <h2 className="text-lg font-bold text-[#2B3642]">Advanced Criminal Cases Export</h2>
+            <h2 className="text-lg font-bold text-[#2B3642]">
+              Advanced {caseType} Cases Export
+            </h2>
             <p className="mt-1 text-sm text-[#4B5563]">
               Filter legal records and export to Excel.
             </p>

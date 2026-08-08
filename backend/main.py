@@ -144,6 +144,7 @@ class ClientPayload(BaseModel):
 class CasePayload(BaseModel):
     client_id: int | str
     client_ids: list[int | str] | None = None
+    case_type: Literal["Criminal", "Civil"] | None = None
     intake_record: dict[str, Any]
     representative: dict[str, Any]
     adverse_party: dict[str, Any]
@@ -310,6 +311,8 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE adverse_party ADD COLUMN IF NOT EXISTS role_oppositor_others BOOLEAN DEFAULT false",
         "ALTER TABLE adverse_party ADD COLUMN IF NOT EXISTS name TEXT",
         "ALTER TABLE adverse_party ADD COLUMN IF NOT EXISTS address TEXT",
+        'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS case_type VARCHAR(30) DEFAULT \'Criminal\'',
+        'UPDATE "case" SET case_type = \'Criminal\' WHERE case_type IS NULL OR case_type = \'\'',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS court_body VARCHAR(255)',
         'ALTER TABLE "case" ALTER COLUMN title_of_case TYPE VARCHAR(255)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS case_status VARCHAR(30)',
@@ -765,6 +768,10 @@ def normalize_case_status(value: Any) -> str:
     return "Terminated" if str(value or "").strip().lower() == "terminated" else "Pending"
 
 
+def normalize_case_type(value: Any) -> str:
+    return "Civil" if str(value or "").strip().lower() == "civil" else "Criminal"
+
+
 def is_none_value(value: Any) -> bool:
     return str(value or "").strip().lower() in {"none", "not applicable", "n/a"}
 
@@ -798,8 +805,11 @@ def normalize_representative_details(details_data: dict[str, Any]) -> dict[str, 
     return normalized
 
 
-def generated_case_title(client: models.Client | None) -> str:
+def generated_case_title(client: models.Client | None, case_type: str = "Criminal") -> str:
     name = (client.name if client else "") or "Client"
+    normalized_type = normalize_case_type(case_type)
+    if normalized_type == "Civil":
+        return limit_text(f"Civil Case - {name.strip() or 'Client'}", 255, "Civil Case - Client") or "Civil Case - Client"
     return limit_text(f"PP vs. {name.strip() or 'Client'}", 50, "PP vs. Client") or "PP vs. Client"
 
 
@@ -828,19 +838,22 @@ def case_participants(record: models.Case) -> list[models.CaseClient]:
 
 
 def generated_case_title_for_case(record: models.Case) -> str:
+    case_type = normalize_case_type(getattr(record, "case_type", "Criminal"))
     names = [
         participant.client.name.strip()
         for participant in case_participants(record)
         if participant.client and participant.client.name and participant.client.name.strip()
     ]
     if not names:
-        return generated_case_title(record.client)
+        return generated_case_title(record.client, case_type)
     if len(names) == 1:
         represented = names[0]
     elif len(names) == 2:
         represented = f"{names[0]} and {names[1]}"
     else:
         represented = f"{', '.join(names[:-1])}, and {names[-1]}"
+    if case_type == "Civil":
+        return limit_text(f"Civil Case - {represented}", 255, "Civil Case - Client") or "Civil Case - Client"
     return limit_text(f"PP vs. {represented}", 255, "PP vs. Client") or "PP vs. Client"
 
 
@@ -1010,6 +1023,7 @@ def get_case_payload(record: models.Case) -> dict[str, Any]:
     return {
         "case_id": str(record.case_id),
         "client_id": str(record.client_id or ""),
+        "case_type": normalize_case_type(getattr(record, "case_type", "Criminal")),
         "created_by_user_id": intake.interviewer_id,
         "intake_record": {
             "control_no": intake.control_no or "",
@@ -2471,16 +2485,21 @@ def get_client(client_id: int, user: models.User = Depends(current_user), db: Se
 
 
 @app.get("/api/clients/{client_id}/cases")
-def get_client_cases(client_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def get_client_cases(
+    client_id: int,
+    case_type: Literal["Criminal", "Civil", "All"] = Query(default="Criminal"),
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
     ensure_client_access(db.get(models.Client, client_id), user, db)
-    records = (
+    query = (
         scoped_case_query(db, user)
         .outerjoin(models.CaseClient)
         .filter(or_(models.Case.client_id == client_id, models.CaseClient.client_id == client_id))
-        .order_by(models.Case.last_updated.desc())
-        .distinct()
-        .all()
     )
+    if case_type != "All":
+        query = query.filter(models.Case.case_type == case_type)
+    records = query.order_by(models.Case.last_updated.desc()).distinct().all()
     return [get_case_payload(record) for record in records]
 
 
@@ -2591,19 +2610,31 @@ def update_client(
 
 
 @app.get("/api/cases/")
-def list_cases(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    records = scoped_case_query(db, user).order_by(models.Case.last_updated.desc()).all()
+def list_cases(
+    case_type: Literal["Criminal", "Civil", "All"] = Query(default="Criminal"),
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    query = scoped_case_query(db, user)
+    if case_type != "All":
+        query = query.filter(models.Case.case_type == case_type)
+    records = query.order_by(models.Case.last_updated.desc()).all()
     return [get_case_payload(record) for record in records]
 
 
 @app.get("/api/cases/terminated")
-def list_terminated_cases(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    records = (
+def list_terminated_cases(
+    case_type: Literal["Criminal", "Civil", "All"] = Query(default="Criminal"),
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    query = (
         scoped_case_query(db, user)
         .filter((models.Case.is_terminated.is_(True)) | (models.Case.status_of_case == "Terminated"))
-        .order_by(models.Case.terminated_at.desc().nullslast(), models.Case.last_updated.desc())
-        .all()
     )
+    if case_type != "All":
+        query = query.filter(models.Case.case_type == case_type)
+    records = query.order_by(models.Case.terminated_at.desc().nullslast(), models.Case.last_updated.desc()).all()
     return [get_case_payload(record) for record in records]
 
 
@@ -2638,6 +2669,7 @@ def get_printable_intake(
     cases = (
         scoped_case_query(db, user)
         .outerjoin(models.CaseClient, models.Case.case_id == models.CaseClient.case_id)
+        .filter(models.Case.case_type == normalize_case_type(getattr(record, "case_type", "Criminal")))
         .filter(
             or_(
                 models.Case.client_id == selected_client.client_id,
@@ -2714,6 +2746,7 @@ def create_case(
         intake_data = payload.intake_record
         rep_data = payload.representative
         case_data = payload.cases
+        case_type = normalize_case_type(payload.case_type)
         normalized_status = normalize_case_status(case_data.get("status_of_case") or case_data.get("case_status"))
         confinement_date, detention_place = detention_fields_for_client(client, case_data)
         case_detained = (
@@ -2783,7 +2816,8 @@ def create_case(
         record = models.Case(
             intake_id=intake.intake_id,
             client_id=primary_client_id,
-            title_of_case=generated_case_title(client),
+            case_type=case_type,
+            title_of_case=generated_case_title(client, case_type),
             case_no=limit_text(case_data.get("case_no"), 20),
             court_body=case_data.get("court_body"),
             status_of_case=normalized_status,
@@ -2830,7 +2864,7 @@ def create_case(
                 remarks="Initial case record",
             )
         )
-        write_audit(db, user.user_id, "Create Case", "case", f"{user.full_name or user.email or user.username} created Criminal Case #{record.case_id}", str(record.case_id), request)
+        write_audit(db, user.user_id, "Create Case", "case", f"{user.full_name or user.email or user.username} created {case_type} Case #{record.case_id}", str(record.case_id), request)
     except HTTPException:
         raise
     except ValueError as exc:
@@ -2863,13 +2897,14 @@ def update_case(
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Invalid case update payload: {exc}") from exc
     actor_name = user.full_name or user.email or user.username
+    case_type = normalize_case_type(getattr(record, "case_type", "Criminal"))
     if created_by_user_id and created_by_user_id != user.user_id:
         description = (
-            f"{actor_name} collaboratively updated Criminal Case #{record.case_id} "
+            f"{actor_name} collaboratively updated {case_type} Case #{record.case_id} "
             f"originally created by User #{created_by_user_id}"
         )
     else:
-        description = f"{actor_name} updated Criminal Case #{record.case_id}"
+        description = f"{actor_name} updated {case_type} Case #{record.case_id}"
     db.add(
         models.CaseHistory(
             case_id=record.case_id,
@@ -2980,13 +3015,14 @@ def terminate_case(
     record.supporting_document_path = payload.supporting_document_path
     record.last_updated = datetime.now()
     actor_name = user.full_name or user.email or user.username
+    case_type = normalize_case_type(getattr(record, "case_type", "Criminal"))
     if created_by_user_id and created_by_user_id != user.user_id:
         description = (
-            f"{actor_name} collaboratively terminated Criminal Case #{record.case_id} "
+            f"{actor_name} collaboratively terminated {case_type} Case #{record.case_id} "
             f"originally created by User #{created_by_user_id}"
         )
     else:
-        description = f"{actor_name} terminated Criminal Case #{record.case_id}"
+        description = f"{actor_name} terminated {case_type} Case #{record.case_id}"
     write_audit(db, user.user_id, "Terminate Case", "case", description, str(record.case_id), request)
     db.commit()
     db.refresh(record)

@@ -28,6 +28,7 @@ import {
 import type {
   CaseParticipant,
   CaseStatus,
+  CaseType,
   ClientRecord,
   CriminalCaseRecord,
 } from "../types";
@@ -362,8 +363,9 @@ function CaseAccordion({
     participant: CaseParticipant,
   ) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const participants = caseParticipants(record, fallbackClient);
+  const isMultiParty = participants.length > 1;
+  const [open, setOpen] = useState(isMultiParty);
 
   return (
     <div
@@ -414,54 +416,50 @@ function CaseAccordion({
             </div>
           </section>
 
-          <section>
-            <h4 className="text-sm font-semibold text-[#2B3642]">
-              Participants
-            </h4>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              {participants.map((participant) => (
-                <div
-                  key={participant.case_client_id || participant.client_id}
-                  className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] p-3"
-                >
-                  <p className="text-sm font-semibold text-[#2B3642]">
-                    {participant.name}
-                  </p>
-                  <dl className="mt-2 space-y-1 text-xs text-[#4B5563]">
-                    <div className="flex justify-between gap-3">
-                      <dt>Applicant Case Involvement</dt>
-                      <dd className="font-semibold text-[#2B3642]">
-                        {participant.applicant_role === "Others"
-                          ? participant.applicant_role_other
-                          : participant.applicant_role || "Role not set"}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt>Party Represented</dt>
-                      <dd className="font-semibold text-[#2B3642]">
-                        {participant.party_represented || "Not set"}
-                      </dd>
-                    </div>
-                  </dl>
-                  {showInterviewSheets && onInterviewSheet && (
-                    <button
-                      type="button"
-                      onClick={() => onInterviewSheet(record, participant)}
-                      className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
-                    >
-                      INTERVIEW SHEET
-                    </button>
-                  )}
-                </div>
-              ))}
-              {participants.length === 0 && (
-                <InfoTile
-                  label="Party Represented"
-                  value={record.intake_record.party_represented}
-                />
-              )}
-            </div>
-          </section>
+          {isMultiParty && (
+            <section>
+              <h4 className="text-sm font-semibold text-[#2B3642]">
+                Participants
+              </h4>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {participants.map((participant) => (
+                  <div
+                    key={participant.case_client_id || participant.client_id}
+                    className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] p-3"
+                  >
+                    <p className="text-sm font-semibold text-[#2B3642]">
+                      {participant.name}
+                    </p>
+                    <dl className="mt-2 space-y-1 text-xs text-[#4B5563]">
+                      <div className="flex justify-between gap-3">
+                        <dt>Applicant Case Involvement</dt>
+                        <dd className="font-semibold text-[#2B3642]">
+                          {participant.applicant_role === "Others"
+                            ? participant.applicant_role_other
+                            : participant.applicant_role || "Role not set"}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt>Party Represented</dt>
+                        <dd className="font-semibold text-[#2B3642]">
+                          {participant.party_represented || "Not set"}
+                        </dd>
+                      </div>
+                    </dl>
+                    {showInterviewSheets && onInterviewSheet && (
+                      <button
+                        type="button"
+                        onClick={() => onInterviewSheet(record, participant)}
+                        className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
+                      >
+                        INTERVIEW SHEET
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section>
             <h4 className="text-sm font-semibold text-[#2B3642]">
@@ -1256,6 +1254,7 @@ function ClientRecordModal({
   cases,
   clients,
   mode,
+  caseType,
   onClose,
   onClientUpdated,
   onCaseUpdated,
@@ -1266,6 +1265,7 @@ function ClientRecordModal({
   cases: CriminalCaseRecord[];
   clients: ClientRecord[];
   mode: "view" | "update";
+  caseType: CaseType;
   onClose: () => void;
   onClientUpdated: (client: ClientRecord) => void;
   onCaseUpdated: (record: CriminalCaseRecord) => void;
@@ -1294,12 +1294,15 @@ function ClientRecordModal({
         .filter(Boolean),
     ),
   );
+  const showCombinedParticipantTitle = mode === "view" && cases.length === 1;
   const openInterviewSheet = (
     record: CriminalCaseRecord,
     participant: CaseParticipant,
   ) => {
     const params = new URLSearchParams({ clientId: participant.client_id });
-    navigate(`/criminal-cases/form-view/${record.case_id}?${params.toString()}`);
+    const formBasePath =
+      caseType === "Civil" ? "/civil-cases" : "/criminal-cases";
+    navigate(`${formBasePath}/form-view/${record.case_id}?${params.toString()}`);
   };
 
   return (
@@ -1309,16 +1312,20 @@ function ClientRecordModal({
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
           <div className="min-w-0">
             <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">
-              Criminal Cases
+              {caseType} Cases
             </p>
             <h2 className="mt-1 text-xl font-bold text-[#2B3642]">
               {mode === "view"
-                ? titleNames.length
-                  ? titleNames.map((name) => <span key={name} className="block">{name}</span>)
+                ? showCombinedParticipantTitle && titleNames.length
+                  ? titleNames.map((name) => (
+                      <span key={name} className="block">
+                        {name}
+                      </span>
+                    ))
                   : client.client.name
                 : "Update Record"}
             </h2>
-            {mode === "update" && (
+            {mode !== "view" && (
               <p className="mt-2 truncate text-sm text-[#6B7280]">
                 {client.client.name}
               </p>
@@ -1393,7 +1400,7 @@ function ClientRecordModal({
           <section className="mt-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-[#2B3642]">
-                Criminal Cases
+                {caseType} Cases
               </h3>
               <p className="text-sm text-[#6B7280]">{cases.length} records</p>
             </div>
@@ -1411,6 +1418,29 @@ function ClientRecordModal({
                     onInterviewSheet={openInterviewSheet}
                   />
                   <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
+                    {mode === "view" &&
+                      caseParticipants(record, client).length <= 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const [participant] = caseParticipants(record, client);
+                            if (participant) {
+                              openInterviewSheet(record, participant);
+                              return;
+                            }
+                            const formBasePath =
+                              caseType === "Civil"
+                                ? "/civil-cases"
+                                : "/criminal-cases";
+                            navigate(
+                              `${formBasePath}/form-view/${record.case_id}`,
+                            );
+                          }}
+                          className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
+                        >
+                          INTERVIEW SHEET
+                        </button>
+                      )}
                     {mode === "update" && (
                       <>
                         {!(
@@ -1485,7 +1515,19 @@ function ClientRecordModal({
   );
 }
 
-export default function CriminalCasesPage() {
+interface CasesPageProps {
+  caseType?: CaseType;
+  pageEyebrow?: string;
+  pageTitle?: string;
+  pageDescription?: string;
+}
+
+export default function CriminalCasesPage({
+  caseType = "Criminal",
+  pageEyebrow,
+  pageTitle,
+  pageDescription,
+}: CasesPageProps = {}) {
   const { user } = useAuth();
   const canCollaborateOnCases =
     user?.role === "admin" ||
@@ -1505,7 +1547,6 @@ export default function CriminalCasesPage() {
   const [showClientModal, setShowClientModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
-  const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [actionMode, setActionMode] = useState<"view" | "update">("view");
 
   useEffect(() => {
@@ -1516,7 +1557,7 @@ export default function CriminalCasesPage() {
       try {
         const [clientRows, caseRows] = await Promise.all([
           listClientRecords(),
-          listCaseRecords(),
+          listCaseRecords(caseType),
         ]);
         if (!cancelled) {
           setClients(clientRows);
@@ -1536,7 +1577,7 @@ export default function CriminalCasesPage() {
     return () => {
       cancelled = true;
     };
-  }, [setCases, setClients, user]);
+  }, [caseType, setCases, setClients, user]);
 
   const visibleClients = useMemo(
     () =>
@@ -1550,15 +1591,19 @@ export default function CriminalCasesPage() {
     [canCollaborateOnCases, clients, user?.user_id],
   );
   const visibleCases = useMemo(
-    () =>
-      canCollaborateOnCases
-        ? cases
-        : cases.filter(
+    () => {
+      const typedCases = cases.filter(
+        (record) => (record.case_type ?? "Criminal") === caseType,
+      );
+      return canCollaborateOnCases
+        ? typedCases
+        : typedCases.filter(
             (record) =>
               record.created_by_user_id === null ||
               record.created_by_user_id === user?.user_id,
-          ),
-    [canCollaborateOnCases, cases, user?.user_id],
+          );
+    },
+    [canCollaborateOnCases, caseType, cases, user?.user_id],
   );
   const activeVisibleCases = useMemo(
     () =>
@@ -1610,19 +1655,16 @@ export default function CriminalCasesPage() {
   const activeClient =
     visibleClients.find((client) => client.client_id === activeClientId) ??
     null;
-  const activeCases = activeCaseId
-    ? visibleCases.filter((record) => record.case_id === activeCaseId)
-    : visibleCases.filter(
-        (record) =>
-          record.client_id === activeClientId ||
-          record.participants?.some(
-            (participant) => participant.client_id === activeClientId,
-          ),
-      );
+  const activeCases = visibleCases.filter(
+    (record) =>
+      record.client_id === activeClientId ||
+      record.participants?.some(
+        (participant) => participant.client_id === activeClientId,
+      ),
+  );
 
   const openRecord = (record: CriminalCaseRecord, mode: "view" | "update") => {
     setActiveClientId(record.client_id);
-    setActiveCaseId(record.case_id);
     setActionMode(mode);
   };
 
@@ -1634,9 +1676,12 @@ export default function CriminalCasesPage() {
         {/* 2. Header Area: shrink-0 keeps it from compressing */}
         <div className="shrink-0">
           <PageHeader
-            eyebrow="Criminal Cases"
-            title="Case Records Management"
-            description="Manage PAO Panabo client profiles, active criminal case records, printable intake forms, and update workflows."
+            eyebrow={pageEyebrow ?? `${caseType} Cases`}
+            title={pageTitle ?? `${caseType} Case Records Management`}
+            description={
+              pageDescription ??
+              `Manage PAO Panabo client profiles, active ${caseType.toLowerCase()} case records, printable intake forms, and update workflows.`
+            }
             compact
             actions={
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1646,7 +1691,7 @@ export default function CriminalCasesPage() {
                   className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]"
                 >
                   <PlusIcon />
-                  Add Case
+                  Add {caseType} Case
                 </button>
                 <button
                   type="button"
@@ -1803,21 +1848,21 @@ export default function CriminalCasesPage() {
       <AddCaseModal
         isOpen={showCaseModal}
         onClose={() => setShowCaseModal(false)}
+        caseType={caseType}
       />
       <ExportCsvModal
         isOpen={showExportModal}
         rows={filteredRows}
+        caseType={caseType}
         onClose={() => setShowExportModal(false)}
       />
       <ClientRecordModal
         mode={actionMode}
+        caseType={caseType}
         client={activeClient}
         cases={activeCases}
         clients={visibleClients}
-        onClose={() => {
-          setActiveClientId(null);
-          setActiveCaseId(null);
-        }}
+        onClose={() => setActiveClientId(null)}
         onClientUpdated={upsertClient}
         onCaseUpdated={upsertCase}
         onCaseTerminated={upsertCase}

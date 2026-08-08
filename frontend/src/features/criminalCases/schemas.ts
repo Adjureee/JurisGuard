@@ -87,6 +87,7 @@ export const caseFormSchema = z
   .object({
     client_id: requiredText("Client"),
     client_ids: z.array(optionalText).optional(),
+    case_type: z.enum(["Criminal", "Civil"]).optional(),
     intake_record: z.object({
       control_no: requiredText("Control number"),
       form_date: requiredText("Form date"),

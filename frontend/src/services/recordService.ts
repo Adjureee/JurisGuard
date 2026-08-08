@@ -1,6 +1,6 @@
 import { apiClient } from "../api/client";
 import { AxiosError } from "axios";
-import type { ClientRecord, CriminalCaseRecord } from "../types";
+import type { CaseType, ClientRecord, CriminalCaseRecord } from "../types";
 import type { CaseFormValues, ClientFormValues } from "../features/criminalCases/schemas";
 
 function getRecordErrorMessage(error: unknown, fallback: string) {
@@ -32,8 +32,14 @@ export async function getClientRecord(clientId: string): Promise<ClientRecord> {
   return response.data;
 }
 
-export async function getClientCases(clientId: string): Promise<CriminalCaseRecord[]> {
-  const response = await apiClient.get<CriminalCaseRecord[]>(`/clients/${clientId}/cases`);
+export async function getClientCases(
+  clientId: string,
+  caseType: CaseType | "All" = "Criminal",
+): Promise<CriminalCaseRecord[]> {
+  const response = await apiClient.get<CriminalCaseRecord[]>(
+    `/clients/${clientId}/cases`,
+    { params: { case_type: caseType } },
+  );
   return response.data;
 }
 
@@ -58,14 +64,24 @@ export async function updateClientRecord(
   }
 }
 
-export async function listCaseRecords(): Promise<CriminalCaseRecord[]> {
-  const response = await apiClient.get<CriminalCaseRecord[]>("/cases/");
+export async function listCaseRecords(
+  caseType: CaseType | "All" = "Criminal",
+): Promise<CriminalCaseRecord[]> {
+  const response = await apiClient.get<CriminalCaseRecord[]>("/cases/", {
+    params: { case_type: caseType },
+  });
   return response.data;
 }
 
-export async function createCaseRecord(values: CaseFormValues): Promise<CriminalCaseRecord> {
+export async function createCaseRecord(
+  values: CaseFormValues,
+  caseType: CaseType = "Criminal",
+): Promise<CriminalCaseRecord> {
   try {
-    const response = await apiClient.post<CriminalCaseRecord>("/cases/", values);
+    const response = await apiClient.post<CriminalCaseRecord>("/cases/", {
+      ...values,
+      case_type: caseType,
+    });
     return response.data;
   } catch (error) {
     throw new Error(getRecordErrorMessage(error, "Unable to create case"));

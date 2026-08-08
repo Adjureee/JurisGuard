@@ -51,6 +51,7 @@ export const useCriminalCasesStore = create<CriminalCasesState>((set, get) => ({
     const record: CriminalCaseRecord = {
       case_id: nextCaseId(get().cases.length),
       client_id: values.client_id,
+      case_type: values.case_type ?? "Criminal",
       created_by_user_id: createdByUserId,
       intake_record: values.intake_record,
       representative: values.representative,

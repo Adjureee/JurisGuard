@@ -198,6 +198,7 @@ class Case(Base):
     client_id = Column(Integer, ForeignKey("client.client_id"))
     nature_id = Column(Integer, ForeignKey("case_nature.nature_id"))
     branch_id = Column(Integer, ForeignKey("court_branch.branch_id"))
+    case_type = Column(String(30), nullable=False, default="Criminal")
     title_of_case = Column(String(255), nullable=False)
     case_no = Column(String(20))
     court_body = Column(String(255))
