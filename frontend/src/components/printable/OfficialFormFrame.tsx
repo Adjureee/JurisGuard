@@ -9,15 +9,26 @@ interface OfficialFormFrameProps {
   template: string;
   data: PrintableFormData;
   language: PrintableFormLanguage;
+  page?: 1 | 2;
   onReady?: () => void;
 }
 
 const OfficialFormFrame = forwardRef<HTMLIFrameElement, OfficialFormFrameProps>(
-  ({ template, data, language, onReady }, ref) => {
+  ({ template, data, language, page, onReady }, ref) => {
     const hydratedHtml = useMemo(
       () => hydrateOfficialTemplate(template, data, language),
       [data, language, template]
     );
+    const viewerHtml = useMemo(() => {
+      if (!page) return hydratedHtml;
+      const pageStyles = `
+        <style>
+          .print-page:not(#page-${page}) { display: none !important; }
+          .print-page#page-${page} { margin-bottom: 0 !important; box-shadow: none !important; }
+        </style>
+      `;
+      return hydratedHtml.replace("</head>", `${pageStyles}</head>`);
+    }, [hydratedHtml, page]);
 
     const handleLoad = async (event: SyntheticEvent<HTMLIFrameElement>) => {
       const frameDocument = event.currentTarget.contentDocument;
@@ -38,9 +49,9 @@ const OfficialFormFrame = forwardRef<HTMLIFrameElement, OfficialFormFrameProps>(
       <iframe
         ref={ref}
         title={`PAO intake form ${language}`}
-        srcDoc={hydratedHtml}
+        srcDoc={viewerHtml}
         onLoad={handleLoad}
-        className="h-[calc(100vh-190px)] min-h-[720px] w-full rounded-lg border border-[#D1D5DB] bg-white print:h-screen print:min-h-screen print:border-0"
+        className="block aspect-[8.5/13] h-auto min-h-0 w-full rounded-none border-0 bg-white print:h-screen print:min-h-screen"
       />
     );
   }

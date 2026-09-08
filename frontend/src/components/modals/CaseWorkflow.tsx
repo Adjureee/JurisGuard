@@ -1073,9 +1073,9 @@ export function CaseWorkflow({
         <StepIndicator steps={steps} currentStep={step} />
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-[#F8FAFC] px-6 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8FAFC] px-6 py-5">
         {!hasLockedSelection && step === 0 && (
-          <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="grid min-h-0 gap-5 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="space-y-4 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
               <label className="block">
                 <span className="text-sm font-medium text-[#4B5563]">
@@ -1100,9 +1100,15 @@ export function CaseWorkflow({
                 <div className="border-b border-[#E5E7EB] px-4 py-3 text-sm font-semibold text-[#2B3642]">
                   Selected Clients
                 </div>
-                <div className="h-64 space-y-3 overflow-y-auto p-3">
+                <div
+                  className={`space-y-3 p-3 ${
+                    selectedClients.length > 0
+                      ? "max-h-64 overflow-y-auto"
+                      : ""
+                  }`}
+                >
                   {selectedClients.length === 0 ? (
-                    <div className="flex h-full items-center justify-center text-center text-sm text-[#4B5563]">
+                    <div className="py-2 text-center text-sm text-[#4B5563]">
                       No clients selected.
                     </div>
                   ) : (
@@ -1119,11 +1125,11 @@ export function CaseWorkflow({
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
+            <div className="min-h-0 overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
               <div className="sticky top-0 border-b border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3 text-sm font-semibold text-[#4B5563]">
                 Existing Clients
               </div>
-              <div className="max-h-96 divide-y divide-[#E5E7EB] overflow-y-auto">
+              <div className="max-h-96 min-h-0 divide-y divide-[#E5E7EB] overflow-y-auto">
                 {!hasSearch ? (
                   <div className="px-4 py-8 text-center text-sm text-[#4B5563]">
                     Start typing to search clients.
