@@ -1,4 +1,3 @@
-import argparse
 import json
 import sys
 from pathlib import Path
@@ -11,8 +10,7 @@ import pandas as pd
 PROJECT_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = PROJECT_DIR / "backend"
 SCAN_PATH = PROJECT_DIR / "temp_live_scan.jpg"
-# Experimental/benchmark output only. This is not the JurisGuard operational database.
-EXCEL_PATH = PROJECT_DIR / "benchmark_output" / "JurisGuard_LiveScanner_Experimental.xlsx"
+EXCEL_PATH = PROJECT_DIR / "JurisVault_Database.xlsx"
 
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -148,8 +146,6 @@ def draw_scanner_overlay(frame, document_contour):
 
 
 def append_json_to_excel(extracted_json):
-    """Write opt-in experimental output; it may contain sensitive information."""
-    EXCEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     row = pd.json_normalize(extracted_json)
 
     if EXCEL_PATH.exists():
@@ -162,7 +158,7 @@ def append_json_to_excel(extracted_json):
     print(f"[Excel] Saved extraction row to {EXCEL_PATH}")
 
 
-def scan_current_frame(frame, document_contour, write_benchmark_excel=False):
+def scan_current_frame(frame, document_contour):
     if document_contour is None:
         print("[Scanner] No document detected. Align the paper and try again.")
         return
@@ -181,11 +177,7 @@ def scan_current_frame(frame, document_contour, write_benchmark_excel=False):
     print(json.dumps(extracted_json, indent=2, ensure_ascii=False))
     print("======================================\n")
 
-    if write_benchmark_excel:
-        print("[Warning] Experimental Excel output may contain sensitive information.")
-        append_json_to_excel(extracted_json)
-    else:
-        print("[Scanner] No Excel output written. Use the authenticated API for operational records.")
+    append_json_to_excel(extracted_json)
 
 
 def is_solid_green_frame(frame):
@@ -244,17 +236,9 @@ def open_camera():
     raise RuntimeError(last_error)
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description="Experimental JurisGuard webcam/benchmark scanner")
-    parser.add_argument(
-        "--write-benchmark-excel",
-        action="store_true",
-        help="Explicitly write experimental Excel output (may contain sensitive information).",
-    )
-    args = parser.parse_args(argv)
-    print("[JurisGuard Live Scanner] Experimental utility; not an operational database client.")
-    print("[JurisGuard Live Scanner] Prefer the authenticated API for real-system document submission.")
-    print("[JurisGuard Live Scanner] Press SPACE to capture, Q or ESC to quit.")
+def main():
+    print("[JurisVault Live Scanner] Starting webcam scanner...")
+    print("[JurisVault Live Scanner] Press SPACE to capture, Q or ESC to quit.")
 
     capture = open_camera()
     last_document_contour = None
@@ -278,12 +262,12 @@ def main(argv=None):
                 break
             if key == 32:
                 contour_to_scan = document_contour if document_contour is not None else last_document_contour
-                scan_current_frame(frame, contour_to_scan, write_benchmark_excel=args.write_benchmark_excel)
+                scan_current_frame(frame, contour_to_scan)
 
     finally:
         capture.release()
         cv2.destroyAllWindows()
-        print("[JurisGuard Live Scanner] Closed.")
+        print("[JurisVault Live Scanner] Closed.")
 
 
 if __name__ == "__main__":

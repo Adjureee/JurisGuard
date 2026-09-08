@@ -5,11 +5,10 @@ psycopg2-binary
 pydantic
 python-multipart
 python-jose
-bcrypt
+passlib[bcrypt]
 alembic
 email-validator
 python-dotenv
-cryptography
 requests
 pillow
 opencv-python

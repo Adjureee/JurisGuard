@@ -79,10 +79,6 @@ type PaoExtractedData = {
   extraction_mode?: string | null;
   raw_text?: string | null;
   sections?: PaoSections | null;
-  requested_extraction_mode?: string | null;
-  actual_extraction_mode?: string | null;
-  offline_attempt?: Record<string, unknown> | null;
-  cloud_fallback?: Record<string, unknown> | null;
 };
 
 type UploadDocumentResponse = {
@@ -114,10 +110,11 @@ export type CaseExtractionResult = {
 
 type UploadOptions = {
   caseId?: number;
+  userId?: number;
   extractionMode?: ExtractionEngineMode;
-  cloudApproved?: boolean;
 };
 
+const DEFAULT_BACKEND_USER_ID = 1;
 export type ExtractionEngineMode = "auto" | "offline" | "cloud";
 
 function cleanText(value: unknown): string | undefined {
@@ -289,13 +286,13 @@ function getUploadError(error: unknown) {
 
 async function uploadDocumentForExtraction(
   file: File,
-  { caseId, extractionMode = "auto", cloudApproved = false }: UploadOptions = {}
+  { caseId, userId = DEFAULT_BACKEND_USER_ID, extractionMode = "auto" }: UploadOptions = {}
 ) {
   const formData = new FormData();
   formData.append("file", file);
-  const params: Record<string, boolean | number | string> = {
+  const params: Record<string, number | string> = {
+    user_id: userId,
     extraction_mode: extractionMode,
-    cloud_approved: cloudApproved,
   };
   if (caseId !== undefined) {
     params.case_id = caseId;
@@ -309,25 +306,6 @@ async function uploadDocumentForExtraction(
   } catch (error) {
     throw new Error(getUploadError(error));
   }
-}
-
-export type ExtractionVerificationStatus = "VERIFIED" | "REJECTED";
-
-export async function verifyDocumentExtraction(
-  documentId: number,
-  payload: {
-    verification_status: ExtractionVerificationStatus;
-    corrected_metadata?: Record<string, unknown>;
-    notes?: string;
-  }
-) {
-  const response = await apiClient.post(`/documents/${documentId}/verification`, payload);
-  return response.data;
-}
-
-export async function downloadProtectedDocument(documentId: number) {
-  const response = await apiClient.get(`/documents/${documentId}/download`, { responseType: "blob" });
-  return response.data;
 }
 
 export async function extractClientFromDocument(
