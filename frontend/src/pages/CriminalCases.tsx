@@ -29,6 +29,7 @@ import type {
   CaseParticipant,
   CaseStatus,
   CaseType,
+  ClientClassification,
   ClientRecord,
   CriminalCaseRecord,
 } from "../types";
@@ -122,11 +123,6 @@ const courtBodyOptions = [
 const courtFilterOptions = ["All Courts", ...courtBodyOptions];
 
 const classificationOptions = [
-  ["flag_senior", "Senior Citizen"],
-  ["flag_cicl", "Child in Conflict with the Law"],
-  ["flag_female", "Female"],
-  ["flag_urban", "Urban"],
-  ["flag_rural", "Rural"],
   ["flag_drugs", "Drug-related"],
   ["flag_foreign_national", "Foreign National"],
   ["flag_vawc_victim", "VAWC Victim"],
@@ -187,11 +183,11 @@ function EyeIcon() {
 
 function InfoTile({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-md border border-[#E5E7EB] bg-white p-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-[#6B7280]">
+    <div className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
         {label}
       </p>
-      <p className="mt-1 text-sm font-semibold text-[#2B3642]">
+      <p className="mt-1 text-base font-medium text-[#111827]">
         {value || "-"}
       </p>
     </div>
@@ -268,6 +264,12 @@ function participantSexes(record: CriminalCaseRecord, fallbackClient?: ClientRec
   return caseParticipants(record, fallbackClient)
     .map((participant) => participant.sex)
     .filter(Boolean);
+}
+
+function participantClassificationLabels(participant: CaseParticipant) {
+  return classificationOptions
+    .filter(([key]) => Boolean(participant.classification?.[key as keyof ClientClassification]))
+    .map(([, label]) => label);
 }
 
 function TextField({
@@ -369,18 +371,18 @@ function CaseAccordion({
 
   return (
     <div
-      className={`rounded-[10px] border bg-white ${accordionBorderClass[record.cases.status_of_case]}`}
+      className={`overflow-hidden rounded-xl border bg-white shadow-sm ${accordionBorderClass[record.cases.status_of_case]}`}
     >
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#F9FAFB]"
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition hover:bg-[#F9FAFB]"
       >
         <div>
-          <p className="text-sm font-semibold text-[#2B3642]">
+          <p className="text-base font-bold text-[#111827]">
             {record.intake_record.control_no}
           </p>
-          <p className="mt-1 text-xs text-[#6B7280]">
+          <p className="mt-1 text-sm text-[#4B5563]">
             {record.cases.title_of_case}
           </p>
         </div>
@@ -388,9 +390,9 @@ function CaseAccordion({
       </button>
 
       {open && (
-        <div className="space-y-5 border-t border-[#E5E7EB] px-4 py-4">
-          <section>
-            <h4 className="text-sm font-semibold text-[#2B3642]">
+        <div className="space-y-5 border-t border-[#E5E7EB] bg-[#F9FAFB] px-5 py-5">
+          <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
+            <h4 className="text-base font-semibold text-[#111827]">
               Case Identification
             </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -417,42 +419,91 @@ function CaseAccordion({
           </section>
 
           {isMultiParty && (
-            <section>
-              <h4 className="text-sm font-semibold text-[#2B3642]">
+            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
+              <h4 className="text-base font-semibold text-[#111827]">
                 Participants
               </h4>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <p className="mt-1 text-sm text-[#6B7280]">
+                Shared case, individual client information.
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {participants.map((participant) => (
                   <div
                     key={participant.case_client_id || participant.client_id}
-                    className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] p-3"
+                    className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4"
                   >
-                    <p className="text-sm font-semibold text-[#2B3642]">
+                    <p className="text-lg font-bold text-[#111827]">
                       {participant.name}
                     </p>
-                    <dl className="mt-2 space-y-1 text-xs text-[#4B5563]">
-                      <div className="flex justify-between gap-3">
-                        <dt>Applicant Case Involvement</dt>
-                        <dd className="font-semibold text-[#2B3642]">
+                    <div className="mt-3 grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                          Gender / Sex
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-[#111827]">
+                          {participant.sex || "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                          Age
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-[#111827]">
+                          {participant.age || "-"}
+                        </p>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                          Address
+                        </p>
+                        <p className="mt-1 break-words text-sm font-medium text-[#111827]">
+                          {participant.address || "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                          Contact Number
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-[#111827]">
+                          {participant.contact_no || "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                          Applicant Case Involvement
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-[#111827]">
                           {participant.applicant_role === "Others"
                             ? participant.applicant_role_other
                             : participant.applicant_role || "Role not set"}
-                        </dd>
+                        </p>
                       </div>
-                      <div className="flex justify-between gap-3">
-                        <dt>Party Represented</dt>
-                        <dd className="font-semibold text-[#2B3642]">
+                      <div className="sm:col-span-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                          Party Represented
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-[#111827]">
                           {participant.party_represented || "Not set"}
-                        </dd>
+                        </p>
                       </div>
-                    </dl>
+                      {participantClassificationLabels(participant).length > 0 && (
+                        <div className="sm:col-span-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                            Applicant Classification
+                          </p>
+                          <p className="mt-1 break-words text-sm font-medium text-[#111827]">
+                            {participantClassificationLabels(participant).join("; ")}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                     {showInterviewSheets && onInterviewSheet && (
                       <button
                         type="button"
                         onClick={() => onInterviewSheet(record, participant)}
-                        className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
+                        className="mt-4 inline-flex w-full items-center justify-center rounded-md border border-[#704389] bg-white px-3 py-2 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
                       >
-                        INTERVIEW SHEET
+                        INTERVIEW SHEET - {participant.name}
                       </button>
                     )}
                   </div>
@@ -461,8 +512,8 @@ function CaseAccordion({
             </section>
           )}
 
-          <section>
-            <h4 className="text-sm font-semibold text-[#2B3642]">
+          <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
+            <h4 className="text-base font-semibold text-[#111827]">
               Detention & Location
             </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -493,8 +544,8 @@ function CaseAccordion({
             </div>
           </section>
 
-          <section>
-            <h4 className="text-sm font-semibold text-[#2B3642]">
+          <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
+            <h4 className="text-base font-semibold text-[#111827]">
               Case Status
             </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1308,13 +1359,13 @@ function ClientRecordModal({
   return (
     <ModalPortal>
     <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
+      <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-[#F9FAFB] shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E5E7EB] bg-white px-6 py-5">
           <div className="min-w-0">
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#704389]">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#704389]">
               {caseType} Cases
             </p>
-            <h2 className="mt-1 text-xl font-bold text-[#2B3642]">
+            <h2 className="mt-1 break-words text-2xl font-bold text-[#111827]">
               {mode === "view"
                 ? showCombinedParticipantTitle && titleNames.length
                   ? titleNames.map((name) => (
@@ -1326,7 +1377,7 @@ function ClientRecordModal({
                 : "Update Record"}
             </h2>
             {mode !== "view" && (
-              <p className="mt-2 truncate text-sm text-[#6B7280]">
+            <p className="mt-2 break-words text-sm text-[#6B7280]">
                 {client.client.name}
               </p>
             )}
@@ -1353,12 +1404,22 @@ function ClientRecordModal({
           </div>
         </div>
 
-        <div className="max-h-[calc(92vh-90px)] overflow-y-auto bg-white px-6 py-5">
-          <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 shadow-sm ">
+        <div className="max-h-[calc(92vh-90px)] overflow-y-auto bg-[#F9FAFB] px-6 py-5">
+          <section className="rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-base font-semibold text-[#2B3642]">
-                Person Information
-              </h3>
+              <div>
+                <h3 className="text-lg font-semibold text-[#111827]">
+                  Client Information
+                </h3>
+                <p className="mt-1 text-sm text-[#6B7280]">
+                  Personal information for the selected client record.
+                </p>
+              </div>
+              {mode === "view" && cases.length > 1 && (
+                <p className="text-sm font-medium text-[#6B7280]">
+                  {cases.length} shared case records
+                </p>
+              )}
               {mode === "update" && (
                 <button
                   type="button"
@@ -1397,9 +1458,9 @@ function ClientRecordModal({
             </div>
           </section>
 
-          <section className="mt-5">
+          <section className="mt-5 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-[#2B3642]">
+              <h3 className="text-lg font-semibold text-[#111827]">
                 {caseType} Cases
               </h3>
               <p className="text-sm text-[#6B7280]">{cases.length} records</p>

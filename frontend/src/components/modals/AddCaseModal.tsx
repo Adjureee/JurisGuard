@@ -5,7 +5,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { useCriminalCasesStore } from "../../features/criminalCases/criminalCasesStore";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
-import { createCaseRecord } from "../../services/recordService";
+import { createCaseRecord, listClientRecords } from "../../services/recordService";
 import type { CaseType } from "../../types";
 
 interface AddCaseModalProps {
@@ -21,6 +21,7 @@ export default function AddCaseModal({
 }: AddCaseModalProps) {
   const { user } = useAuth();
   const clients = useCriminalCasesStore((state) => state.clients);
+  const setClients = useCriminalCasesStore((state) => state.setClients);
   const upsertCase = useCriminalCasesStore((state) => state.upsertCase);
   const addLog = useAuditLogStore((state) => state.addLog);
   const addNotification = useNotificationStore((state) => state.addNotification);
@@ -60,6 +61,11 @@ export default function AddCaseModal({
             onSubmit={async (values) => {
               const record = await createCaseRecord(values, caseType);
               upsertCase(record);
+              try {
+                setClients(await listClientRecords());
+              } catch {
+                // The case is already saved; the next page load will refresh clients.
+              }
               addLog({
                 userId: user?.user_id,
                 user: user?.full_name || user?.email,

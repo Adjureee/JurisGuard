@@ -54,16 +54,20 @@ export const clientFormSchema = z.object({
       .trim()
       .email("Enter a valid email")
       .or(z.literal("")),
-    detained: z.boolean(),
-    detained_since: optionalText,
-    place_of_detention: optionalText,
+    // Legacy client-level detention fields remain optional for existing records.
+    // New detention data is collected and validated on the case instead.
+    detained: z.boolean().optional(),
+    detained_since: optionalText.optional(),
+    place_of_detention: optionalText.optional(),
   }),
   client_classification: z.object({
-    flag_senior: z.boolean(),
-    flag_cicl: z.boolean(),
-    flag_female: z.boolean(),
-    flag_urban: z.boolean(),
-    flag_rural: z.boolean(),
+    // Derived from client/case data; kept optional for compatibility with
+    // existing records and API payloads.
+    flag_senior: z.boolean().optional(),
+    flag_cicl: z.boolean().optional(),
+    flag_female: z.boolean().optional(),
+    flag_urban: z.boolean().optional(),
+    flag_rural: z.boolean().optional(),
     flag_drugs: z.boolean(),
     flag_foreign_national: z.boolean(),
     flag_vawc_victim: z.boolean(),

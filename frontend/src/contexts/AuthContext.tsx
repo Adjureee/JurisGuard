@@ -9,6 +9,7 @@ import {
 } from "react";
 import { TOKEN_STORAGE_KEY } from "../api/client";
 import { useAuditLogStore } from "../features/auditLogs/auditLogStore";
+import { useCriminalCasesStore } from "../features/criminalCases/criminalCasesStore";
 import * as authService from "../services/authService";
 import type { AuthUser, LoginPayload, RegisterPayload, RegisterResponse } from "../types/auth";
 
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = useCallback(() => {
     authService.logout();
     useAuditLogStore.getState().clearLogs();
+    useCriminalCasesStore.getState().clearRecords();
     setToken(null);
     setUser(null);
   }, []);

@@ -290,6 +290,19 @@ function generatedCaseTitle(clients: ClientRecord[], caseType: CaseType) {
   return `${prefix} ${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
 }
 
+function hasSavedRepresentative(client?: ClientRecord) {
+  if (!client) return false;
+  const details = client.client_details;
+  const name = details.representative_name?.trim().toLowerCase();
+  const civilStatus = details.representative_civil_status?.trim().toLowerCase();
+  return Boolean(
+    name &&
+      name !== "none" &&
+      name !== "not applicable" &&
+      civilStatus !== "none",
+  );
+}
+
 function splitSelectedOptions(value: string) {
   return value
     .split(",")
@@ -581,9 +594,7 @@ export function CaseWorkflow({
   const [extractionEngine, setExtractionEngine] =
     useState<ExtractionEngineMode>("auto");
   const [replaceExistingWithOcr, setReplaceExistingWithOcr] = useState(false);
-  const [useClientRepresentative, setUseClientRepresentative] = useState(
-    Boolean(lockedClient),
-  );
+  const [useClientRepresentative, setUseClientRepresentative] = useState(false);
   const {
     videoRef,
     isCameraActive,
@@ -639,6 +650,7 @@ export function CaseWorkflow({
     [clients, hasLockedSelection, lockedSelectionClients, selectedClientIds],
   );
   const selectedClient = selectedClients[0];
+  const canReuseClientRepresentative = hasSavedRepresentative(selectedClient);
   const applicantRole = watch("intake_record.applicant_role");
   const natureOfRequest = watch("intake_record.nature_of_request");
   const representativeCivilStatus = watch("representative.civil_status");
@@ -703,10 +715,27 @@ export function CaseWorkflow({
   }, [hasLockedSelection, selectedClientIds, setValue]);
 
   useEffect(() => {
+    setUseClientRepresentative(canReuseClientRepresentative);
+  }, [canReuseClientRepresentative, selectedClient?.client_id]);
+
+  useEffect(() => {
+    if (canReuseClientRepresentative) return;
+    setValue("representative.rep_name", "", { shouldDirty: false });
+    setValue("representative.rep_age", 0, { shouldDirty: false });
+    setValue("representative.rep_sex", "", { shouldDirty: false });
+    setValue("representative.civil_status", "", { shouldDirty: false });
+    setValue("representative.rep_address", "", { shouldDirty: false });
+    setValue("representative.rep_contact_no", "", { shouldDirty: false });
+    setValue("representative.relationship_to_applicant", "", {
+      shouldDirty: false,
+    });
+  }, [canReuseClientRepresentative, selectedClient?.client_id, setValue]);
+
+  useEffect(() => {
     if (!selectedClient || !useClientRepresentative) return;
     setValue(
       "representative.rep_name",
-      selectedClient.client_details.representative_name || "Not applicable",
+      selectedClient.client_details.representative_name || "",
       { shouldDirty: true, shouldValidate: true },
     );
     setValue(
@@ -716,9 +745,7 @@ export function CaseWorkflow({
     );
     setValue(
       "representative.rep_sex",
-      selectedClient.client_details.representative_sex ||
-        selectedClient.client.sex ||
-        "",
+      selectedClient.client_details.representative_sex || "",
       { shouldDirty: true, shouldValidate: true },
     );
     setValue(
@@ -728,16 +755,12 @@ export function CaseWorkflow({
     );
     setValue(
       "representative.rep_address",
-      selectedClient.client_details.representative_address ||
-        selectedClient.client_details.address ||
-        "",
+      selectedClient.client_details.representative_address || "",
       { shouldDirty: true, shouldValidate: true },
     );
     setValue(
       "representative.rep_contact_no",
-      selectedClient.client_details.representative_contact_no ||
-        selectedClient.client_details.contact_no ||
-        "",
+      selectedClient.client_details.representative_contact_no || "",
       { shouldDirty: true, shouldValidate: true },
     );
     setValue(
@@ -1601,14 +1624,14 @@ export function CaseWorkflow({
                   <h3 className="text-base font-semibold text-[#1F2937]">
                     Representative
                   </h3>
-                  {lockedClient && useClientRepresentative && (
+                  {canReuseClientRepresentative && useClientRepresentative && (
                     <p className="mt-1 text-sm text-[#4B5563]">
                       Using representative details already saved on the client
                       record.
                     </p>
                   )}
                 </div>
-                {lockedClient && (
+                {canReuseClientRepresentative && (
                   <div className="grid gap-2 rounded-lg border border-[#E5E7EB] bg-[#F8FAFC] p-2 text-sm font-semibold text-[#4B5563] sm:grid-cols-2">
                     <label className="flex items-center gap-2 rounded-md bg-white px-3 py-2">
                       <input
@@ -1634,7 +1657,7 @@ export function CaseWorkflow({
                 )}
               </div>
 
-              {!lockedClient || !useClientRepresentative ? (
+              {!canReuseClientRepresentative || !useClientRepresentative ? (
                 <div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   <TextInput
                     label="Representative Name"

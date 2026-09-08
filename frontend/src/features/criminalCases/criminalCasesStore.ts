@@ -5,6 +5,7 @@ import type { CaseFormValues, ClientFormValues } from "./schemas";
 interface CriminalCasesState {
   clients: ClientRecord[];
   cases: CriminalCaseRecord[];
+  clearRecords: () => void;
   setClients: (clients: ClientRecord[]) => void;
   setCases: (cases: CriminalCaseRecord[]) => void;
   upsertClient: (client: ClientRecord) => void;
@@ -19,6 +20,7 @@ const nextCaseId = (count: number) => `CASE-2026-${String(count + 1).padStart(3,
 export const useCriminalCasesStore = create<CriminalCasesState>((set, get) => ({
   clients: [],
   cases: [],
+  clearRecords: () => set({ clients: [], cases: [] }),
   setClients: (clients) => set({ clients }),
   setCases: (cases) => set({ cases }),
   upsertClient: (client) => {
@@ -40,8 +42,20 @@ export const useCriminalCasesStore = create<CriminalCasesState>((set, get) => ({
         client_id,
         ...values.client,
       },
-      client_details: values.client_details,
-      client_classification: values.client_classification,
+      client_details: {
+        ...values.client_details,
+        detained: Boolean(values.client_details.detained),
+        detained_since: values.client_details.detained_since ?? "",
+        place_of_detention: values.client_details.place_of_detention ?? "",
+      },
+      client_classification: {
+        ...values.client_classification,
+        flag_senior: Boolean(values.client_classification.flag_senior),
+        flag_cicl: Boolean(values.client_classification.flag_cicl),
+        flag_female: Boolean(values.client_classification.flag_female),
+        flag_urban: Boolean(values.client_classification.flag_urban),
+        flag_rural: Boolean(values.client_classification.flag_rural),
+      },
     };
 
     set((state) => ({ clients: [client, ...state.clients] }));

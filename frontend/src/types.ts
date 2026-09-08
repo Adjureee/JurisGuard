@@ -128,6 +128,7 @@ export interface CaseParticipant {
   party_represented: string;
   applicant_role: string;
   applicant_role_other: string;
+  relationship_to_applicant?: string;
   address: string;
   contact_no: string;
   classification?: Partial<ClientClassification>;

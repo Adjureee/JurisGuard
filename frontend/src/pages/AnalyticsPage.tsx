@@ -11,6 +11,8 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Label,
+  LabelList,
   Line,
   LineChart,
   Pie,
@@ -37,8 +39,35 @@ const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsM
 const COLORS = ["#704389", "#9F5AA6", "#F59E0B", "#DC2626", "#7C3AED", "#0F766E"];
 type DatePreset = "last7" | "last30" | "month" | "year" | "custom";
 
+const datePresetLabels: Record<Exclude<DatePreset, "custom">, string> = {
+  last7: "Last 7 Days",
+  last30: "Last 30 Days",
+  month: "This Month",
+  year: "This Year",
+};
+
 function isoDate(date: Date) {
   return date.toISOString().slice(0, 10);
+}
+
+function formatExportDate(value: string) {
+  if (!value) return "Not specified";
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+}
+
+function coveragePeriodLabel(
+  preset: DatePreset,
+  dateRange: { dateFrom: string; dateTo: string },
+) {
+  if (preset !== "custom") return datePresetLabels[preset];
+  return `${formatExportDate(dateRange.dateFrom)} - ${formatExportDate(dateRange.dateTo)}`;
 }
 
 function presetRange(preset: DatePreset) {
@@ -76,9 +105,48 @@ function ChartTooltip({
   );
 }
 
+interface ChartExportContext {
+  title: string;
+  description: string;
+  coveragePeriod: string;
+  filtersApplied: string;
+  legend?: Array<{
+    label: string;
+    value: number;
+    percentage: number;
+    color: string;
+  }>;
+}
+
+function drawWrappedText(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+) {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let line = "";
+  words.forEach((word) => {
+    const candidate = line ? `${line} ${word}` : word;
+    if (context.measureText(candidate).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = candidate;
+    }
+  });
+  if (line) lines.push(line);
+  lines.forEach((lineText, index) => context.fillText(lineText, x, y + index * lineHeight));
+  return lines.length;
+}
+
 async function downloadChartPng(
   container: HTMLElement | null,
   filename: string,
+  exportContext: ChartExportContext,
 ) {
   const svg = container?.querySelector("svg");
   if (!svg) {
@@ -87,12 +155,12 @@ async function downloadChartPng(
   }
 
   const bounds = svg.getBoundingClientRect();
-  const width = Math.max(Math.ceil(bounds.width), 1);
-  const height = Math.max(Math.ceil(bounds.height), 1);
+  const chartWidth = Math.max(Math.ceil(bounds.width), 1);
+  const chartHeight = Math.max(Math.ceil(bounds.height), 1);
   const clone = svg.cloneNode(true) as SVGSVGElement;
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  clone.setAttribute("width", String(width));
-  clone.setAttribute("height", String(height));
+  clone.setAttribute("width", String(chartWidth));
+  clone.setAttribute("height", String(chartHeight));
 
   const svgText = new XMLSerializer().serializeToString(clone);
   const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
@@ -101,17 +169,107 @@ async function downloadChartPng(
   await new Promise<void>((resolve, reject) => {
     const image = new Image();
     image.onload = () => {
+      const scale = 2;
+      const horizontalPadding = 48;
+      const headerHeight = 218;
+      const footerHeight = 58;
+      const canvasWidth = Math.max(chartWidth, 640);
+      const legendColumns = canvasWidth >= 760 ? 2 : 1;
+      const legendRows = exportContext.legend
+        ? Math.ceil(exportContext.legend.length / legendColumns)
+        : 0;
+      const legendHeight = exportContext.legend?.length
+        ? legendRows * 38 + 20
+        : 0;
+      const canvasHeight = headerHeight + chartHeight + legendHeight + footerHeight;
       const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = canvasWidth * scale;
+      canvas.height = canvasHeight * scale;
       const context = canvas.getContext("2d");
       if (!context) {
         reject(new Error("Canvas is not available."));
         return;
       }
+      context.scale(scale, scale);
       context.fillStyle = "#ffffff";
-      context.fillRect(0, 0, width, height);
-      context.drawImage(image, 0, 0, width, height);
+      context.fillRect(0, 0, canvasWidth, canvasHeight);
+
+      context.fillStyle = "#704389";
+      context.font = "700 13px Arial, sans-serif";
+      context.fillText("JURISGUARD", horizontalPadding, 34);
+      context.fillStyle = "#6B7280";
+      context.font = "600 12px Arial, sans-serif";
+      context.fillText("PAO PANABO", horizontalPadding + 98, 34);
+
+      context.fillStyle = "#111827";
+      context.font = "700 25px Arial, sans-serif";
+      const titleLines = drawWrappedText(
+        context,
+        exportContext.title.toUpperCase(),
+        horizontalPadding,
+        78,
+        canvasWidth - horizontalPadding * 2,
+        31,
+      );
+      context.fillStyle = "#4B5563";
+      context.font = "400 13px Arial, sans-serif";
+      const descriptionY = 98 + titleLines * 31;
+      const descriptionLines = drawWrappedText(
+        context,
+        exportContext.description,
+        horizontalPadding,
+        descriptionY,
+        canvasWidth - horizontalPadding * 2,
+        20,
+      );
+      const metadataY = descriptionY + descriptionLines * 20 + 27;
+      context.fillStyle = "#374151";
+      context.font = "600 12px Arial, sans-serif";
+      context.fillText(`Coverage Period: ${exportContext.coveragePeriod}`, horizontalPadding, metadataY);
+      context.fillText(`Filters Applied: ${exportContext.filtersApplied}`, horizontalPadding, metadataY + 20);
+      context.strokeStyle = "#E5E7EB";
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(horizontalPadding, headerHeight - 18);
+      context.lineTo(canvasWidth - horizontalPadding, headerHeight - 18);
+      context.stroke();
+
+      const chartX = Math.max((canvasWidth - chartWidth) / 2, 0);
+      context.drawImage(image, chartX, headerHeight, chartWidth, chartHeight);
+
+      if (exportContext.legend?.length) {
+        const legendTop = headerHeight + chartHeight + 16;
+        const columnWidth = (canvasWidth - horizontalPadding * 2) / legendColumns;
+        context.font = "600 11px Arial, sans-serif";
+        exportContext.legend.forEach((item, index) => {
+          const column = index % legendColumns;
+          const row = Math.floor(index / legendColumns);
+          const itemX = horizontalPadding + column * columnWidth;
+          const itemY = legendTop + row * 38;
+          context.fillStyle = item.color;
+          context.fillRect(itemX, itemY - 9, 10, 10);
+          context.fillStyle = "#374151";
+          drawWrappedText(
+            context,
+            `${item.label} - ${item.value} (${item.percentage}%)`,
+            itemX + 17,
+            itemY,
+            columnWidth - 22,
+            15,
+          );
+        });
+      }
+
+      context.fillStyle = "#6B7280";
+      context.font = "400 11px Arial, sans-serif";
+      context.fillText("Generated from JurisGuard Analytics", horizontalPadding, canvasHeight - 22);
+      context.textAlign = "right";
+      context.fillText(`Generated on: ${new Date().toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })}`, canvasWidth - horizontalPadding, canvasHeight - 22);
+      context.textAlign = "left";
       URL.revokeObjectURL(url);
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
@@ -126,6 +284,7 @@ async function downloadChartPng(
     image.src = url;
   });
 }
+
 
 function ChartDownloadButton({
   label,
@@ -186,6 +345,19 @@ export default function AnalyticsPage() {
   const averageDailyIntake = intakeLoad?.average_daily_intake ?? 0;
   const topBarangays = useMemo(() => barangays, [barangays]);
   const categoryPie = useMemo(() => caseCategories.slice(0, 7), [caseCategories]);
+  const categoryTotal = caseCategories.reduce((sum, row) => sum + row.total_cases, 0);
+  const categoryLegendItems = useMemo(
+    () =>
+      categoryPie.map((row, index) => ({
+        label: row.category,
+        value: row.total_cases,
+        percentage: categoryTotal
+          ? Math.round((row.total_cases / categoryTotal) * 100)
+          : 0,
+        color: COLORS[index % COLORS.length],
+      })),
+    [categoryPie, categoryTotal],
+  );
   const hourlyRows = useMemo(
     () => (intakeLoad?.hourly ?? []).filter((row) => Number.isFinite(row.total_cases) && row.total_cases > 0),
     [intakeLoad]
@@ -197,7 +369,6 @@ export default function AnalyticsPage() {
   );
   const busiestHour = intakeLoad?.busiest_hour;
   const leadingCategory = caseCategories[0];
-  const categoryTotal = caseCategories.reduce((sum, row) => sum + row.total_cases, 0);
   const exportRows = useMemo<ReportExportRow[]>(() => {
     const monthlyRows = monthlyTrends.map((row) => ({
       dataset: "monthly_intake_trends",
@@ -461,6 +632,12 @@ export default function AnalyticsPage() {
                     void downloadChartPng(
                       monthlyChartRef.current,
                       "jurisguard-case-intake-trends.png",
+                      {
+                        title: "Case Intake Trends",
+                        description: "Shows changes in recorded case volume across the selected period.",
+                        coveragePeriod: coveragePeriodLabel(datePreset, dateRange),
+                        filtersApplied: "No additional filters",
+                      },
                     )
                   }
                 />
@@ -484,10 +661,16 @@ export default function AnalyticsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={displayMonthlyTrends}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
-                      <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
+                      <XAxis dataKey="month" stroke="#6B7280" fontSize={12}>
+                        <Label value="Month" offset={-4} position="insideBottom" />
+                      </XAxis>
+                      <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false}>
+                        <Label value="Number of Cases" angle={-90} position="insideLeft" />
+                      </YAxis>
                       <Tooltip content={<ChartTooltip />} />
-                      <Line type="monotone" dataKey="total_cases" name="Cases" stroke="#704389" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 7 }} />
+                      <Line type="monotone" dataKey="total_cases" name="Cases" stroke="#704389" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 7 }}>
+                        <LabelList dataKey="total_cases" position="top" fill="#4B5563" fontSize={10} />
+                      </Line>
                     </LineChart>
                   </ResponsiveContainer>
                 )}
@@ -502,6 +685,12 @@ export default function AnalyticsPage() {
                     void downloadChartPng(
                       weeklyChartRef.current,
                       "jurisguard-weekly-volume-distribution.png",
+                      {
+                        title: "Weekly Volume Distribution",
+                        description: "Shows the distribution of recorded intake volume by day of the week.",
+                        coveragePeriod: coveragePeriodLabel(datePreset, dateRange),
+                        filtersApplied: "No additional filters",
+                      },
                     )
                   }
                 />
@@ -524,10 +713,16 @@ export default function AnalyticsPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={intakeLoad?.weekly ?? []}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                    <XAxis dataKey="day" stroke="#6B7280" fontSize={11} />
-                    <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill="#704389" />
+                      <XAxis dataKey="day" stroke="#6B7280" fontSize={11}>
+                        <Label value="Day of Week" offset={-4} position="insideBottom" />
+                      </XAxis>
+                      <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false}>
+                        <Label value="Recorded Cases" angle={-90} position="insideLeft" />
+                      </YAxis>
+                      <Tooltip content={<ChartTooltip />} />
+                      <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill="#704389">
+                        <LabelList dataKey="total_cases" position="top" fill="#4B5563" fontSize={10} />
+                      </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -602,6 +797,13 @@ export default function AnalyticsPage() {
                     void downloadChartPng(
                       categoryChartRef.current,
                       "jurisguard-case-category-analytics.png",
+                      {
+                        title: "Case Category Analytics",
+                        description: "Shows the distribution of recorded cases by legal service category.",
+                        coveragePeriod: coveragePeriodLabel(datePreset, dateRange),
+                        filtersApplied: "No additional filters",
+                        legend: categoryLegendItems,
+                      },
                     )
                   }
                 />
@@ -610,15 +812,27 @@ export default function AnalyticsPage() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Distribution Base</p>
                 <p className="mt-1 text-sm font-bold text-[#111827]">{categoryTotal} categorized case record(s)</p>
               </div>
-              <div ref={categoryChartRef} className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={categoryPie} dataKey="total_cases" nameKey="category" innerRadius={58} outerRadius={96} paddingAngle={3}>
-                      {categoryPie.map((entry, index) => <Cell key={entry.category} fill={COLORS[index % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip content={<ChartTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div ref={categoryChartRef}>
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={categoryPie} dataKey="total_cases" nameKey="category" innerRadius={58} outerRadius={96} paddingAngle={3}>
+                        {categoryPie.map((entry, index) => <Cell key={entry.category} fill={COLORS[index % COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip content={<ChartTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2" aria-label="Case category legend">
+                  {categoryLegendItems.map((item) => (
+                    <div key={item.label} className="flex min-w-0 items-center gap-2 text-xs text-[#374151]">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: item.color }} aria-hidden="true" />
+                      <span className="min-w-0 truncate font-medium">
+                        {item.label} - {item.value} ({item.percentage}%)
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </AnalyticsPanel>
 
@@ -630,6 +844,12 @@ export default function AnalyticsPage() {
                     void downloadChartPng(
                       terminatedChartRef.current,
                       "jurisguard-terminated-case-analytics.png",
+                      {
+                        title: "Terminated Case Analytics",
+                        description: "Shows changes in terminated case volume across the selected period.",
+                        coveragePeriod: coveragePeriodLabel(datePreset, dateRange),
+                        filtersApplied: "No additional filters",
+                      },
                     )
                   }
                 />
@@ -665,10 +885,16 @@ export default function AnalyticsPage() {
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#FECACA" />
-                        <XAxis dataKey="month" stroke="#6B7280" fontSize={11} />
-                        <YAxis allowDecimals={false} stroke="#6B7280" fontSize={12} />
+                        <XAxis dataKey="month" stroke="#6B7280" fontSize={11}>
+                          <Label value="Month" offset={-4} position="insideBottom" />
+                        </XAxis>
+                        <YAxis allowDecimals={false} stroke="#6B7280" fontSize={12}>
+                          <Label value="Terminated Cases" angle={-90} position="insideLeft" />
+                        </YAxis>
                         <Tooltip content={<ChartTooltip />} />
-                        <Area type="monotone" dataKey="total_cases" name="Terminated" stroke="#DC2626" strokeWidth={2.5} fill="url(#terminatedGradient)" />
+                        <Area type="monotone" dataKey="total_cases" name="Terminated" stroke="#DC2626" strokeWidth={2.5} fill="url(#terminatedGradient)">
+                          <LabelList dataKey="total_cases" position="top" fill="#991B1B" fontSize={10} />
+                        </Area>
                       </AreaChart>
                     </ResponsiveContainer>
                   )}

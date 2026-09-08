@@ -26,6 +26,7 @@ import {
 import {
   createCaseRecord,
   createClientRecord,
+  listClientRecords,
 } from "../../services/recordService";
 import type {
   ClientRecord,
@@ -107,16 +108,8 @@ const defaultValues: ClientFormValues = {
     representative_contact_no: "",
     representative_relationship: "",
     representative_email: "",
-    detained: false,
-    detained_since: "",
-    place_of_detention: "",
   },
   client_classification: {
-    flag_senior: false,
-    flag_cicl: false,
-    flag_female: false,
-    flag_urban: false,
-    flag_rural: false,
     flag_drugs: false,
     flag_foreign_national: false,
     flag_vawc_victim: false,
@@ -383,11 +376,6 @@ function ReviewSection({
 }
 
 const classificationOptions = [
-  ["flag_senior", "Senior Citizen"],
-  ["flag_cicl", "Child in Conflict with the Law"],
-  ["flag_female", "Female"],
-  ["flag_urban", "Urban"],
-  ["flag_rural", "Rural"],
   ["flag_drugs", "Drug-related"],
   ["flag_foreign_national", "Foreign National"],
   ["flag_vawc_victim", "VAWC Victim"],
@@ -411,6 +399,7 @@ export default function AddClientModal({
 }: AddClientModalProps) {
   const { user } = useAuth();
   const upsertClient = useCriminalCasesStore((state) => state.upsertClient);
+  const setClients = useCriminalCasesStore((state) => state.setClients);
   const upsertCase = useCriminalCasesStore((state) => state.upsertCase);
   const addLog = useAuditLogStore((state) => state.addLog);
   const addNotification = useNotificationStore(
@@ -458,7 +447,6 @@ export default function AddClientModal({
   const representativeCivilStatus = watch(
     "client_details.representative_civil_status",
   );
-  const clientDetained = watch("client_details.detained");
 
   useEffect(() => {
     if (spouseValue !== "None") return;
@@ -482,12 +470,6 @@ export default function AddClientModal({
     });
     setValue("client_details.representative_email", "", { shouldDirty: true });
   }, [representativeCivilStatus, setValue]);
-
-  useEffect(() => {
-    if (clientDetained) return;
-    setValue("client_details.detained_since", "", { shouldDirty: true });
-    setValue("client_details.place_of_detention", "", { shouldDirty: true });
-  }, [clientDetained, setValue]);
 
   if (!isOpen) return null;
 
@@ -555,14 +537,6 @@ export default function AddClientModal({
       "client_details.representative_contact_no",
       "client_details.representative_relationship",
       "client_details.representative_email",
-      "client_details.detained",
-      "client_details.detained_since",
-      "client_details.place_of_detention",
-      "client_classification.flag_senior",
-      "client_classification.flag_cicl",
-      "client_classification.flag_female",
-      "client_classification.flag_urban",
-      "client_classification.flag_rural",
       "client_classification.flag_drugs",
       "client_classification.flag_foreign_national",
       "client_classification.flag_vawc_victim",
@@ -688,11 +662,26 @@ export default function AddClientModal({
 
   const onSubmit = async (data: ClientFormValues) => {
     try {
+      const normalizedAge = String(data.client.age ?? "").trim();
+      const age = Number(normalizedAge);
+      const hasAge = normalizedAge !== "" && Number.isFinite(age);
+      const derivedClassification = {
+        flag_female: data.client.sex.trim().toLowerCase() === "female",
+        flag_senior: hasAge && age >= 60,
+        flag_cicl: hasAge && age < 15,
+        // Urban/Rural is case-location data, not client data.
+        flag_urban: false,
+        flag_rural: false,
+      };
       const spouseNotApplicable = data.client_details.spouse === "None";
       const representativeNotApplicable =
         data.client_details.representative_civil_status === "None";
       const client = await createClientRecord({
         ...data,
+        client_classification: {
+          ...data.client_classification,
+          ...derivedClassification,
+        },
         client_details: {
           ...data.client_details,
           individual_monthly_income: sanitizeMonthlyIncome(
@@ -719,13 +708,6 @@ export default function AddClientModal({
           representative_relationship: representativeNotApplicable
             ? "None"
             : data.client_details.representative_relationship,
-          detained: Boolean(data.client_details.detained),
-          detained_since: data.client_details.detained
-            ? data.client_details.detained_since
-            : "",
-          place_of_detention: data.client_details.detained
-            ? data.client_details.place_of_detention
-            : "",
         },
       });
       upsertClient(client);
@@ -805,6 +787,11 @@ export default function AddClientModal({
               onSubmit={async (values) => {
                 const record = await createCaseRecord(values);
                 upsertCase(record);
+                try {
+                  setClients(await listClientRecords());
+                } catch {
+                  // The case is already saved; the next page load will refresh clients.
+                }
                 addLog({
                   userId: user?.user_id,
                   user: user?.full_name || user?.email,
@@ -1192,30 +1179,6 @@ export default function AddClientModal({
                         indicators["client_details.individual_monthly_income"]
                       }
                     />
-                    <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
-                      <input
-                        type="checkbox"
-                        {...register("client_details.detained")}
-                        className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389]"
-                      />
-                      Detained
-                      <FieldStatus status={indicators["client_details.detained"]} />
-                    </label>
-                    {clientDetained && (
-                      <>
-                        <TextInput
-                          label="Detained Since"
-                          type="date"
-                          registration={register("client_details.detained_since")}
-                          status={indicators["client_details.detained_since"]}
-                        />
-                        <TextInput
-                          label="Place of Detention"
-                          registration={register("client_details.place_of_detention")}
-                          status={indicators["client_details.place_of_detention"]}
-                        />
-                      </>
-                    )}
                     <div>
                       <TextInput
                         label="Spouse"
@@ -1247,7 +1210,7 @@ export default function AddClientModal({
                       status={indicators["client_details.address_of_spouse"]}
                       disabled={spouseNotApplicable}
                     />
-                    <div className="md:col-span-2">
+                    <div>
                       <TextInput
                         label="Contact No. of Spouse"
                         registration={register(
@@ -1257,14 +1220,16 @@ export default function AddClientModal({
                         disabled={spouseNotApplicable}
                       />
                     </div>
-                    <TextInput
-                      label="Representative Name"
-                      registration={register(
-                        "client_details.representative_name",
-                      )}
-                      status={indicators["client_details.representative_name"]}
-                      disabled={representativeNotApplicable}
-                    />
+                    <div className="md:col-start-1">
+                      <TextInput
+                        label="Representative Name"
+                        registration={register(
+                          "client_details.representative_name",
+                        )}
+                        status={indicators["client_details.representative_name"]}
+                        disabled={representativeNotApplicable}
+                      />
+                    </div>
                     <TextInput
                       label="Representative Address"
                       registration={register(
@@ -1376,6 +1341,11 @@ export default function AddClientModal({
                           </label>
                         ))}
                       </div>
+                      <div className="mt-4 rounded-md border border-[#E7D7EE] bg-[#F7F0FA] px-3 py-2 text-sm text-[#5F3675]">
+                        Female, Senior Citizen, and CICL are derived from the
+                        client&apos;s sex and age. Urban/Rural is derived from
+                        case location.
+                      </div>
                       <div className="mt-4">
                         <TextInput
                           label="Classification Notes"
@@ -1456,18 +1426,6 @@ export default function AddClientModal({
                         label="Individual Monthly Income"
                         value={values.client_details.individual_monthly_income}
                       />
-                      <ReviewItem
-                        label="Detained"
-                        value={values.client_details.detained}
-                      />
-                      <ReviewItem
-                        label="Detained Since"
-                        value={values.client_details.detained_since}
-                      />
-                      <ReviewItem
-                        label="Place of Detention"
-                        value={values.client_details.place_of_detention}
-                      />
                     </ReviewSection>
 
                     <ReviewSection title="Spouse and Representative">
@@ -1518,6 +1476,26 @@ export default function AddClientModal({
                     </ReviewSection>
 
                     <ReviewSection title="Applicant Classification">
+                      {(() => {
+                        const reviewAgeText = String(values.client.age ?? "").trim();
+                        const reviewAge = Number(reviewAgeText);
+                        const hasReviewAge =
+                          reviewAgeText !== "" && Number.isFinite(reviewAge);
+                        return (
+                      <div className="md:col-span-2 lg:col-span-3 rounded-md border border-[#E7D7EE] bg-[#F7F0FA] p-3">
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
+                          Automatically Derived
+                        </dt>
+                        <dd className="mt-1 text-sm font-semibold text-[#2B3642]">
+                          {[
+                            values.client.sex.trim().toLowerCase() === "female" && "Female",
+                            hasReviewAge && reviewAge >= 60 && "Senior Citizen",
+                            hasReviewAge && reviewAge < 15 && "Child in Conflict with the Law",
+                          ].filter(Boolean).join(", ") || "None"}
+                        </dd>
+                      </div>
+                        );
+                      })()}
                       <div className="md:col-span-2 lg:col-span-3 rounded-md border border-[#E5E7EB] bg-white p-3">
                         <dt className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
                           Classifications

@@ -59,6 +59,8 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".jfif", ".webp"}
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 DEFAULT_INCIDENT_CITY = "Panabo City"
 DEFAULT_DISTRICT_OFFICE = "Panabo City Public Attorney's Office"
+SENIOR_CITIZEN_AGE = 60
+CICL_MAX_AGE = 15
 PANABO_CENTER = {"lat": 7.3081, "lng": 125.6841}
 BARANGAY_CENTROIDS: dict[str, tuple[float, float]] = {
     "A. O. Floirendo": (7.3977, 125.5802),
@@ -626,18 +628,9 @@ def is_admin(user: models.User) -> bool:
 
 
 def can_collaborate_on_cases(user: models.User) -> bool:
-    role_name = (user.role.role_name or "").strip().lower() if user.role else ""
-    shared_workspace_roles = {
-        "staff",
-        "user",
-        "legal staff",
-        "legal_staff",
-        "legal-staff",
-        "lawyer",
-        "attorney",
-        "public attorney",
-    }
-    return is_admin(user) or role_name in shared_workspace_roles
+    # The admin is the centralized supervisor. Every non-admin role gets an
+    # ownership-scoped workspace, regardless of its display name.
+    return is_admin(user)
 
 
 def display_role_name(user: models.User | None) -> str | None:
@@ -764,6 +757,19 @@ def normalize_sex(value: Any) -> str | None:
     return None
 
 
+def derived_client_classification(age: Any, sex: Any) -> dict[str, bool]:
+    try:
+        normalized_age = int(age)
+    except (TypeError, ValueError):
+        normalized_age = None
+    normalized_sex = str(sex or "").strip().lower()
+    return {
+        "flag_female": normalized_sex == "female",
+        "flag_senior": normalized_age is not None and normalized_age >= SENIOR_CITIZEN_AGE,
+        "flag_cicl": normalized_age is not None and normalized_age < CICL_MAX_AGE,
+    }
+
+
 def normalize_case_status(value: Any) -> str:
     return "Terminated" if str(value or "").strip().lower() == "terminated" else "Pending"
 
@@ -803,6 +809,38 @@ def normalize_representative_details(details_data: dict[str, Any]) -> dict[str, 
         normalized["representative_contact_no"] = "None"
         normalized["representative_relationship"] = "None"
     return normalized
+
+
+def update_latest_client_representative(
+    client: models.Client,
+    representative_data: dict[str, Any],
+    representative_none: bool,
+) -> None:
+    details = client.details
+    if details is None:
+        details = models.ClientDetails(client_id=client.client_id)
+        client.details = details
+    details.representative_name = (
+        "None" if representative_none else representative_data.get("rep_name") or "Not applicable"
+    )
+    details.representative_age = None if representative_none else representative_data.get("rep_age") or None
+    details.representative_sex = (
+        "None" if representative_none else normalize_sex(representative_data.get("rep_sex"))
+    )
+    details.representative_civil_status = (
+        "None" if representative_none else representative_data.get("civil_status")
+    )
+    details.representative_address = (
+        "None" if representative_none else representative_data.get("rep_address")
+    )
+    details.representative_contact_no = (
+        "None" if representative_none else representative_data.get("rep_contact_no")
+    )
+    details.representative_relationship = (
+        "None"
+        if representative_none
+        else limit_text(representative_data.get("relationship_to_applicant"), 100)
+    )
 
 
 def generated_case_title(client: models.Client | None, case_type: str = "Criminal") -> str:
@@ -857,10 +895,21 @@ def generated_case_title_for_case(record: models.Case) -> str:
     return limit_text(f"PP vs. {represented}", 255, "PP vs. Client") or "PP vs. Client"
 
 
-def case_participant_payload(participant: models.CaseClient) -> dict[str, Any]:
+def case_participant_payload(
+    participant: models.CaseClient,
+    case_location: str | None = None,
+) -> dict[str, Any]:
     client = participant.client
     classification = client.classification if client and client.classification else None
     details = client.details if client and client.details else None
+    derived = derived_client_classification(
+        client.age if client else None,
+        client.sex if client else None,
+    )
+    case_location = case_location or (participant.case.location_type if participant.case else None)
+    case_representative = None
+    if participant.case and participant.case.intake and participant.case.intake.representatives:
+        case_representative = participant.case.intake.representatives[0]
     return {
         "case_client_id": str(participant.case_client_id or ""),
         "client_id": str(participant.client_id or (client.client_id if client else "")),
@@ -872,14 +921,19 @@ def case_participant_payload(participant: models.CaseClient) -> dict[str, Any]:
         or "",
         "applicant_role": participant.applicant_role or "",
         "applicant_role_other": participant.applicant_role_other or "",
+        "relationship_to_applicant": (
+            case_representative.relationship_to_applicant
+            if case_representative
+            else ""
+        ),
         "address": details.address if details else "",
         "contact_no": details.contact_no if details else "",
         "classification": {
-            "flag_senior": bool(classification.class_senior_citizen) if classification else False,
-            "flag_cicl": bool(classification.class_cicl) if classification else False,
-            "flag_female": bool(classification.class_female or classification.class_woman) if classification else False,
-            "flag_urban": bool(classification.class_urban) if classification else False,
-            "flag_rural": bool(classification.class_rural) if classification else False,
+            "flag_senior": derived["flag_senior"],
+            "flag_cicl": derived["flag_cicl"],
+            "flag_female": derived["flag_female"],
+            "flag_urban": case_location == "Urban",
+            "flag_rural": case_location == "Rural",
             "flag_drugs": bool(classification.class_drug_related or classification.class_9165) if classification else False,
         },
     }
@@ -954,6 +1008,7 @@ def user_to_details(user: models.User) -> dict[str, Any]:
 def get_client_payload(client: models.Client) -> dict[str, Any]:
     details = client.details or models.ClientDetails(client_id=client.client_id)
     classification = client.classification or models.ClientClassification(client_id=client.client_id)
+    derived = derived_client_classification(client.age, client.sex)
     return {
         "client_id": str(client.client_id),
         "created_by_user_id": None,
@@ -989,11 +1044,11 @@ def get_client_payload(client: models.Client) -> dict[str, Any]:
             "place_of_detention": details.place_of_detention or "",
         },
         "client_classification": {
-            "flag_senior": bool(classification.class_senior_citizen),
-            "flag_cicl": bool(classification.class_cicl),
-            "flag_female": bool(classification.class_female or classification.class_woman),
-            "flag_urban": bool(classification.class_urban),
-            "flag_rural": bool(classification.class_rural),
+            "flag_senior": derived["flag_senior"],
+            "flag_cicl": derived["flag_cicl"],
+            "flag_female": derived["flag_female"],
+            "flag_urban": False,
+            "flag_rural": False,
             "flag_drugs": bool(classification.class_drug_related or classification.class_9165),
             "flag_foreign_national": bool(classification.class_foreign_national),
             "flag_vawc_victim": bool(classification.class_vawc_victim),
@@ -1124,7 +1179,7 @@ def get_case_payload(record: models.Case) -> dict[str, Any]:
             "remarks": record.remarks or record.last_action_taken or "",
         },
         "participants": [
-            case_participant_payload(participant)
+            case_participant_payload(participant, record.location_type)
             for participant in case_participants(record)
         ],
         "last_updated": record.last_updated.date().isoformat() if record.last_updated else "",
@@ -1238,10 +1293,8 @@ def ensure_latest_submission_version(db: Session, submission: models.CaseSubmiss
 def submission_case_records(db: Session, user: models.User, date_from: datetime, date_to: datetime) -> list[models.Case]:
     end = date_to + timedelta(days=1)
     return (
-        db.query(models.Case)
-        .join(models.IntakeRecord)
+        scoped_case_query(db, user)
         .filter(
-            models.IntakeRecord.interviewer_id == user.user_id,
             models.IntakeRecord.form_date >= date_from,
             models.IntakeRecord.form_date < end,
         )
@@ -1306,12 +1359,11 @@ def apply_client_payload(client: models.Client, payload: ClientPayload) -> None:
     details.detained_since = parse_date(details_data.get("detained_since"))
     details.place_of_detention = details_data.get("place_of_detention")
 
-    classification.class_senior_citizen = bool(class_data.get("flag_senior"))
-    classification.class_cicl = bool(class_data.get("flag_cicl"))
-    classification.class_female = bool(class_data.get("flag_female"))
-    classification.class_woman = bool(class_data.get("flag_female"))
-    classification.class_urban = bool(class_data.get("flag_urban"))
-    classification.class_rural = bool(class_data.get("flag_rural"))
+    derived = derived_client_classification(client.age, client.sex)
+    classification.class_senior_citizen = derived["flag_senior"]
+    classification.class_cicl = derived["flag_cicl"]
+    classification.class_female = derived["flag_female"]
+    classification.class_woman = derived["flag_female"]
     classification.class_drug_related = bool(class_data.get("flag_drugs"))
     classification.class_foreign_national = "Yes" if class_data.get("flag_foreign_national") else None
     classification.class_vawc_victim = bool(class_data.get("flag_vawc_victim"))
@@ -1417,6 +1469,15 @@ def apply_case_payload(record: models.Case, payload: CasePayload) -> None:
     representative.rep_address = "None" if representative_none else rep_data.get("rep_address")
     representative.rep_contact_no = "None" if representative_none else rep_data.get("rep_contact_no")
     representative.relationship_to_applicant = "None" if representative_none else limit_text(rep_data.get("relationship_to_applicant"), 50)
+    # The case representative is stored once on the case intake. Keep the
+    # latest client preference in sync only for the primary client; do not
+    # copy one client's representative onto unrelated co-participants.
+    if record.client is not None:
+        update_latest_client_representative(
+            record.client,
+            rep_data,
+            representative_none,
+        )
 
     primary_participant = next(
         (participant for participant in record.participants if participant.client_id == record.client_id),
@@ -2524,6 +2585,7 @@ def create_client(
             citizenship=client_data.get("citizenship") or "",
             language_dialect=client_data.get("language_dialect") or "",
         )
+        derived = derived_client_classification(client.age, client.sex)
         db.add(client)
         db.flush()
         db.add(
@@ -2552,12 +2614,12 @@ def create_client(
         db.add(
             models.ClientClassification(
                 client_id=client.client_id,
-                class_senior_citizen=bool(class_data.get("flag_senior")),
-                class_cicl=bool(class_data.get("flag_cicl")),
-                class_female=bool(class_data.get("flag_female")),
-                class_woman=bool(class_data.get("flag_female")),
-                class_urban=bool(class_data.get("flag_urban")),
-                class_rural=bool(class_data.get("flag_rural")),
+                class_senior_citizen=derived["flag_senior"],
+                class_cicl=derived["flag_cicl"],
+                class_female=derived["flag_female"],
+                class_woman=derived["flag_female"],
+                class_urban=False,
+                class_rural=False,
                 class_drug_related=bool(class_data.get("flag_drugs")),
                 class_foreign_national="Yes" if class_data.get("flag_foreign_national") else None,
                 class_vawc_victim=bool(class_data.get("flag_vawc_victim")),
@@ -2852,6 +2914,13 @@ def create_case(
                     applicant_role_other=intake.applicant_role_other,
                 )
             )
+        # Keep the latest representative preference on the primary client
+        # while the Representative row remains case-specific and historical.
+        update_latest_client_representative(
+            client,
+            rep_data,
+            representative_none,
+        )
         db.flush()
         record.title_of_case = generated_case_title_for_case(record)
         db.add(
@@ -3134,6 +3203,7 @@ def create_audit_log(
 @app.post("/api/upload-document/")
 async def upload_document(
     request: Request,
+    user: models.User = Depends(current_user),
     user_id: int | None = None,
     file: UploadFile = File(...),
     case_id: int | None = None,
@@ -3143,13 +3213,17 @@ async def upload_document(
 ):
     new_document = None
     try:
-        uploader = db.get(models.User, user_id)
-        if not uploader:
-            raise HTTPException(status_code=400, detail=f"Uploader user_id {user_id} does not exist")
-        if case_id is not None and not db.get(models.Case, case_id):
-            raise HTTPException(status_code=400, detail=f"Case ID {case_id} does not exist. Save the case before attaching a document.")
-        if intake_id is not None and not db.get(models.IntakeRecord, intake_id):
-            raise HTTPException(status_code=400, detail=f"Intake ID {intake_id} does not exist. Save the intake record before attaching a document.")
+        # Keep the legacy query parameter for client compatibility, but never
+        # trust it as an ownership or attribution source.
+        uploader = user
+        if case_id is not None:
+            ensure_case_access(db.get(models.Case, case_id), user)
+        if intake_id is not None:
+            intake = db.get(models.IntakeRecord, intake_id)
+            if not intake:
+                raise HTTPException(status_code=400, detail="Intake record does not exist. Save the intake record before attaching a document.")
+            if not is_admin(user) and intake.interviewer_id != user.user_id:
+                raise HTTPException(status_code=403, detail="Record access denied")
 
         original_name = Path(file.filename or "uploaded-document").name
         extension = Path(original_name).suffix.lower()

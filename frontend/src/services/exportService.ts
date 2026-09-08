@@ -34,7 +34,7 @@ export interface CriminalCaseRowFilterDto extends Partial<CriminalCaseExportFilt
   table_filter?: CaseTableFilter;
 }
 
-const PAO_EXPORT_COLUMN_COUNT = 23;
+const PAO_EXPORT_COLUMN_COUNT = 24;
 
 const PAO_INVENTORY_HEADERS = [
   "CONTROL NUMBER",
@@ -52,6 +52,7 @@ const PAO_INVENTORY_HEADERS = [
   "URBAN",
   "RURAL",
   "DRUGS",
+  "FEMALE",
   "SENIOR",
   "CICL",
   "DATE OF CONFINEMENT",
@@ -173,6 +174,23 @@ function boolFlag(value: boolean | undefined) {
   return value ? 1 : 0;
 }
 
+function derivedClassification(
+  age: number | undefined,
+  sex: string | undefined,
+  locationType: string | undefined,
+  existing?: Partial<ClientClassification>,
+): Partial<ClientClassification> {
+  const numericAge = Number(age);
+  return {
+    ...existing,
+    flag_female: sex?.trim().toLowerCase() === "female",
+    flag_senior: Number.isFinite(numericAge) && numericAge >= 60,
+    flag_cicl: Number.isFinite(numericAge) && numericAge < 15,
+    flag_urban: locationType === "Urban",
+    flag_rural: locationType === "Rural",
+  };
+}
+
 interface ExportParticipantRow {
   partyRepresented: string;
   sex: string | undefined;
@@ -196,13 +214,18 @@ function exportParticipantRows(
   if ((record.participants?.length ?? 0) > 1) {
     return (record.participants ?? []).map((participant) => ({
       partyRepresented:
-        participant.name || participant.party_represented || "Unknown client",
+        participant.party_represented || participantInvolvement(participant) || "Unknown party",
       sex: participant.sex,
       age: participant.age,
       address: participant.address,
       contactNo: participant.contact_no,
-      relationshipToApplicant: participantInvolvement(participant),
-      classification: participant.classification,
+      relationshipToApplicant: participant.relationship_to_applicant,
+      classification: derivedClassification(
+        participant.age,
+        participant.sex,
+        record.cases.location_type,
+        participant.classification,
+      ),
     }));
   }
 
@@ -214,9 +237,14 @@ function exportParticipantRows(
       address: client?.client_details.address,
       contactNo: client?.client_details.contact_no,
       relationshipToApplicant:
-        record.representative.relationship_to_applicant ||
-        client?.client_details.representative_relationship,
-      classification: client?.client_classification,
+        client?.client_details.representative_relationship ||
+        record.representative.relationship_to_applicant,
+      classification: derivedClassification(
+        client?.client.age,
+        client?.client.sex,
+        record.cases.location_type,
+        client?.client_classification,
+      ),
     },
   ];
 }
@@ -232,12 +260,15 @@ function participantValues(
     boolFlag(participant.classification?.flag_urban),
     boolFlag(participant.classification?.flag_rural),
     boolFlag(participant.classification?.flag_drugs),
+    boolFlag(participant.classification?.flag_female),
     boolFlag(participant.classification?.flag_senior),
     boolFlag(participant.classification?.flag_cicl),
     participant.address,
     participant.contactNo,
     participant.relationshipToApplicant ||
-      record.representative.relationship_to_applicant,
+      ((record.participants?.length ?? 0) > 1
+        ? ""
+        : record.representative.relationship_to_applicant),
   ];
 }
 
@@ -258,8 +289,14 @@ export function buildCriminalCasesCsv(
     `As of ${formatAsOfDate()}`,
   ];
 
-  const lines = filteredRows.map(({ record, client }) =>
-    csvRow([
+  const lines = filteredRows.map(({ record, client }) => {
+    const classification = derivedClassification(
+      client?.client.age,
+      client?.client.sex,
+      record.cases.location_type,
+      client?.client_classification,
+    );
+    return csvRow([
       record.intake_record.control_no,
       record.intake_record.party_represented,
       client?.client.sex,
@@ -272,11 +309,12 @@ export function buildCriminalCasesCsv(
       record.cases.cause_of_termination,
       record.cases.date_of_termination,
       client?.client.age,
-      boolFlag(client?.client_classification.flag_urban),
-      boolFlag(client?.client_classification.flag_rural),
-      boolFlag(client?.client_classification.flag_drugs),
-      boolFlag(client?.client_classification.flag_senior),
-      boolFlag(client?.client_classification.flag_cicl),
+      boolFlag(classification.flag_urban),
+      boolFlag(classification.flag_rural),
+      boolFlag(classification.flag_drugs),
+      boolFlag(classification.flag_female),
+      boolFlag(classification.flag_senior),
+      boolFlag(classification.flag_cicl),
       record.cases.date_of_confinement,
       record.cases.place_of_detention,
       record.intake_record.form_date,
@@ -284,8 +322,8 @@ export function buildCriminalCasesCsv(
       client?.client_details.contact_no,
       record.representative.relationship_to_applicant ||
         client?.client_details.representative_relationship,
-    ])
-  );
+    ]);
+  });
 
   return [
     ...titleRows.map(centeredTitleRow),
@@ -326,12 +364,14 @@ export function buildCriminalCasesExcelHtml(
         current.rural + boolFlag(participant.classification?.flag_rural),
       drugs:
         current.drugs + boolFlag(participant.classification?.flag_drugs),
+      female:
+        current.female + boolFlag(participant.sex?.trim().toLowerCase() === "female"),
       senior:
         current.senior + boolFlag(participant.classification?.flag_senior),
       cicl:
         current.cicl + boolFlag(participant.classification?.flag_cicl),
     }),
-    { urban: 0, rural: 0, drugs: 0, senior: 0, cicl: 0 },
+    { urban: 0, rural: 0, drugs: 0, female: 0, senior: 0, cicl: 0 },
   );
   const body = filteredRows
     .map(({ record, client }) => {
@@ -372,12 +412,13 @@ export function buildCriminalCasesExcelHtml(
             `<td>${htmlCell(participantData[5])}</td>`,
             `<td>${htmlCell(participantData[6])}</td>`,
             `<td>${htmlCell(participantData[7])}</td>`,
+            `<td>${htmlCell(participantData[8])}</td>`,
             index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[9])}</td>` : "",
             index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[10])}</td>` : "",
             index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[11])}</td>` : "",
-            `<td>${htmlCell(participantData[8])}</td>`,
             `<td>${htmlCell(participantData[9])}</td>`,
             `<td>${htmlCell(participantData[10])}</td>`,
+            `<td>${htmlCell(participantData[11])}</td>`,
           ];
           return `<tr>${cells.join("")}</tr>`;
         })
@@ -400,6 +441,7 @@ export function buildCriminalCasesExcelHtml(
     totals.urban,
     totals.rural,
     totals.drugs,
+    totals.female,
     totals.senior,
     totals.cicl,
     "",
