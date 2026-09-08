@@ -931,9 +931,15 @@ export function CaseWorkflow({
     const toastId = toast.loading("Extracting case fields...");
 
     try {
+      const cloudApproved = extractionEngine === "cloud" && window.confirm(
+        "Send this legal document to the authorized cloud extraction service? This requires enabled institutional policy."
+      );
+      if (extractionEngine === "cloud" && !cloudApproved) {
+        throw new Error("Cloud extraction was not approved.");
+      }
       const result = await extractCaseFromDocument(file, {
-        userId: user?.user_id,
         extractionMode: extractionEngine,
+        cloudApproved,
       });
       setIndicators(result.indicators);
       applyExtractedPayload(result.extracted);

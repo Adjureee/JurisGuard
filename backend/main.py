@@ -1,4 +1,5 @@
 import base64
+import bcrypt
 import hashlib
 import hmac
 import json
@@ -13,14 +14,16 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, or_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 import models
 from ai_service import process_document
@@ -51,11 +54,16 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
 PROFILE_UPLOAD_DIR = UPLOAD_DIR / "profiles"
+DOCUMENT_STORE_DIR = Path(os.getenv("DOCUMENT_STORE_DIR", "protected_documents"))
+MAX_DOCUMENT_BYTES = 32 * 1024 * 1024
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 PROFILE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+DOCUMENT_STORE_DIR.mkdir(parents=True, exist_ok=True)
+# Only public profile pictures are mounted. Legal documents are stored separately
+# and are served exclusively through the authenticated document endpoint.
+app.mount("/uploads/profiles", StaticFiles(directory=str(PROFILE_UPLOAD_DIR)), name="profiles")
 
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".jfif", ".webp"}
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 DEFAULT_INCIDENT_CITY = "Panabo City"
 DEFAULT_DISTRICT_OFFICE = "Panabo City Public Attorney's Office"
@@ -179,6 +187,12 @@ class AuditLogPayload(BaseModel):
     fallback_reason: str | None = None
 
 
+class ExtractionVerificationPayload(BaseModel):
+    verification_status: Literal["VERIFIED", "REJECTED"]
+    corrected_metadata: dict[str, Any] | None = None
+    notes: str | None = None
+
+
 class SubmissionPreviewPayload(BaseModel):
     date_from: str
     date_to: str
@@ -193,6 +207,111 @@ class CaseSubmissionPayload(BaseModel):
 
 class SubmissionFeedbackPayload(BaseModel):
     comments: str
+
+
+ENCRYPTED_DOCUMENT_MAGIC = b"JGDOC1"
+DOCUMENT_CHUNK_SIZE = 1024 * 1024
+
+
+def document_encryption_key() -> bytes:
+    """Load a 256-bit AES key from configuration; never generate one at runtime."""
+    encoded_key = os.getenv("DOCUMENT_ENCRYPTION_KEY", "").strip()
+    if not encoded_key:
+        raise RuntimeError("DOCUMENT_ENCRYPTION_KEY is not configured")
+    try:
+        key = base64.urlsafe_b64decode(encoded_key + "=" * (-len(encoded_key) % 4))
+    except Exception as exc:
+        raise RuntimeError("DOCUMENT_ENCRYPTION_KEY must be URL-safe base64") from exc
+    if len(key) != 32:
+        raise RuntimeError("DOCUMENT_ENCRYPTION_KEY must decode to exactly 32 bytes")
+    return key
+
+
+def detected_image_content_type(header: bytes) -> str | None:
+    if header.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def validate_document_type(filename: str, header: bytes) -> tuple[str, str]:
+    extension = Path(filename).suffix.lower()
+    detected_type = detected_image_content_type(header)
+    extension_type = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }.get(extension)
+    if extension not in ALLOWED_EXTENSIONS or not detected_type or extension_type != detected_type:
+        raise HTTPException(status_code=400, detail="Unsupported or mismatched document type.")
+    return extension, detected_type
+
+
+async def store_encrypted_upload(file: UploadFile, destination: Path) -> tuple[int, str]:
+    """Encrypt the upload while enforcing the size limit; plaintext is never persisted."""
+    first_chunk = await file.read(DOCUMENT_CHUNK_SIZE)
+    if not first_chunk:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    original_name = Path(file.filename or "uploaded-document").name
+    extension, detected_type = validate_document_type(original_name, first_chunk[:32])
+    if len(first_chunk) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(status_code=413, detail="Document exceeds the 32 MB upload limit.")
+
+    nonce = secrets.token_bytes(12)
+    encryptor = Cipher(algorithms.AES(document_encryption_key()), modes.GCM(nonce)).encryptor()
+    bytes_written = len(first_chunk)
+    try:
+        with destination.open("xb") as encrypted_file:
+            encrypted_file.write(ENCRYPTED_DOCUMENT_MAGIC)
+            encrypted_file.write(nonce)
+            encrypted_file.write(encryptor.update(first_chunk))
+            while True:
+                chunk = await file.read(DOCUMENT_CHUNK_SIZE)
+                if not chunk:
+                    break
+                bytes_written += len(chunk)
+                if bytes_written > MAX_DOCUMENT_BYTES:
+                    raise HTTPException(status_code=413, detail="Document exceeds the 32 MB upload limit.")
+                encrypted_file.write(encryptor.update(chunk))
+            encrypted_file.write(encryptor.finalize())
+            encrypted_file.write(encryptor.tag)
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    return bytes_written, detected_type
+
+
+def decrypt_document_bytes(encrypted_path: str) -> bytes:
+    path = Path(encrypted_path).resolve()
+    store_root = DOCUMENT_STORE_DIR.resolve()
+    if store_root not in path.parents:
+        raise RuntimeError("Document path is outside the protected document store")
+    try:
+        encrypted = path.read_bytes()
+        header_length = len(ENCRYPTED_DOCUMENT_MAGIC) + 12
+        if len(encrypted) <= header_length + 16 or not encrypted.startswith(ENCRYPTED_DOCUMENT_MAGIC):
+            raise ValueError("invalid encrypted document format")
+        nonce = encrypted[len(ENCRYPTED_DOCUMENT_MAGIC):header_length]
+        ciphertext, tag = encrypted[header_length:-16], encrypted[-16:]
+        decryptor = Cipher(algorithms.AES(document_encryption_key()), modes.GCM(nonce, tag)).decryptor()
+        return decryptor.update(ciphertext) + decryptor.finalize()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Document decryption failed") from exc
+
+
+def decrypt_document_to_temporary_file(document: models.Document) -> Path:
+    suffix = Path(document.original_filename or "document.jpg").suffix or ".jpg"
+    temp_path = DOCUMENT_STORE_DIR / f".ocr-{uuid.uuid4()}{suffix}"
+    try:
+        temp_path.write_bytes(decrypt_document_bytes(document.encrypted_file_path))
+        return temp_path
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
 
 
 def template_path(language: str) -> Path:
@@ -231,6 +350,9 @@ def ensure_schema_compatibility() -> None:
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(64)',
         'UPDATE "user" SET email = username WHERE email IS NULL',
         "ALTER TABLE document ADD COLUMN IF NOT EXISTS intake_id INTEGER",
+        "ALTER TABLE document ADD COLUMN IF NOT EXISTS original_filename VARCHAR(255)",
+        "ALTER TABLE document ADD COLUMN IF NOT EXISTS file_size_bytes INTEGER",
+        "ALTER TABLE extracted_metadata ADD COLUMN IF NOT EXISTS verification_notes TEXT",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS address TEXT",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS contact_no TEXT",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS email TEXT",
@@ -465,20 +587,28 @@ seed_roles()
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120_000)
-    return f"pbkdf2_sha256${salt}${digest.hex()}"
+    """Hash a password using bcrypt with 12 rounds, as recommended by the
+    JurisGuard password-hashing benchmark."""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
+    """Verify a password against a stored hash.  Supports both:
+    - bcrypt hashes (current production default)
+    - legacy PBKDF2-SHA256 hashes (backward compatibility)
+    """
     if not stored_hash:
         return False
-    if not stored_hash.startswith("pbkdf2_sha256$"):
-        return hmac.compare_digest(password, stored_hash)
-
-    _, salt, digest_hex = stored_hash.split("$", 2)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120_000)
-    return hmac.compare_digest(digest.hex(), digest_hex)
+    # Current bcrypt hashes start with $2b$ (or $2a$)
+    if stored_hash.startswith(("$2b$", "$2a$")):
+        return bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
+    # Legacy PBKDF2-SHA256 hashes
+    if stored_hash.startswith("pbkdf2_sha256$"):
+        _, salt, digest_hex = stored_hash.split("$", 2)
+        digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120_000)
+        return hmac.compare_digest(digest.hex(), digest_hex)
+    # Plaintext fallback for very old records (constant-time compare)
+    return hmac.compare_digest(password, stored_hash)
 
 
 def generate_mfa_secret() -> str:
@@ -686,6 +816,28 @@ def ensure_case_access(record: models.Case | None, user: models.User) -> models.
     if not record.intake or record.intake.interviewer_id != user.user_id:
         raise HTTPException(status_code=403, detail="Record access denied")
     return record
+
+
+def ensure_intake_access(record: models.IntakeRecord | None, user: models.User) -> models.IntakeRecord:
+    if not record:
+        raise HTTPException(status_code=404, detail="Intake record not found")
+    if can_collaborate_on_cases(user) or record.interviewer_id == user.user_id:
+        return record
+    raise HTTPException(status_code=403, detail="Record access denied")
+
+
+def ensure_document_access(document: models.Document | None, user: models.User, db: Session) -> models.Document:
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if document.case_id:
+        ensure_case_access(db.get(models.Case, document.case_id), user)
+        return document
+    if document.intake_id:
+        ensure_intake_access(db.get(models.IntakeRecord, document.intake_id), user)
+        return document
+    if document.uploaded_by == user.user_id or can_collaborate_on_cases(user):
+        return document
+    raise HTTPException(status_code=403, detail="Record access denied")
 
 
 def ensure_client_access(client: models.Client | None, user: models.User, db: Session) -> models.Client:
@@ -1565,7 +1717,11 @@ def write_audit(
 
 
 def public_extraction_payload(extracted: dict[str, Any]) -> dict[str, Any]:
-    """Return only the standardized sectioned OCR result for API/storage use."""
+    """Return staged OCR output and the extraction-decision record for API/storage use.
+
+    raw_text is deliberately excluded: it may contain sensitive legal information
+    and should not be stored in the JSONB metadata returned to API consumers.
+    """
     sections = extracted.get("sections")
     if not isinstance(sections, dict):
         sections = {}
@@ -1573,7 +1729,10 @@ def public_extraction_payload(extracted: dict[str, Any]) -> dict[str, Any]:
     return {
         "sections": sections,
         "extraction_mode": extracted.get("extraction_mode"),
-        "raw_text": extracted.get("raw_text"),
+        "requested_extraction_mode": extracted.get("requested_extraction_mode"),
+        "actual_extraction_mode": extracted.get("actual_extraction_mode"),
+        "offline_attempt": extracted.get("offline_attempt"),
+        "cloud_fallback": extracted.get("cloud_fallback"),
     }
 
 
@@ -3209,9 +3368,13 @@ async def upload_document(
     case_id: int | None = None,
     intake_id: int | None = None,
     extraction_mode: Literal["auto", "offline", "cloud"] = Query(default="auto"),
+    cloud_approved: bool = Query(default=False),
+    user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     new_document = None
+    encrypted_path: Path | None = None
+    temporary_ocr_path: Path | None = None
     try:
         # Keep the legacy query parameter for client compatibility, but never
         # trust it as an ownership or attribution source.
@@ -3224,36 +3387,48 @@ async def upload_document(
                 raise HTTPException(status_code=400, detail="Intake record does not exist. Save the intake record before attaching a document.")
             if not is_admin(user) and intake.interviewer_id != user.user_id:
                 raise HTTPException(status_code=403, detail="Record access denied")
+        if not can_collaborate_on_cases(user):
+            raise HTTPException(status_code=403, detail="Legal staff or administrator access is required")
+        if case_id is not None:
+            ensure_case_access(db.get(models.Case, case_id), user)
+        if intake_id is not None:
+            ensure_intake_access(db.get(models.IntakeRecord, intake_id), user)
+        if case_id is not None and intake_id is not None:
+            record = db.get(models.Case, case_id)
+            if record and record.intake_id != intake_id:
+                raise HTTPException(status_code=400, detail="The case and intake record do not match")
 
         original_name = Path(file.filename or "uploaded-document").name
         extension = Path(original_name).suffix.lower()
-        if extension not in ALLOWED_EXTENSIONS or file.content_type not in ALLOWED_CONTENT_TYPES:
-            raise HTTPException(status_code=400, detail="Unsupported file type. Please upload a JPG, PNG, or WEBP image.")
-
-        safe_filename = f"{uuid.uuid4()}{extension}"
-        file_location = UPLOAD_DIR / safe_filename
-
-        with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        encrypted_path = DOCUMENT_STORE_DIR / f"{uuid.uuid4()}{extension}.enc"
+        file_size_bytes, detected_type = await store_encrypted_upload(file, encrypted_path)
 
         new_document = models.Document(
             case_id=case_id,
             intake_id=intake_id,
-            uploaded_by=uploader.user_id,
-            document_type=file.content_type,
-            encrypted_file_path=str(file_location),
+            uploaded_by=user.user_id,
+            document_type=detected_type,
+            original_filename=original_name,
+            file_size_bytes=file_size_bytes,
+            encrypted_file_path=str(encrypted_path),
             ocr_status="PROCESSING",
         )
         db.add(new_document)
         db.commit()
         db.refresh(new_document)
 
-        extracted_json = process_document(str(file_location), extraction_mode=extraction_mode)
+        cloud_policy_enabled = os.getenv("CLOUD_FALLBACK_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+        if extraction_mode == "cloud" and not (cloud_policy_enabled and cloud_approved):
+            raise HTTPException(status_code=403, detail="Cloud extraction requires enabled policy and explicit approval")
+        temporary_ocr_path = decrypt_document_to_temporary_file(new_document)
+        extracted_json = process_document(
+            str(temporary_ocr_path),
+            extraction_mode=extraction_mode,
+            cloud_authorized=can_collaborate_on_cases(user),
+            cloud_policy_enabled=cloud_policy_enabled,
+            cloud_approved=cloud_approved,
+        )
         public_extracted_json = public_extraction_payload(extracted_json)
-
-        print("\n===== AI EXTRACTION RESULTS =====")
-        print(public_extracted_json)
-        print("=================================\n")
 
         db.add(
             models.ExtractedMetadata(
@@ -3266,12 +3441,14 @@ async def upload_document(
         new_document.ocr_status = "COMPLETED"
         write_audit(
             db,
-            uploader.user_id,
+            user.user_id,
             "OCR Scan",
             "ocr",
-            f"{uploader.full_name or uploader.email or uploader.username} scanned document #{new_document.document_id}",
+            f"{user.full_name or user.email or user.username} scanned document #{new_document.document_id}",
             str(new_document.document_id),
             request,
+            public_extracted_json.get("actual_extraction_mode") or public_extracted_json.get("extraction_mode"),
+            json.dumps(public_extracted_json.get("cloud_fallback"), sort_keys=True),
         )
         db.commit()
 
@@ -3282,12 +3459,90 @@ async def upload_document(
         }
 
     except Exception as exc:
-        if isinstance(exc, HTTPException):
-            raise exc
-
         db.rollback()
         if new_document is not None:
-            new_document.ocr_status = "FAILED"
-            db.add(new_document)
+            db.delete(new_document)
             db.commit()
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(exc)}") from exc
+        if encrypted_path:
+            encrypted_path.unlink(missing_ok=True)
+        if isinstance(exc, HTTPException):
+            raise exc
+        raise HTTPException(status_code=500, detail="Document processing failed") from exc
+    finally:
+        if temporary_ocr_path:
+            temporary_ocr_path.unlink(missing_ok=True)
+        await file.close()
+
+
+@app.get("/api/documents/{document_id}/download")
+def download_document(
+    document_id: int,
+    request: Request,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    document = ensure_document_access(db.get(models.Document, document_id), user, db)
+    contents = decrypt_document_bytes(document.encrypted_file_path)
+    write_audit(
+        db, user.user_id, "Download Document", "document",
+        f"Downloaded protected document #{document.document_id}", str(document.document_id), request,
+    )
+    db.commit()
+    filename = quote(document.original_filename or f"document-{document.document_id}")
+    return StreamingResponse(
+        iter([contents]),
+        media_type=document.document_type or "application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+    )
+
+
+@app.post("/api/documents/{document_id}/verification")
+def verify_document_extraction(
+    document_id: int,
+    payload: ExtractionVerificationPayload,
+    request: Request,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    if not can_collaborate_on_cases(user):
+        raise HTTPException(status_code=403, detail="Legal staff or administrator access is required")
+    document = ensure_document_access(db.get(models.Document, document_id), user, db)
+    metadata = (
+        db.query(models.ExtractedMetadata)
+        .filter(models.ExtractedMetadata.document_id == document.document_id)
+        .order_by(models.ExtractedMetadata.meta_id.desc())
+        .first()
+    )
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Staged extraction metadata not found")
+    if metadata.verification_status != "PENDING":
+        raise HTTPException(status_code=409, detail="Only pending extractions may be verified or rejected")
+
+    staged_payload = dict(metadata.extracted_json or {})
+    if payload.verification_status == "VERIFIED":
+        staged_payload["verified_metadata"] = payload.corrected_metadata or {}
+    metadata.extracted_json = staged_payload
+    metadata.verification_status = payload.verification_status
+    metadata.verified_by = user.user_id
+    metadata.verified_at = datetime.now(timezone.utc)
+    metadata.verification_notes = payload.notes
+    action = "Verified Extraction" if payload.verification_status == "VERIFIED" else "Rejected Extraction"
+    write_audit(
+        db, user.user_id, action, "extracted_metadata",
+        f"{action.lower()} for document #{document.document_id}", str(document.document_id), request,
+        staged_payload.get("actual_extraction_mode") or staged_payload.get("extraction_mode"),
+        json.dumps(staged_payload.get("cloud_fallback"), sort_keys=True),
+    )
+    if payload.corrected_metadata:
+        write_audit(
+            db, user.user_id, "Corrected Extraction", "extracted_metadata",
+            f"Corrected staged extraction for document #{document.document_id}", str(document.document_id), request,
+        )
+    db.commit()
+    return {
+        "document_id": document.document_id,
+        "verification_status": metadata.verification_status,
+        "verified_by": metadata.verified_by,
+        "verified_at": metadata.verified_at,
+        "verified_metadata": staged_payload.get("verified_metadata"),
+    }

@@ -190,6 +190,8 @@ CREATE TABLE IF NOT EXISTS document (
     uploaded_by INTEGER REFERENCES "user"(user_id),
     document_type VARCHAR(50),
     encrypted_file_path TEXT NOT NULL,
+    original_filename VARCHAR(255),
+    file_size_bytes INTEGER,
     ocr_status VARCHAR(20) DEFAULT 'PENDING',
     uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -200,7 +202,8 @@ CREATE TABLE IF NOT EXISTS extracted_metadata (
     verified_by INTEGER REFERENCES "user"(user_id),
     extracted_json JSONB NOT NULL,
     verification_status VARCHAR(20) DEFAULT 'PENDING',
-    verified_at TIMESTAMP
+    verified_at TIMESTAMP,
+    verification_notes TEXT
 );
 
 CREATE TABLE IF NOT EXISTS audit_log (
