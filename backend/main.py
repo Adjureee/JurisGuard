@@ -2773,8 +2773,21 @@ def get_printable_intake(
             if involvement == "Others"
             else ""
         )
+    selected_client_payload = get_client_payload(selected_client)
+    case_representative = selected_case.get("representative") or {}
+    selected_client_payload["client_details"].update(
+        {
+            "representative_name": case_representative.get("rep_name") or "",
+            "representative_age": case_representative.get("rep_age") or 0,
+            "representative_sex": case_representative.get("rep_sex") or "",
+            "representative_civil_status": case_representative.get("civil_status") or "",
+            "representative_address": case_representative.get("rep_address") or "",
+            "representative_contact_no": case_representative.get("rep_contact_no") or "",
+            "representative_relationship": case_representative.get("relationship_to_applicant") or "",
+        }
+    )
     return {
-        "client": get_client_payload(selected_client),
+        "client": selected_client_payload,
         "selected_case": selected_case,
         "cases": [get_case_payload(case) for case in cases],
         "templates": {

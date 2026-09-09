@@ -24,6 +24,13 @@ function setTextarea(textareas: HTMLTextAreaElement[], index: number, value: unk
   textarea.value = get(value);
 }
 
+function setInputBySelector(doc: Document, selector: string, value: unknown) {
+  const input = doc.querySelector(selector) as HTMLInputElement | null;
+  if (!input) return;
+  input.setAttribute("value", get(value));
+  input.value = get(value);
+}
+
 function checkNearText(doc: Document, text: string, checked: boolean) {
   if (!checked) return;
   const normalized = text.toLowerCase();
@@ -134,12 +141,27 @@ function hydrateEnglish(doc: Document, data: PrintableFormData) {
   setInput(inputs, 46, details.spouse);
   setInput(inputs, 47, details.address);
   setInput(inputs, 48, details.individual_monthly_income);
-  setInput(inputs, 61, record.intake_record.applicant_role_other);
+  setInput(inputs, 64, record.intake_record.applicant_role_other);
+
+  if (doc.querySelector(".pending-title-block")) {
+    setInputBySelector(
+      doc,
+      'input[aria-label="Title of the Case and Docket No"]',
+      `${caseDetails.title_of_case} ${caseDetails.case_no}`.trim(),
+    );
+    setInputBySelector(
+      doc,
+      'input[aria-label="Court Body Tribunal where pending"]',
+      caseDetails.court_body,
+    );
+  }
 
   setTextarea(textareas, 0, caseDetails.facts_of_case);
   setTextarea(textareas, 1, caseDetails.cause_of_action);
-  setTextarea(textareas, 2, `${caseDetails.title_of_case} ${caseDetails.case_no}`.trim());
-  setTextarea(textareas, 3, caseDetails.court_body);
+  if (!doc.querySelector(".pending-title-block")) {
+    setTextarea(textareas, 2, `${caseDetails.title_of_case} ${caseDetails.case_no}`.trim());
+    setTextarea(textareas, 3, caseDetails.court_body);
+  }
 
   checkNearText(doc, "Yes", Boolean(details.detained));
   checkNearText(doc, "No", !details.detained);
@@ -209,7 +231,7 @@ function hydrateFilipino(doc: Document, data: PrintableFormData) {
   setInput(inputs, 46, details.spouse);
   setInput(inputs, 47, details.address);
   setInput(inputs, 48, details.individual_monthly_income);
-  setInput(inputs, 61, record.intake_record.applicant_role_other);
+  setInput(inputs, 64, record.intake_record.applicant_role_other);
 
   setTextarea(textareas, 0, caseDetails.facts_of_case);
   setTextarea(textareas, 1, caseDetails.cause_of_action);
