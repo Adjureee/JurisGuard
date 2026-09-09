@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
 import shutil
@@ -13,7 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
@@ -30,6 +31,7 @@ from database import engine, get_db
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="JurisGuard API")
+template_logger = logging.getLogger("jurisguard.templates")
 
 app.add_middleware(
     CORSMiddleware,
@@ -206,7 +208,13 @@ def read_form_template(language: str) -> str:
     path = template_path(language)
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Printable form template not found: {path.name}")
-    return path.read_text(encoding="utf-8")
+    content = path.read_text(encoding="utf-8")
+    template_logger.info(
+        "Printable Interview Sheet template: %s SHA-256: %s",
+        path,
+        hashlib.sha256(content.encode("utf-8")).hexdigest(),
+    )
+    return content
 
 
 def ensure_schema_compatibility() -> None:
@@ -2702,6 +2710,7 @@ def list_terminated_cases(
 
 @app.get("/api/printable-intake/{case_id}")
 def get_printable_intake(
+    response: Response,
     case_id: int,
     client_id: int | None = Query(default=None),
     user: models.User = Depends(current_user),
@@ -2786,6 +2795,8 @@ def get_printable_intake(
             "representative_relationship": case_representative.get("relationship_to_applicant") or "",
         }
     )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
     return {
         "client": selected_client_payload,
         "selected_case": selected_case,

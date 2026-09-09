@@ -82,9 +82,6 @@ function removeGreenBarWithContent(doc: Document, matcher: (text: string) => boo
 
 function removeObsoleteOfficialSections(doc: Document) {
   removeGreenBarWithContent(doc, (text) =>
-    text.includes("conflict-of-interest") || text.includes("conflict of interest"),
-  );
-  removeGreenBarWithContent(doc, (text) =>
     text.includes("viii-a") && text.includes("adverse"),
   );
   removeGreenBarWithContent(doc, (text) =>
