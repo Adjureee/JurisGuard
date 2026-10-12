@@ -43,23 +43,18 @@ DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/jurisguard
 FRONTEND_ORIGIN=http://localhost:5173
 UPLOAD_DIR=uploads
 MISTRAL_API_KEY=
-VITE_API_BASE_URL=http://localhost:8000
-PADDLEOCR_MAX_DIMENSION=1600
-PADDLEOCR_DET_LIMIT_SIDE_LEN=960
-PADDLEOCR_DET_MODEL_NAME=PP-OCRv4_mobile_det
-PADDLEOCR_REC_MODEL_NAME=en_PP-OCRv4_mobile_rec
-PADDLEOCR_ENABLE_ANGLE_CLS=false
-PADDLEOCR_ENHANCED_PREPROCESS=false
-PADDLEOCR_CPU_THREADS=4
-PADDLEOCR_ENABLE_MKLDNN=false
-PADDLEOCR_USE_GPU=false
+VITE_API_BASE_URL=http://localhost:8000/api
+LOCAL_OCR_MAX_DIMENSION=2500
+LOCAL_OCR_MAX_PAGES=8
+LOCAL_OCR_MAX_PIXELS=40000000
 PAO_CHECKBOX_MODE=strict
 PAO_SPACY_DEBUG=false
 ```
 
 Notes:
 
-- Leave `MISTRAL_API_KEY` blank if you only want the offline PaddleOCR + spaCy pipeline.
+- `auto` and `offline` extraction run locally even when `MISTRAL_API_KEY` is set. Cloud extraction requires the explicit `cloud` mode.
+- PaddleOCR uses existing local model directories and does not download models at runtime. See [offline extraction testing](docs/offline_extraction_testing.md) for model paths and commands.
 - `PAO_CHECKBOX_MODE=strict` prevents printed checkbox labels from being treated as selected options.
 - Do not upload `.env` to GitHub. The repository already ignores it.
 
@@ -158,82 +153,21 @@ If Vite uses another port, open the URL shown in the terminal.
 
 ## 7. Create an Admin Account
 
-You can register through the app, or create an admin account directly in PostgreSQL.
-
-Example SQL:
-
-```sql
-BEGIN;
-
-INSERT INTO public.role (role_name, permissions)
-SELECT 'admin', 'all'
-WHERE NOT EXISTS (
-    SELECT 1 FROM public.role WHERE role_name = 'admin'
-);
-
-INSERT INTO public."user" (
-    role_id,
-    username,
-    email,
-    full_name,
-    password_hash,
-    approval_status,
-    is_active,
-    mfa_enabled,
-    profile_completed
-)
-SELECT
-    role_id,
-    'admin',
-    'admin@jurisguard.local',
-    'System Administrator',
-    'admin123',
-    'approved',
-    true,
-    false,
-    true
-FROM public.role
-WHERE role_name = 'admin'
-ORDER BY role_id
-LIMIT 1
-ON CONFLICT (username) DO UPDATE
-SET
-    role_id = EXCLUDED.role_id,
-    email = EXCLUDED.email,
-    full_name = EXCLUDED.full_name,
-    password_hash = 'admin123',
-    approval_status = 'approved',
-    is_active = true,
-    profile_completed = true;
-
-COMMIT;
-```
-
-Default login after running the SQL:
-
-```text
-Email: admin@jurisguard.local
-Password: admin123
-```
-
-For production, replace this password immediately.
+On a fresh database, generate a unique random setup key (at least 32 characters) and set `ADMIN_BOOTSTRAP_KEY` **on the backend only**, before starting the API. Register the first account through the application and enter that key in the optional initial admin setup field. The backend assigns the first account the admin role, approves it, and hashes its password; registrations without the configured key cannot claim admin access. Once the first account exists, remove the key from the backend environment and restart. Subsequent registrations remain pending until an admin approves them; the setup field should be left blank. Never put the setup key in `VITE_` variables or commit it. Use a unique strong account password. Do not insert plaintext passwords or use shared default credentials in SQL.
 
 ## 8. OCR Pipeline Notes
 
-JurisGuard supports two document extraction paths:
-
-1. Cloud pipeline, if `MISTRAL_API_KEY` is configured.
-2. Offline pipeline, using PaddleOCR + spaCy/Regex, if cloud extraction is unavailable or not configured.
+JurisGuard defaults to offline PaddleOCR with a local Tesseract fallback. Cloud extraction is used only when explicitly selected.
 
 Offline pipeline flow:
 
 ```text
-Uploaded image
-  -> OpenCV/Pillow preprocessing
-  -> PaddleOCR text detection and recognition
-  -> spaCy EntityRuler/Matcher
-  -> Regex field mapping
-  -> JSON extraction result
+Uploaded image or PDF
+  -> Pillow orientation/contrast correction or local PDF rendering
+  -> PaddleOCR text detection and recognition (local Tesseract fallback)
+  -> weighted document router
+  -> intake spaCy/Regex compatibility fields or RTC decision rules
+  -> exact inventory plus separate evidence and review diagnostics
   -> PostgreSQL metadata storage
 ```
 
@@ -352,7 +286,7 @@ http://127.0.0.1:8000
 Then check `.env`:
 
 ```env
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:8000/api
 ```
 
 Restart the frontend after changing environment variables.
@@ -362,10 +296,7 @@ Restart the frontend after changing environment variables.
 The offline OCR layer can be CPU-heavy. You can try:
 
 ```env
-PADDLEOCR_MAX_DIMENSION=1200
-PADDLEOCR_DET_LIMIT_SIDE_LEN=736
-PADDLEOCR_ENABLE_ANGLE_CLS=false
-PADDLEOCR_ENHANCED_PREPROCESS=false
+LOCAL_OCR_MAX_DIMENSION=1800
 ```
 
 Lower values are faster but may reduce accuracy on small or blurry handwriting.

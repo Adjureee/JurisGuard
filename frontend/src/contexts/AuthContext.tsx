@@ -21,6 +21,7 @@ interface AuthContextValue {
   login: (payload: LoginPayload) => Promise<AuthUser>;
   register: (payload: RegisterPayload) => Promise<RegisterResponse>;
   logout: () => void;
+  signOut: () => Promise<void>;
   getCurrentUser: () => Promise<AuthUser | null>;
 }
 
@@ -118,6 +119,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       },
       register: authService.register,
       logout,
+      signOut: async () => {
+        if (sessionStorage.getItem(TOKEN_STORAGE_KEY)) {
+          await authService.revokeSession();
+        }
+        logout();
+      },
       getCurrentUser,
     }),
     [getCurrentUser, isLoading, logout, token, user]

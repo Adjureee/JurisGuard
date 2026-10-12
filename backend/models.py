@@ -48,10 +48,19 @@ class User(Base):
     role = relationship("Role", back_populates="users")
 
 
+class RevokedAccessToken(Base):
+    __tablename__ = "revoked_access_token"
+
+    token_hash = Column(String(64), primary_key=True)
+    user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+
 class Client(Base):
     __tablename__ = "client"
 
     client_id = Column(Integer, primary_key=True, index=True)
+    created_by_user_id = Column(Integer, ForeignKey("user.user_id"), index=True)
     name = Column(Text, nullable=False)
     age = Column(Integer)
     sex = Column(String(10))

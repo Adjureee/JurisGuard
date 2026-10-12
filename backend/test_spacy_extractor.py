@@ -14,9 +14,9 @@ def main():
     II. IMPORMASYON UKOL SA APLIKANTE
     Pangalan: John Lloyd C. Lozada Edad: 24 Sex: M Civil Status: Single
     III. URI NG KASO
-    Criminal Civil
+    ☑ Criminal ☐ Civil
     VII. PROOF OF INDIGENCY
-    Income Tax Return Certification from Barangay
+    ☑ Income Tax Return ☑ Certification from Barangay
     VIII-D. NAKAHAIN NA BA SA HUKUMAN? OO
     Pamagat at Docket No. ng Kaso: CR-12345
     Court/Body/Tribunal kung saan naka-file: RTC Branch 4
@@ -34,6 +34,7 @@ def main():
         "req_legal_doc": True,
         "req_oath": True,
         "case_type_criminal": True,
+        "case_type_civil": False,
         "has_proof_itr": True,
         "has_proof_brgy": True,
         "is_filed_in_court": True,

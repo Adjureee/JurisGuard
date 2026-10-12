@@ -182,7 +182,7 @@ export default function StaffAnalyticsPage() {
             <AnalyticsPanel title="Monthly Productivity" subtitle="Cases encoded by month from your own workload.">
               {monthlyProductivity.length === 0 ? <EmptyState message="No personal case productivity data is available yet." /> : (
                 <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
                     <BarChart data={monthlyProductivity}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                       <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
@@ -198,7 +198,7 @@ export default function StaffAnalyticsPage() {
             <AnalyticsPanel title="Weekly Intake Trend" subtitle="Recent weekly movement for your own intake records.">
               {weeklyIntake.length === 0 ? <EmptyState message="No weekly intake records are available yet." /> : (
                 <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
                     <BarChart data={weeklyIntake}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                       <XAxis dataKey="week" stroke="#6B7280" fontSize={11} />
@@ -216,7 +216,7 @@ export default function StaffAnalyticsPage() {
             <AnalyticsPanel title="OCR Analytics" subtitle="Your extraction volume by OCR status.">
               {ocrStatus.length === 0 ? <EmptyState message="No personal OCR activity is available yet." /> : (
                 <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
                     <PieChart>
                       <Pie data={ocrStatus} dataKey="total_cases" nameKey="label" innerRadius={54} outerRadius={88} paddingAngle={3}>
                         {ocrStatus.map((item, index) => <Cell key={item.label} fill={COLORS[index % COLORS.length]} />)}

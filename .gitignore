@@ -26,6 +26,7 @@ gcp_credentials.json
 # Runtime uploads and generated files
 uploads/
 backend/uploads/
+test_images/
 temp_vlm_payload*.jpg
 
 # Logs

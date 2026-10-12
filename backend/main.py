@@ -4,7 +4,6 @@ import hmac
 import json
 import os
 import secrets
-import shutil
 import struct
 import unicodedata
 import uuid
@@ -16,7 +15,7 @@ from urllib.parse import quote
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import func, or_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -24,7 +23,10 @@ from sqlalchemy.orm import Session
 
 import models
 from ai_service import process_document
+from extraction_mapping import ocr_status_for_result, public_extraction_payload
+from fastapi.concurrency import run_in_threadpool
 from database import engine, get_db
+from upload_validation import save_bounded_upload, verify_image
 
 
 models.Base.metadata.create_all(bind=engine)
@@ -53,10 +55,15 @@ UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
 PROFILE_UPLOAD_DIR = UPLOAD_DIR / "profiles"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 PROFILE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+# No upload directory is mounted as static content; photos require API authorization.
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".jfif", ".webp"}
-ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+DOCUMENT_CONTENT_TYPES = {
+    ".jpg": {"image/jpeg"}, ".jpeg": {"image/jpeg"}, ".jfif": {"image/jpeg"},
+    ".png": {"image/png"}, ".webp": {"image/webp"}, ".pdf": {"application/pdf"},
+}
+MAX_DOCUMENT_BYTES = 25 * 1024 * 1024
+MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
 DEFAULT_INCIDENT_CITY = "Panabo City"
 DEFAULT_DISTRICT_OFFICE = "Panabo City Public Attorney's Office"
 SENIOR_CITIZEN_AGE = 60
@@ -112,6 +119,7 @@ class RegisterPayload(BaseModel):
     email: str
     password: str
     employee_id_path: str
+    bootstrap_key: str | None = None
 
 
 class RegisterResponse(BaseModel):
@@ -179,6 +187,12 @@ class AuditLogPayload(BaseModel):
     fallback_reason: str | None = None
 
 
+class ResolveClientOwnerPayload(BaseModel):
+    owner_user_id: int
+    reason: str
+    evidence_reference: str
+
+
 class SubmissionPreviewPayload(BaseModel):
     date_from: str
     date_to: str
@@ -231,6 +245,10 @@ def ensure_schema_compatibility() -> None:
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(64)',
         'UPDATE "user" SET email = username WHERE email IS NULL',
         "ALTER TABLE document ADD COLUMN IF NOT EXISTS intake_id INTEGER",
+        'ALTER TABLE client ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER REFERENCES "user"(user_id)',
+        "CREATE INDEX IF NOT EXISTS ix_client_created_by_user_id ON client (created_by_user_id)",
+        # Existing intake interviewer grants case/client access, but is not proof of
+        # who created the client. Leave legacy owners null for admin resolution.
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS address TEXT",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS contact_no TEXT",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS email TEXT",
@@ -572,6 +590,7 @@ def create_access_token(user_id: int) -> str:
     payload = {
         "sub": user_id,
         "exp": int((datetime.now(timezone.utc) + timedelta(minutes=TOKEN_TTL_MINUTES)).timestamp()),
+        "jti": secrets.token_hex(16),
     }
     payload_segment = b64url(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     signature = hmac.new(SECRET_KEY.encode("utf-8"), payload_segment.encode("utf-8"), hashlib.sha256)
@@ -611,7 +630,10 @@ def read_access_token(token: str) -> int:
 
 
 def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
-    user = db.get(models.User, read_access_token(token))
+    user_id = read_access_token(token)
+    if db.get(models.RevokedAccessToken, hashlib.sha256(token.encode("utf-8")).hexdigest()):
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+    user = db.get(models.User, user_id)
     if not user or not user.is_active or user.approval_status != "approved":
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     return user
@@ -654,18 +676,13 @@ def staff_client_ids(db: Session, user: models.User) -> set[int]:
         .all()
         if row[0] is not None
     }
-    audit_ids: set[int] = set()
-    for row in (
-        db.query(models.AuditLog.entity_id)
-        .filter(models.AuditLog.user_id == user.user_id, models.AuditLog.action == "Create Client")
+    owned_ids = {
+        row[0]
+        for row in db.query(models.Client.client_id)
+        .filter(models.Client.created_by_user_id == user.user_id)
         .all()
-    ):
-        try:
-            if row[0]:
-                audit_ids.add(int(row[0]))
-        except (TypeError, ValueError):
-            continue
-    return intake_ids | audit_ids
+    }
+    return intake_ids | owned_ids
 
 
 def scoped_client_query(db: Session, user: models.User):
@@ -1011,7 +1028,7 @@ def get_client_payload(client: models.Client) -> dict[str, Any]:
     derived = derived_client_classification(client.age, client.sex)
     return {
         "client_id": str(client.client_id),
-        "created_by_user_id": None,
+        "created_by_user_id": client.created_by_user_id,
         "client": {
             "client_id": str(client.client_id),
             "name": client.name,
@@ -1564,19 +1581,6 @@ def write_audit(
     )
 
 
-def public_extraction_payload(extracted: dict[str, Any]) -> dict[str, Any]:
-    """Return only the standardized sectioned OCR result for API/storage use."""
-    sections = extracted.get("sections")
-    if not isinstance(sections, dict):
-        sections = {}
-
-    return {
-        "sections": sections,
-        "extraction_mode": extracted.get("extraction_mode"),
-        "raw_text": extracted.get("raw_text"),
-    }
-
-
 def case_category(record: models.Case) -> str:
     if record.intake and record.intake.nature_of_case:
         return record.intake.nature_of_case
@@ -2060,7 +2064,15 @@ def register(payload: RegisterPayload, request: Request, db: Session = Depends(g
             raise HTTPException(status_code=400, detail="This email is suspended. Please contact the administrator")
         raise HTTPException(status_code=400, detail="Email is already registered")
 
+    # Serialize first-account creation across workers on the same database.
+    db.execute(text("SELECT pg_advisory_xact_lock(7264821)"))
     is_first_user = db.query(models.User).count() == 0
+    if is_first_user:
+        configured_key = os.getenv("ADMIN_BOOTSTRAP_KEY", "")
+        if len(configured_key) < 32:
+            raise HTTPException(status_code=503, detail="Admin bootstrap is not configured")
+        if not hmac.compare_digest(payload.bootstrap_key or "", configured_key):
+            raise HTTPException(status_code=403, detail="Invalid admin bootstrap key")
     user = models.User(
         role_id=role_id(db, "admin" if is_first_user else "staff"),
         username=make_username(email),
@@ -2128,6 +2140,26 @@ def me(user: models.User = Depends(current_user)):
     return user_to_auth(user)
 
 
+@app.post("/api/auth/logout")
+def logout_access_token(
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    # Store only the token digest, not a reusable bearer credential.
+    payload_segment = token.split(".", 1)[0]
+    expiry = int(json.loads(b64url_decode(payload_segment))["exp"])
+    db.add(models.RevokedAccessToken(
+        token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+        user_id=user.user_id,
+        expires_at=datetime.fromtimestamp(expiry, timezone.utc).replace(tzinfo=None),
+    ))
+    write_audit(db, user.user_id, "Logout", "user", "Session revoked", str(user.user_id), request)
+    db.commit()
+    return {"message": "Signed out"}
+
+
 @app.post("/api/auth/me/mfa/setup", response_model=MfaSetupResponse)
 def setup_mfa(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     if user.mfa_enabled:
@@ -2171,6 +2203,35 @@ def disable_mfa(
     return {"message": "MFA disabled"}
 
 
+@app.get("/uploads/profiles/{filename}")
+def get_profile_image(
+    filename: str,
+    viewer: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    # Require an exact active DB reference: stale files and guessed names are not readable.
+    if not filename.startswith("profile-") or not filename.lower().endswith(tuple(ALLOWED_EXTENSIONS)):
+        raise HTTPException(status_code=404, detail="Profile image not found")
+    path = f"/uploads/profiles/{filename}"
+    owner = db.query(models.User).filter(models.User.profile_image_path == path).first()
+    if not owner or not owner.is_active or owner.approval_status != "approved":
+        raise HTTPException(status_code=404, detail="Profile image not found")
+    if viewer.user_id != owner.user_id and not is_admin(viewer):
+        raise HTTPException(status_code=403, detail="Profile image access denied")
+    location = PROFILE_UPLOAD_DIR / filename
+    if not location.is_file():
+        raise HTTPException(status_code=404, detail="Profile image not found")
+    return FileResponse(location, headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+
+
+def remove_owned_profile_file(path: str | None, user_id: int) -> None:
+    if not path:
+        return
+    filename = Path(path).name
+    if path == f"/uploads/profiles/{filename}" and filename.startswith(f"profile-{user_id}-"):
+        (PROFILE_UPLOAD_DIR / filename).unlink(missing_ok=True)
+
+
 @app.post("/api/auth/me/profile-image")
 def upload_profile_image(
     file: UploadFile = File(...),
@@ -2178,24 +2239,102 @@ def upload_profile_image(
     db: Session = Depends(get_db),
 ):
     extension = Path(file.filename or "").suffix.lower()
-    if extension not in ALLOWED_EXTENSIONS or file.content_type not in ALLOWED_CONTENT_TYPES:
+    if extension not in ALLOWED_EXTENSIONS or file.content_type not in DOCUMENT_CONTENT_TYPES[extension]:
         raise HTTPException(status_code=400, detail="Profile picture must be a JPG, PNG, or WEBP file.")
     filename = f"profile-{user.user_id}-{uuid.uuid4()}{extension}"
     location = PROFILE_UPLOAD_DIR / filename
-    with open(location, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    user.profile_image_path = f"/uploads/profiles/{filename}"
-    db.commit()
+    save_bounded_upload(file.file, location, MAX_PROFILE_IMAGE_BYTES)
+    previous_path = user.profile_image_path
+    try:
+        verify_image(location, extension)
+        user.profile_image_path = f"/uploads/profiles/{filename}"
+        db.commit()
+    except Exception:
+        db.rollback()
+        location.unlink(missing_ok=True)
+        raise
+    remove_owned_profile_file(previous_path, user.user_id)
     db.refresh(user)
     return user_to_auth(user)
 
 
 @app.delete("/api/auth/me/profile-image")
 def remove_profile_image(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    previous_path = user.profile_image_path
     user.profile_image_path = None
     db.commit()
+    remove_owned_profile_file(previous_path, user.user_id)
     db.refresh(user)
     return user_to_auth(user)
+
+
+@app.get("/api/admin/clients/unresolved-owners")
+def list_unresolved_client_owners(
+    response: Response, _: models.User = Depends(admin_user), db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    return [
+        {"client_id": client.client_id, "name": client.name,
+         "created_at": client.created_at,
+         "interviewers": [
+             {"user_id": person.user_id, "full_name": person.full_name}
+             for person in db.query(models.User).filter(
+                 models.User.user_id.in_({i.interviewer_id for i in client.intakes if i.interviewer_id is not None})
+             ).order_by(models.User.user_id).all()
+         ],
+         "case_ids": sorted(case.case_id for case in client.cases)}
+        for client in db.query(models.Client)
+        .filter(models.Client.created_by_user_id.is_(None), models.Client.deleted_at.is_(None))
+        .order_by(models.Client.client_id).all()
+    ]
+
+
+@app.get("/api/admin/clients/owner-candidates")
+def list_client_owner_candidates(
+    response: Response, _: models.User = Depends(admin_user), db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    return [
+        {"user_id": person.user_id, "full_name": person.full_name, "email": person.email}
+        for person in db.query(models.User).join(models.Role).filter(
+            models.User.is_active.is_(True), models.User.approval_status == "approved",
+        ).order_by(models.User.user_id).all() if not is_admin(person)
+    ]
+
+
+@app.post("/api/admin/clients/{client_id}/resolve-owner")
+def resolve_client_owner(
+    client_id: int, payload: ResolveClientOwnerPayload, request: Request,
+    admin: models.User = Depends(admin_user), db: Session = Depends(get_db),
+):
+    reason = payload.reason.strip()
+    evidence = payload.evidence_reference.strip()
+    if not (10 <= len(reason) <= 1000) or not (3 <= len(evidence) <= 500):
+        raise HTTPException(status_code=422, detail="Provide a reason (10–1000 characters) and trusted evidence reference (3–500 characters)")
+    # PostgreSQL row lock serializes competing resolutions. Audit and owner change
+    # commit together; a stale second request returns 409 without an audit entry.
+    try:
+        client = db.query(models.Client).filter(models.Client.client_id == client_id).with_for_update().first()
+        if not client or client.deleted_at is not None:
+            raise HTTPException(status_code=404, detail="Client not found")
+        if client.created_by_user_id is not None:
+            raise HTTPException(status_code=409, detail="Owner already resolved; reload the investigation")
+        owner = db.get(models.User, payload.owner_user_id)
+        if not owner or not owner.is_active or owner.approval_status != "approved" or is_admin(owner):
+            raise HTTPException(status_code=422, detail="Select an active approved staff owner")
+        previous_owner = client.created_by_user_id
+        client.created_by_user_id = owner.user_id
+        write_audit(
+            db, admin.user_id, "Resolve Client Owner", "client",
+            json.dumps({"previous_owner_user_id": previous_owner, "new_owner_user_id": owner.user_id,
+                        "reason": reason, "evidence_reference": evidence}, ensure_ascii=False),
+            str(client_id), request,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return {"client_id": client_id, "previous_owner_user_id": previous_owner, "owner_user_id": owner.user_id}
 
 
 @app.get("/api/admin/verification")
@@ -2576,6 +2715,7 @@ def create_client(
         details_data = normalize_representative_details(normalize_spouse_details(payload.client_details))
         class_data = payload.client_classification
         client = models.Client(
+            created_by_user_id=user.user_id,
             name=client_data.get("name") or "Unnamed Client",
             age=client_data.get("age") or None,
             sex=client_data.get("sex") or "",
@@ -3182,6 +3322,8 @@ def create_audit_log(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
+    if payload.action.strip().lower() in {"create client", "resolve client owner"}:
+        raise HTTPException(status_code=403, detail="Client creation audit entries are server-managed")
     target = payload.entity_type or payload.module
     if payload.module == "Export" and not target:
         target = "export"
@@ -3212,6 +3354,7 @@ async def upload_document(
     db: Session = Depends(get_db),
 ):
     new_document = None
+    file_location = None
     try:
         # Keep the legacy query parameter for client compatibility, but never
         # trust it as an ownership or attribution source.
@@ -3227,14 +3370,21 @@ async def upload_document(
 
         original_name = Path(file.filename or "uploaded-document").name
         extension = Path(original_name).suffix.lower()
-        if extension not in ALLOWED_EXTENSIONS or file.content_type not in ALLOWED_CONTENT_TYPES:
-            raise HTTPException(status_code=400, detail="Unsupported file type. Please upload a JPG, PNG, or WEBP image.")
+        if extension not in DOCUMENT_CONTENT_TYPES or file.content_type not in DOCUMENT_CONTENT_TYPES[extension]:
+            raise HTTPException(status_code=400, detail="Unsupported file type. Upload a JPG, PNG, WEBP, or PDF document.")
+        if extension == ".pdf" and extraction_mode == "cloud":
+            raise HTTPException(status_code=400, detail="Cloud mode does not support PDFs. Select offline or auto mode.")
 
         safe_filename = f"{uuid.uuid4()}{extension}"
         file_location = UPLOAD_DIR / safe_filename
 
-        with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        save_bounded_upload(file.file, file_location, MAX_DOCUMENT_BYTES)
+        if extension != ".pdf":
+            try:
+                verify_image(file_location, extension)
+            except HTTPException:
+                file_location.unlink(missing_ok=True)
+                raise
 
         new_document = models.Document(
             case_id=case_id,
@@ -3248,12 +3398,10 @@ async def upload_document(
         db.commit()
         db.refresh(new_document)
 
-        extracted_json = process_document(str(file_location), extraction_mode=extraction_mode)
+        extracted_json = await run_in_threadpool(
+            process_document, str(file_location), extraction_mode=extraction_mode
+        )
         public_extracted_json = public_extraction_payload(extracted_json)
-
-        print("\n===== AI EXTRACTION RESULTS =====")
-        print(public_extracted_json)
-        print("=================================\n")
 
         db.add(
             models.ExtractedMetadata(
@@ -3263,7 +3411,7 @@ async def upload_document(
             )
         )
 
-        new_document.ocr_status = "COMPLETED"
+        new_document.ocr_status = ocr_status_for_result(extracted_json)
         write_audit(
             db,
             uploader.user_id,
@@ -3276,13 +3424,15 @@ async def upload_document(
         db.commit()
 
         return {
-            "message": "Document processed successfully!",
+            "message": "Document uploaded; OCR needs review." if new_document.ocr_status == "FAILED" else "Document processed successfully!",
             "document_id": new_document.document_id,
             "extracted_data": public_extracted_json,
         }
 
     except Exception as exc:
         if isinstance(exc, HTTPException):
+            if new_document is None and file_location is not None:
+                file_location.unlink(missing_ok=True)
             raise exc
 
         db.rollback()
@@ -3290,4 +3440,4 @@ async def upload_document(
             new_document.ocr_status = "FAILED"
             db.add(new_document)
             db.commit()
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(exc)}") from exc
+        raise HTTPException(status_code=500, detail="Document extraction failed. Review server diagnostics.") from exc

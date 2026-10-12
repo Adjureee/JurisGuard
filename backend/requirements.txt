@@ -13,8 +13,9 @@ requests
 pillow
 opencv-python
 numpy
-paddleocr
-paddlepaddle
+paddleocr==2.8.1
+paddlepaddle>=2.6,<3
+pypdfium2
 spacy
 pandas
 openpyxl

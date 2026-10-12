@@ -79,6 +79,9 @@ type PaoExtractedData = {
   extraction_mode?: string | null;
   raw_text?: string | null;
   sections?: PaoSections | null;
+  document_type?: "intake_form" | "rtc_decision" | "sandiganbayan_document" | "unknown" | "ambiguous";
+  inventory?: Record<string, string | boolean | null>;
+  needs_review?: boolean;
 };
 
 type UploadDocumentResponse = {
@@ -89,6 +92,8 @@ type UploadDocumentResponse = {
 
 export type ClientExtractionResult = {
   documentId: number;
+  documentType: NonNullable<PaoExtractedData["document_type"]>;
+  needsReview: boolean;
   extracted: {
     client: Partial<ClientFormValues["client"]>;
     client_details: Partial<ClientFormValues["client_details"]>;
@@ -99,6 +104,8 @@ export type ClientExtractionResult = {
 
 export type CaseExtractionResult = {
   documentId: number;
+  documentType: NonNullable<PaoExtractedData["document_type"]>;
+  needsReview: boolean;
   extracted: {
     intake_record: Partial<CaseFormValues["intake_record"]>;
     representative: Partial<CaseFormValues["representative"]>;
@@ -147,6 +154,14 @@ function isTrue(value: unknown): boolean {
     return ["true", "yes", "oo", "checked", "1"].includes(value.trim().toLowerCase());
   }
   return false;
+}
+
+function supportedTrue(value: unknown): true | undefined {
+  return isTrue(value) ? true : undefined;
+}
+
+function inventoryBoolean(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }
 
 function normalizeSex(value: unknown): string | undefined {
@@ -236,6 +251,9 @@ function parseFormDate(value: unknown): string | undefined {
   const text = cleanText(value);
   if (!text) return undefined;
 
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return formatDateInput(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+
   const normalized = normalizeDateOcrText(text);
   const monthNames = Object.keys(MONTH_ALIASES)
     .sort((left, right) => right.length - left.length)
@@ -246,7 +264,8 @@ function parseFormDate(value: unknown): string | undefined {
 
   if (monthMatch) {
     const month = MONTH_ALIASES[monthMatch[1].toLowerCase()];
-    const day = monthMatch[2] ? Number.parseInt(monthMatch[2], 10) : 1;
+    if (!monthMatch[2]) return undefined;
+    const day = Number.parseInt(monthMatch[2], 10);
     const year = Number.parseInt(monthMatch[3], 10);
     return formatDateInput(year, month, day);
   }
@@ -256,6 +275,7 @@ function parseFormDate(value: unknown): string | undefined {
     const first = Number.parseInt(numericMatch[1], 10);
     const second = Number.parseInt(numericMatch[2], 10);
     const year = Number.parseInt(numericMatch[3], 10);
+    if (first <= 12 && second <= 12) return undefined;
     const day = first > 12 ? first : second;
     const month = first > 12 ? second : first;
     return formatDateInput(year, month, day);
@@ -324,19 +344,19 @@ export async function extractClientFromDocument(
 
   const extracted: ClientExtractionResult["extracted"] = {
     client: {
-      name: cleanText(applicant("name", extracted_data.applicant_name)),
+      name: cleanText(applicant("name", extracted_data.inventory?.["Party Represented"] ?? extracted_data.applicant_name)),
       age: toNumber(applicant("age", extracted_data.applicant_age)),
-      sex: normalizeSex(applicant("sex", extracted_data.applicant_sex)),
+      sex: normalizeSex(applicant("sex", extracted_data.inventory?.["Gender/Sex"] ?? extracted_data.applicant_sex)),
       civil_status: cleanText(applicant("civil_status", extracted_data.applicant_civil_status)),
       religion: cleanText(applicant("religion", extracted_data.applicant_religion)),
       educational_attainment: cleanText(applicant("educational_attainment", extracted_data.applicant_educational_attainment)),
-      citizenship: cleanText(applicant("citizenship", extracted_data.applicant_citizenship)) || "Filipino",
+      citizenship: cleanText(applicant("citizenship", extracted_data.applicant_citizenship)),
       language_dialect: cleanText(applicant("language_dialect", extracted_data.applicant_language_dialect)),
     },
     client_details: {
-      address: cleanText(applicant("address", extracted_data.applicant_address)),
+      address: cleanText(applicant("address", extracted_data.inventory?.["Address"] ?? extracted_data.applicant_address)),
       email: cleanText(applicant("email", extracted_data.applicant_email)),
-      contact_no: cleanText(applicant("contact_no", extracted_data.applicant_contact)),
+      contact_no: cleanText(applicant("contact_no", extracted_data.inventory?.["Contact Number"] ?? extracted_data.applicant_contact)),
       individual_monthly_income: cleanText(applicant("individual_monthly_income", extracted_data.individual_monthly_income)) || cleanText(affidavit("monthly_net_salary_income", extracted_data.affidavit_income)),
       spouse: cleanText(applicant("spouse", extracted_data.spouse_name)),
       address_of_spouse: cleanText(applicant("address_of_spouse", extracted_data.spouse_address)),
@@ -349,16 +369,16 @@ export async function extractClientFromDocument(
       representative_contact_no: cleanText(representative("contact_no", extracted_data.rep_contact)),
       representative_relationship: cleanText(representative("relationship_to_applicant", extracted_data.rep_relation)),
       representative_email: cleanText(representative("email", extracted_data.rep_email)),
-      detained: isTrue(applicant("detained", extracted_data.is_detained)),
+      detained: supportedTrue(applicant("detained", extracted_data.is_detained)),
       detained_since: parseFormDate(applicant("detained_since", extracted_data.detained_since)),
       place_of_detention: cleanText(applicant("place_of_detention", extracted_data.place_of_detention)),
     },
     client_classification: {
-      flag_foreign_national: isTrue(classification("foreign_national", extracted_data.sector_foreign_national)),
-      flag_urban: isTrue(classification("urban_poor", extracted_data.sector_urban_poor)),
-      flag_rural: isTrue(classification("rural_poor", extracted_data.sector_rural_poor)),
-      flag_indigenous_people: isTrue(classification("indigenous_people", extracted_data.sector_indigenous)),
-      flag_pwd: isTrue(classification("pwd", extracted_data.sector_pwd)),
+      flag_foreign_national: supportedTrue(classification("foreign_national", extracted_data.sector_foreign_national)),
+      flag_urban: inventoryBoolean(extracted_data.inventory?.["Urban"]),
+      flag_rural: inventoryBoolean(extracted_data.inventory?.["Rural"]),
+      flag_indigenous_people: supportedTrue(classification("indigenous_people", extracted_data.sector_indigenous)),
+      flag_pwd: supportedTrue(classification("pwd", extracted_data.sector_pwd)),
       classification_notes: cleanText(extracted_data.extraction_mode),
     },
   };
@@ -399,7 +419,7 @@ export async function extractClientFromDocument(
     ["client_classification.classification_notes", extracted.client_classification.classification_notes],
   ].forEach(([path, value]) => addIndicator(indicators, String(path), value));
 
-  return { documentId: document_id, extracted, indicators };
+  return { documentId: document_id, documentType: extracted_data.document_type ?? "unknown", needsReview: extracted_data.needs_review !== false, extracted, indicators };
 }
 
 export async function extractCaseFromDocument(
@@ -452,11 +472,11 @@ export async function extractCaseFromDocument(
 
   const extracted: CaseExtractionResult["extracted"] = {
     intake_record: {
-      control_no: cleanText(header("control_no", extracted_data.control_no)),
+      control_no: cleanText(header("control_no", extracted_data.inventory?.["Control Number"] ?? extracted_data.control_no)),
       form_date: parseFormDate(header("date", extracted_data.petsa)),
       region: cleanText(header("region", extracted_data.rehiyon)),
       district_office: cleanText(header("district_office", extracted_data.district_office)),
-      party_represented: cleanText(applicant("name", extracted_data.applicant_name)),
+      party_represented: cleanText(applicant("name", extracted_data.inventory?.["Party Represented"] ?? extracted_data.applicant_name)),
       applicant_role: applicantRole,
       nature_of_request: natureOfRequest,
       nature_of_case: natureOfCase,
@@ -465,13 +485,13 @@ export async function extractCaseFromDocument(
       proof_brgy_date: parseFormDate(proof("barangay_certification_date", extracted_data.proof_brgy_date)),
       proof_dswd_date: parseFormDate(proof("dswd_certification_date", extracted_data.proof_dswd_date)),
       proof_others_details: cleanText(proof("others_text", extracted_data.proof_other_text)),
-      inv_plaintiff: isTrue(involvement("plaintiff")) || applicantRoleKey === "plaintiff",
-      inv_defendant: isTrue(involvement("defendant")) || applicantRoleKey === "defendant",
-      inv_oppositor: isTrue(involvement("oppositor")) || applicantRoleKey === "oppositor",
-      inv_petitioner: isTrue(involvement("petitioner")) || applicantRoleKey === "petitioner",
-      inv_respondent: isTrue(involvement("respondent")) || applicantRoleKey === "respondent",
-      inv_complainant: isTrue(involvement("complainant")) || applicantRoleKey === "complainant",
-      inv_accused: isTrue(involvement("accused")) || applicantRoleKey === "accused",
+      inv_plaintiff: applicantRoleKey === "plaintiff" ? true : supportedTrue(involvement("plaintiff")),
+      inv_defendant: applicantRoleKey === "defendant" ? true : supportedTrue(involvement("defendant")),
+      inv_oppositor: applicantRoleKey === "oppositor" ? true : supportedTrue(involvement("oppositor")),
+      inv_petitioner: applicantRoleKey === "petitioner" ? true : supportedTrue(involvement("petitioner")),
+      inv_respondent: applicantRoleKey === "respondent" ? true : supportedTrue(involvement("respondent")),
+      inv_complainant: applicantRoleKey === "complainant" ? true : supportedTrue(involvement("complainant")),
+      inv_accused: applicantRoleKey === "accused" ? true : supportedTrue(involvement("accused")),
     },
     representative: {
       rep_name: cleanText(representative("name", extracted_data.rep_name)),
@@ -488,15 +508,16 @@ export async function extractCaseFromDocument(
       address: cleanText(adverse("address", extracted_data.adversary_address)),
     },
     cases: {
-      title_of_case: cleanText(caseDetails("title_of_case_and_docket_no", extracted_data.case_docket_title)),
-      court_body: cleanText(caseDetails("court_body_tribunal_where_pending", extracted_data.court_body)),
-      status_of_case: "Pending",
+      title_of_case: cleanText(caseDetails("title_of_case_and_docket_no", extracted_data.inventory?.["Title of the Case"] ?? extracted_data.case_docket_title)),
+      case_no: cleanText(extracted_data.inventory?.["Case No."]),
+      court_body: cleanText(caseDetails("court_body_tribunal_where_pending", extracted_data.inventory?.["Court/Body"] ?? extracted_data.court_body)),
+      status_of_case: undefined,
       last_action_taken: lastActionTaken,
-      date_of_confinement: parseFormDate(applicant("detained_since", extracted_data.detained_since)),
-      place_of_detention: cleanText(applicant("place_of_detention", extracted_data.place_of_detention)),
+      date_of_confinement: parseFormDate(applicant("detained_since", extracted_data.inventory?.["Date of Confinement"] ?? extracted_data.detained_since)),
+      place_of_detention: cleanText(applicant("place_of_detention", extracted_data.inventory?.["Place of Detention"] ?? extracted_data.place_of_detention)),
       cause_of_action: cleanText(caseDetails("cause_of_action_nature_of_offense", extracted_data.cause_of_action)),
       facts_of_case: cleanText(caseDetails("facts_of_the_case", extracted_data.case_information)),
-      pending_in_court: isTrue(caseDetails("pending_in_court", extracted_data.is_filed_in_court)),
+      pending_in_court: supportedTrue(caseDetails("pending_in_court", extracted_data.is_filed_in_court)),
     },
   };
 
@@ -533,6 +554,7 @@ export async function extractCaseFromDocument(
     ["adverse_party.name", extracted.adverse_party.name],
     ["adverse_party.address", extracted.adverse_party.address],
     ["cases.title_of_case", extracted.cases.title_of_case],
+    ["cases.case_no", extracted.cases.case_no],
     ["cases.court_body", extracted.cases.court_body],
     ["cases.last_action_taken", extracted.cases.last_action_taken],
     ["cases.date_of_confinement", extracted.cases.date_of_confinement],
@@ -542,7 +564,7 @@ export async function extractCaseFromDocument(
     ["cases.pending_in_court", extracted.cases.pending_in_court],
   ].forEach(([path, value]) => addIndicator(indicators, String(path), value));
 
-  return { documentId: document_id, extracted, indicators };
+  return { documentId: document_id, documentType: extracted_data.document_type ?? "unknown", needsReview: extracted_data.needs_review !== false, extracted, indicators };
 }
 
 export async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {

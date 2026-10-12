@@ -145,6 +145,10 @@ export function resolveProfileImageUrl(path: string | null | undefined) {
   return `${API_ORIGIN}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+export async function revokeSession(): Promise<void> {
+  await apiClient.post("/auth/logout");
+}
+
 export function logout() {
   sessionStorage.removeItem(TOKEN_STORAGE_KEY);
 }

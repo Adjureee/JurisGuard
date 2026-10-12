@@ -1,13 +1,13 @@
 import { useState, type ChangeEvent } from "react";
 import toast from "react-hot-toast";
 import MainLayout from "../layouts/MainLayout";
+import ProtectedProfileImage from "../components/ProtectedProfileImage";
 import PageHeader from "../components/PageHeader";
 import { useAuth } from "../contexts/AuthContext";
 import {
   disableMfa,
   enableMfa,
   removeProfileImage,
-  resolveProfileImageUrl,
   setupMfa,
   uploadProfileImage,
 } from "../services/authService";
@@ -46,8 +46,7 @@ export default function UserProfilePage() {
   const [mfaUri, setMfaUri] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [isMfaBusy, setIsMfaBusy] = useState(false);
-  const profileImageSrc =
-    previewSrc || resolveProfileImageUrl(user?.profile_image_path);
+  const profileImageSrc = previewSrc;
 
   const handleProfileImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -184,7 +183,7 @@ export default function UserProfilePage() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              initials(user?.full_name, user?.email)
+              <ProtectedProfileImage path={user?.profile_image_path} alt="Profile" className="h-full w-full object-cover" fallback={initials(user?.full_name, user?.email)} />
             )}
           </div>
           <div className="min-w-0 flex-1">
@@ -196,7 +195,7 @@ export default function UserProfilePage() {
               <label
                 className={`rounded-md bg-[#704389] px-3 py-1.5 text-xs font-semibold text-white transition duration-200 hover:bg-[#5F3675] ${isUploading ? "pointer-events-none opacity-70" : "cursor-pointer"}`}
               >
-                {profileImageSrc
+                {profileImageSrc || user?.profile_image_path
                   ? "Change Profile Picture"
                   : "Upload Profile Picture"}
                 <input
