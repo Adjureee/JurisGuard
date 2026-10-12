@@ -29,6 +29,11 @@ backend/uploads/
 test_images/
 temp_vlm_payload*.jpg
 
+# Local seminar submission artifacts (kept outside the published branch)
+/docs/advanced_seminar_midterm_output_jurisguard.md
+/output/pdf/
+/output/docx/
+
 # Logs
 logs/
 *.log
