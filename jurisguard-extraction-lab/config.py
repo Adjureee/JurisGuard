@@ -14,9 +14,9 @@ DEFAULT_TESSERACT = str(_WINDOWS_TESSERACT) if _WINDOWS_TESSERACT.is_file() else
 
 @dataclass(frozen=True)
 class LabConfig:
-    ocr_engine: str = "tesseract"  # or "easyocr" or "paddleocr"
-    paddle_det_model_dir: Path = Path.home() / ".paddleocr/whl/det/en/en_PP-OCRv3_det_infer"
-    paddle_rec_model_dir: Path = Path.home() / ".paddleocr/whl/rec/en/en_PP-OCRv4_rec_infer"
+    ocr_engine: str = "paddleocr"  # select "easyocr" or "tesseract" for comparison runs
+    paddle_det_model_dir: Path = Path.home() / ".paddlex/official_models/PP-OCRv6_medium_det"
+    paddle_rec_model_dir: Path = Path.home() / ".paddlex/official_models/PP-OCRv6_medium_rec"
     tesseract_command: str = DEFAULT_TESSERACT
     tesseract_language: str = "eng"
     easyocr_model_dir: Path = Path.home() / ".EasyOCR/model"
@@ -24,7 +24,7 @@ class LabConfig:
     @classmethod
     def from_env(cls) -> "LabConfig":
         return cls(
-            ocr_engine=os.getenv("JURISGUARD_LAB_OCR_ENGINE", "tesseract").lower(),
+            ocr_engine=os.getenv("JURISGUARD_LAB_OCR_ENGINE", "paddleocr").lower(),
             paddle_det_model_dir=Path(os.getenv("JURISGUARD_LAB_PADDLE_DET_MODEL", str(cls.paddle_det_model_dir))),
             paddle_rec_model_dir=Path(os.getenv("JURISGUARD_LAB_PADDLE_REC_MODEL", str(cls.paddle_rec_model_dir))),
             tesseract_command=os.getenv("JURISGUARD_LAB_TESSERACT", DEFAULT_TESSERACT),

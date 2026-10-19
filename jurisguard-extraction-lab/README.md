@@ -19,23 +19,23 @@ jurisguard-extraction-lab/
   reports/          private reports (ignored)
   src/
     ocr_pipeline.py document_router.py extractors.py schema.py evaluate.py
-  tests/
-    test_ocr.py test_nlp.py test_pipeline.py
+../tests/lab/
+  test_ocr.py test_nlp.py test_pipeline.py and other lab tests
 ```
 
 ## Setup
 
-Use Python 3.10 or later. The default engine is a **local Tesseract executable**. This computer has Tesseract installed at `C:\Program Files\Tesseract-OCR\tesseract.exe`; `config.py` uses that path when present and otherwise looks for `tesseract` on `PATH`. No Python packages or network access are required for the default path. `requirements.txt` documents the optional dependencies.
+Use Python 3.10 or later. The default one-image lab pipeline uses **local PaddleOCR 3.7.0 / PaddlePaddle 3.3.1 with PP-OCRv6 medium models**, matching the application engine. Supply complete local detection and recognition model directories under `~/.paddlex/official_models/` or set `JURISGUARD_LAB_PADDLE_DET_MODEL` and `JURISGUARD_LAB_PADDLE_REC_MODEL`. The router and evaluation code can still run on saved OCR text without loading an OCR engine.
 
-For a fresh machine, install Tesseract locally and set `JURISGUARD_LAB_TESSERACT` to its executable path if it is not on `PATH`. Keep its `eng` language data installed. Tagalog intake forms use Latin-script English OCR in this MVP, so Tagalog accuracy needs separate evaluation. Set `JURISGUARD_LAB_OCR_ENGINE=tesseract` to choose it explicitly. PaddleOCR 2.8.1 with PaddlePaddle 2.6.2, EasyOCR, and Tesseract have each run locally on the synthetic fixture. The optional engines require installed local models and never download them during extraction.
+Tesseract and EasyOCR are **comparison candidates**, not application fallback engines. To compare Tesseract, install its local executable and `eng` data, then set `JURISGUARD_LAB_OCR_ENGINE=tesseract` and, if needed, `JURISGUARD_LAB_TESSERACT` to its executable path. Set `JURISGUARD_LAB_OCR_ENGINE=easyocr` for the EasyOCR candidate. Each comparison command in [MANUSCRIPT_TESTING.md](MANUSCRIPT_TESTING.md) selects its candidate explicitly. Tagalog and handwriting accuracy need separate evaluation. Historical 2.8.1/PP-OCRv4 figures remain historical; new PP-OCRv6 results are a separate benchmark.
 
-From this folder, run the separate suites:
+From the **repository root**, run the separate suites and the complete suite:
 
 ```powershell
-python -m unittest tests.test_ocr -v
-python -m unittest tests.test_nlp -v
-python -m unittest tests.test_pipeline -v
-python -m unittest discover -s tests -v
+.\backend\venv\Scripts\python.exe -m unittest tests.lab.test_ocr -v
+.\backend\venv\Scripts\python.exe -m unittest tests.lab.test_nlp -v
+.\backend\venv\Scripts\python.exe -m unittest tests.lab.test_pipeline -v
+.\backend\venv\Scripts\python.exe -m unittest discover -s tests -t . -p 'test_*.py' -v
 ```
 
 ## End-to-end synthetic example
@@ -43,15 +43,15 @@ python -m unittest discover -s tests -v
 The image, reference transcript, and full ground-truth inventory in `data/synthetic/` are invented for testing. From this folder:
 
 ```powershell
-python -m src.ocr_pipeline --image data/synthetic/synthetic_intake.png --ground-truth data/synthetic/synthetic_intake.json --output-dir data/outputs/synthetic_demo
+..\backend\venv\Scripts\python.exe -m src.ocr_pipeline --image data/synthetic/synthetic_intake.png --ground-truth data/synthetic/synthetic_intake.json --output-dir data/outputs/synthetic_demo
 ```
 
-The command writes `ocr.txt` (the original engine text, with line boundaries), `layout.json` (line boxes and engine scores), `result.json` (`document_type`, exact `inventory`, separate `diagnostics`, `needs_review`), and `report.json` (classification and field comparison, plus CER/WER when a reference transcript exists). The default output directory is ignored by Git. The synthetic image can be regenerated with `python data/synthetic/generate_example.py` after installing Pillow; the checked-in PNG lets the default pipeline run without Pillow.
+The command uses PaddleOCR by default and writes `ocr.txt` (the original engine text, with line boundaries), `layout.json` (line boxes and engine scores), `result.json` (`document_type`, exact `inventory`, separate `diagnostics`, `needs_review`), and `report.json` (classification and field comparison, plus CER/WER when a reference transcript exists). The default output directory is ignored by Git. The synthetic image can be regenerated with `python data/synthetic/generate_example.py` after installing Pillow; the checked-in PNG requires no image-generation dependency.
 
 To test NLP rules directly on saved OCR text, without loading an OCR engine:
 
 ```powershell
-python -m src.ocr_pipeline --ocr-text data/synthetic/synthetic_intake.txt --ground-truth data/synthetic/synthetic_intake.json --output-dir data/outputs/synthetic_text_demo
+..\backend\venv\Scripts\python.exe -m src.ocr_pipeline --ocr-text data/synthetic/synthetic_intake.txt --ground-truth data/synthetic/synthetic_intake.json --output-dir data/outputs/synthetic_text_demo
 ```
 
 For private documents, place images in `data/input/` and reviewed JSON annotations in `data/ground_truth/`. Never place real documents or generated output in `data/synthetic/`. The `.gitignore` excludes the private and generated folders. Avoid copying sensitive OCR into bug reports or logs.
@@ -66,4 +66,4 @@ On RTC decisions, only explicit court, case number, and complete caption pattern
 
 `evaluate.py` validates the exact schema and reports each field as `match`, `missing_extraction`, `incorrect_extraction`, or `unsupported_extraction` relative to annotations. It reports raw-text CER and WER only with a reference transcript. These labels describe differences; a reviewer must inspect the source to distinguish OCR corruption, extraction logic, unclear mappings, and annotation errors. The example's results are **synthetic-only**, not real-world performance.
 
-For a supplied failure: inspect source image, OCR text and boxes, routing signals, field evidence, and ground truth; classify the cause; make the smallest document-specific repair; add its regression test and exactly three labeled synthetic variations; run OCR, intake, RTC, and pipeline suites; then verify on held-out real documents when available. Trained NLP, including spaCy, is a later option only after annotated data and evaluation show a benefit.
+For a supplied failure: inspect source image, OCR text and boxes, routing signals, field evidence, and ground truth; classify the cause; make the smallest document-specific repair; add its regression test and exactly three labeled synthetic variations; run OCR, intake, RTC, and pipeline suites; then verify on held-out real documents when available. The production spaCy/Regex rules stay in the application; NLTK, BERT NER, and the lab spaCy/Regex candidate stay in this isolated comparison. No JurisGuard NLP model has been trained; training a task-specific model requires annotated data and evaluation showing a benefit.

@@ -1,3 +1,5 @@
+import unittest
+
 from ai_service import JurisGuardExtractionEngine, spacy_extract_pao_fields
 
 
@@ -83,6 +85,11 @@ def main():
         raise SystemExit(1)
 
     print("spaCy extractor test passed.")
+
+
+class SpacyExtractorTests(unittest.TestCase):
+    def test_synthetic_intake_and_blank_template(self):
+        main()
 
 
 if __name__ == "__main__":

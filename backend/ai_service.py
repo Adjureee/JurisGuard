@@ -1440,12 +1440,6 @@ def crop_document_region(image: np.ndarray) -> np.ndarray:
     y2 = min(h, y + ch + pad)
     return image[y1:y2, x1:x2]
 
-def group_ocr_lines(ocr_results: list) -> str:
-    """Format local PaddleOCR v2 detections without merging unrelated boxes."""
-    if not ocr_results:
-        return ""
-    return "\n".join(item["text"] for item in LocalOCR._paddle_lines(ocr_results[0], 1))
-
 # ==========================================
 # 2. THE DUAL-HYBRID ORCHESTRATOR
 # ==========================================

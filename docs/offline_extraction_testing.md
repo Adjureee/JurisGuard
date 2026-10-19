@@ -9,35 +9,33 @@ cd C:\Users\Adjureee\Documents\GitHub\JurisGuard
 .\backend\venv\Scripts\python.exe -c "import paddle, paddleocr; print('PaddlePaddle', paddle.__version__, 'PaddleOCR', paddleocr.__version__)"
 ```
 
-This implementation uses the installed PaddleOCR **2.8.1** API and was verified with PaddlePaddle **2.6.2**. `backend/requirements.txt` constrains PaddlePaddle to version 2.x. To create a fresh environment, run `python -m venv backend\venv` followed by `.\backend\venv\Scripts\python.exe -m pip install -r backend\requirements.txt`. Installation may use the network; extraction does not.
+This implementation uses PaddleOCR **3.7.0** with PaddlePaddle **3.3.1** and cached PP-OCRv6 medium models. Both versions are pinned in `backend/requirements.txt`. To create a fresh environment, run `python -m venv backend\venv` followed by `.\backend\venv\Scripts\python.exe -m pip install -r backend\requirements.txt`. Installation may use the network; extraction does not. On the tested Windows CPU, `enable_mkldnn=False` is needed to avoid a PaddlePaddle oneDNN inference error.
 
-PaddleOCR needs complete, already installed local detection, recognition, and classifier model directories. Defaults are under `%USERPROFILE%\.paddleocr\whl\`. Check them:
+PaddleOCR needs complete, already installed local PP-OCRv6 detection and recognition model directories. Defaults are under `%USERPROFILE%\.paddlex\official_models\`. Check them:
 
 ```powershell
-Test-Path "$env:USERPROFILE\.paddleocr\whl\det\en\en_PP-OCRv3_det_infer\inference.pdmodel"
-Test-Path "$env:USERPROFILE\.paddleocr\whl\rec\en\en_PP-OCRv4_rec_infer\inference.pdmodel"
-Test-Path "$env:USERPROFILE\.paddleocr\whl\cls\ch_ppocr_mobile_v2.0_cls_infer\inference.pdmodel"
+Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv6_medium_det\inference.json"
+Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv6_medium_det\inference.pdiparams"
+Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv6_medium_det\inference.yml"
+Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv6_medium_rec\inference.json"
+Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv6_medium_rec\inference.pdiparams"
+Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv6_medium_rec\inference.yml"
 ```
 
-Each should print `True`. To use other already installed models, set `PADDLEOCR_DET_MODEL_DIR`, `PADDLEOCR_REC_MODEL_DIR`, and `PADDLEOCR_CLS_MODEL_DIR` to their absolute directory paths. The adapter checks model files before construction to prevent implicit downloads. If PaddleOCR fails and Tesseract is installed locally, OCR uses Tesseract and records the fallback in diagnostics. Set `TESSERACT_CMD` to the executable path if it is not on `PATH` or at the standard Windows location.
+Each should print `True`. To use another local copy of the same PP-OCRv6 medium models, set `PADDLEOCR_DET_MODEL_DIR` and `PADDLEOCR_REC_MODEL_DIR` to their absolute directory paths. The adapter checks model files before construction and disables optional orientation/rectification models to prevent implicit downloads. Application OCR uses PaddleOCR only. If its models are missing or inference fails, extraction returns `OFFLINE_OCR_FAILED`, an empty 21-field inventory, and `needs_review=true`; it does not switch OCR engines. Tesseract and EasyOCR remain separate candidates in the [extraction lab comparison](../jurisguard-extraction-lab/MANUSCRIPT_TESTING.md).
 
 ## 2. Run tests in order
 
 ```powershell
-Push-Location backend
-.\venv\Scripts\python.exe -m unittest test_local_ocr -v
-.\venv\Scripts\python.exe test_spacy_extractor.py
-Pop-Location
-python -m unittest discover -s tests -p test_document_router.py -v
-Push-Location jurisguard-extraction-lab
-python -m unittest discover -s tests -v
-Pop-Location
-cd frontend
+.\backend\venv\Scripts\python.exe -m unittest tests.backend.test_local_ocr tests.backend.test_spacy_extractor tests.backend.test_upload_validation -v
+.\backend\venv\Scripts\python.exe -m unittest tests.lab.test_ocr tests.lab.test_nlp tests.lab.test_pipeline -v
+.\backend\venv\Scripts\python.exe -m unittest discover -s tests -t . -p 'test_*.py' -v
+Push-Location frontend
 npm run typecheck
-cd ..
+Pop-Location
 ```
 
-The backend tests cover PaddleOCR's local constructor, line/box formatting, blank and corrupt images, PDF rendering, offline routing, and JSON payload mapping. The legacy spaCy test uses a synthetic form with explicit checkbox marks. The router and lab suites cover both intake forms and RTC decisions. The frontend type check requires `npm install` once if dependencies are missing.
+The backend tests cover PaddleOCR's local constructor, failure without an OCR engine switch, line/box formatting, blank and corrupt images, PDF rendering, offline routing, and JSON payload mapping. The spaCy test uses a synthetic form with explicit checkbox marks. The router and lab suites cover both intake forms and RTC decisions. The three NLP comparison candidates (spaCy/Regex, NLTK, and BERT) run only inside the lab; the application uses its existing spaCy/Regex extraction path. The frontend type check requires `npm install` once if dependencies are missing.
 
 ## 3. Process one image or PDF
 
@@ -79,6 +77,6 @@ PDFs are rendered locally, up to `LOCAL_OCR_MAX_PAGES` (default 8). Each detecte
 
 With a configured **test PostgreSQL database**, start the backend from `backend/` with `.\venv\Scripts\python.exe -m uvicorn main:app --reload`. Submit a document to `POST /api/upload-document/?extraction_mode=offline` using an authenticated session. The response and `ExtractedMetadata.extracted_json` include `document_type`, the exact `inventory`, `diagnostics`, `needs_review`, and legacy intake `sections`. The API does not automatically write extracted values to `Case` or `Client`; those forms require human review. Uploaded legal documents are not publicly served by the static `/uploads` route.
 
-The direct script, OCR engines, router, and pure JSON mapping have been exercised locally. A live FastAPI/PostgreSQL upload was not run against the production database.
+The direct script, PaddleOCR path, router, and pure JSON mapping have been exercised locally. The other two OCR candidates are exercised only through the separate lab comparison. A live FastAPI/PostgreSQL upload was not run against the production database.
 
 In the active client and case forms, a `needs_review` result displays a review notice. Unknown or ambiguous routing asks the operator to identify the document type before saving. The current forms do not yet offer a dedicated document-type correction control; resolve that workflow before treating human review as complete.

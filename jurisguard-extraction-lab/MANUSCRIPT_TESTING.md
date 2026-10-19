@@ -2,7 +2,7 @@
 
 The manuscript names **three OCR candidates** (PyTesseract, EasyOCR, PaddleOCR) and **three NLP candidates** (NLTK rules, BERT NER, spaCy plus Regex). “Three” refers to candidate methods, not three uploaded images. Its quality-group tables describe **30 PAO interview-sheet captures**: 10 clean scans, 10 mobile captures, and 10 low-quality captures. Run every OCR candidate on the same 30 images. Then run every NLP candidate on the same saved text for those 30 samples. Keep RTC decisions as a separately labeled supplementary set unless the study protocol is changed.
 
-The figures already printed in Tables 19–22 are **manuscript claims**, not results reproduced by this lab. Table 19 also prints `6.82%%` for EasyOCR, which needs an editorial correction after source data are checked. Do not replace those numbers with the single synthetic example below or describe the new cached BERT checkpoint as the original study model.
+The figures already printed in Tables 19–22 are **manuscript claims**, not results reproduced by this lab. Table 19 also prints `6.82%%` for EasyOCR, which needs an editorial correction after source data are checked. Do not replace those numbers with the single synthetic example below or describe the new cached BERT checkpoint as the original study model. PaddleOCR 3.7.0 with PP-OCRv6 is a **new candidate version**; keep its measurements separate from earlier PaddleOCR 2.8.1 / PP-OCRv4 runs.
 
 **If only 20 labeled images are available:** use the same 20 for all six candidates and replace `--require-manuscript-30` in every command below with `--require-samples 20`. Record the actual number of clean, mobile, and low-quality images; do not invent a 10/10/10 split. This is a new **n=20 evaluation**, so revise the manuscript's sample-count statements and recalculate Tables 19–22 and 26 from the measured results. Do not retain the previous n=30 percentages as findings from these 20 images. The original `--require-manuscript-30` option remains available if the remaining 10 annotated images arrive later.
 
@@ -55,7 +55,7 @@ $bert = "$env:USERPROFILE\.cache\huggingface\hub\models--dslim--bert-base-NER\sn
 & $py -m src.manuscript_benchmark nlp spacy_regex --manifest $manifest --require-manuscript-30 --nlp-text-dir data\outputs\paddle_text --output data\outputs\nlp_spacy_regex.json
 ```
 
-All candidate model files must already be local. EasyOCR uses `~/.EasyOCR/model` by default and disables downloads. Set `JURISGUARD_LAB_EASYOCR_MODEL_DIR` if your models are elsewhere. PaddleOCR checks local model files and compatible 2.x Paddle packages. BERT loads only the specified local checkpoint, with offline mode enabled. A missing dependency or model **fails the run**; it is never scored as zero accuracy. The tested optional versions here are NLTK 3.9.2, spaCy 3.8.14, Transformers 4.40.2, CPU PyTorch 2.0.1, EasyOCR 1.7.2, PaddleOCR 2.8.1, and PaddlePaddle 2.6.2. Record model versions and machine hardware in the study method.
+All candidate model files must already be local. EasyOCR uses `~/.EasyOCR/model` by default and disables downloads. Set `JURISGUARD_LAB_EASYOCR_MODEL_DIR` if your models are elsewhere. PaddleOCR now checks local PP-OCRv6 model files and requires PaddleOCR 3.7.0 / PaddlePaddle 3.3.1; CPU oneDNN is disabled for compatibility on this Windows machine. BERT loads only the specified local checkpoint, with offline mode enabled. A missing dependency or model **fails the run**; it is never scored as zero accuracy. Earlier reports used NLTK 3.9.2, spaCy 3.8.14, Transformers 4.40.2, CPU PyTorch 2.0.1, EasyOCR 1.7.2, PaddleOCR 2.8.1, and PaddlePaddle 2.6.2. Record actual versions and machine hardware for every new run.
 
 ## What the reports mean
 
@@ -88,9 +88,9 @@ foreach ($candidate in 'tesseract', 'easyocr', 'paddleocr') {
   & $py -m src.scan_unlabeled $candidate --images-dir ..\test_images --expected-count 20 --output-dir "data\outputs\decision_20\$candidate" --reuse-ocr-text
 }
 & $py -m src.classification_report --images-dir ..\test_images --manifest data\ground_truth\decision_20\manifest.json --ocr-base-dir data\outputs\decision_20 --output-json reports\decision_20_classification.json --output-md reports\decision_20_classification.md
-& $py -m unittest discover -s tests -v
-cd ..
-& .\backend\venv\Scripts\python.exe -m unittest discover -s tests -p test_document_router.py -v
+Push-Location ..
+& .\backend\venv\Scripts\python.exe -m unittest discover -s tests -t . -p 'test_*.py' -v
+Pop-Location
 ```
 
 The report checks image hashes, exact inventory shape, and routing against the agent's visual document-family labels. Its label-match counts are **in-sample** because these pages helped refine the rules. This folder has no visually labeled RTC images, so the RTC path is currently verified by synthetic regression tests only. The report does not contain OCR text or claim OCR CER/WER, field accuracy, or performance on unseen court documents.

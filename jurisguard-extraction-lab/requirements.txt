@@ -1,9 +1,11 @@
-# Runtime routing, extraction, evaluation, and the default Tesseract adapter
-# use only the Python standard library plus an installed Tesseract executable.
-# Optional: Pillow is used solely to regenerate the committed synthetic PNG.
-# Optional: PaddleOCR can be selected after installing a compatible local
-# PaddleOCR/PaddlePaddle pair and providing existing model directories.
-# Manuscript 3x3 benchmarking additionally uses locally installed EasyOCR,
-# NLTK, spaCy, Transformers, CPU PyTorch, and psutil. Their tested versions
-# and local model paths are documented in MANUSCRIPT_TESTING.md; runtime
-# candidate loaders disable model downloads.
+# The one-image lab pipeline defaults to the selected application OCR engine.
+# Install dependencies during setup, then provide complete local model files
+# for offline inference. Tesseract and EasyOCR are comparison candidates only.
+paddleocr==3.7.0
+paddlepaddle==3.3.1
+
+# Router/evaluation on saved OCR text uses only the Python standard library.
+# Pillow is optional for regenerating the committed synthetic PNG.
+# Manuscript 3x3 benchmarking additionally uses locally installed Tesseract,
+# EasyOCR, NLTK, spaCy, Transformers, CPU PyTorch, and psutil. Their versions
+# and model paths are documented in MANUSCRIPT_TESTING.md.

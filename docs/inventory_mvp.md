@@ -20,7 +20,7 @@ The existing FastAPI, OCR, and spaCy code is outside this MVP. Feed **one logica
 From the repository root, with Python 3.10 or later:
 
 ```powershell
-python -m unittest discover -s tests -p test_document_router.py -v
+python -m unittest tests.test_document_router -v
 ```
 
 Use the router in Python:

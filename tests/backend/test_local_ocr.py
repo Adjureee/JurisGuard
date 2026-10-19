@@ -40,30 +40,39 @@ class LocalOCRTests(unittest.TestCase):
 
     def test_incompatible_paddle_runtime_fails_before_inference(self):
         ocr = LocalOCR()
-        with patch.object(ocr, "_model_complete", return_value=True), patch("local_ocr.version", side_effect=["2.8.1", "3.3.1"]):
-            with self.assertRaisesRegex(OfflineOCRError, "incompatible"):
+        with patch.object(ocr, "_model_complete", return_value=True), patch("local_ocr.version", side_effect=["2.8.1", "2.6.2"]):
+            with self.assertRaisesRegex(OfflineOCRError, "PaddleOCR 3.x"):
                 ocr._paddle_engine()
 
     def test_paddle_constructor_uses_only_checked_local_model_paths(self):
         ocr = LocalOCR()
         called = {}
-        fake_module = SimpleNamespace(__version__="2.8.1", PaddleOCR=lambda **kwargs: called.update(kwargs) or object())
-        with patch.object(ocr, "_model_complete", return_value=True), patch("local_ocr.version", side_effect=["2.8.1", "2.6.2"]), patch.dict("sys.modules", {"paddleocr": fake_module}):
+        fake_module = SimpleNamespace(__version__="3.7.0", PaddleOCR=lambda **kwargs: called.update(kwargs) or object())
+        with patch.object(ocr, "_model_complete", return_value=True), patch("local_ocr.version", side_effect=["3.7.0", "3.3.1"]), patch.dict("sys.modules", {"paddleocr": fake_module}):
             ocr._paddle_engine()
-        self.assertEqual(called["det_model_dir"], str(ocr.det_model))
-        self.assertEqual(called["rec_model_dir"], str(ocr.rec_model))
-        self.assertEqual(called["cls_model_dir"], str(ocr.cls_model))
+        self.assertEqual(called["text_detection_model_dir"], str(ocr.det_model))
+        self.assertEqual(called["text_recognition_model_dir"], str(ocr.rec_model))
+        self.assertEqual(called["text_detection_model_name"], "PP-OCRv6_medium_det")
+        self.assertEqual(called["text_recognition_model_name"], "PP-OCRv6_medium_rec")
         self.assertFalse(called["enable_mkldnn"])
-        self.assertNotIn("text_detection_model_name", called)
+        self.assertFalse(called["use_doc_orientation_classify"])
+        self.assertFalse(called["use_doc_unwarping"])
+        self.assertFalse(called["use_textline_orientation"])
 
     def test_paddle_boxes_remain_separate_lines_even_at_same_height(self):
-        detections = [
-            ([[90, 10], [130, 10], [130, 30], [90, 30]], ("Ana", 0.2)),
-            ([[10, 10], [80, 10], [80, 30], [10, 30]], ("Name:", 0.9)),
-        ]
-        lines = LocalOCR._paddle_lines(detections, 1)
+        page = SimpleNamespace(json={"res": {
+            "rec_texts": ["Ana", "Name:"],
+            "rec_scores": [0.2, 0.9],
+            "rec_boxes": [[90, 10, 130, 30], [10, 10, 80, 30]],
+        }})
+        lines = LocalOCR._paddle_lines([page], 1)
         self.assertEqual([item["text"] for item in lines], ["Name:", "Ana"])
         self.assertEqual(lines[1]["engine_score"], 0.2)
+
+    def test_mismatched_paddle_output_requires_review(self):
+        page = SimpleNamespace(json={"res": {"rec_texts": ["Name"], "rec_scores": [], "rec_boxes": [[0, 0, 1, 1]]}})
+        with self.assertRaisesRegex(OfflineOCRError, "mismatched"):
+            LocalOCR._paddle_lines([page], 1)
 
     def test_blank_and_corrupt_images_are_handled(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -89,6 +98,18 @@ class LocalOCRTests(unittest.TestCase):
             self.assertEqual(result.raw_text, "Name: Ana")
             self.assertTrue(any("low contrast" in warning for warning in result.warnings))
 
+    def test_paddle_failure_stops_ocr_without_switching_engines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "synthetic.png"
+            image = Image.new("RGB", (300, 100), "white")
+            ImageDraw.Draw(image).rectangle((20, 20, 280, 70), fill="black")
+            image.save(path)
+            ocr = LocalOCR()
+            with patch.object(ocr, "_paddle_page", side_effect=OfflineOCRError("PaddleOCR unavailable")) as paddle:
+                with self.assertRaisesRegex(OfflineOCRError, "PaddleOCR unavailable"):
+                    ocr.extract(path)
+            paddle.assert_called_once()
+
     def test_local_pdf_page_renders_without_database_or_network(self):
         with tempfile.TemporaryDirectory() as directory:
             pdf = Path(directory) / "synthetic.pdf"
@@ -99,6 +120,18 @@ class LocalOCRTests(unittest.TestCase):
 
 
 class IntegrationTests(unittest.TestCase):
+    def test_paddle_failure_returns_reviewable_empty_inventory(self):
+        engine = object.__new__(JurisGuardExtractionEngine)
+        engine.local_ocr = LocalOCR()
+        with patch.object(engine.local_ocr, "extract", side_effect=OfflineOCRError("PaddleOCR unavailable")):
+            result = engine._run_offline_pipeline("synthetic.png")
+        self.assertEqual(result["extraction_mode"], "OFFLINE_OCR_FAILED")
+        self.assertEqual(result["document_type"], "unknown")
+        self.assertEqual(result["inventory"], empty_inventory())
+        self.assertIsNone(result["diagnostics"]["ocr_engine"])
+        self.assertTrue(result["needs_review"])
+        self.assertEqual(ocr_status_for_result(result), "FAILED")
+
     def test_sandiganbayan_routes_with_empty_inventory_and_review(self):
         engine = object.__new__(JurisGuardExtractionEngine)
         engine.local_ocr = type("FakeOCR", (), {"extract": lambda self, _: OCRDocument(SANDIGANBAYAN_TEXT, [], "fake", 1, [])})()

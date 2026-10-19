@@ -4,6 +4,8 @@
 **Dataset:** 20 private images in `../test_images/`
 **Status:** Local execution and routing checks complete; OCR transcription accuracy awaits reviewed references.
 
+**Version note (19 October 2026):** This report preserves the earlier PaddleOCR 2.8.1 / PP-OCRv4 run. The application and lab adapters now use PaddleOCR 3.7.0 / PP-OCRv6; the synthetic upgrade smoke test is separate evidence and does not revise these historical observations.
+
 ## 1. Purpose and boundary
 
 This report records how the three local OCR engines were run on the same 20 supplied images, what outputs were saved, what was verified, and which measurements cannot yet be reported. It is a supplementary **Sandiganbayan court-page** test. All 20 images were visually inspected for court family; some are caption pages or show multiple case numbers. There are no PAO interview sheets or real RTC pages in this set. Thus this run does not reproduce the manuscript's 30-image PAO interview-sheet study or establish RTC real-image performance.
@@ -130,7 +132,7 @@ After reference transcripts have been fully image-reviewed and the manifest upda
 & $py -m src.decision_ocr_reference evaluate --images-dir ..\test_images --reference-dir data\ground_truth\decision_20 --ocr-base-dir data\outputs\decision_20 --output reports\decision_20_ocr.json
 ```
 
-At present that last command fails by design because the drafts are unreviewed. Run the lab tests with `& $py -m unittest discover -s tests -v`; run the production router suite from the repository root and backend integration suite from `backend/` as described in `MANUSCRIPT_TESTING.md`.
+At present that last command fails by design because the drafts are unreviewed. Run the consolidated suite from the repository root with `.\backend\venv\Scripts\python.exe -m unittest discover -s tests -t . -p 'test_*.py' -v`, as described in `MANUSCRIPT_TESTING.md`.
 
 ## 8. Interpretation and next evaluation stage
 

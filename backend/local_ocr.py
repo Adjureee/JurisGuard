@@ -1,4 +1,4 @@
-"""Local-only image/PDF OCR. PaddleOCR is primary; Tesseract is an offline fallback.
+"""Local-only image/PDF OCR using PaddleOCR 3.x and PP-OCRv6.
 
 All model paths are checked before PaddleOCR construction to prevent its implicit
 download behavior. This module never calls a network service or production DB.
@@ -6,13 +6,8 @@ download behavior. This module never calls a network service or production DB.
 
 from __future__ import annotations
 
-import csv
-import io
 from importlib.metadata import PackageNotFoundError, version
 import os
-import shutil
-import subprocess
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,7 +16,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 
 class OfflineOCRError(RuntimeError):
-    """A document cannot be read or all installed local OCR engines failed."""
+    """A document cannot be read or local PaddleOCR failed."""
 
 
 @dataclass
@@ -46,54 +41,46 @@ def _positive_env(name: str, default: int) -> int:
 
 class LocalOCR:
     def __init__(self) -> None:
-        cache = Path.home() / ".paddleocr" / "whl"
-        self.det_model = _model_dir("PADDLEOCR_DET_MODEL_DIR", cache / "det/en/en_PP-OCRv3_det_infer")
-        self.rec_model = _model_dir("PADDLEOCR_REC_MODEL_DIR", cache / "rec/en/en_PP-OCRv4_rec_infer")
-        self.cls_model = _model_dir("PADDLEOCR_CLS_MODEL_DIR", cache / "cls/ch_ppocr_mobile_v2.0_cls_infer")
+        cache = Path.home() / ".paddlex" / "official_models"
+        self.det_model = _model_dir("PADDLEOCR_DET_MODEL_DIR", cache / "PP-OCRv6_medium_det")
+        self.rec_model = _model_dir("PADDLEOCR_REC_MODEL_DIR", cache / "PP-OCRv6_medium_rec")
         self.max_pages = _positive_env("LOCAL_OCR_MAX_PAGES", 8)
         self.max_pixels = _positive_env("LOCAL_OCR_MAX_PIXELS", 40000000)
         self.max_dimension = max(400, _positive_env("LOCAL_OCR_MAX_DIMENSION", 2500))
-        self.tesseract_command = os.getenv("TESSERACT_CMD") or self._default_tesseract()
         self._paddle = None
         self._paddle_failure: str | None = None
 
     @staticmethod
-    def _default_tesseract() -> str | None:
-        found = shutil.which("tesseract")
-        windows = Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe")
-        return found or (str(windows) if windows.is_file() else None)
-
-    @staticmethod
     def _model_complete(path: Path) -> bool:
-        return (path / "inference.pdmodel").is_file() and (path / "inference.pdiparams").is_file()
+        return all((path / name).is_file() for name in ("inference.json", "inference.pdiparams", "inference.yml"))
 
     def _paddle_engine(self):
         if self._paddle_failure:
             raise OfflineOCRError(self._paddle_failure)
         if self._paddle is not None:
             return self._paddle
-        if not all(self._model_complete(path) for path in (self.det_model, self.rec_model, self.cls_model)):
+        if not all(self._model_complete(path) for path in (self.det_model, self.rec_model)):
             raise OfflineOCRError("PaddleOCR local model files are missing; download is disabled.")
         try:
             paddleocr_version = version("paddleocr")
             paddle_version = version("paddlepaddle")
-            if paddleocr_version.startswith("2.") and paddle_version.split(".", 1)[0] != "2":
-                raise OfflineOCRError("Installed PaddleOCR 2.x and PaddlePaddle runtime are incompatible; using local fallback.")
+            if not paddleocr_version.startswith("3.") or not paddle_version.startswith("3."):
+                raise OfflineOCRError("PaddleOCR 3.x and PaddlePaddle 3.x are required for PP-OCRv6.")
             import paddleocr
 
-            if not str(paddleocr.__version__).startswith("2."):
+            if not str(paddleocr.__version__).startswith("3."):
                 raise OfflineOCRError("PaddleOCR version is not supported by this local model adapter.")
             self._paddle = paddleocr.PaddleOCR(
-                det_model_dir=str(self.det_model),
-                rec_model_dir=str(self.rec_model),
-                cls_model_dir=str(self.cls_model),
-                use_angle_cls=False,
-                use_gpu=False,
+                text_detection_model_name="PP-OCRv6_medium_det",
+                text_detection_model_dir=str(self.det_model),
+                text_recognition_model_name="PP-OCRv6_medium_rec",
+                text_recognition_model_dir=str(self.rec_model),
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+                use_textline_orientation=False,
+                device="cpu",
                 enable_mkldnn=False,
                 cpu_threads=max(1, min(4, os.cpu_count() or 1)),
-                det_limit_side_len=1536,
-                lang="en",
-                show_log=False,
             )
             return self._paddle
         except OfflineOCRError:
@@ -106,25 +93,31 @@ class LocalOCR:
     @staticmethod
     def _paddle_lines(result: object, page: int) -> list[dict]:
         entries: list[dict] = []
-        if not isinstance(result, list):
-            return entries
-        for detected in result:
-            if not isinstance(detected, (list, tuple)) or len(detected) < 2:
+        if not isinstance(result, list) or len(result) != 1:
+            raise OfflineOCRError("PaddleOCR returned an unexpected page result.")
+        payload = getattr(result[0], "json", None)
+        if not isinstance(payload, dict):
+            raise OfflineOCRError("PaddleOCR returned an unexpected result format.")
+        data = payload.get("res", payload)
+        if not isinstance(data, dict):
+            raise OfflineOCRError("PaddleOCR returned an unexpected result format.")
+        texts, scores, boxes = (data.get(name) for name in ("rec_texts", "rec_scores", "rec_boxes"))
+        if not all(isinstance(items, list) for items in (texts, scores, boxes)) or len(texts) != len(scores) or len(texts) != len(boxes):
+            raise OfflineOCRError("PaddleOCR returned mismatched text and layout data.")
+        for recognized_text, score, box in zip(texts, scores, boxes):
+            if not str(recognized_text).strip():
                 continue
             try:
-                box, recognition = detected[0], detected[1]
-                text, score = recognition
-                points = np.asarray(box, dtype=float).reshape(-1, 2)
-                if not str(text).strip() or len(points) < 4:
-                    continue
+                if len(box) != 4:
+                    raise ValueError("invalid box")
                 entries.append({
                     "page": page,
-                    "text": str(text).strip(),
-                    "bbox": [int(points[:, 0].min()), int(points[:, 1].min()), int(points[:, 0].max()), int(points[:, 1].max())],
+                    "text": str(recognized_text).strip(),
+                    "bbox": [int(value) for value in box],
                     "engine_score": float(score),
                 })
             except (TypeError, ValueError):
-                continue
+                raise OfflineOCRError("PaddleOCR returned invalid text or layout data.") from None
         # Keep each detection as one line. Joining boxes on a fixed pixel
         # threshold can merge unrelated form columns and erase label boundaries.
         entries.sort(key=lambda item: (item["bbox"][1], item["bbox"][0]))
@@ -133,44 +126,13 @@ class LocalOCR:
     def _paddle_page(self, image: Image.Image, page: int) -> list[dict]:
         engine = self._paddle_engine()
         try:
-            results = engine.ocr(np.asarray(image.convert("RGB")), cls=False)
-            return self._paddle_lines(results[0] if results else [], page)
+            results = engine.predict(input=np.asarray(image.convert("RGB")))
+            return self._paddle_lines(list(results), page)
+        except OfflineOCRError:
+            raise
         except Exception as exc:
             self._paddle_failure = f"PaddleOCR inference failed: {type(exc).__name__}."
             raise OfflineOCRError(self._paddle_failure) from exc
-
-    def _tesseract_page(self, image: Image.Image, page: int) -> list[dict]:
-        if not self.tesseract_command:
-            raise OfflineOCRError("Tesseract executable is unavailable.")
-        with tempfile.TemporaryDirectory(prefix="jurisguard-ocr-") as directory:
-            path = Path(directory) / "page.png"
-            image.save(path, "PNG")
-            try:
-                completed = subprocess.run(
-                    [self.tesseract_command, str(path), "stdout", "-l", "eng", "tsv"],
-                    capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=120,
-                )
-            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-                raise OfflineOCRError(f"Tesseract failed: {type(exc).__name__}.") from exc
-        groups: dict[tuple[str, str, str, str], list[dict[str, str]]] = {}
-        for row in csv.DictReader(io.StringIO(completed.stdout), delimiter="\t"):
-            if row.get("text", "").strip():
-                key = (row["page_num"], row["block_num"], row["par_num"], row["line_num"])
-                groups.setdefault(key, []).append(row)
-        entries = []
-        for words in groups.values():
-            left = min(int(word["left"]) for word in words)
-            top = min(int(word["top"]) for word in words)
-            right = max(int(word["left"]) + int(word["width"]) for word in words)
-            bottom = max(int(word["top"]) + int(word["height"]) for word in words)
-            scores = [float(word["conf"]) for word in words if float(word["conf"]) >= 0]
-            entries.append({
-                "page": page,
-                "text": " ".join(word["text"] for word in words),
-                "bbox": [left, top, right, bottom],
-                "engine_score": sum(scores) / len(scores) if scores else None,
-            })
-        return entries
 
     def _pages(self, path: Path):
         if not path.is_file():
@@ -215,7 +177,7 @@ class LocalOCR:
         path = Path(file_path)
         layout: list[dict] = []
         warnings: list[str] = []
-        engines: set[str] = set()
+        paddle_attempted = False
         page_count = 0
         for page_number, original in self._pages(path):
             page_count += 1
@@ -231,19 +193,14 @@ class LocalOCR:
                 working = ImageOps.autocontrast(original)
             else:
                 working = original
-            try:
-                entries = self._paddle_page(working, page_number)
-                engines.add("paddleocr")
-            except OfflineOCRError as exc:
-                warnings.append(str(exc) + " Using local Tesseract fallback.")
-                entries = self._tesseract_page(working, page_number)
-                engines.add("tesseract")
+            paddle_attempted = True
+            entries = self._paddle_page(working, page_number)
             if not entries:
                 warnings.append(f"Page {page_number}: OCR found no readable text.")
             for entry in entries:
                 entry["line"] = len(layout) + 1
                 layout.append(entry)
-        engine = "+".join(sorted(engines)) if engines else None
+        engine = "paddleocr" if paddle_attempted else None
         raw_text = "\n".join(item["text"] for item in layout)
         box_layout = [{key: value for key, value in item.items() if key != "text"} for item in layout]
         return OCRDocument(raw_text, box_layout, engine, page_count, warnings)

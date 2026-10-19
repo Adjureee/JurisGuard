@@ -41,11 +41,11 @@ class PaddleOCREngine:
 
     def extract(self, image_path: Path) -> OCRResult:
         for label, path in (("detection", self.config.paddle_det_model_dir), ("recognition", self.config.paddle_rec_model_dir)):
-            if not (path / "inference.pdmodel").is_file() or not (path / "inference.pdiparams").is_file():
+            if not all((path / name).is_file() for name in ("inference.json", "inference.pdiparams", "inference.yml")):
                 raise RuntimeError(f"Local PaddleOCR {label} model missing at {path}. Supply installed model directories; this lab does not download models.")
         try:
-            if not version("paddleocr").startswith("2.") or not version("paddlepaddle").startswith("2."):
-                raise RuntimeError("This lab adapter requires compatible PaddleOCR 2.x and PaddlePaddle 2.x versions.")
+            if not version("paddleocr").startswith("3.") or not version("paddlepaddle").startswith("3."):
+                raise RuntimeError("This lab adapter requires PaddleOCR 3.x and PaddlePaddle 3.x for PP-OCRv6.")
         except PackageNotFoundError as exc:
             raise RuntimeError("PaddleOCR and PaddlePaddle must be installed locally.") from exc
         try:
@@ -54,21 +54,34 @@ class PaddleOCREngine:
             raise RuntimeError("PaddleOCR is not installed in this Python environment. See requirements.txt.") from exc
         if self._engine is None:
             self._engine = PaddleOCR(
-                det_model_dir=str(self.config.paddle_det_model_dir),
-                rec_model_dir=str(self.config.paddle_rec_model_dir),
-                use_angle_cls=False,
-                lang="en",
-                use_gpu=False,
+                text_detection_model_name="PP-OCRv6_medium_det",
+                text_detection_model_dir=str(self.config.paddle_det_model_dir),
+                text_recognition_model_name="PP-OCRv6_medium_rec",
+                text_recognition_model_dir=str(self.config.paddle_rec_model_dir),
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+                use_textline_orientation=False,
+                device="cpu",
                 enable_mkldnn=False,
-                show_log=False,
+                cpu_threads=4,
             )
-        pages = self._engine.ocr(str(image_path), cls=False)
+        pages = list(self._engine.predict(input=str(image_path)))
+        if len(pages) != 1 or not isinstance(getattr(pages[0], "json", None), dict):
+            raise RuntimeError("PaddleOCR returned an unexpected page result.")
+        data = pages[0].json.get("res", pages[0].json)
+        if not isinstance(data, dict):
+            raise RuntimeError("PaddleOCR returned an unexpected result format.")
+        texts, scores, boxes = (data.get(name) for name in ("rec_texts", "rec_scores", "rec_boxes"))
+        if not all(isinstance(items, list) for items in (texts, scores, boxes)) or len(texts) != len(scores) or len(texts) != len(boxes):
+            raise RuntimeError("PaddleOCR returned mismatched text and layout data.")
         entries = []
-        for page in pages or []:
-            for box, recognition in page or []:
-                text, score = recognition
-                xs, ys = zip(*box)
-                entries.append((str(text), (int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))), float(score)))
+        for text, score, box in zip(texts, scores, boxes):
+            if not str(text).strip():
+                continue
+            if len(box) != 4:
+                raise RuntimeError("PaddleOCR returned invalid layout data.")
+            entries.append((str(text).strip(), tuple(int(value) for value in box), float(score)))
+        entries.sort(key=lambda item: (item[1][1], item[1][0]))
         lines = tuple(OCRLine(i, text, box, score) for i, (text, box, score) in enumerate(entries, 1))
         return OCRResult("\n".join(line.text for line in lines), lines, "paddleocr")
 

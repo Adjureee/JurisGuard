@@ -4,7 +4,7 @@ import shutil
 import unittest
 from pathlib import Path
 
-from config import DEFAULT_TESSERACT, LAB_ROOT
+from config import DEFAULT_TESSERACT, LAB_ROOT, LabConfig
 from src.document_router import DocumentRouter
 from src.evaluate import compare, load_ground_truth, ocr_metrics
 from src.ocr_pipeline import OCRLine, OCRResult, run_image
@@ -32,8 +32,8 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(report["sample_origin"], "synthetic")
 
     @unittest.skipUnless(Path(DEFAULT_TESSERACT).is_file() or shutil.which(DEFAULT_TESSERACT), "local Tesseract unavailable")
-    def test_installed_tesseract_synthetic_image(self):
-        ocr, result = run_image(SYNTHETIC / "synthetic_intake.png")
+    def test_explicit_tesseract_comparison_candidate_on_synthetic_image(self):
+        ocr, result = run_image(SYNTHETIC / "synthetic_intake.png", config=LabConfig(ocr_engine="tesseract"))
         self.assertEqual(ocr.engine, "tesseract")
         self.assertTrue(ocr.lines)
         self.assertEqual(result["document_type"], "intake_form")
