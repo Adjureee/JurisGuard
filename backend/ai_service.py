@@ -1,25 +1,18 @@
 import os
-import socket
 import json
 import requests
 import base64
 import tempfile
 import time
-import traceback
 import re
-import importlib.util
+import threading
 from pathlib import Path
 from requests import exceptions as requests_exceptions
 import cv2
 import numpy as np
 from PIL import Image
-try:
-    from paddleocr import PaddleOCR
-except Exception as exc:
-    PaddleOCR = None
-    PADDLEOCR_IMPORT_ERROR = exc
-else:
-    PADDLEOCR_IMPORT_ERROR = None
+from local_ocr import LocalOCR, OfflineOCRError
+from inventory_mvp import DocumentRouter, empty_inventory
 import spacy
 from spacy.matcher import Matcher
 from dotenv import load_dotenv
@@ -293,18 +286,19 @@ def section_visible(compact_text: str, *patterns: str) -> bool:
 
 def is_checked_option(lines: list[str], option_pattern: str) -> bool:
     option_re = re.compile(option_pattern, re.IGNORECASE)
-    mark_re = re.compile(r"(?:☑|☒|✓|✔|\[[xX/]\]|\([xX/]\)|\b[xX]\b|■|▣)")
+    mark_re = re.compile(r"(?:☑|☒|✓|✔|\[[xX/]\]|\([xX/]\)|■|▣)")
 
-    for index, line in enumerate(lines):
-        if not option_re.search(line):
+    for line in lines:
+        match = option_re.search(line)
+        if not match:
             continue
-
-        before_option = option_re.split(line, maxsplit=1)[0]
-        nearby_text = " ".join(lines[max(0, index - 1):index + 2])
-
-        if mark_re.search(before_option):
+        # Require an adjacent mark. An earlier checked option on the same
+        # OCR line must not select this option too.
+        before_option = line[:match.start()]
+        after_option = line[match.end():]
+        if re.search(mark_re.pattern + r"\s*$", before_option):
             return True
-        if re.search(r"(?:checked|tsek|may\s*marka)", nearby_text, re.IGNORECASE):
+        if re.match(r"^\s*" + mark_re.pattern + r"(?!\w)", after_option):
             return True
 
     return False
@@ -1446,158 +1440,16 @@ def crop_document_region(image: np.ndarray) -> np.ndarray:
     y2 = min(h, y + ch + pad)
     return image[y1:y2, x1:x2]
 
-def group_ocr_lines(ocr_results: list) -> str:
-    """
-    Group PaddleOCR output into logical lines instead of character-by-character.
-    Handles multi-line text fields and improves readability.
-    """
-    if not ocr_results:
-        return ""
-    
-    result = ocr_results[0]
-    text_items = []
-
-    if isinstance(result, dict) and "rec_texts" in result:
-        boxes = as_sequence(result.get("rec_polys"))
-        if not boxes:
-            boxes = as_sequence(result.get("dt_polys"))
-        scores = as_sequence(result.get("rec_scores"))
-        texts = as_sequence(result.get("rec_texts"))
-        for index, text in enumerate(texts):
-            if not text:
-                continue
-            bbox = boxes[index] if index < len(boxes) else [[0, index * 24]]
-            confidence = scores[index] if index < len(scores) else 1.0
-            points = np.asarray(bbox).reshape(-1, 2)
-            text_items.append({
-                "x": float(np.min(points[:, 0])),
-                "y": float(np.min(points[:, 1])),
-                "text": str(text).strip(),
-                "confidence": float(confidence),
-            })
-    else:
-        for line in result:
-            if len(line) >= 2:
-                bbox, (text, confidence) = line[0], line[1]
-                points = np.asarray(bbox).reshape(-1, 2)
-                text_items.append({
-                    "x": float(np.min(points[:, 0])),
-                    "y": float(np.min(points[:, 1])),
-                    "text": text.strip(),
-                    "confidence": confidence
-                })
-
-    if not text_items:
-        return ""
-    
-    # Step 2: Filter low-confidence results (< 0.3)
-    text_items = [item for item in text_items if item["confidence"] > 0.3]
-    
-    # Step 3: Sort by Y-coordinate (top-to-bottom), then X (left-to-right)
-    text_items = sorted(text_items, key=lambda x: (x["y"], x["x"]))
-    
-    # Step 4: Group texts into lines based on Y proximity (within 20 pixels = same line)
-    grouped_lines = []
-    current_line = []
-    last_y = None
-    
-    for item in text_items:
-        if last_y is None or abs(item["y"] - last_y) < 20:
-            current_line.append(item["text"])
-            last_y = item["y"]
-        else:
-            if current_line:
-                grouped_lines.append(" ".join(current_line))
-            current_line = [item["text"]]
-            last_y = item["y"]
-    
-    if current_line:
-        grouped_lines.append(" ".join(current_line))
-    
-    # Step 5: Join lines with newlines for readability
-    return "\n".join(grouped_lines)
-
 # ==========================================
 # 2. THE DUAL-HYBRID ORCHESTRATOR
 # ==========================================
 class JurisGuardExtractionEngine:
     def __init__(self):
-        print("[JurisGuard] Booting up Enterprise Orchestrator...")
         self.mistral_api_key = os.getenv("MISTRAL_API_KEY")
-        self.ocr_max_dimension = get_int_env("PADDLEOCR_MAX_DIMENSION", 1280)
-        self.ocr_det_limit_side_len = get_int_env("PADDLEOCR_DET_LIMIT_SIDE_LEN", 736)
-        self.ocr_det_model_name = os.getenv("PADDLEOCR_DET_MODEL_NAME", "PP-OCRv4_mobile_det")
-        self.ocr_rec_model_name = os.getenv("PADDLEOCR_REC_MODEL_NAME", "en_PP-OCRv4_mobile_rec")
-        self.ocr_enable_angle_cls = get_bool_env("PADDLEOCR_ENABLE_ANGLE_CLS", False)
-        self.ocr_use_enhanced_preprocess = get_bool_env("PADDLEOCR_ENHANCED_PREPROCESS", False)
-        self.ocr_cpu_threads = get_int_env("PADDLEOCR_CPU_THREADS", max(2, (os.cpu_count() or 4) - 1))
-        self.ocr_enable_mkldnn = get_bool_env("PADDLEOCR_ENABLE_MKLDNN", False)
-        self.ocr_use_gpu = get_bool_env("PADDLEOCR_USE_GPU", False)
-        self.ocr_device = "gpu" if self.ocr_use_gpu else "cpu"
+        self.local_ocr = LocalOCR()
         self.mistral_connect_timeout = get_int_env("MISTRAL_CONNECT_TIMEOUT_SECONDS", 10)
         self.mistral_read_timeout = get_int_env("MISTRAL_READ_TIMEOUT_SECONDS", 60)
         self.mistral_model = os.getenv("MISTRAL_MODEL", "pixtral-12b-2409")
-        
-        print("[JurisGuard] Offline Eyes (PaddleOCR) will initialize only when local OCR is needed.")
-        import logging
-        logging.getLogger('ppocr').setLevel(logging.ERROR)
-        self.local_ocr = None
-        self.safe_ocr = None
-        print(
-            "[JurisGuard] PaddleOCR config: "
-            f"det={self.ocr_det_model_name}, rec={self.ocr_rec_model_name}, "
-            f"mkldnn={self.ocr_enable_mkldnn}, threads={self.ocr_cpu_threads}"
-        )
-
-    def _create_ocr_engine(self, enable_mkldnn: bool, engine: str):
-        if PaddleOCR is None:
-            raise RuntimeError(f"PaddleOCR is not available: {PADDLEOCR_IMPORT_ERROR}")
-        if importlib.util.find_spec("paddle") is None:
-            raise RuntimeError(
-                "Offline OCR dependency is missing: install paddlepaddle in the backend virtual environment."
-            )
-        return PaddleOCR(
-            use_angle_cls=self.ocr_enable_angle_cls,
-            text_detection_model_name=self.ocr_det_model_name,
-            text_recognition_model_name=self.ocr_rec_model_name,
-            device=self.ocr_device,
-            engine=engine,
-            enable_mkldnn=enable_mkldnn,
-            cpu_threads=self.ocr_cpu_threads,
-            text_det_limit_side_len=self.ocr_det_limit_side_len,
-            text_recognition_batch_size=16,
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-        )
-
-    def _run_paddleocr(self, image: np.ndarray):
-        try:
-            if self.local_ocr is None:
-                self.local_ocr = self._create_ocr_engine(
-                    enable_mkldnn=self.ocr_enable_mkldnn,
-                    engine="paddle_static",
-                )
-            return self.local_ocr.ocr(image)
-        except Exception as exc:
-            print(f"[Warning] Fast PaddleOCR engine failed ({exc}). Retrying with safe CPU engine...")
-            traceback.print_exc()
-            if self.safe_ocr is None:
-                self.safe_ocr = self._create_ocr_engine(enable_mkldnn=False, engine="paddle")
-            try:
-                return self.safe_ocr.ocr(image)
-            except Exception as safe_exc:
-                print(f"[Error] Safe PaddleOCR engine also failed ({safe_exc}).")
-                traceback.print_exc()
-                raise
-
-    def _check_network_heartbeat(self) -> bool:
-        if not self.mistral_api_key:
-            return False
-        try:
-            socket.create_connection(("api.mistral.ai", 443), timeout=0.75)
-            return True
-        except OSError:
-            return False
 
     def _get_empty_schema(self) -> dict:
         return {
@@ -2116,91 +1968,48 @@ class JurisGuardExtractionEngine:
         return extracted_data
 
     def _run_offline_pipeline(self, image_path: str) -> dict:
-        """Failover Mode: PaddleOCR + spaCy NLP extraction."""
-        pipeline_started = time.perf_counter()
-        print("[System] Routing to Air-Gapped Hybrid Pipeline...")
-        
-        # 1. Load and preprocess image
-        print("[Offline Engine] Loading image...")
-        from PIL import Image, ImageOps
-        
-        # Step A: Respect smartphone rotation
-        load_started = time.perf_counter()
-        pil_img = Image.open(image_path)
-        pil_img = ImageOps.exif_transpose(pil_img) 
-        img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR) 
-        img = crop_document_region(img)
-        print(f"[Timing] Image load: {time.perf_counter() - load_started:.2f}s")
-        
-        # Step B: Smart Downscaling (balance quality vs speed)
-        h, w = img.shape[:2]
-        if max(h, w) > self.ocr_max_dimension:
-            resize_started = time.perf_counter()
-            scale = self.ocr_max_dimension / max(h, w)
-            print(f"[Offline Engine] Downscaling {w}x{h} → {int(w*scale)}x{int(h*scale)}...")
-            img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-            print(f"[Timing] Resize: {time.perf_counter() - resize_started:.2f}s")
-        
-        # Step C: Apply OCR preprocessing
-        preprocess_started = time.perf_counter()
-        if self.ocr_use_enhanced_preprocess:
-            print("[Offline Engine] Applying enhanced handwriting preprocessing...")
-            ocr_img = enhance_handwriting_image(img)
-        else:
-            print("[Offline Engine] Applying fast OCR preprocessing...")
-            ocr_img = fast_prepare_ocr_image(img)
-        print(f"[Timing] Preprocess: {time.perf_counter() - preprocess_started:.2f}s")
-        
-        # Step D: Feed enhanced image to PaddleOCR
-        ocr_started = time.perf_counter()
-        print(
-            "[Offline Engine] Running PaddleOCR "
-            f"(device={self.ocr_device}, angle_cls={self.ocr_enable_angle_cls}, "
-            f"det_limit={self.ocr_det_limit_side_len})..."
-        )
+        """Run local image/PDF OCR, then route one logical document."""
         try:
-            ocr_results = self._run_paddleocr(ocr_img)
-        except Exception as exc:
+            ocr = self.local_ocr.extract(image_path)
+        except OfflineOCRError as exc:
             fallback_data = self._get_empty_schema()
             fallback_data["extraction_mode"] = "OFFLINE_OCR_FAILED"
-            fallback_data["raw_text"] = f"PaddleOCR failed: {exc}"
-            print(f"[Timing] PaddleOCR failed after: {time.perf_counter() - ocr_started:.2f}s")
-            print(f"[Timing] Offline pipeline total: {time.perf_counter() - pipeline_started:.2f}s")
-            return fallback_data
-        print(f"[Timing] PaddleOCR: {time.perf_counter() - ocr_started:.2f}s")
-        
-        # Step E: Group OCR results into logical lines
-        grouping_started = time.perf_counter()
-        print("[Offline Engine] Grouping OCR output into coherent lines...")
-        raw_text = group_ocr_lines(ocr_results)
-        print(f"[Timing] Grouping: {time.perf_counter() - grouping_started:.2f}s")
-        
-        if not raw_text:
-            print("[Warning] OCR extracted no text. Returning fallback payload.")
-            fallback_data = self._get_empty_schema()
-            fallback_data["extraction_mode"] = "OFFLINE_OCR_ONLY"
             fallback_data["raw_text"] = ""
+            fallback_data.update({
+                "document_type": "unknown", "inventory": empty_inventory(),
+                "diagnostics": {"warnings": [str(exc)], "field_evidence": {}, "ocr_engine": None, "ocr_layout": [], "page_count": 0},
+                "needs_review": True,
+            })
             return fallback_data
-            
-        print(f"[Offline Engine] OCR finished. Extracted {len(raw_text)} characters in {len(raw_text.split(chr(10)))} lines.")
-
-        nlp_started = time.perf_counter()
-        extracted_data = spacy_extract_pao_fields(raw_text, self._get_empty_schema())
-        print(f"[Timing] spaCy NLP parse: {time.perf_counter() - nlp_started:.2f}s")
-        print(f"[Timing] Offline pipeline total: {time.perf_counter() - pipeline_started:.2f}s")
+        raw_text = ocr.raw_text
+        routed = DocumentRouter().process(raw_text)
+        if routed["document_type"] == "intake_form":
+            try:
+                extracted_data = spacy_extract_pao_fields(raw_text, self._get_empty_schema())
+            except Exception as exc:
+                extracted_data = self._get_empty_schema()
+                extracted_data["extraction_mode"] = "OFFLINE_ROUTER_ONLY"
+                routed["diagnostics"]["warnings"].append(f"Legacy intake parser failed: {type(exc).__name__}.")
+                routed["needs_review"] = True
+        else:
+            extracted_data = self._get_empty_schema()
+            extracted_data["extraction_mode"] = "OFFLINE_ROUTER_ONLY" if raw_text else "OFFLINE_OCR_EMPTY"
+        routed["diagnostics"]["warnings"].extend(ocr.warnings)
+        routed["diagnostics"].update({"ocr_engine": ocr.engine, "ocr_layout": ocr.layout, "page_count": ocr.page_count})
+        if ocr.warnings:
+            routed["needs_review"] = True
+        extracted_data.update(routed)
+        extracted_data["raw_text"] = raw_text
         return extracted_data
 
     def _cloud_failure_payload(self, exc: Exception) -> dict:
         fallback_data = self._get_empty_schema()
         if isinstance(exc, requests_exceptions.Timeout):
             fallback_data["extraction_mode"] = "ONLINE_MISTRAL_TIMEOUT"
-            fallback_data["raw_text"] = (
-                "Mistral Cloud Vision timed out. "
-                f"Increase MISTRAL_READ_TIMEOUT_SECONDS if the image is large or the connection is slow. Details: {exc}"
-            )
         else:
             fallback_data["extraction_mode"] = "ONLINE_MISTRAL_FAILED"
-            fallback_data["raw_text"] = f"Mistral Cloud Vision failed: {exc}"
+        fallback_data["raw_text"] = ""
+        fallback_data.update({"document_type": "unknown", "inventory": empty_inventory(), "diagnostics": {"warnings": ["Cloud extraction failed; local review required."]}, "needs_review": True})
         return fallback_data
 
     def _run_cloud_then_offline_fallback(self, file_path: str, compressed_file_path: str) -> dict:
@@ -2211,9 +2020,10 @@ class JurisGuardExtractionEngine:
             print(f"[Warning] Cloud extraction failed ({exc}). Executing local failover...")
             try:
                 offline_data = self._run_offline_pipeline(file_path)
-                offline_data["extraction_mode"] = "CLOUD_FAILED_OFFLINE_FALLBACK"
-                offline_raw_text = offline_data.get("raw_text") or ""
-                offline_data["raw_text"] = f"Cloud failure: {exc}\n\nOffline OCR raw text:\n{offline_raw_text}"
+                if offline_data.get("extraction_mode") not in {"OFFLINE_OCR_FAILED", "OFFLINE_OCR_EMPTY"}:
+                    offline_data["extraction_mode"] = "CLOUD_FAILED_OFFLINE_FALLBACK"
+                offline_data.setdefault("diagnostics", {}).setdefault("warnings", []).append("Cloud extraction failed; local OCR was used.")
+                offline_data["needs_review"] = True
                 return offline_data
             except Exception as offline_exc:
                 print(f"[Error] Offline fallback also failed ({offline_exc}).")
@@ -2234,30 +2044,25 @@ class JurisGuardExtractionEngine:
             finally:
                 if compressed_file_path != file_path and os.path.exists(compressed_file_path):
                     os.remove(compressed_file_path)
-        elif self._check_network_heartbeat():
-            compressed_file_path = compress_image_for_vlm(file_path)
-            try:
-                final_data.update(self._run_cloud_then_offline_fallback(file_path, compressed_file_path))
-            finally:
-                if compressed_file_path != file_path and os.path.exists(compressed_file_path):
-                    os.remove(compressed_file_path)
         else:
             final_data.update(self._run_offline_pipeline(file_path))
 
-        final_data["sections"] = self._sectioned_from_flat(final_data)
+        final_data["sections"] = self._sectioned_from_flat(final_data) if final_data.get("document_type") in (None, "intake_form") else {}
         return final_data
 
 # ==========================================
 # 3. FASTAPI COMPATIBILITY WRAPPER
 # ==========================================
 _engine_instance = None
+_engine_lock = threading.Lock()
 
 def process_document(file_path: str, extraction_mode: str = "auto"):
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Image not found at {file_path}")
+        raise FileNotFoundError(f"Document not found at {file_path}")
 
     global _engine_instance
-    if _engine_instance is None:
-        _engine_instance = JurisGuardExtractionEngine()
-
-    return _engine_instance.execute_extraction(file_path=file_path, extraction_mode=extraction_mode)
+    # The cached PaddleOCR session is shared across FastAPI worker threads.
+    with _engine_lock:
+        if _engine_instance is None:
+            _engine_instance = JurisGuardExtractionEngine()
+        return _engine_instance.execute_extraction(file_path=file_path, extraction_mode=extraction_mode)

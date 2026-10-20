@@ -7,7 +7,7 @@ import ModalPortal from "../components/modals/ModalPortal";
 import { useAuth } from "../contexts/AuthContext";
 import { useAuditLogStore } from "../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../features/notifications/notificationStore";
-import { resolveProfileImageUrl } from "../services/authService";
+import ProtectedProfileImage from "../components/ProtectedProfileImage";
 import { createAuditLog } from "../services/auditService";
 import {
   approveCaseSubmission,
@@ -107,10 +107,6 @@ function snapshotRows(items: SubmissionSnapshot[]): CriminalCaseRow[] {
     client: item.client ?? undefined,
     clientName: item.client_name,
   }));
-}
-
-function avatarSrc(path?: string | null) {
-  return resolveProfileImageUrl(path);
 }
 
 type ReportModalMode = "create" | "edit-draft" | "revise";
@@ -1252,15 +1248,10 @@ function VersionHistoryTable({
 }
 
 function StaffIdentity({ submission }: { submission: CaseSubmission }) {
-  const src = avatarSrc(submission.staff_profile_image_path);
   return (
     <div className="flex items-center gap-3">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F7F0FA] text-xs font-bold text-[#704389]">
-        {src ? (
-          <img src={src} alt="" className="h-full w-full object-cover" />
-        ) : (
-          initials(submission.staff_name)
-        )}
+        <ProtectedProfileImage path={submission.staff_profile_image_path} className="h-full w-full object-cover" fallback={initials(submission.staff_name)} />
       </div>
       <div>
         <p className="font-semibold text-[#2B3642]">{submission.staff_name}</p>
@@ -1273,16 +1264,11 @@ function StaffIdentity({ submission }: { submission: CaseSubmission }) {
 }
 
 function ReportHeader({ submission }: { submission: CaseSubmission }) {
-  const src = avatarSrc(submission.staff_profile_image_path);
   return (
     <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-6 py-5">
       <div className="flex items-center gap-4">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F7F0FA] text-sm font-bold text-[#704389]">
-          {src ? (
-            <img src={src} alt="" className="h-full w-full object-cover" />
-          ) : (
-            initials(submission.staff_name)
-          )}
+          <ProtectedProfileImage path={submission.staff_profile_image_path} className="h-full w-full object-cover" fallback={initials(submission.staff_name)} />
         </div>
         <div className="min-w-0">
           <p className="truncate text-lg font-bold text-[#111827]">

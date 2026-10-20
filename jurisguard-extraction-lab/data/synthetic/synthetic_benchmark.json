@@ -1,0 +1,12 @@
+{
+  "dataset_origin": "synthetic",
+  "samples": [
+    {
+      "sample_id": "synthetic-intake-001",
+      "quality_group": "clean",
+      "image": "synthetic_intake.png",
+      "ground_truth": "synthetic_intake.json",
+      "nlp_text": "synthetic_intake.txt"
+    }
+  ]
+}

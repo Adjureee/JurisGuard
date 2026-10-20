@@ -22,7 +22,7 @@ import {
 } from "../../features/dashboardReminders/dashboardReminderStore";
 import type { ReminderPriority } from "../../features/dashboardReminders/dashboardReminderStore";
 import { useAuth } from "../../contexts/AuthContext";
-import { resolveProfileImageUrl } from "../../services/authService";
+import ProtectedProfileImage from "../../components/ProtectedProfileImage";
 import { listCaseSubmissions, type CaseSubmission } from "../../services/caseSubmissionService";
 import { useDashboardAnalytics } from "./useDashboardAnalytics";
 
@@ -351,13 +351,12 @@ export default function AdminDashboard() {
               <table className="w-full min-w-[640px] text-sm">
                 <tbody className="divide-y divide-[#E5E7EB]">
                   {recentSubmissions.map((submission) => {
-                    const image = resolveProfileImageUrl(submission.staff_profile_image_path);
                     return (
                       <tr key={submission.submission_id} onClick={() => navigate(`/case-review-center?submission=${submission.submission_id}`)} className="cursor-pointer bg-white hover:bg-[#F9FAFB]">
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F7F0FA] text-sm font-bold text-[#704389]">
-                              {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : initials(submission.staff_name).slice(0, 1)}
+                              <ProtectedProfileImage path={submission.staff_profile_image_path} className="h-full w-full object-cover" fallback={initials(submission.staff_name).slice(0, 1)} />
                             </div>
                             <div>
                               <p className="font-bold text-[#111827]">{submission.staff_name}</p>

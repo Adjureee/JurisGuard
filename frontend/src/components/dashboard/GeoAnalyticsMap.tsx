@@ -83,20 +83,10 @@ function statusStyle(status: CaseStatus) {
 
 function getTileLayerConfig(explicitUrl?: string) {
   const configuredUrl = explicitUrl || import.meta.env.VITE_LEAFLET_TILE_URL;
-  const forceOfflineTiles = import.meta.env.VITE_LEAFLET_OFFLINE_TILES === "true";
-
-  if (configuredUrl || forceOfflineTiles) {
-    return {
-      attribution: "Local OSM tiles",
-      url: configuredUrl || "/tiles/{z}/{x}/{y}.png",
-    };
-  }
-
-  return {
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  };
+  // Tiles are optional: case markers and heatmap still work without a basemap.
+  // Never contact a remote tile server unless an operator explicitly configures it.
+  if (!configuredUrl) return null;
+  return { attribution: "Configured map tiles", url: configuredUrl };
 }
 
 function isValidCoordinate(lat: number, lng: number) {
@@ -317,7 +307,12 @@ export default function GeoAnalyticsMap({
         </div>
       </div>
 
-      <div className="relative z-0 h-[460px] min-h-[360px]">
+      {!tileLayer && (
+        <p className="border-b border-[#E5E7EB] bg-amber-50 px-4 py-2 text-xs text-amber-800">
+          Offline map: case markers and heatmap are available without a basemap. Configure local tiles for geographic context.
+        </p>
+      )}
+      <div className="relative z-0 h-[460px] min-h-[360px] bg-slate-100">
         <MapContainer
           center={[safeCenter.lat, safeCenter.lng]}
           zoom={12}
@@ -325,12 +320,14 @@ export default function GeoAnalyticsMap({
           className="z-0 h-full w-full"
         >
           <ResizeMapWhenReady />
-          <TileLayer
-            attribution={tileLayer.attribution}
-            url={tileLayer.url}
-            minZoom={10}
-            maxZoom={18}
-          />
+          {tileLayer && (
+            <TileLayer
+              attribution={tileLayer.attribution}
+              url={tileLayer.url}
+              minZoom={10}
+              maxZoom={18}
+            />
+          )}
           <HeatLayer points={visiblePoints} />
           <FocusBarangay barangay={selectedBarangay} stats={mappedBarangays} />
 

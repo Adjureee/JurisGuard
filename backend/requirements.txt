@@ -11,10 +11,11 @@ email-validator
 python-dotenv
 requests
 pillow
-opencv-python
-numpy
-paddleocr
-paddlepaddle
+opencv-python==4.11.0.86
+numpy==1.26.4
+paddleocr==3.7.0
+paddlepaddle==3.3.1
+pypdfium2
 spacy
 pandas
 openpyxl

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
-import { resolveProfileImageUrl } from "../../services/authService";
+import ProtectedProfileImage from "../ProtectedProfileImage";
 import {
   useNotificationStore,
   type NotificationType,
@@ -68,7 +69,7 @@ function relativeTime(value: string) {
 
 export default function Topbar({ onToggleSidebar }: TopbarProps) {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const addLog = useAuditLogStore((state) => state.addLog);
   const notifications = useNotificationStore((state) => state.notifications);
   const addNotification = useNotificationStore((state) => state.addNotification);
@@ -96,7 +97,6 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   const unreadCount = visibleNotifications.filter((notification) => !notification.isRead).length;
   const recentNotifications = visibleNotifications.slice(0, 6);
   const visibleNotificationIds = visibleNotifications.map((notification) => notification.id);
-  const profileImageSrc = resolveProfileImageUrl(user?.profile_image_path);
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {
@@ -202,7 +202,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
     };
   }, [addNotification, user]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     addLog({
       userId: user?.user_id,
       user: user?.full_name || user?.email,
@@ -212,8 +212,13 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
       entityType: "user",
       entityId: user ? String(user.user_id) : undefined,
     });
-    logout();
-    navigate("/login", { replace: true });
+    try {
+      await signOut();
+      navigate("/login", { replace: true });
+    } catch {
+      // Do not claim logout succeeded while the server still accepts this token.
+      toast.error("Sign out failed. Check the connection and retry.");
+    }
   };
 
   const handleNotificationClick = (id: string, redirectTo: string) => {
@@ -380,11 +385,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
               className="inline-flex h-10 items-center gap-2 rounded-md border border-[#E5E7EB] bg-white px-2 text-[#2B3642] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC] sm:px-3"
             >
               <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#704389] text-xs font-semibold text-white">
-                {profileImageSrc ? (
-                  <img src={profileImageSrc} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  initials(user?.full_name, user?.email)
-                )}
+                <ProtectedProfileImage path={user?.profile_image_path} className="h-full w-full object-cover" fallback={initials(user?.full_name, user?.email)} />
               </span>
               <span className="hidden max-w-40 truncate text-sm font-semibold sm:inline">
                 {user?.full_name || user?.email || "User"}

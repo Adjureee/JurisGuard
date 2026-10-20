@@ -1,0 +1,18 @@
+# Private documents, transcripts, labels, and generated results stay local.
+data/input/*
+data/ground_truth/*
+data/real_evaluation/*
+data/outputs/*
+ocr/*
+extraction/*
+reports/*
+!data/input/.gitkeep
+!data/ground_truth/.gitkeep
+!data/outputs/.gitkeep
+!ocr/.gitkeep
+!extraction/.gitkeep
+!reports/.gitkeep
+__pycache__/
+*.py[cod]
+.venv/
+.venv-*/

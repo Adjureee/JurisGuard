@@ -92,7 +92,9 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
       path: user?.role === "admin" ? "/case-review-center" : "/case-submissions",
       icon: <SubmissionIcon />,
     },
-    ...(user?.role === "admin" ? [{ label: "Verification", path: "/admin/verification", icon: <ShieldIcon /> }] : []),
+    ...(user?.role === "admin" ? [
+      { label: "Verification", path: "/admin/verification", icon: <ShieldIcon /> },
+    ] : []),
   ];
   const recordsNavigation = [navigation[4]];
   const navigationSections = [

@@ -18,6 +18,7 @@ export default function RegisterPage() {
   const [employeeIdPreview, setEmployeeIdPreview] = useState("");
   const [employeeIdReference, setEmployeeIdReference] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [bootstrapKey, setBootstrapKey] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -75,6 +76,7 @@ export default function RegisterPage() {
         email,
         password,
         employee_id_path: employeeIdPreview || employeeIdReference,
+        ...(bootstrapKey ? { bootstrap_key: bootstrapKey } : {}),
       });
       setSuccess(response.message);
       addNotification({
@@ -91,6 +93,7 @@ export default function RegisterPage() {
       removeEmployeeId();
       setPassword("");
       setConfirmPassword("");
+      setBootstrapKey("");
       window.setTimeout(() => {
         navigate("/login", { replace: true });
       }, 1200);
@@ -234,6 +237,17 @@ export default function RegisterPage() {
                   </AnimatePresence>
                 </div>
               </div>
+
+              <label className="block">
+                <span className="text-sm font-medium text-[#111827]">Initial admin setup key (only for the first account)</span>
+                <input
+                  type="password"
+                  value={bootstrapKey}
+                  onChange={(event) => setBootstrapKey(event.target.value)}
+                  autoComplete="off"
+                  className="mt-1.5 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950"
+                />
+              </label>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">

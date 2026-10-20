@@ -1,0 +1,29 @@
+{
+  "sample_id": "synthetic-intake-001",
+  "sample_origin": "synthetic",
+  "document_type": "intake_form",
+  "reference_text": "INTERVIEW SHEET\nName: Ana Reyes\nContact No.: 09170001234\nAddress: 12 Mabini Street",
+  "inventory": {
+    "Control Number": null,
+    "Party Represented": "Ana Reyes",
+    "Gender/Sex": null,
+    "Title of the Case": null,
+    "Court/Body": null,
+    "Case No.": null,
+    "Cause of Action": null,
+    "Status of the Case": null,
+    "Last Action Taken": null,
+    "Cause of Termination": null,
+    "Date of Termination": null,
+    "Place of Detention": null,
+    "Address": "12 Mabini Street",
+    "Contact Number": "09170001234",
+    "Date of Confinement": null,
+    "Urban": null,
+    "Rural": null,
+    "Drugs": null,
+    "Female": null,
+    "SENIOR": null,
+    "CICL": null
+  }
+}

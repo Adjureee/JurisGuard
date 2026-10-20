@@ -658,7 +658,7 @@ export default function AnalyticsPage() {
               </div>
               <div ref={monthlyChartRef} className="h-80">
                 {displayMonthlyTrends.length === 0 ? <EmptyState message="No intake records match the selected date range." /> : (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
                     <LineChart data={displayMonthlyTrends}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                       <XAxis dataKey="month" stroke="#6B7280" fontSize={12}>
@@ -710,7 +710,7 @@ export default function AnalyticsPage() {
                 </div>
               </div>
               <div ref={weeklyChartRef} className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
                   <BarChart data={intakeLoad?.weekly ?? []}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                       <XAxis dataKey="day" stroke="#6B7280" fontSize={11}>
@@ -814,7 +814,7 @@ export default function AnalyticsPage() {
               </div>
               <div ref={categoryChartRef}>
                 <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
                     <PieChart>
                       <Pie data={categoryPie} dataKey="total_cases" nameKey="category" innerRadius={58} outerRadius={96} paddingAngle={3}>
                         {categoryPie.map((entry, index) => <Cell key={entry.category} fill={COLORS[index % COLORS.length]} />)}
@@ -876,7 +876,7 @@ export default function AnalyticsPage() {
                   {displayTerminatedMonthly.length === 0 ? (
                     <EmptyState message="No terminated case records match the selected date range." />
                   ) : (
-                    <ResponsiveContainer width="100%" height={240}>
+                    <ResponsiveContainer width="100%" height={240} initialDimension={{ width: 300, height: 240 }}>
                       <AreaChart data={displayTerminatedMonthly}>
                         <defs>
                           <linearGradient id="terminatedGradient" x1="0" y1="0" x2="0" y2="1">

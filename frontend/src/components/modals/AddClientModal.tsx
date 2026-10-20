@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
+import { Camera, Keyboard, Upload } from "lucide-react";
 import { useForm } from "react-hook-form";
 import type {
   FieldPath,
@@ -331,7 +332,7 @@ function MethodCard({
       }`}
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#704389]/10 text-[#704389]">
-        <i className={`fa-solid ${icon}`} aria-hidden="true" />
+        {icon === "fa-camera" ? <Camera aria-hidden="true" /> : icon === "fa-upload" ? <Upload aria-hidden="true" /> : <Keyboard aria-hidden="true" />}
       </div>
       <p className="mt-4 text-base font-semibold text-[#2B3642]">{title}</p>
       <p className="mt-2 text-sm leading-6 text-[#4B5563]">{description}</p>
@@ -595,11 +596,18 @@ export default function AddClientModal({
       addNotification({
         type: "ocr_completed",
         userId: user?.user_id,
-        message: "OCR extraction completed",
+        message: result.needsReview ? "OCR extraction needs review" : "OCR extraction completed",
         entityType: "ocr",
         entityId: label,
       });
-      toast.success("OCR extraction completed", { id: toastId });
+      if (result.needsReview) {
+        const message = result.documentType === "unknown" || result.documentType === "ambiguous"
+          ? "Identify the document type and verify fields before saving."
+          : "OCR extraction needs review. Verify fields before saving.";
+        toast(message, { id: toastId });
+      } else {
+        toast.success("OCR extraction completed", { id: toastId });
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "OCR failed", {
         id: toastId,
