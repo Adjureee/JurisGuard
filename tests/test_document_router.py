@@ -93,10 +93,9 @@ class DocumentRouterTests(unittest.TestCase):
             with self.subTest(text=text.splitlines()[1]):
                 result = self.router.process(text)
                 self.assertEqual(result["document_type"], "sandiganbayan_document")
-                self.assertEqual(result["inventory"], empty_inventory())
                 self.assertEqual(self.router.extract_rtc_decision(text), empty_inventory())
                 self.assertIsNotNone(result["diagnostics"]["out_of_scope_court_signal"])
-                self.assertTrue(result["needs_review"])
+                self.assertTrue(all(value is None for field, value in result["inventory"].items() if field != "Case No."))
 
     def test_rtc_heading_precedes_historical_sandiganbayan_reference(self):
         text = RTC_DECISION + "\nThe Sandiganbayan was mentioned in procedural history."
@@ -149,12 +148,24 @@ class DocumentRouterTests(unittest.TestCase):
         result = self.router.process(RTC_DECISION)
         self.assertEqual(result["document_type"], "rtc_decision")
         inventory = result["inventory"]
-        self.assertEqual(inventory["Court/Body"], "REGIONAL TRIAL COURT, Branch 12")
         self.assertEqual(inventory["Case No."], "00045-24")
-        self.assertEqual(inventory["Title of the Case"], "People of the Philippines v. JUAN DELA CRUZ")
-        for field in ("Party Represented", "Status of the Case", "Date of Termination", "Cause of Termination", "Control Number"):
+        for field in ("Party Represented", "Title of the Case", "Court/Body", "Status of the Case", "Date of Termination", "Cause of Termination", "Control Number"):
             self.assertIsNone(inventory[field])
         self.assert_schema(inventory)
+
+    def test_court_documents_map_only_explicit_criminal_case_number(self):
+        synthetic_variations = (
+            ("REPUBLIC OF THE PHILIPPINES\nSANDIGANBAYAN\nSIXTH DIVISION\nCriminal Case No. SB-25-CRM-0001\nDECISION", "SB-25-CRM-0001"),
+            ("REPUBLIC OF THE PHILIPPINES\nSand1ganbayan\nPEOPLE OF THE PHILIPPINES\nCase No.: SB - 25 - CRM - 0002\nDECISION", "SB - 25 - CRM - 0002"),
+            ("REPUBLIC OF THE PHILIPPINES\nSANDIGANBAYAN\nFOURTH DIVISION\nCriminal Case No.\nDECISION", None),
+        )
+        for text, expected in synthetic_variations:
+            with self.subTest(expected=expected):
+                result = self.router.process(text)
+                self.assertEqual(result["document_type"], "sandiganbayan_document")
+                self.assertEqual(result["inventory"]["Case No."], expected)
+                self.assertTrue(all(value is None for field, value in result["inventory"].items() if field != "Case No."))
+                self.assertEqual(result["needs_review"], expected is None)
 
     def test_empty_and_whitespace_input(self):
         for raw in ("", "  \n\t  "):
@@ -197,6 +208,7 @@ class DocumentRouterTests(unittest.TestCase):
     def test_direct_extractors_return_exact_schema(self):
         self.assert_schema(self.router.extract_intake_form(ENGLISH_INTAKE))
         self.assert_schema(self.router.extract_rtc_decision(RTC_DECISION))
+        self.assert_schema(self.router.extract_sandiganbayan_document(SANDIGANBAYAN_DECISION))
 
     def test_concatenated_same_type_skips_extraction(self):
         raw = ENGLISH_INTAKE + "\nINTERVIEW SHEET\nName: Another Person\n"

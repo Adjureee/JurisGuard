@@ -115,7 +115,7 @@ export function resolvePanaboBarangay(value: string | null | undefined): string 
   );
 }
 
-export function getPanaboCoordinate(value: string | null | undefined): GeoCoordinate {
+export function getPanaboCoordinate(value: string | null | undefined): GeoCoordinate | null {
   const barangay = resolvePanaboBarangay(value);
-  return barangay ? PANABO_COORDINATES[barangay] : PANABO_CITY_HALL_COORDINATES;
+  return barangay ? PANABO_COORDINATES[barangay] : null;
 }

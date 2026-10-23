@@ -170,22 +170,28 @@ function formatAsOfDate(date = new Date()) {
   });
 }
 
-function boolFlag(value: boolean | undefined) {
+function officeHeading(rows: CriminalCaseRow[], field: "region" | "district_office") {
+  const values = new Set(rows.map(({ record }) => record.intake_record[field]?.trim()).filter((value): value is string => Boolean(value)));
+  return values.size === 1 ? [...values][0] : "";
+}
+
+function boolFlag(value: boolean | null | undefined) {
   return value ? 1 : 0;
 }
 
-function derivedClassification(
-  age: number | undefined,
-  sex: string | undefined,
+function reviewedFlagCell(value: boolean | null | undefined) {
+  return value === true ? 1 : value === false ? 0 : "";
+}
+
+function classificationForExport(
   locationType: string | undefined,
   existing?: Partial<ClientClassification>,
 ): Partial<ClientClassification> {
-  const numericAge = Number(age);
   return {
     ...existing,
-    flag_female: sex?.trim().toLowerCase() === "female",
-    flag_senior: Number.isFinite(numericAge) && numericAge >= 60,
-    flag_cicl: Number.isFinite(numericAge) && numericAge < 15,
+    flag_female: existing?.flags_reviewed === true ? existing.flag_female ?? null : null,
+    flag_senior: existing?.flags_reviewed === true ? existing.flag_senior ?? null : null,
+    flag_cicl: existing?.flags_reviewed === true ? existing.flag_cicl ?? null : null,
     flag_urban: locationType === "Urban",
     flag_rural: locationType === "Rural",
   };
@@ -220,9 +226,7 @@ function exportParticipantRows(
       address: participant.address,
       contactNo: participant.contact_no,
       relationshipToApplicant: participant.relationship_to_applicant,
-      classification: derivedClassification(
-        participant.age,
-        participant.sex,
+      classification: classificationForExport(
         record.cases.location_type,
         participant.classification,
       ),
@@ -239,9 +243,7 @@ function exportParticipantRows(
       relationshipToApplicant:
         client?.client_details.representative_relationship ||
         record.representative.relationship_to_applicant,
-      classification: derivedClassification(
-        client?.client.age,
-        client?.client.sex,
+      classification: classificationForExport(
         record.cases.location_type,
         client?.client_classification,
       ),
@@ -260,9 +262,9 @@ function participantValues(
     boolFlag(participant.classification?.flag_urban),
     boolFlag(participant.classification?.flag_rural),
     boolFlag(participant.classification?.flag_drugs),
-    boolFlag(participant.classification?.flag_female),
-    boolFlag(participant.classification?.flag_senior),
-    boolFlag(participant.classification?.flag_cicl),
+    reviewedFlagCell(participant.classification?.flag_female),
+    reviewedFlagCell(participant.classification?.flag_senior),
+    reviewedFlagCell(participant.classification?.flag_cicl),
     participant.address,
     participant.contactNo,
     participant.relationshipToApplicant ||
@@ -283,16 +285,14 @@ export function buildCriminalCasesCsv(
     "KAGAWARAN NG KATARUNGAN",
     "TANGGAPAN NG MANANANGGOL PAMBAYAN",
     "(PUBLIC ATTORNEY'S OFFICE)",
-    "Regional Office No. XI",
-    "Panabo City District Office",
+    officeHeading(filteredRows, "region"),
+    officeHeading(filteredRows, "district_office"),
     "YEAR-END INVENTORY OF CASES",
     `As of ${formatAsOfDate()}`,
   ];
 
   const lines = filteredRows.map(({ record, client }) => {
-    const classification = derivedClassification(
-      client?.client.age,
-      client?.client.sex,
+    const classification = classificationForExport(
       record.cases.location_type,
       client?.client_classification,
     );
@@ -312,9 +312,9 @@ export function buildCriminalCasesCsv(
       boolFlag(classification.flag_urban),
       boolFlag(classification.flag_rural),
       boolFlag(classification.flag_drugs),
-      boolFlag(classification.flag_female),
-      boolFlag(classification.flag_senior),
-      boolFlag(classification.flag_cicl),
+      reviewedFlagCell(classification.flag_female),
+      reviewedFlagCell(classification.flag_senior),
+      reviewedFlagCell(classification.flag_cicl),
       record.cases.date_of_confinement,
       record.cases.place_of_detention,
       record.intake_record.form_date,
@@ -365,7 +365,7 @@ export function buildCriminalCasesExcelHtml(
       drugs:
         current.drugs + boolFlag(participant.classification?.flag_drugs),
       female:
-        current.female + boolFlag(participant.sex?.trim().toLowerCase() === "female"),
+        current.female + boolFlag(participant.classification?.flag_female),
       senior:
         current.senior + boolFlag(participant.classification?.flag_senior),
       cicl:
@@ -453,7 +453,7 @@ export function buildCriminalCasesExcelHtml(
   ];
   const totalRow = `<tr class="total">${totalValues.map((value) => `<td>${htmlCell(value)}</td>`).join("")}</tr>`;
 
-  return `<!doctype html><html><head><meta charset="utf-8" /><style>body{font-family:Arial,sans-serif;color:#2B3642}table{border-collapse:collapse;width:100%}th{background:#E9EEF3;text-transform:uppercase;letter-spacing:.04em}th,td{border:1px solid #D6DEE7;padding:8px;font-size:12px;vertical-align:middle}.title{text-align:center;font-weight:700}.total td{background:#F3F4F6;font-weight:700}</style></head><body><p class="title">REPUBLIKA NG PILIPINAS</p><p class="title">KAGAWARAN NG KATARUNGAN</p><p class="title">TANGGAPAN NG MANANANGGOL PAMBAYAN</p><p class="title">(PUBLIC ATTORNEY'S OFFICE)</p><p class="title">Regional Office No. XI</p><p class="title">Panabo City District Office</p><p class="title">YEAR-END INVENTORY OF CASES</p><p class="title">As of ${htmlCell(formatAsOfDate())}</p><table><thead><tr>${headers.map((header) => `<th>${htmlCell(header)}</th>`).join("")}</tr></thead><tbody>${body}${totalRow}</tbody></table></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8" /><style>body{font-family:Arial,sans-serif;color:#2B3642}table{border-collapse:collapse;width:100%}th{background:#E9EEF3;text-transform:uppercase;letter-spacing:.04em}th,td{border:1px solid #D6DEE7;padding:8px;font-size:12px;vertical-align:middle}.title{text-align:center;font-weight:700}.total td{background:#F3F4F6;font-weight:700}</style></head><body><p class="title">REPUBLIKA NG PILIPINAS</p><p class="title">KAGAWARAN NG KATARUNGAN</p><p class="title">TANGGAPAN NG MANANANGGOL PAMBAYAN</p><p class="title">(PUBLIC ATTORNEY'S OFFICE)</p><p class="title">${htmlCell(officeHeading(filteredRows, "region"))}</p><p class="title">${htmlCell(officeHeading(filteredRows, "district_office"))}</p><p class="title">YEAR-END INVENTORY OF CASES</p><p class="title">As of ${htmlCell(formatAsOfDate())}</p><table><thead><tr>${headers.map((header) => `<th>${htmlCell(header)}</th>`).join("")}</tr></thead><tbody>${body}${totalRow}</tbody></table></body></html>`;
 }
 
 export function downloadCsv(filename: string, csv: string) {

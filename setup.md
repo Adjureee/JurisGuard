@@ -40,11 +40,13 @@ Open `.env` and update the database password:
 
 ```env
 DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/jurisguard
+SECRET_KEY=YOUR_PRIVATE_RANDOM_VALUE_OF_AT_LEAST_32_CHARACTERS
 FRONTEND_ORIGIN=http://localhost:5173
 UPLOAD_DIR=uploads
 MISTRAL_API_KEY=
 VITE_API_BASE_URL=http://localhost:8000/api
 LOCAL_OCR_MAX_DIMENSION=2500
+LOCAL_OCR_DET_MAX_DIMENSION=1280
 LOCAL_OCR_MAX_PAGES=8
 LOCAL_OCR_MAX_PIXELS=40000000
 PAO_CHECKBOX_MODE=strict
@@ -53,8 +55,10 @@ PAO_SPACY_DEBUG=false
 
 Notes:
 
-- `auto` and `offline` extraction run locally even when `MISTRAL_API_KEY` is set. Cloud extraction requires the explicit `cloud` mode.
-- PaddleOCR uses existing local model directories and does not download models at runtime. See [offline extraction testing](docs/offline_extraction_testing.md) for model paths and commands.
+- Generate `SECRET_KEY` with `python -c "import secrets; print(secrets.token_urlsafe(48))"` and keep it private. The backend refuses a missing or short key.
+- `auto` and `offline` use local PaddleOCR. Cloud mode requires explicit selection and a configured `MISTRAL_API_KEY`.
+- Place `VITE_API_BASE_URL=http://localhost:8000/api` in `frontend/.env.local` as well; Vite reads frontend variables from its own directory.
+- Interactive uploads use cached PP-OCRv5 mobile detection and English/Latin recognition models for practical Windows CPU latency. PP-OCRv6 medium remains selectable with `PADDLEOCR_MODEL_PROFILE=medium` for slower accuracy experiments. See [offline extraction testing](docs/offline_extraction_testing.md) for paths and version checks.
 - `PAO_CHECKBOX_MODE=strict` prevents printed checkbox labels from being treated as selected options.
 - Do not upload `.env` to GitHub. The repository already ignores it.
 
@@ -153,55 +157,36 @@ If Vite uses another port, open the URL shown in the terminal.
 
 ## 7. Create an Admin Account
 
-On a fresh database, generate a unique random setup key (at least 32 characters) and set `ADMIN_BOOTSTRAP_KEY` **on the backend only**, before starting the API. Register the first account through the application and enter that key in the optional initial admin setup field. The backend assigns the first account the admin role, approves it, and hashes its password; registrations without the configured key cannot claim admin access. Once the first account exists, remove the key from the backend environment and restart. Subsequent registrations remain pending until an admin approves them; the setup field should be left blank. Never put the setup key in `VITE_` variables or commit it. Use a unique strong account password. Do not insert plaintext passwords or use shared default credentials in SQL.
+On a fresh database, generate a unique random setup key of at least 32 characters and set `ADMIN_BOOTSTRAP_KEY` in the backend environment before starting the API. Register the first account through the application and enter that key in the initial admin setup field. The backend hashes the account password and approves the first administrator. Remove the bootstrap key and restart the backend after this account exists.
+
+Do not insert a plaintext password into `password_hash` or use shared default credentials. Later registrations remain pending until an administrator approves them.
 
 ## 8. OCR Pipeline Notes
 
-JurisGuard defaults to offline PaddleOCR with a local Tesseract fallback. Cloud extraction is used only when explicitly selected.
-
-Offline pipeline flow:
+The application uses local PaddleOCR for `auto` and `offline` extraction. `cloud` is an explicit optional mode; the three OCR and three NLP comparison candidates run only in `jurisguard-extraction-lab/`.
 
 ```text
-Uploaded image or PDF
-  -> Pillow orientation/contrast correction or local PDF rendering
-  -> PaddleOCR text detection and recognition (local Tesseract fallback)
+Captured image or PDF
+  -> local image preparation or PDF page rendering
+  -> cached PaddleOCR detection and recognition
   -> weighted document router
-  -> intake spaCy/Regex compatibility fields or RTC decision rules
-  -> exact inventory plus separate evidence and review diagnostics
-  -> PostgreSQL metadata storage
+  -> intake spaCy/Regex fields or RTC decision rules
+  -> 21-field inventory, separate diagnostics, and human review
 ```
 
-The offline pipeline is deterministic. It does not train on the uploaded form. It uses strict rules for Filipino PAO labels such as:
-
-- `Petsa` -> Form Date
-- `Control No.` -> Control Number
-- `Rehiyon` -> Region
-- `District Office` -> District Office
-- `Pangalan` -> Applicant or representative name depending on section context
-
-## 9. Live Scanner
-
-The repository includes `live_scanner.py`, a standalone OpenCV scanner for webcam-based document capture.
-
-Run it from the project root:
+The pipeline does not train on an uploaded form. A failed OCR run requires review and does not switch to a comparison engine. Test a synthetic image with:
 
 ```powershell
-python live_scanner.py
+.\backend\venv\Scripts\python.exe backend\extract_one.py jurisguard-extraction-lab\data\synthetic\synthetic_intake.png
 ```
 
-Basic controls:
+See [offline extraction testing](docs/offline_extraction_testing.md) and [manuscript comparison protocol](jurisguard-extraction-lab/MANUSCRIPT_TESTING.md).
 
-- Move the PAO form in front of the camera.
-- The scanner detects the paper boundary.
-- Press `SPACEBAR` to capture and flatten the document.
-- The output image is saved as `temp_live_scan.jpg`.
+## 9. Document Camera
 
-If the camera shows a blank or green frame:
+Connect the overhead document camera by USB and confirm Windows lists it as a camera. In JurisGuard, choose **Document Camera** and select **Detect cameras**. Allow camera access for the exact JurisGuard address shown in the browser. Select **NETUM Camera** if that is the connected device, then select **Start document camera**. Check the displayed camera name and frame resolution before positioning the page. Select **Capture photo**, zoom in to inspect small text, and use **Retake photo** if blurred. Select **Use photo for OCR** only after the still photo appears. The preview itself does not run OCR.
 
-- Close other apps using the camera.
-- Restart the scanner.
-- Try another camera index in the script if multiple cameras are connected.
-- Check Windows camera privacy settings.
+If camera access is denied or remains pending, check the browser permission for the exact JurisGuard address and try **Detect cameras** again. If the device does not appear in the browser camera list, use its own scanning software to save a JPG or PNG, then choose **Upload Document**. Browser camera capture requires localhost or a secure origin and camera permission. A successful preview alone does not verify still capture and OCR; test both with the actual camera before the defense.
 
 ## 10. Common Commands
 
@@ -243,7 +228,7 @@ python -m py_compile main.py models.py database.py ai_service.py
 Wrong:
 
 ```powershell
-uvicorn main:app --reload host 127.0.0.1 --port 8000
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Correct:
@@ -297,6 +282,7 @@ The offline OCR layer can be CPU-heavy. You can try:
 
 ```env
 LOCAL_OCR_MAX_DIMENSION=1800
+LOCAL_OCR_DET_MAX_DIMENSION=960
 ```
 
 Lower values are faster but may reduce accuracy on small or blurry handwriting.

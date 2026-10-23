@@ -30,7 +30,7 @@ export interface EnrichedGeoCase extends RawGeoCase {
   barangay: string;
   latitude: number;
   longitude: number;
-  coordinate_source: "case_coordinates" | "local_barangay_dictionary" | "panabo_city_fallback";
+  coordinate_source: "case_coordinates" | "local_barangay_dictionary";
 }
 
 export interface DashboardOverview {
@@ -176,16 +176,17 @@ function firstText(...values: Array<string | number | null | undefined>) {
 export function enrichCasesWithCoordinates<T extends RawGeoCase>(
   cases: T[],
 ): Array<EnrichedGeoCase & T> {
-  return cases.map((record, index) => {
+  return cases.flatMap((record, index) => {
     const rawBarangay = firstText(record.incident_barangay, record.barangay);
     const resolvedBarangay = resolvePanaboBarangay(rawBarangay);
     const explicitLat = toFiniteNumber(record.latitude);
     const explicitLng = toFiniteNumber(record.longitude);
     const hasExplicitCoordinates = explicitLat !== null && explicitLng !== null;
     const dictionaryCoordinates = getPanaboCoordinate(rawBarangay);
-    const fallbackUsed = !hasExplicitCoordinates && !resolvedBarangay;
+    // An unknown address must not become a marker at the city center.
+    if (!hasExplicitCoordinates && !dictionaryCoordinates) return [];
 
-    return {
+    return [{
       ...record,
       case_id: record.case_id ?? `local-geo-${index + 1}`,
       client_name: firstText(record.client_name, record.clientName, "Unknown Client"),
@@ -196,16 +197,14 @@ export function enrichCasesWithCoordinates<T extends RawGeoCase>(
         record.nature_of_case,
         "Unclassified",
       ),
-      case_status: firstText(record.case_status, record.caseStatus, record.status, "Pending"),
-      barangay: resolvedBarangay ?? (rawBarangay || "Panabo City"),
-      latitude: hasExplicitCoordinates ? explicitLat : dictionaryCoordinates.lat,
-      longitude: hasExplicitCoordinates ? explicitLng : dictionaryCoordinates.lng,
+      case_status: firstText(record.case_status, record.caseStatus, record.status, "Unspecified"),
+      barangay: resolvedBarangay ?? (rawBarangay || "Unspecified"),
+      latitude: hasExplicitCoordinates ? explicitLat : dictionaryCoordinates!.lat,
+      longitude: hasExplicitCoordinates ? explicitLng : dictionaryCoordinates!.lng,
       coordinate_source: hasExplicitCoordinates
         ? "case_coordinates"
-        : fallbackUsed
-          ? "panabo_city_fallback"
-          : "local_barangay_dictionary",
-    };
+        : "local_barangay_dictionary",
+    }];
   });
 }
 
@@ -217,7 +216,7 @@ export function buildLocalHeatmap(cases: EnrichedGeoCase[]): HeatmapResponse {
       barangayBuckets.get(record.barangay) ??
       {
         barangay: record.barangay,
-        city: "Panabo City",
+        city: resolvePanaboBarangay(record.barangay) ? "Panabo City" : "",
         total_cases: 0,
         active_cases: 0,
         terminated_cases: 0,

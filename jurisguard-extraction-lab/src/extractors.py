@@ -153,33 +153,23 @@ def extract_intake(raw_text: str) -> ExtractionResult:
 
 def extract_rtc(raw_text: str) -> ExtractionResult:
     result = ExtractionResult()
-    lines = _lines(raw_text)
-    for i, line in enumerate(lines):
-        court = re.search(r"\bREGIONAL\s+TR[I1l]AL\s+COURT\b", line.work, re.IGNORECASE)
-        if court:
-            value = line.work[court.start():].strip(" ,")
-            if i + 1 < len(lines) and re.fullmatch(r"Branch\s+(?:No\.?\s*)?[A-Z0-9-]+", lines[i + 1].work, re.IGNORECASE):
-                value += ", " + lines[i + 1].work
-            result.assign("Court/Body", value, line.number, line.raw)
-        case = re.fullmatch(r"(?:Criminal\s+)?Case\s+No\.\s*[:：]?\s*([A-Z0-9][A-Z0-9/ .-]*)", line.work, re.IGNORECASE)
+    for line in _lines(raw_text):
+        case = re.fullmatch(r"(?:Criminal|Crim\.?)\s+Case\s+No\.?\s*[:：]?\s*([A-Z0-9][A-Z0-9/ .\-–]*)", line.work, re.IGNORECASE)
         if case:
             result.assign("Case No.", case.group(1).strip(), line.number, line.raw)
-    for i, line in enumerate(lines):
-        if not re.match(r"PEOPLE\s+OF\s+THE\s+PHILIPPINES\b", line.work, re.IGNORECASE):
-            continue
-        versus = next((j for j in range(i + 1, min(i + 5, len(lines))) if re.fullmatch(r"-?\s*(?:versus|vs?\.?)\s*-?", lines[j].work, re.IGNORECASE)), None)
-        if versus is None:
-            continue
-        for j in range(versus + 1, min(versus + 4, len(lines))):
-            raw_name = lines[j].work
-            name = re.sub(r",?\s*Accus[ei]d\.?\s*$", "", raw_name, flags=re.IGNORECASE).strip(" ,.")
-            role = bool(re.search(r"\bAccus[ei]d\b", raw_name, re.IGNORECASE))
-            if not role and j + 1 < len(lines):
-                role = bool(re.fullmatch(r"Accus[ei]d\.?", lines[j + 1].work, re.IGNORECASE))
-            if role and name and not _heading(name):
-                result.assign("Title of the Case", "People of the Philippines v. " + name, lines[j].number, lines[j].raw)
-                break
-        break
+    if result.inventory["Case No."] is None:
+        result.warnings.append("Explicit RTC criminal case number was not found; no court-document fields were mapped.")
+    return result
+
+
+def extract_sandiganbayan(raw_text: str) -> ExtractionResult:
+    result = ExtractionResult()
+    for line in _lines(raw_text):
+        case = re.search(r"\b(SB\s*[-–]\s*\d{2}\s*[-–]\s*CRM\s*[-–]\s*\d{3,5})\b", line.work, re.IGNORECASE)
+        if case:
+            result.assign("Case No.", case.group(1).strip(), line.number, line.raw)
+    if result.inventory["Case No."] is None:
+        result.warnings.append("Explicit Sandiganbayan CRM criminal case number was not found; no court-document fields were mapped.")
     return result
 
 
@@ -191,3 +181,8 @@ def extract_intake_form(raw_text: str) -> dict[str, str | bool | None]:
 def extract_rtc_decision(raw_text: str) -> dict[str, str | bool | None]:
     """Public extractor contract: exactly the inventory fields, no metadata."""
     return extract_rtc(raw_text).inventory
+
+
+def extract_sandiganbayan_document(raw_text: str) -> dict[str, str | bool | None]:
+    """Public extractor contract: exactly the inventory fields, no metadata."""
+    return extract_sandiganbayan(raw_text).inventory

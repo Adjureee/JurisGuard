@@ -61,11 +61,11 @@ export const clientFormSchema = z.object({
     place_of_detention: optionalText.optional(),
   }),
   client_classification: z.object({
-    // Derived from client/case data; kept optional for compatibility with
-    // existing records and API payloads.
-    flag_senior: z.boolean().optional(),
-    flag_cicl: z.boolean().optional(),
-    flag_female: z.boolean().optional(),
+    // These values require source evidence reviewed by a staff member.
+    flag_senior: z.boolean().nullable(),
+    flag_cicl: z.boolean().nullable(),
+    flag_female: z.boolean().nullable(),
+    flags_reviewed: z.boolean(),
     flag_urban: z.boolean().optional(),
     flag_rural: z.boolean().optional(),
     flag_drugs: z.boolean(),

@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -22,9 +23,12 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 import models
-from ai_service import process_document
+from classification_evidence import reviewed_flag_input, stored_reviewed_flags
+from extraction_runtime import (
+    extract_document, ExtractionBusy, ExtractionTimeout,
+    ExtractionCancelled, ExtractionWorkerError,
+)
 from extraction_mapping import ocr_status_for_result, public_extraction_payload
-from fastapi.concurrency import run_in_threadpool
 from database import engine, get_db
 from upload_validation import save_bounded_upload, verify_image
 
@@ -47,7 +51,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-SECRET_KEY = os.getenv("SECRET_KEY", "jurisguard-dev-secret-change-me")
+SECRET_KEY = os.getenv("SECRET_KEY", "").strip()
+if len(SECRET_KEY) < 32:
+    raise RuntimeError("SECRET_KEY must be set to a private random value of at least 32 characters.")
 TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "720"))
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
@@ -64,10 +70,6 @@ DOCUMENT_CONTENT_TYPES = {
 }
 MAX_DOCUMENT_BYTES = 25 * 1024 * 1024
 MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
-DEFAULT_INCIDENT_CITY = "Panabo City"
-DEFAULT_DISTRICT_OFFICE = "Panabo City Public Attorney's Office"
-SENIOR_CITIZEN_AGE = 60
-CICL_MAX_AGE = 15
 PANABO_CENTER = {"lat": 7.3081, "lng": 125.6841}
 BARANGAY_CENTROIDS: dict[str, tuple[float, float]] = {
     "A. O. Floirendo": (7.3977, 125.5802),
@@ -267,7 +269,7 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS detained BOOLEAN DEFAULT false",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS detained_since TIMESTAMP",
         "ALTER TABLE client_details ADD COLUMN IF NOT EXISTS place_of_detention VARCHAR(255)",
-        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_cicl BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_cicl BOOLEAN",
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_woman BOOLEAN DEFAULT false",
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_law_enforcer BOOLEAN DEFAULT false",
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_tenant_agrarian BOOLEAN DEFAULT false",
@@ -275,7 +277,7 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_ofw_sea BOOLEAN DEFAULT false",
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_former_rebel BOOLEAN DEFAULT false",
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_trafficking_victim BOOLEAN DEFAULT false",
-        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_senior_citizen BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_senior_citizen BOOLEAN",
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_vawc_victim BOOLEAN DEFAULT false",
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_drug_related BOOLEAN DEFAULT false",
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_terrorism_arrested BOOLEAN DEFAULT false",
@@ -290,7 +292,11 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_urban BOOLEAN DEFAULT false",
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_rural BOOLEAN DEFAULT false",
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_9165 BOOLEAN DEFAULT false",
-        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_female BOOLEAN DEFAULT false",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS class_female BOOLEAN",
+        "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS flags_reviewed BOOLEAN NOT NULL DEFAULT false",
+        "ALTER TABLE client_classification ALTER COLUMN class_cicl DROP DEFAULT",
+        "ALTER TABLE client_classification ALTER COLUMN class_senior_citizen DROP DEFAULT",
+        "ALTER TABLE client_classification ALTER COLUMN class_female DROP DEFAULT",
         "ALTER TABLE client_classification ADD COLUMN IF NOT EXISTS classification_notes TEXT",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS district_office VARCHAR(255)",
         "ALTER TABLE intake_record ADD COLUMN IF NOT EXISTS applicant_role VARCHAR(100)",
@@ -337,7 +343,8 @@ def ensure_schema_compatibility() -> None:
         'ALTER TABLE "case" ALTER COLUMN title_of_case TYPE VARCHAR(255)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS case_status VARCHAR(30)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS incident_barangay VARCHAR(120)',
-        f'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS incident_city VARCHAR(120) DEFAULT \'{DEFAULT_INCIDENT_CITY}\'',
+        'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS incident_city VARCHAR(120)',
+        'ALTER TABLE "case" ALTER COLUMN incident_city DROP DEFAULT',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS incident_address TEXT',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS latitude VARCHAR(50)',
         'ALTER TABLE "case" ADD COLUMN IF NOT EXISTS longitude VARCHAR(50)',
@@ -774,19 +781,6 @@ def normalize_sex(value: Any) -> str | None:
     return None
 
 
-def derived_client_classification(age: Any, sex: Any) -> dict[str, bool]:
-    try:
-        normalized_age = int(age)
-    except (TypeError, ValueError):
-        normalized_age = None
-    normalized_sex = str(sex or "").strip().lower()
-    return {
-        "flag_female": normalized_sex == "female",
-        "flag_senior": normalized_age is not None and normalized_age >= SENIOR_CITIZEN_AGE,
-        "flag_cicl": normalized_age is not None and normalized_age < CICL_MAX_AGE,
-    }
-
-
 def normalize_case_status(value: Any) -> str:
     return "Terminated" if str(value or "").strip().lower() == "terminated" else "Pending"
 
@@ -919,10 +913,7 @@ def case_participant_payload(
     client = participant.client
     classification = client.classification if client and client.classification else None
     details = client.details if client and client.details else None
-    derived = derived_client_classification(
-        client.age if client else None,
-        client.sex if client else None,
-    )
+    reviewed_flags = stored_reviewed_flags(classification)
     case_location = case_location or (participant.case.location_type if participant.case else None)
     case_representative = None
     if participant.case and participant.case.intake and participant.case.intake.representatives:
@@ -946,9 +937,8 @@ def case_participant_payload(
         "address": details.address if details else "",
         "contact_no": details.contact_no if details else "",
         "classification": {
-            "flag_senior": derived["flag_senior"],
-            "flag_cicl": derived["flag_cicl"],
-            "flag_female": derived["flag_female"],
+            **reviewed_flags,
+            "flags_reviewed": classification is not None and classification.flags_reviewed is True,
             "flag_urban": case_location == "Urban",
             "flag_rural": case_location == "Rural",
             "flag_drugs": bool(classification.class_drug_related or classification.class_9165) if classification else False,
@@ -989,6 +979,7 @@ def user_to_auth(user: models.User) -> dict[str, Any]:
         "profile_picture_path": user.profile_picture_path,
         "employee_id_path": employee_id_path,
         "profile_completed": bool(user.profile_completed),
+        "created_at": user.created_at.isoformat() if user.created_at else "",
     }
 
 
@@ -1025,7 +1016,7 @@ def user_to_details(user: models.User) -> dict[str, Any]:
 def get_client_payload(client: models.Client) -> dict[str, Any]:
     details = client.details or models.ClientDetails(client_id=client.client_id)
     classification = client.classification or models.ClientClassification(client_id=client.client_id)
-    derived = derived_client_classification(client.age, client.sex)
+    reviewed_flags = stored_reviewed_flags(classification)
     return {
         "client_id": str(client.client_id),
         "created_by_user_id": client.created_by_user_id,
@@ -1061,9 +1052,8 @@ def get_client_payload(client: models.Client) -> dict[str, Any]:
             "place_of_detention": details.place_of_detention or "",
         },
         "client_classification": {
-            "flag_senior": derived["flag_senior"],
-            "flag_cicl": derived["flag_cicl"],
-            "flag_female": derived["flag_female"],
+            **reviewed_flags,
+            "flags_reviewed": classification.flags_reviewed is True,
             "flag_urban": False,
             "flag_rural": False,
             "flag_drugs": bool(classification.class_drug_related or classification.class_9165),
@@ -1160,7 +1150,7 @@ def get_case_payload(record: models.Case) -> dict[str, Any]:
             "status_of_case": display_status,
             "case_status": display_status,
             "incident_barangay": record.incident_barangay or "",
-            "incident_city": record.incident_city or DEFAULT_INCIDENT_CITY,
+            "incident_city": record.incident_city or "",
             "incident_address": record.incident_address or "",
             "latitude": record.latitude or "",
             "longitude": record.longitude or "",
@@ -1376,11 +1366,12 @@ def apply_client_payload(client: models.Client, payload: ClientPayload) -> None:
     details.detained_since = parse_date(details_data.get("detained_since"))
     details.place_of_detention = details_data.get("place_of_detention")
 
-    derived = derived_client_classification(client.age, client.sex)
-    classification.class_senior_citizen = derived["flag_senior"]
-    classification.class_cicl = derived["flag_cicl"]
-    classification.class_female = derived["flag_female"]
-    classification.class_woman = derived["flag_female"]
+    reviewed_flags = reviewed_flag_input(class_data)
+    if reviewed_flags is not None:
+        classification.class_senior_citizen = reviewed_flags["flag_senior"]
+        classification.class_cicl = reviewed_flags["flag_cicl"]
+        classification.class_female = reviewed_flags["flag_female"]
+        classification.flags_reviewed = True
     classification.class_drug_related = bool(class_data.get("flag_drugs"))
     classification.class_foreign_national = "Yes" if class_data.get("flag_foreign_national") else None
     classification.class_vawc_victim = bool(class_data.get("flag_vawc_victim"))
@@ -1452,7 +1443,7 @@ def apply_case_payload(record: models.Case, payload: CasePayload) -> None:
     intake.control_no = limit_text(intake_data.get("control_no"), 20)
     intake.form_date = parse_date(intake_data.get("form_date"), intake.form_date) or intake.form_date
     intake.region = intake_data.get("region")
-    intake.district_office = intake_data.get("district_office") or DEFAULT_DISTRICT_OFFICE
+    intake.district_office = limit_text(intake_data.get("district_office"), 255)
     represented_party = intake_data.get("party_represented") or (
         intake_data.get("applicant_role_other")
         if intake_data.get("applicant_role") == "Others"
@@ -1511,7 +1502,7 @@ def apply_case_payload(record: models.Case, payload: CasePayload) -> None:
     record.status_of_case = normalized_status
     record.case_status = normalized_status
     record.incident_barangay = case_data.get("incident_barangay")
-    record.incident_city = case_data.get("incident_city") or DEFAULT_INCIDENT_CITY
+    record.incident_city = limit_text(case_data.get("incident_city"), 120)
     record.incident_address = case_data.get("incident_address")
     record.latitude = str(case_data.get("latitude")) if case_data.get("latitude") not in (None, "") else None
     record.longitude = str(case_data.get("longitude")) if case_data.get("longitude") not in (None, "") else None
@@ -1616,7 +1607,7 @@ def build_barangay_stats(records: list[models.Case]) -> list[dict[str, Any]]:
             barangay,
             {
                 "barangay": barangay,
-                "city": record.incident_city or DEFAULT_INCIDENT_CITY,
+                "city": record.incident_city or "",
                 "total_cases": 0,
                 "active_cases": 0,
                 "terminated_cases": 0,
@@ -2725,7 +2716,7 @@ def create_client(
             citizenship=client_data.get("citizenship") or "",
             language_dialect=client_data.get("language_dialect") or "",
         )
-        derived = derived_client_classification(client.age, client.sex)
+        reviewed_flags = reviewed_flag_input(class_data)
         db.add(client)
         db.flush()
         db.add(
@@ -2754,10 +2745,10 @@ def create_client(
         db.add(
             models.ClientClassification(
                 client_id=client.client_id,
-                class_senior_citizen=derived["flag_senior"],
-                class_cicl=derived["flag_cicl"],
-                class_female=derived["flag_female"],
-                class_woman=derived["flag_female"],
+                class_senior_citizen=reviewed_flags["flag_senior"] if reviewed_flags else None,
+                class_cicl=reviewed_flags["flag_cicl"] if reviewed_flags else None,
+                class_female=reviewed_flags["flag_female"] if reviewed_flags else None,
+                flags_reviewed=reviewed_flags is not None,
                 class_urban=False,
                 class_rural=False,
                 class_drug_related=bool(class_data.get("flag_drugs")),
@@ -2969,7 +2960,7 @@ def create_case(
             control_no=limit_text(intake_data.get("control_no"), 20),
             form_date=parse_date(intake_data.get("form_date"), datetime.now()) or datetime.now(),
             region=intake_data.get("region"),
-            district_office=intake_data.get("district_office") or DEFAULT_DISTRICT_OFFICE,
+            district_office=limit_text(intake_data.get("district_office"), 255),
             party_represented=limit_text(represented_party, 50),
             applicant_role=intake_data.get("applicant_role"),
             applicant_role_other=intake_data.get("applicant_role_other"),
@@ -3025,7 +3016,7 @@ def create_case(
             status_of_case=normalized_status,
             case_status=normalized_status,
             incident_barangay=case_data.get("incident_barangay"),
-            incident_city=case_data.get("incident_city") or DEFAULT_INCIDENT_CITY,
+            incident_city=limit_text(case_data.get("incident_city"), 120),
             incident_address=case_data.get("incident_address"),
             latitude=str(case_data.get("latitude")) if case_data.get("latitude") not in (None, "") else None,
             longitude=str(case_data.get("longitude")) if case_data.get("longitude") not in (None, "") else None,
@@ -3351,6 +3342,7 @@ async def upload_document(
     case_id: int | None = None,
     intake_id: int | None = None,
     extraction_mode: Literal["auto", "offline", "cloud"] = Query(default="auto"),
+    extraction_target: Literal["full", "client"] = Query(default="full"),
     db: Session = Depends(get_db),
 ):
     new_document = None
@@ -3398,8 +3390,8 @@ async def upload_document(
         db.commit()
         db.refresh(new_document)
 
-        extracted_json = await run_in_threadpool(
-            process_document, str(file_location), extraction_mode=extraction_mode
+        extracted_json = await extract_document(
+            str(file_location), extraction_mode, extraction_target, is_disconnected=request.is_disconnected
         )
         public_extracted_json = public_extraction_payload(extracted_json)
 
@@ -3429,7 +3421,7 @@ async def upload_document(
             "extracted_data": public_extracted_json,
         }
 
-    except Exception as exc:
+    except (Exception, asyncio.CancelledError) as exc:
         if isinstance(exc, HTTPException):
             if new_document is None and file_location is not None:
                 file_location.unlink(missing_ok=True)
@@ -3440,4 +3432,14 @@ async def upload_document(
             new_document.ocr_status = "FAILED"
             db.add(new_document)
             db.commit()
+        if isinstance(exc, asyncio.CancelledError):
+            raise
+        if isinstance(exc, ExtractionBusy):
+            raise HTTPException(status_code=503, detail=str(exc), headers={"Retry-After": "5"}) from exc
+        if isinstance(exc, ExtractionTimeout):
+            raise HTTPException(status_code=504, detail=str(exc)) from exc
+        if isinstance(exc, ExtractionCancelled):
+            raise HTTPException(status_code=499, detail="Document extraction cancelled.") from exc
+        if isinstance(exc, ExtractionWorkerError):
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         raise HTTPException(status_code=500, detail="Document extraction failed. Review server diagnostics.") from exc

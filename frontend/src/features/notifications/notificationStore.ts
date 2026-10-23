@@ -39,6 +39,8 @@ interface AddNotificationInput {
 
 interface NotificationState {
   notifications: OperationalNotification[];
+  userScope: string | null;
+  setUserScope: (accountScope: string | null) => void;
   addNotification: (notification: AddNotificationInput) => OperationalNotification;
   markRead: (id: string) => void;
   markAllRead: (ids?: string[]) => void;
@@ -46,7 +48,12 @@ interface NotificationState {
   clearNotifications: (ids?: string[]) => void;
 }
 
-const STORAGE_KEY = "jurisguard_notifications";
+const LEGACY_STORAGE_KEY = "jurisguard_notifications";
+const STORAGE_PREFIX = "jurisguard_notifications_v2";
+
+function storageKey(accountScope: string) {
+  return `${STORAGE_PREFIX}:${accountScope}`;
+}
 
 function defaultTitle(type: NotificationType) {
   if (type === "new_registration") return "New Registration";
@@ -75,11 +82,14 @@ function normalizeNotification(raw: OperationalNotification & { read?: boolean }
   };
 }
 
-function readStoredNotifications() {
-  if (typeof window === "undefined") return [];
+function readStoredNotifications(accountScope: string | null) {
+  if (typeof window === "undefined" || accountScope === null) return [];
 
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
+    // The old unscoped key could expose stale notices when development user
+    // IDs were recreated. Do not migrate it into a real account scope.
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+    const stored = window.localStorage.getItem(storageKey(accountScope));
     return stored
       ? (JSON.parse(stored) as Array<OperationalNotification & { read?: boolean }>).map(
           normalizeNotification
@@ -90,13 +100,18 @@ function readStoredNotifications() {
   }
 }
 
-function persistNotifications(notifications: OperationalNotification[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications.slice(0, 50)));
+function persistNotifications(accountScope: string | null, notifications: OperationalNotification[]) {
+  if (typeof window === "undefined" || accountScope === null) return;
+  window.localStorage.setItem(storageKey(accountScope), JSON.stringify(notifications.slice(0, 50)));
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
-  notifications: readStoredNotifications(),
+  notifications: [],
+  userScope: null,
+  setUserScope: (accountScope) => {
+    if (get().userScope === accountScope) return;
+    set({ userScope: accountScope, notifications: readStoredNotifications(accountScope) });
+  },
   addNotification: (notification) => {
     const duplicate = get().notifications.find(
       (item) =>
@@ -123,7 +138,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       entity_id: notification.entityId,
     };
     const notifications = [entry, ...get().notifications].slice(0, 50);
-    persistNotifications(notifications);
+    persistNotifications(get().userScope, notifications);
     set({ notifications });
     return entry;
   },
@@ -131,7 +146,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const notifications = get().notifications.map((notification) =>
       notification.id === id ? { ...notification, isRead: true } : notification
     );
-    persistNotifications(notifications);
+    persistNotifications(get().userScope, notifications);
     set({ notifications });
   },
   markAllRead: (ids) => {
@@ -139,14 +154,14 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const notifications = get().notifications.map((notification) =>
       !allowed || allowed.has(notification.id) ? { ...notification, isRead: true } : notification
     );
-    persistNotifications(notifications);
+    persistNotifications(get().userScope, notifications);
     set({ notifications });
   },
   removeNotification: (id) => {
     const notifications = get().notifications.filter(
       (notification) => notification.id !== id || !notification.isRead
     );
-    persistNotifications(notifications);
+    persistNotifications(get().userScope, notifications);
     set({ notifications });
   },
   clearNotifications: (ids) => {
@@ -156,7 +171,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
           (notification) => !allowed.has(notification.id) || !notification.isRead
         )
       : get().notifications.filter((notification) => !notification.isRead);
-    persistNotifications(notifications);
+    persistNotifications(get().userScope, notifications);
     set({ notifications });
   },
 }));

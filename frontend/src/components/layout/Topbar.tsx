@@ -72,6 +72,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   const { user, signOut } = useAuth();
   const addLog = useAuditLogStore((state) => state.addLog);
   const notifications = useNotificationStore((state) => state.notifications);
+  const setNotificationUserScope = useNotificationStore((state) => state.setUserScope);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const markRead = useNotificationStore((state) => state.markRead);
   const markAllRead = useNotificationStore((state) => state.markAllRead);
@@ -81,6 +82,10 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setNotificationUserScope(user ? `${user.user_id}:${user.created_at}` : null);
+  }, [setNotificationUserScope, user]);
 
   const visibleNotifications = useMemo(() => {
     if (!user) return [];

@@ -147,9 +147,8 @@ function hydrateEnglish(doc: Document, data: PrintableFormData) {
   checkNearText(doc, "Civil", record.intake_record.nature_of_case.toLowerCase().includes("civil"));
   checkNearText(doc, "Labor", record.intake_record.nature_of_case.toLowerCase().includes("labor"));
   checkNearText(doc, "Administrative", record.intake_record.nature_of_case.toLowerCase().includes("admin"));
-  checkNearText(doc, "Senior Citizen", classification.flag_senior);
-  checkNearText(doc, "Child in Conflict", classification.flag_cicl);
-  checkNearText(doc, "Woman", classification.flag_female);
+  checkNearText(doc, "Senior Citizen", classification.flag_senior === true);
+  checkNearText(doc, "Child in Conflict", classification.flag_cicl === true);
   checkNearText(doc, "VAWC", classification.flag_vawc_victim);
   checkNearText(doc, "Urban Poor", classification.flag_urban);
   checkNearText(doc, "Rural Poor", classification.flag_rural);
@@ -222,9 +221,8 @@ function hydrateFilipino(doc: Document, data: PrintableFormData) {
   checkNearText(doc, "Civil", record.intake_record.nature_of_case.toLowerCase().includes("civil"));
   checkNearText(doc, "Labor", record.intake_record.nature_of_case.toLowerCase().includes("labor"));
   checkNearText(doc, "Administrative", record.intake_record.nature_of_case.toLowerCase().includes("admin"));
-  checkNearText(doc, "Senior Citizen", classification.flag_senior);
-  checkNearText(doc, "Children in Conflict", classification.flag_cicl);
-  checkNearText(doc, "Woman", classification.flag_female);
+  checkNearText(doc, "Senior Citizen", classification.flag_senior === true);
+  checkNearText(doc, "Children in Conflict", classification.flag_cicl === true);
   checkNearText(doc, "VAWC", classification.flag_vawc_victim);
   checkNearText(doc, "Urban Poor", classification.flag_urban);
   checkNearText(doc, "Rural Poor", classification.flag_rural);

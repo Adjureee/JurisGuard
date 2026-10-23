@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 from .document_router import DocumentRouter
-from .schema import DOCUMENT_TYPES, empty_inventory, validate_inventory
+from .schema import DOCUMENT_TYPES, validate_inventory
 
 CANDIDATES = ("tesseract", "easyocr", "paddleocr")
 
@@ -49,7 +49,9 @@ def build_report(images_dir: Path, manifest_path: Path, ocr_base_dir: Path) -> d
             raw_text = (ocr_base_dir / candidate / f"{sample_id}.txt").read_text(encoding="utf-8")
             result = router.process(raw_text)
             validate_inventory(result["inventory"])
-            if result["document_type"] == "sandiganbayan_document" and result["inventory"] != empty_inventory():
+            if result["document_type"] == "sandiganbayan_document" and any(
+                value is not None for field, value in result["inventory"].items() if field != "Case No."
+            ):
                 raise ValueError(f"{candidate}/{sample_id}: unapproved Sandiganbayan field mapping")
             rows.append({
                 "sample_id": sample_id,
@@ -109,7 +111,7 @@ def write_report(report: dict, json_path: Path, markdown_path: Path) -> None:
         "",
         "The label match counts measure routing agreement on this tuning set. They are not held-out classifier performance.",
         f"There are {report['rtc_real_sample_count']} visually labeled RTC images in this set; RTC behavior is checked only by synthetic regression tests.",
-        "Sandiganbayan inventory fields remain null and need review because legal and PAO field mappings are unapproved.",
+        "Only an explicit Sandiganbayan criminal case number may be mapped. Other inventory fields remain null pending approved mappings.",
         "OCR CER/WER require corrected image-reviewed transcripts; field accuracy requires separate inventory annotations.",
         "The three NLP entity candidates are not scored on these pages because their PAO/RTC target-field mapping is not defined for Sandiganbayan.",
         "",

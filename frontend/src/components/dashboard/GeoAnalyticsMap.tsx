@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CircleMarker,
   MapContainer,
   Marker,
   Popup,
+  Rectangle,
   TileLayer,
   Tooltip,
   useMap,
@@ -26,6 +27,7 @@ import {
 } from "../../services/dashboardService";
 import {
   getPanaboCoordinate,
+  PANABO_COORDINATES,
   PANABO_CITY_HALL_COORDINATES,
 } from "../../utils/panaboCoordinates";
 
@@ -59,6 +61,13 @@ interface GeoAnalyticsMapProps {
   tileLayerUrl?: string;
 }
 
+const PANABO_REFERENCE_POINTS = Object.entries(PANABO_COORDINATES).map(
+  ([barangay, coordinate]) => ({ barangay, ...coordinate }),
+);
+const PANABO_REFERENCE_BOUNDS = L.latLngBounds(
+  PANABO_REFERENCE_POINTS.map((point) => [point.lat, point.lng] as [number, number]),
+).pad(0.08);
+
 const STATUS_STYLE: Record<
   string,
   { stroke: string; fill: string; label: string; badge: string }
@@ -86,7 +95,8 @@ function getTileLayerConfig(explicitUrl?: string) {
   // Tiles are optional: case markers and heatmap still work without a basemap.
   // Never contact a remote tile server unless an operator explicitly configures it.
   if (!configuredUrl) return null;
-  return { attribution: "Configured map tiles", url: configuredUrl };
+  const attribution = import.meta.env.VITE_LEAFLET_TILE_ATTRIBUTION || "Configured map tiles";
+  return { attribution, url: configuredUrl };
 }
 
 function isValidCoordinate(lat: number, lng: number) {
@@ -170,10 +180,37 @@ function FocusBarangay({
   useEffect(() => {
     if (!barangay) return;
     const target = stats.find((item) => item.barangay === barangay);
-    if (target?.latitude && target.longitude) {
+    if (target?.latitude != null && target.longitude != null) {
       map.flyTo([target.latitude, target.longitude], 13, { duration: 0.8 });
     }
   }, [barangay, map, stats]);
+
+  return null;
+}
+
+function FitMapToContent({
+  points,
+  barangays,
+}: {
+  points: CaseMapPoint[];
+  barangays: Array<BarangayStat & { latitude: number; longitude: number }>;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      map.invalidateSize();
+      const coordinates: Array<[number, number]> = [
+        ...points.map((point) => [point.latitude, point.longitude] as [number, number]),
+        ...barangays.map((barangay) => [barangay.latitude, barangay.longitude] as [number, number]),
+      ];
+      map.fitBounds(
+        coordinates.length > 0 ? L.latLngBounds(coordinates).pad(0.2) : PANABO_REFERENCE_BOUNDS,
+        { padding: [24, 24], maxZoom: coordinates.length > 0 ? 13 : 11 },
+      );
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [barangays, map, points]);
 
   return null;
 }
@@ -207,10 +244,11 @@ function toCaseMapPoint(record: EnrichedGeoCase): CaseMapPoint {
   };
 }
 
-function heatmapPointToCaseMapPoint(point: HeatmapPoint): CaseMapPoint {
+function heatmapPointToCaseMapPoint(point: HeatmapPoint): CaseMapPoint | null {
   const fallback = getPanaboCoordinate(point.barangay);
-  const latitude = toCoordinateNumber(point.latitude) ?? fallback.lat;
-  const longitude = toCoordinateNumber(point.longitude) ?? fallback.lng;
+  const latitude = toCoordinateNumber(point.latitude) ?? fallback?.lat;
+  const longitude = toCoordinateNumber(point.longitude) ?? fallback?.lng;
+  if (latitude === undefined || longitude === undefined || !isValidCoordinate(latitude, longitude)) return null;
 
   return {
     id: point.case_id,
@@ -234,6 +272,7 @@ export default function GeoAnalyticsMap({
   onSelectBarangay,
   tileLayerUrl,
 }: GeoAnalyticsMapProps) {
+  const [tileLoadFailed, setTileLoadFailed] = useState(false);
   const enrichedCases = useMemo(
     () => (cases?.length ? enrichCasesWithCoordinates(cases) : []),
     [cases],
@@ -252,24 +291,27 @@ export default function GeoAnalyticsMap({
   const mappedBarangays = useMemo(() => {
     const source = localHeatmap?.barangays ?? barangays;
     return source
-      .map((item) => {
+      .flatMap((item) => {
         const fallback = getPanaboCoordinate(item.barangay);
-        const latitude = toCoordinateNumber(item.latitude) ?? fallback.lat;
-        const longitude = toCoordinateNumber(item.longitude) ?? fallback.lng;
+        const latitude = toCoordinateNumber(item.latitude) ?? fallback?.lat;
+        const longitude = toCoordinateNumber(item.longitude) ?? fallback?.lng;
+        if (latitude === undefined || longitude === undefined || !isValidCoordinate(latitude, longitude)) return [];
 
-        return {
+        return [{
           ...item,
           latitude,
           longitude,
-        };
-      })
-      .filter((item) => isValidCoordinate(item.latitude, item.longitude));
+        }];
+      });
   }, [barangays, localHeatmap]);
 
   const mappedPoints = useMemo(() => {
     const source = enrichedCases.length
       ? enrichedCases.map(toCaseMapPoint)
-      : points.map(heatmapPointToCaseMapPoint);
+      : points.flatMap((point) => {
+        const mapped = heatmapPointToCaseMapPoint(point);
+        return mapped ? [mapped] : [];
+      });
 
     return source.filter((point) =>
       isValidCoordinate(point.latitude, point.longitude),
@@ -285,6 +327,7 @@ export default function GeoAnalyticsMap({
   );
 
   const tileLayer = getTileLayerConfig(tileLayerUrl);
+  const hasMappedCases = visiblePoints.length > 0 || mappedBarangays.length > 0;
 
   return (
     <div className="relative z-0 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-sm">
@@ -307,9 +350,16 @@ export default function GeoAnalyticsMap({
         </div>
       </div>
 
-      {!tileLayer && (
+      {(!tileLayer || tileLoadFailed) && (
         <p className="border-b border-[#E5E7EB] bg-amber-50 px-4 py-2 text-xs text-amber-800">
-          Offline map: case markers and heatmap are available without a basemap. Configure local tiles for geographic context.
+          {tileLoadFailed
+            ? "The configured map tiles could not be loaded. The local Panabo reference layer remains available."
+            : "Offline map: the local Panabo barangay reference layer is active. Configure local tiles for road and boundary detail."}
+        </p>
+      )}
+      {!hasMappedCases && (
+        <p className="border-b border-[#DBEAFE] bg-blue-50 px-4 py-2 text-xs text-blue-800">
+          No mapped case records yet. Showing barangay reference locations without case counts.
         </p>
       )}
       <div className="relative z-0 h-[460px] min-h-[360px] bg-slate-100">
@@ -320,16 +370,48 @@ export default function GeoAnalyticsMap({
           className="z-0 h-full w-full"
         >
           <ResizeMapWhenReady />
+          <FitMapToContent points={visiblePoints} barangays={mappedBarangays} />
           {tileLayer && (
             <TileLayer
               attribution={tileLayer.attribution}
               url={tileLayer.url}
               minZoom={10}
               maxZoom={18}
+              eventHandlers={{
+                load: () => setTileLoadFailed(false),
+                tileerror: () => setTileLoadFailed(true),
+              }}
             />
           )}
+          {!tileLayer || tileLoadFailed ? (
+            <Rectangle
+              bounds={PANABO_REFERENCE_BOUNDS}
+              pathOptions={{ color: "#94A3B8", weight: 1, dashArray: "5 6", fillColor: "#F8FAFC", fillOpacity: 0.55 }}
+            />
+          ) : null}
           <HeatLayer points={visiblePoints} />
           <FocusBarangay barangay={selectedBarangay} stats={mappedBarangays} />
+
+          {!hasMappedCases && PANABO_REFERENCE_POINTS.map((point) => (
+            <CircleMarker
+              key={`reference-${point.barangay}`}
+              center={[point.lat, point.lng]}
+              radius={3}
+              pathOptions={{ color: "#64748B", fillColor: "#CBD5E1", fillOpacity: 0.9, weight: 1 }}
+            >
+              <Tooltip direction="top" opacity={0.95}>{point.barangay}</Tooltip>
+            </CircleMarker>
+          ))}
+
+          {!hasMappedCases && (
+            <CircleMarker
+              center={[PANABO_CITY_HALL_COORDINATES.lat, PANABO_CITY_HALL_COORDINATES.lng]}
+              radius={6}
+              pathOptions={{ color: "#1D4ED8", fillColor: "#60A5FA", fillOpacity: 1, weight: 2 }}
+            >
+              <Tooltip direction="top" permanent opacity={0.95}>Panabo City reference center</Tooltip>
+            </CircleMarker>
+          )}
 
           {mappedBarangays.map((barangay) => (
             <Marker

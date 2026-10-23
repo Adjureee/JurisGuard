@@ -8,13 +8,10 @@ import re
 import threading
 from pathlib import Path
 from requests import exceptions as requests_exceptions
-import cv2
 import numpy as np
 from PIL import Image
 from local_ocr import LocalOCR, OfflineOCRError
 from inventory_mvp import DocumentRouter, empty_inventory
-import spacy
-from spacy.matcher import Matcher
 from dotenv import load_dotenv
 
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -385,7 +382,10 @@ def bidirectional_label_value(
     prefer_before: bool = False,
     radius: int = 0,
 ) -> str | None:
-    for _, line in label_contexts(lines, label_pattern, radius):
+    label_re = re.compile(label_pattern, re.IGNORECASE)
+    for index, line in enumerate(lines):
+        if not label_re.search(line):
+            continue
         before, after, span = split_around_first_label(line, label_pattern)
         if span is None:
             continue
@@ -395,6 +395,17 @@ def bidirectional_label_value(
         for value in ordered:
             if value and not re.fullmatch(r"[_\-\s.]+", value):
                 return value
+        for distance in range(1, radius + 1):
+            for nearby_index in (index + distance, index - distance):
+                if nearby_index < 0 or nearby_index >= len(lines):
+                    continue
+                candidate = clean_ocr_value(lines[nearby_index])
+                if not candidate or re.search(stop_pattern, candidate, re.IGNORECASE):
+                    continue
+                if re.search(r"\b(?:impormasyon|section|uri\s+ng|sektor)\b", candidate, re.IGNORECASE):
+                    continue
+                if not re.fullmatch(r"[_\-\s.]+", candidate):
+                    return candidate
     return None
 
 def find_nearest_regex_to_label(
@@ -410,22 +421,20 @@ def find_nearest_regex_to_label(
     exclude_re = re.compile(exclude_pattern, re.IGNORECASE) if exclude_pattern else None
     best: tuple[int, str] | None = None
 
-    for _, line in label_contexts(lines, label_pattern, radius):
+    for label_index, line in enumerate(lines):
         label_matches = list(label_re.finditer(line))
         if not label_matches:
             continue
-        for value_match in value_re.finditer(line):
-            value = clean_ocr_value(value_match.group(0))
-            if not value:
-                continue
-            if exclude_re and exclude_re.search(value):
-                continue
-            distance = min(
-                abs(value_match.start() - label_match.start())
-                for label_match in label_matches
-            )
-            if best is None or distance < best[0]:
-                best = (distance, value)
+        for nearby_index in range(max(0, label_index - radius), min(len(lines), label_index + radius + 1)):
+            nearby_line = lines[nearby_index]
+            for value_match in value_re.finditer(nearby_line):
+                value = clean_ocr_value(value_match.group(0))
+                if not value or (exclude_re and exclude_re.search(value)):
+                    continue
+                char_distance = min(abs(value_match.start() - match.start()) for match in label_matches) if nearby_index == label_index else 0
+                distance = abs(nearby_index - label_index) * 10000 + char_distance
+                if best is None or distance < best[0]:
+                    best = (distance, value)
 
     return best[1] if best else None
 
@@ -446,7 +455,7 @@ def extract_sex_near_label(lines: list[str], label_pattern: str = r"\bsex\b") ->
         lines,
         label_pattern,
         r"\b(?:male|female|m|f)\b",
-        radius=0,
+        radius=1,
         exclude_pattern=r"civil|status|single|married",
     )
     return normalize_sex_value(value)
@@ -460,9 +469,9 @@ def extract_email_near_label(lines: list[str], label_pattern: str = r"\be[-\s]?m
     )
 
 def extract_title_words_near_label(lines: list[str], label_pattern: str) -> str | None:
-    candidate = bidirectional_label_value(lines, label_pattern, prefer_before=True, radius=0)
+    candidate = bidirectional_label_value(lines, label_pattern, prefer_before=True, radius=1)
     if not candidate:
-        candidate = bidirectional_label_value(lines, label_pattern, prefer_before=False, radius=0)
+        candidate = bidirectional_label_value(lines, label_pattern, prefer_before=False, radius=1)
     if not candidate:
         return None
     match = re.search(r"\b[A-Z][a-zA-Z]{2,}(?:\s+[A-Z][a-zA-Z]{2,}){0,3}\b", candidate)
@@ -506,6 +515,10 @@ def extract_text_after_label(
         value = nearest_segment_after_label(after, stop_pattern)
         if value and not has_mixed_form_labels(value):
             return value
+    if radius:
+        value = bidirectional_label_value(lines, label_pattern, stop_pattern=stop_pattern, radius=radius)
+        if value and not has_mixed_form_labels(value):
+            return value
     return None
 
 def clean_detention_place_candidate(value: str | None) -> str | None:
@@ -532,6 +545,11 @@ def extract_money_near_label(lines: list[str], label_pattern: str) -> str | None
         if not after_value:
             continue
         match = re.search(r"(?:P|₱|PHP)?\s*[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|(?:P|₱|PHP)?\s*[0-9]+", after_value, re.IGNORECASE)
+        if match:
+            return clean_ocr_value(match.group(0))
+    nearby = bidirectional_label_value(lines, label_pattern, radius=1)
+    if nearby:
+        match = re.search(r"(?:P|₱|PHP)?\s*[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|(?:P|₱|PHP)?\s*[0-9]+", nearby, re.IGNORECASE)
         if match:
             return clean_ocr_value(match.group(0))
     return None
@@ -568,7 +586,7 @@ def extract_civil_status_near_label(lines: list[str]) -> str | None:
         lines,
         r"\bcivil\s*status\b",
         r"\b(?:single|sing|sngle|ing|married|widowed|widow|separated)\b",
-        radius=0,
+        radius=1,
     )
     if value:
         return normalize_civil_status_value(value)
@@ -685,6 +703,11 @@ _spacy_pao_nlp = None
 _spacy_pao_matcher = None
 
 def build_spacy_pao_pipeline():
+    # Import only for intake-form NLP. Court routing and model-worker startup do
+    # not need to pay spaCy's import cost.
+    import spacy
+    from spacy.matcher import Matcher
+
     nlp = spacy.blank("xx")
     ruler = nlp.add_pipe("entity_ruler")
     ruler.add_patterns(SPACY_ENTITY_PATTERNS)
@@ -797,6 +820,7 @@ def apply_applicant_section_fields(extracted: dict, lines: list[str]) -> None:
         r"\bpangalan\b",
         r"\bedad\b|\bsex\b|\bcivil\s*status\b|\brelihiyon\b|\bpagkamamamayan\b|\btirahan\b|\be[-\s]?mail\b",
         prefer_before=True,
+        radius=1,
     )
     if name and not re.search(r"impormasyon|aplikante|representative", name, re.IGNORECASE):
         extracted["applicant_name"] = name
@@ -827,6 +851,7 @@ def apply_applicant_section_fields(extracted: dict, lines: list[str]) -> None:
         applicant_lines,
         r"\btirahan\b(?!\s+ng\s+asawa)|\baddress\b(?!\s+of\s+spouse)",
         stop_pattern=r"\be[-\s]?mail\b|\bspouse\b|\basawa\b|\bindividual\s+monthly\s+income\b|\bcontact\b|\bnakakulong\b|\bdetained\b",
+        radius=1,
     )
     if address:
         extracted["applicant_address"] = address
@@ -835,6 +860,7 @@ def apply_applicant_section_fields(extracted: dict, lines: list[str]) -> None:
         applicant_lines,
         r"\bnaabot\s+na\s+pag[-\s]?aaral\b|\beducational\s+attainment\b",
         stop_pattern=r"\brelihiyon\b|\breligion\b|\bsalita\s*/?\s*di(?:a|ya)lekto\b|\blanguage\s*/?\s*dialect\b|\bcontact\b|\bspouse\b|\basawa\b",
+        radius=1,
     )
     if education:
         extracted["applicant_educational_attainment"] = education
@@ -843,6 +869,7 @@ def apply_applicant_section_fields(extracted: dict, lines: list[str]) -> None:
         applicant_lines,
         r"\bpagkamamamayan\b|\bcitizenship\b",
         stop_pattern=r"\btirahan\b|\baddress\b|\be[-\s]?mail\b|\bcontact\b",
+        radius=1,
     )
     if citizenship:
         extracted["applicant_citizenship"] = citizenship
@@ -851,6 +878,7 @@ def apply_applicant_section_fields(extracted: dict, lines: list[str]) -> None:
         applicant_lines,
         r"\bsalita\s*/?\s*di(?:a|ya)lekto\b|\blanguage\s*/?\s*dialect\b",
         stop_pattern=r"\bcontact\b|\bspouse\b|\basawa\b|\bindividual\s+monthly\s+income\b",
+        radius=1,
     )
     if language:
         extracted["applicant_language_dialect"] = language
@@ -883,10 +911,11 @@ def apply_applicant_section_fields(extracted: dict, lines: list[str]) -> None:
     if spouse_contact:
         extracted["spouse_contact"] = spouse_contact
 
-    contact = extract_section_value(
+    contact = bidirectional_label_value(
         applicant_lines,
         r"\bcontact\s*no\.?\b",
         r"\basawa\b|\btirahan\s+ng\s+asawa\b|\bcontact\s*no\.\s*ng\s*asawa\b|\blugar\s+ng\s+detention\b",
+        radius=1,
     )
     if contact and not re.search(r"asawa|detention|petsa", contact, re.IGNORECASE):
         extracted["applicant_contact"] = contact
@@ -1195,8 +1224,10 @@ def apply_quality_filters(extracted: dict) -> dict:
 
     for field_name in ["applicant_contact", "rep_contact"]:
         value = cleaned.get(field_name)
-        if isinstance(value, str) and not re.search(r"\d{5,}|@", value):
-            cleaned[field_name] = None
+        if isinstance(value, str):
+            digits = re.sub(r"\D", "", value)
+            if len(digits) < 7:
+                cleaned[field_name] = None
 
     for field_name in ["case_information", "cause_of_action"]:
         value = cleaned.get(field_name)
@@ -1378,6 +1409,8 @@ def enhance_handwriting_image(image: np.ndarray) -> np.ndarray:
     ENTERPRISE-GRADE preprocessing for handwritten form OCR.
     Improves contrast, reduces noise, handles lighting variations.
     """
+    import cv2
+
     # Step 1: Convert to LAB color space for better contrast handling
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
@@ -1415,12 +1448,16 @@ def enhance_handwriting_image(image: np.ndarray) -> np.ndarray:
 
 def fast_prepare_ocr_image(image: np.ndarray) -> np.ndarray:
     """Cheap contrast normalization for faster OCR on mostly readable scans."""
+    import cv2
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray = cv2.equalizeHist(gray)
     return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
 def crop_document_region(image: np.ndarray) -> np.ndarray:
     """Remove obvious camera background so OCR scans fewer pixels."""
+    import cv2
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     _, mask = cv2.threshold(gray, 70, 255, cv2.THRESH_BINARY)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
@@ -1967,10 +2004,10 @@ class JurisGuardExtractionEngine:
         extracted_data["raw_text"] = "Processed via Mistral Cloud Vision"
         return extracted_data
 
-    def _run_offline_pipeline(self, image_path: str) -> dict:
+    def _run_offline_pipeline(self, image_path: str, extraction_target: str = "full") -> dict:
         """Run local image/PDF OCR, then route one logical document."""
         try:
-            ocr = self.local_ocr.extract(image_path)
+            ocr = self.local_ocr.extract(image_path, extraction_target) if extraction_target != "full" else self.local_ocr.extract(image_path)
         except OfflineOCRError as exc:
             fallback_data = self._get_empty_schema()
             fallback_data["extraction_mode"] = "OFFLINE_OCR_FAILED"
@@ -1995,7 +2032,7 @@ class JurisGuardExtractionEngine:
             extracted_data = self._get_empty_schema()
             extracted_data["extraction_mode"] = "OFFLINE_ROUTER_ONLY" if raw_text else "OFFLINE_OCR_EMPTY"
         routed["diagnostics"]["warnings"].extend(ocr.warnings)
-        routed["diagnostics"].update({"ocr_engine": ocr.engine, "ocr_layout": ocr.layout, "page_count": ocr.page_count})
+        routed["diagnostics"].update({"ocr_engine": ocr.engine, "ocr_layout": ocr.layout, "page_count": ocr.page_count, "ocr_timings": ocr.timings})
         if ocr.warnings:
             routed["needs_review"] = True
         extracted_data.update(routed)
@@ -2031,12 +2068,13 @@ class JurisGuardExtractionEngine:
                 fallback_data["fallback_reason"] = f"Offline fallback failed: {offline_exc}"
                 return fallback_data
 
-    def execute_extraction(self, file_path: str, extraction_mode: str = "auto") -> dict:
+    def execute_extraction(self, file_path: str, extraction_mode: str = "auto", extraction_target: str = "full") -> dict:
         final_data = self._get_empty_schema()
         mode = (extraction_mode or "auto").strip().lower()
 
         if mode == "offline":
-            final_data.update(self._run_offline_pipeline(file_path))
+            offline = self._run_offline_pipeline(file_path) if extraction_target == "full" else self._run_offline_pipeline(file_path, extraction_target)
+            final_data.update(offline)
         elif mode == "cloud":
             compressed_file_path = compress_image_for_vlm(file_path)
             try:
@@ -2045,7 +2083,8 @@ class JurisGuardExtractionEngine:
                 if compressed_file_path != file_path and os.path.exists(compressed_file_path):
                     os.remove(compressed_file_path)
         else:
-            final_data.update(self._run_offline_pipeline(file_path))
+            offline = self._run_offline_pipeline(file_path) if extraction_target == "full" else self._run_offline_pipeline(file_path, extraction_target)
+            final_data.update(offline)
 
         final_data["sections"] = self._sectioned_from_flat(final_data) if final_data.get("document_type") in (None, "intake_form") else {}
         return final_data
@@ -2056,7 +2095,7 @@ class JurisGuardExtractionEngine:
 _engine_instance = None
 _engine_lock = threading.Lock()
 
-def process_document(file_path: str, extraction_mode: str = "auto"):
+def process_document(file_path: str, extraction_mode: str = "auto", extraction_target: str = "full"):
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Document not found at {file_path}")
 
@@ -2065,4 +2104,4 @@ def process_document(file_path: str, extraction_mode: str = "auto"):
     with _engine_lock:
         if _engine_instance is None:
             _engine_instance = JurisGuardExtractionEngine()
-        return _engine_instance.execute_extraction(file_path=file_path, extraction_mode=extraction_mode)
+        return _engine_instance.execute_extraction(file_path=file_path, extraction_mode=extraction_mode, extraction_target=extraction_target)

@@ -17,6 +17,7 @@ export interface AuthUser {
   profile_picture_path: string | null;
   employee_id_path: string | null;
   profile_completed: boolean;
+  created_at: string;
 }
 
 export interface RegisterPayload {
@@ -47,7 +48,6 @@ export interface TokenResponse {
 
 export interface AdminUserListItem extends AuthUser {
   is_active: boolean;
-  created_at: string;
   last_login_at: string | null;
 }
 

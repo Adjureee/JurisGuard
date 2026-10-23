@@ -12,18 +12,13 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import { FieldStatus } from "../../features/criminalCases/components/FieldStatus";
 import { StepIndicator } from "../../features/criminalCases/components/StepIndicator";
-import { useCamera } from "../../features/criminalCases/hooks/useCamera";
 import { useCriminalCasesStore } from "../../features/criminalCases/criminalCasesStore";
 import {
   clientFormSchema,
   type ClientFormValues,
 } from "../../features/criminalCases/schemas";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
-import {
-  dataUrlToFile,
-  extractClientFromDocument,
-  type ExtractionEngineMode,
-} from "../../services/documentExtractionService";
+import { extractClientFromDocument, type ExtractionEngineMode } from "../../services/documentExtractionService";
 import {
   createCaseRecord,
   createClientRecord,
@@ -38,6 +33,9 @@ import type {
 import { CaseWorkflow } from "./CaseWorkflow";
 import ClientInformationModal from "./ClientInformationModal";
 import ModalPortal from "./ModalPortal";
+import { useExtractionRequest } from "../../features/documentExtraction/useExtractionRequest";
+import { ExtractionProgress } from "../../features/documentExtraction/ExtractionProgress";
+import { CameraCapture } from "../../features/documentExtraction/CameraCapture";
 
 interface AddClientModalProps {
   isOpen: boolean;
@@ -111,6 +109,10 @@ const defaultValues: ClientFormValues = {
     representative_email: "",
   },
   client_classification: {
+    flag_female: null,
+    flag_senior: null,
+    flag_cicl: null,
+    flags_reviewed: false,
     flag_drugs: false,
     flag_foreign_national: false,
     flag_vawc_victim: false,
@@ -418,17 +420,9 @@ export default function AddClientModal({
   const [documentPreview, setDocumentPreview] = useState<string | null>(null);
   const [documentLabel, setDocumentLabel] = useState("");
   const [indicators, setIndicators] = useState<ExtractionMap>({});
-  const [isExtracting, setIsExtracting] = useState(false);
+  const { isExtracting, elapsedSeconds, startExtraction, finishExtraction, isCurrentExtraction, cancelExtraction } = useExtractionRequest(isOpen);
   const [extractionEngine, setExtractionEngine] =
     useState<ExtractionEngineMode>("auto");
-  const {
-    videoRef,
-    isCameraActive,
-    cameraError,
-    startCamera,
-    stopCamera,
-    captureFrame,
-  } = useCamera();
   const {
     register,
     handleSubmit,
@@ -472,6 +466,10 @@ export default function AddClientModal({
     setValue("client_details.representative_email", "", { shouldDirty: true });
   }, [representativeCivilStatus, setValue]);
 
+  useEffect(() => () => {
+    if (documentPreview?.startsWith("blob:")) URL.revokeObjectURL(documentPreview);
+  }, [documentPreview]);
+
   if (!isOpen) return null;
 
   const values = watch();
@@ -481,7 +479,7 @@ export default function AddClientModal({
   const hasOcrResult = Object.keys(indicators).length > 0;
 
   const closeModal = () => {
-    stopCamera();
+    cancelExtraction();
     reset(defaultValues);
     setMethod(null);
     setStep(0);
@@ -497,7 +495,7 @@ export default function AddClientModal({
   };
 
   const resetClientEntry = () => {
-    stopCamera();
+    cancelExtraction();
     reset(defaultValues);
     setMethod(null);
     setStep(0);
@@ -580,16 +578,21 @@ export default function AddClientModal({
   };
 
   const runOcr = async (file: File, preview: string, label: string) => {
+    const request = startExtraction("Extracting client fields...");
+    if (!request) {
+      if (preview.startsWith("blob:")) URL.revokeObjectURL(preview);
+      return;
+    }
     setDocumentPreview(preview);
     setDocumentLabel(label);
-    setIsExtracting(true);
-    const toastId = toast.loading("Extracting client fields...");
+    const { toastId } = request;
 
     try {
       const result = await extractClientFromDocument(file, {
-        userId: user?.user_id,
         extractionMode: extractionEngine,
+        signal: request.controller.signal,
       });
+      if (!isCurrentExtraction(request)) return;
       setIndicators(result.indicators);
       applyExtractedPayload(result.extracted);
       setStep(0);
@@ -609,44 +612,27 @@ export default function AddClientModal({
         toast.success("OCR extraction completed", { id: toastId });
       }
     } catch (error) {
+      if (!isCurrentExtraction(request)) return;
       toast.error(error instanceof Error ? error.message : "OCR failed", {
         id: toastId,
       });
     } finally {
-      setIsExtracting(false);
+      finishExtraction(request);
     }
-  };
-
-  const handleCapture = async () => {
-    const captured = captureFrame() || "";
-    if (!captured) {
-      toast.error("Camera did not return an image.");
-      return;
-    }
-
-    const file = await dataUrlToFile(
-      captured,
-      `live-client-scan-${Date.now()}.png`,
-    );
-    await runOcr(file, captured, "Live camera capture");
   };
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       const file = event.target.files?.[0];
-      if (!file) return;
+      event.target.value = "";
+      if (!file || isExtracting) return;
 
-      if (!file.type.startsWith("image/")) {
-        toast.error("Please upload a JPG, PNG, or WEBP image.");
+      if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type)) {
+        toast.error("Please upload a JPG, PNG, WEBP, or PDF document.");
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = async () => {
-        await runOcr(file, String(reader.result), file.name);
-      };
-      reader.onerror = () => toast.error("Upload error");
-      reader.readAsDataURL(file);
+      await runOcr(file, file.type === "application/pdf" ? "" : URL.createObjectURL(file), file.name);
     } catch {
       toast.error("Upload error");
     }
@@ -670,17 +656,6 @@ export default function AddClientModal({
 
   const onSubmit = async (data: ClientFormValues) => {
     try {
-      const normalizedAge = String(data.client.age ?? "").trim();
-      const age = Number(normalizedAge);
-      const hasAge = normalizedAge !== "" && Number.isFinite(age);
-      const derivedClassification = {
-        flag_female: data.client.sex.trim().toLowerCase() === "female",
-        flag_senior: hasAge && age >= 60,
-        flag_cicl: hasAge && age < 15,
-        // Urban/Rural is case-location data, not client data.
-        flag_urban: false,
-        flag_rural: false,
-      };
       const spouseNotApplicable = data.client_details.spouse === "None";
       const representativeNotApplicable =
         data.client_details.representative_civil_status === "None";
@@ -688,7 +663,7 @@ export default function AddClientModal({
         ...data,
         client_classification: {
           ...data.client_classification,
-          ...derivedClassification,
+          flags_reviewed: classificationReviewed,
         },
         client_details: {
           ...data.client_details,
@@ -738,7 +713,6 @@ export default function AddClientModal({
         entityId: client.client_id,
       });
       toast.success("Client created");
-      stopCamera();
       setCreatedClient(client);
       setSelectedClients((current) =>
         current.some((item) => item.client_id === client.client_id)
@@ -906,8 +880,8 @@ export default function AddClientModal({
                 />
                 <MethodCard
                   value="camera"
-                  title="Live Camera OCR"
-                  description="Start camera, capture a document, then review extracted fields."
+                  title="Document Camera"
+                  description="Capture a page with a connected document camera, then review it before OCR."
                   icon="fa-camera"
                   selected={method === "camera"}
                   onSelect={setMethod}
@@ -940,7 +914,7 @@ export default function AddClientModal({
                       {method === "manual"
                         ? "Manual Entry"
                         : method === "camera"
-                          ? "Live Camera OCR"
+                          ? "Document Camera"
                           : "Upload Document OCR"}
                     </p>
                     <p className="text-xs text-[#4B5563]">
@@ -949,7 +923,10 @@ export default function AddClientModal({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setMethod(null)}
+                    onClick={() => {
+                      cancelExtraction();
+                      setMethod(null);
+                    }}
                     className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
                   >
                     Change Method
@@ -984,43 +961,14 @@ export default function AddClientModal({
                   </div>
                 )}
 
+                {isExtracting && <ExtractionProgress elapsedSeconds={elapsedSeconds} onCancel={cancelExtraction} />}
+
                 {step !== steps.length - 1 && method === "camera" && (
-                  <div className="mb-5 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-                    <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
-                      <video
-                        ref={videoRef}
-                        muted
-                        playsInline
-                        className="aspect-video w-full rounded-md border border-[#E5E7EB] bg-[#F9FAFB] object-cover"
-                      />
-                      <div className="space-y-3">
-                        <button
-                          type="button"
-                          onClick={startCamera}
-                          className="w-full rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675]"
-                        >
-                          Start Camera
-                        </button>
-                        <button
-                          type="button"
-                          onClick={stopCamera}
-                          className="w-full rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] hover:bg-[#F9FAFB]"
-                        >
-                          Stop Camera
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!isCameraActive || isExtracting}
-                          onClick={handleCapture}
-                          className="w-full rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] hover:bg-[#704389] hover:text-white disabled:opacity-50"
-                        >
-                          {isExtracting ? "Extracting..." : "Capture"}
-                        </button>
-                        {cameraError && (
-                          <p className="text-sm text-red-600">{cameraError}</p>
-                        )}
-                      </div>
-                    </div>
+                  <div className="mb-5">
+                    <CameraCapture
+                      isExtracting={isExtracting}
+                      onUsePhoto={(file) => void runOcr(file, URL.createObjectURL(file), file.name)}
+                    />
                   </div>
                 )}
 
@@ -1032,7 +980,8 @@ export default function AddClientModal({
                       </span>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept=".jpg,.jpeg,.jfif,.png,.webp,.pdf"
+                        disabled={isExtracting}
                         onChange={handleUpload}
                         className="mt-3 block w-full text-sm text-[#4B5563] file:mr-4 file:rounded-md file:border-0 file:bg-[#704389] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
                       />
@@ -1349,10 +1298,29 @@ export default function AddClientModal({
                           </label>
                         ))}
                       </div>
-                      <div className="mt-4 rounded-md border border-[#E7D7EE] bg-[#F7F0FA] px-3 py-2 text-sm text-[#5F3675]">
-                        Female, Senior Citizen, and CICL are derived from the
-                        client&apos;s sex and age. Urban/Rural is derived from
-                        case location.
+                      <div className="mt-4 grid gap-3 md:grid-cols-3">
+                        {([
+                          ["flag_female", "Female"],
+                          ["flag_senior", "Senior Citizen"],
+                          ["flag_cicl", "CICL"],
+                        ] as const).map(([name, label]) => (
+                          <label key={name} className="text-sm font-medium text-[#4B5563]">
+                            {label} (source evidence)
+                            <select
+                              className="mt-1 w-full rounded-md border border-[#CBD5E1] bg-white px-3 py-2"
+                              value={watch(`client_classification.${name}`) === null ? "" : String(watch(`client_classification.${name}`))}
+                              onChange={(event) => {
+                                const value = event.target.value === "" ? null : event.target.value === "true";
+                                setValue(`client_classification.${name}`, value, { shouldDirty: true, shouldValidate: true });
+                                setClassificationReviewed(true);
+                              }}
+                            >
+                              <option value="">Unresolved</option>
+                              <option value="true">Yes, explicitly supported</option>
+                              <option value="false">No, explicitly negated</option>
+                            </select>
+                          </label>
+                        ))}
                       </div>
                       <div className="mt-4">
                         <TextInput
@@ -1380,7 +1348,7 @@ export default function AddClientModal({
                           }
                           className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389]"
                         />
-                        Classification reviewed
+                        I reviewed the source evidence; unresolved values remain unknown
                       </label>
                     </div>
                   </div>
@@ -1484,26 +1452,18 @@ export default function AddClientModal({
                     </ReviewSection>
 
                     <ReviewSection title="Applicant Classification">
-                      {(() => {
-                        const reviewAgeText = String(values.client.age ?? "").trim();
-                        const reviewAge = Number(reviewAgeText);
-                        const hasReviewAge =
-                          reviewAgeText !== "" && Number.isFinite(reviewAge);
-                        return (
                       <div className="md:col-span-2 lg:col-span-3 rounded-md border border-[#E7D7EE] bg-[#F7F0FA] p-3">
                         <dt className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
-                          Automatically Derived
+                          Evidence-reviewed classifications
                         </dt>
                         <dd className="mt-1 text-sm font-semibold text-[#2B3642]">
-                          {[
-                            values.client.sex.trim().toLowerCase() === "female" && "Female",
-                            hasReviewAge && reviewAge >= 60 && "Senior Citizen",
-                            hasReviewAge && reviewAge < 15 && "Child in Conflict with the Law",
-                          ].filter(Boolean).join(", ") || "None"}
+                          {([[
+                            "flag_female", "Female"
+                          ], ["flag_senior", "Senior Citizen"], ["flag_cicl", "CICL"]] as const)
+                            .map(([name, label]) => `${label}: ${values.client_classification[name] === null ? "Unresolved" : values.client_classification[name] ? "Yes" : "No"}`)
+                            .join(" · ")}
                         </dd>
                       </div>
-                        );
-                      })()}
                       <div className="md:col-span-2 lg:col-span-3 rounded-md border border-[#E5E7EB] bg-white p-3">
                         <dt className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
                           Classifications

@@ -212,7 +212,7 @@ function toCaseFormValues(record: CriminalCaseRecord): CaseFormValues {
       ...record.cases,
       case_status: record.cases.case_status ?? record.cases.status_of_case,
       incident_barangay: record.cases.incident_barangay ?? "",
-      incident_city: record.cases.incident_city ?? "Panabo City",
+      incident_city: record.cases.incident_city ?? "",
       incident_address: record.cases.incident_address ?? "",
       latitude: record.cases.latitude ?? "",
       longitude: record.cases.longitude ?? "",
@@ -527,7 +527,7 @@ function CaseAccordion({
               />
               <InfoTile
                 label="Incident City"
-                value={record.cases.incident_city ?? "Panabo City"}
+                value={record.cases.incident_city ?? ""}
               />
               <InfoTile
                 label="Incident Address"
@@ -617,7 +617,7 @@ function UpdateClientInfoModal({
   };
   const updateClassification = (
     field: keyof ClientFormValues["client_classification"],
-    value: boolean | string,
+    value: boolean | string | null,
   ) => {
     setValues((current) => ({
       ...current,
@@ -733,6 +733,32 @@ function UpdateClientInfoModal({
                   </label>
                 ))}
               </div>
+              <p className="mt-4 text-sm text-[#4B5563]">
+                Review the source document before setting these inventory classifications. Age and sex do not set them automatically.
+              </p>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                {([ ["flag_female", "Female"], ["flag_senior", "Senior Citizen"], ["flag_cicl", "CICL"] ] as const).map(([name, label]) => (
+                  <label key={name} className="text-sm font-medium text-[#4B5563]">
+                    {label}
+                    <select
+                      className="mt-1 w-full rounded-md border border-[#CBD5E1] bg-white px-3 py-2"
+                      value={values.client_classification[name] === null ? "" : String(values.client_classification[name])}
+                      onChange={(event) => {
+                        updateClassification(name, event.target.value === "" ? null : event.target.value === "true");
+                        updateClassification("flags_reviewed", true);
+                      }}
+                    >
+                      <option value="">Unresolved</option>
+                      <option value="true">Yes, explicitly supported</option>
+                      <option value="false">No, explicitly negated</option>
+                    </select>
+                  </label>
+                ))}
+              </div>
+              <label className="mt-3 flex items-center gap-2 text-sm text-[#4B5563]">
+                <input type="checkbox" checked={values.client_classification.flags_reviewed} onChange={(event) => updateClassification("flags_reviewed", event.target.checked)} />
+                Source evidence reviewed; unresolved values remain unknown
+              </label>
             </div>
             <div className="md:col-span-2">
               <TextAreaField
@@ -823,7 +849,7 @@ function UpdateCaseModal({
           ...values.cases,
           case_status: values.cases.status_of_case,
           pending_in_court: values.cases.status_of_case === "Pending",
-          incident_city: values.cases.incident_city || "Panabo City",
+          incident_city: values.cases.incident_city,
           detained: caseDetained,
           date_of_confinement: caseDetained ? values.cases.date_of_confinement : "",
           place_of_detention: caseDetained ? values.cases.place_of_detention : "",
@@ -973,7 +999,7 @@ function UpdateCaseModal({
             </label>
             <TextField
               label="City"
-              value={values.cases.incident_city ?? "Panabo City"}
+              value={values.cases.incident_city ?? ""}
               onChange={(value) => updateCase("incident_city", value)}
             />
             <TextField
