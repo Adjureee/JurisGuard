@@ -29,6 +29,7 @@ class OCRDocument:
     page_count: int
     warnings: list[str]
     timings: dict = field(default_factory=dict)
+    refinements: list[dict] = field(default_factory=list)
 
 
 def _model_dir(name: str, default: Path) -> Path:
@@ -240,6 +241,7 @@ class LocalOCR:
         paddle_attempted = False
         page_count = 0
         page_timings = []
+        refinements = []
         for page_number, original in self._pages(path):
             page_count += 1
             source_width, source_height = original.size
@@ -280,6 +282,34 @@ class LocalOCR:
                 entry["region"] = region_name
                 entry["line"] = len(layout) + 1
                 layout.append(entry)
+            # Re-read only the bounded applicant columns. Keep the first pass
+            # immutable and expose the additional candidates separately.
+            if target == "full" and _bool_env("LOCAL_OCR_REFINE_INTAKE", True):
+                from intake_layout import applicant_bounds
+                bounds = applicant_bounds(entries)
+                if bounds:
+                    _, top, bottom = bounds
+                    block = [e for e in entries if top <= e["bbox"][1] < bottom]
+                    anchors = [e for e in block if "Naabot" in e["text"]]
+                    if block and anchors:
+                        left = max(0, min(e["bbox"][0] for e in block) - 12)
+                        right = min(original.width, max(e["bbox"][2] for e in block) + 40)
+                        split = anchors[0]["bbox"][0] - 12
+                        for x1, x2 in ((left, split), (split, right)):
+                            if x2 <= x1 or bottom <= top:
+                                continue
+                            crop = ImageOps.autocontrast(original.crop((x1, top, x2, bottom)), cutoff=1)
+                            factor = min(2.0, self.max_dimension / max(crop.size))
+                            crop = crop.resize((round(crop.width*factor), round(crop.height*factor)), Image.Resampling.LANCZOS)
+                            try:
+                                refined = self._paddle_page(crop, page_number)
+                            except OfflineOCRError:
+                                warnings.append(f"Page {page_number}: applicant refinement failed; first-pass OCR preserved.")
+                                break
+                            for item in refined:
+                                item["bbox"] = [round(item["bbox"][i]/factor + (x1 if i%2 == 0 else top)) for i in range(4)]
+                                item["region"] = "applicant_refinement"
+                            refinements.extend(refined)
             if target == "client":
                 break
         engine = "paddleocr" if paddle_attempted else None
@@ -289,4 +319,4 @@ class LocalOCR:
             "total_seconds": round(time.perf_counter() - started, 3),
             "pages": page_timings, "detection_max_dimension": self.det_limit,
             "model_profile": self.model_profile, "target": target,
-        })
+        }, refinements)

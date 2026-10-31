@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 import models
+from auth_limits import auth_attempts, source_attempts
 from classification_evidence import reviewed_flag_input, stored_reviewed_flags
 from extraction_runtime import (
     extract_document, ExtractionBusy, ExtractionTimeout,
@@ -499,9 +500,14 @@ def verify_password(password: str, stored_hash: str) -> bool:
     if not stored_hash:
         return False
     if not stored_hash.startswith("pbkdf2_sha256$"):
-        return hmac.compare_digest(password, stored_hash)
+        return False
 
-    _, salt, digest_hex = stored_hash.split("$", 2)
+    parts = stored_hash.split("$")
+    if len(parts) != 3:
+        return False
+    _, salt, digest_hex = parts
+    if not salt or len(digest_hex) != 64 or any(c not in "0123456789abcdef" for c in digest_hex):
+        return False
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120_000)
     return hmac.compare_digest(digest.hex(), digest_hex)
 
@@ -528,14 +534,17 @@ def generate_totp(secret: str, at_time: datetime | None = None, interval: int = 
 def verify_totp(secret: str | None, code: str | None, window: int = 1) -> bool:
     if not secret or not code:
         return False
-    normalized = "".join(ch for ch in code if ch.isdigit())
-    if len(normalized) != 6:
+    normalized = code.strip().replace(" ", "")
+    if len(normalized) != 6 or any(ch not in "0123456789" for ch in normalized):
         return False
     now = datetime.now(timezone.utc)
-    return any(
-        hmac.compare_digest(generate_totp(secret, now + timedelta(seconds=30 * step)), normalized)
-        for step in range(-window, window + 1)
-    )
+    try:
+        return any(
+            hmac.compare_digest(generate_totp(secret, now + timedelta(seconds=30 * step)), normalized)
+            for step in range(-window, window + 1)
+        )
+    except (ValueError, TypeError):
+        return False
 
 
 def mfa_otpauth_uri(user: models.User, secret: str) -> str:
@@ -578,7 +587,7 @@ def verify_mfa_trusted_device_token(user: models.User, token: str | None) -> boo
             payload.get("purpose") == "mfa_trusted_device"
             and int(payload.get("sub", 0)) == user.user_id
             and payload.get("mfa") == secret_fingerprint
-            and int(payload.get("exp", 0)) >= int(datetime.now(timezone.utc).timestamp())
+            and int(payload.get("exp", 0)) > int(datetime.now(timezone.utc).timestamp())
         )
     except Exception:
         return False
@@ -595,6 +604,7 @@ def b64url_decode(data: str) -> bytes:
 
 def create_access_token(user_id: int) -> str:
     payload = {
+        "purpose": "access",
         "sub": user_id,
         "exp": int((datetime.now(timezone.utc) + timedelta(minutes=TOKEN_TTL_MINUTES)).timestamp()),
         "jti": secrets.token_hex(16),
@@ -629,7 +639,9 @@ def read_access_token(token: str) -> int:
         if not hmac.compare_digest(b64url(expected.digest()), signature_segment):
             raise ValueError("Invalid token signature")
         payload = json.loads(b64url_decode(payload_segment))
-        if int(payload["exp"]) < int(datetime.now(timezone.utc).timestamp()):
+        if payload.get("purpose") != "access":
+            raise ValueError("Invalid token purpose")
+        if int(payload["exp"]) <= int(datetime.now(timezone.utc).timestamp()):
             raise ValueError("Expired token")
         return int(payload["sub"])
     except Exception as exc:
@@ -2102,6 +2114,9 @@ def login(
     db: Session = Depends(get_db),
 ):
     username = form.username.lower().strip()
+    if request is not None and request.client is not None:
+        source_attempts.consume(request.client.host)
+    auth_attempts.consume(f"login:{username}")
     user = db.query(models.User).filter((models.User.email == username) | (models.User.username == username)).first()
     if not user or not verify_password(form.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Could not validate credentials")
@@ -2112,7 +2127,7 @@ def login(
         trusted_device_ok = verify_mfa_trusted_device_token(user, trusted_device_token)
         if not trusted_device_ok:
             if not verify_totp(user.mfa_secret, otp_code):
-                raise HTTPException(status_code=401, detail="MFA code required")
+                raise HTTPException(status_code=401, detail="Invalid MFA code" if otp_code else "MFA code required")
             if remember_device:
                 new_trusted_device_token = create_mfa_trusted_device_token(user)
 
@@ -2168,6 +2183,7 @@ def enable_mfa(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
+    auth_attempts.consume(f"mfa:{user.user_id}")
     if not user.mfa_secret:
         raise HTTPException(status_code=400, detail="Start MFA setup first")
     if not verify_totp(user.mfa_secret, payload.code):
@@ -2185,6 +2201,7 @@ def disable_mfa(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
+    auth_attempts.consume(f"mfa:{user.user_id}")
     if user.mfa_enabled and not verify_totp(user.mfa_secret, payload.code):
         raise HTTPException(status_code=400, detail="Invalid MFA code")
     user.mfa_enabled = False
