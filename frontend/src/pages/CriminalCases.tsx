@@ -1,3 +1,4 @@
+import { useConfirmation } from "../components/ConfirmationProvider";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
@@ -1083,6 +1084,7 @@ function TerminationModal({
   onClose: () => void;
   onTerminated: (record: CriminalCaseRecord) => void;
 }) {
+  const confirm = useConfirmation();
   const [values, setValues] = useState<TerminationPayload>({
     termination_reason: "",
     resolution_type: "",
@@ -1098,6 +1100,7 @@ function TerminationModal({
       toast.error("Termination reason is required");
       return;
     }
+    if (!await confirm({ title: "Terminate this case?", message: "This case will be marked as terminated using the details you entered. Review them before continuing.", confirmLabel: "Terminate case" })) return;
     setSaving(true);
     try {
       const updated = await terminateCaseRecord(record.case_id, values);

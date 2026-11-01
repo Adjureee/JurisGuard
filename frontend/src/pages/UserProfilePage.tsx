@@ -3,10 +3,12 @@ import toast from "react-hot-toast";
 import MainLayout from "../layouts/MainLayout";
 import ProtectedProfileImage from "../components/ProtectedProfileImage";
 import PageHeader from "../components/PageHeader";
+import { useConfirmation } from "../components/ConfirmationProvider";
 import { useAuth } from "../contexts/AuthContext";
 import {
   disableMfa,
   enableMfa,
+  forgetTrustedDevice,
   removeProfileImage,
   setupMfa,
   uploadProfileImage,
@@ -37,13 +39,14 @@ function initials(name?: string, email?: string) {
 }
 
 export default function UserProfilePage() {
+  const confirm = useConfirmation();
   const { user, getCurrentUser } = useAuth();
   const [uploadError, setUploadError] = useState("");
   const [previewSrc, setPreviewSrc] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [mfaSecret, setMfaSecret] = useState("");
-  const [mfaUri, setMfaUri] = useState("");
+  const [mfaQrCode, setMfaQrCode] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [isMfaBusy, setIsMfaBusy] = useState(false);
   const profileImageSrc = previewSrc;
@@ -102,6 +105,7 @@ export default function UserProfilePage() {
 
   const handleRemoveProfileImage = async () => {
     if (!user) return;
+    if (!await confirm({ title: "Remove profile photo?", message: "Your current profile photo will be removed. You can upload a new one later.", confirmLabel: "Remove photo" })) return;
     setIsUploading(true);
     setUploadError("");
     try {
@@ -121,10 +125,19 @@ export default function UserProfilePage() {
 
   const handleSetupMfa = async () => {
     setIsMfaBusy(true);
+    setMfaQrCode("");
+    setMfaCode("");
     try {
       const setup = await setupMfa();
       setMfaSecret(setup.secret);
-      setMfaUri(setup.otpauth_uri);
+      try {
+        const { toDataURL } = await import("qrcode");
+        setMfaQrCode(await toDataURL(setup.otpauth_uri, {
+          width: 280, margin: 4, errorCorrectionLevel: "M",
+        }));
+      } catch {
+        toast.error("Unable to generate the QR code. Use the manual setup key below.");
+      }
       toast.success("MFA setup started");
     } catch (err) {
       toast.error(
@@ -142,7 +155,7 @@ export default function UserProfilePage() {
       await getCurrentUser();
       setMfaCode("");
       setMfaSecret("");
-      setMfaUri("");
+      setMfaQrCode("");
       toast.success("MFA enabled");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to enable MFA");
@@ -152,6 +165,7 @@ export default function UserProfilePage() {
   };
 
   const handleDisableMfa = async () => {
+    if (!await confirm({ title: "Disable MFA?", message: "Your account will no longer require an authenticator code when signing in.", confirmLabel: "Disable MFA" })) return;
     setIsMfaBusy(true);
     try {
       await disableMfa(mfaCode);
@@ -249,6 +263,23 @@ export default function UserProfilePage() {
         className="mt-4 rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-[#111827]/10"
       >
         <h3 className="font-semibold text-[#111827]">Security</h3>
+        {user?.email && (
+          <button
+            type="button"
+            className="mt-3 rounded-md border border-[#E5E7EB] px-3 py-2 text-sm font-semibold text-[#111827]"
+            onClick={async () => {
+              if (!await confirm({ title: "Forget this device?", message: "Your next sign-in on this browser will require an MFA code. Your current session will stay signed in.", confirmLabel: "Forget device" })) return;
+              try {
+                forgetTrustedDevice(user.email);
+                toast.success("Remembered device cleared. Sign out and sign in again to test MFA.");
+              } catch {
+                toast.error("Unable to clear this browser's remembered-device setting.");
+              }
+            }}
+          >
+            Forget this device
+          </button>
+        )}
         <div className="mt-4 rounded-md border border-[#E5E7EB] p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -273,26 +304,30 @@ export default function UserProfilePage() {
 
           {mfaSecret && !user?.mfa_enabled && (
             <div className="mt-4 space-y-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
-                  Manual Secret
-                </p>
+              <p className="text-sm text-[#6B7280]">
+                In your authenticator app, choose Add account, then Scan a QR code.
+                Scan below and enter the current 6-digit code to enable MFA.
+              </p>
+              {mfaQrCode && (
+                <img
+                  src={mfaQrCode}
+                  alt="Scan this QR code with your authenticator app to set up JurisGuard"
+                  width={280}
+                  height={280}
+                  className="h-auto max-w-full rounded-md border border-[#E5E7EB] bg-white"
+                />
+              )}
+              <details>
+                <summary className="cursor-pointer text-sm font-medium text-[#111827]">
+                  Can't scan? Enter a setup key manually
+                </summary>
                 <p className="mt-1 break-all rounded-md bg-[#F9FAFB] px-3 py-2 font-mono text-sm text-[#111827]">
                   {mfaSecret}
                 </p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
-                  Authenticator URI
+                <p className="mt-2 text-sm text-[#6B7280]">
+                  Choose a time-based account and enter this key.
                 </p>
-                <p className="mt-1 break-all rounded-md bg-[#F9FAFB] px-3 py-2 font-mono text-xs text-[#111827]">
-                  {mfaUri}
-                </p>
-              </div>
-              <p className="text-sm text-[#6B7280]">
-                Add the secret to an authenticator app, then enter the current
-                6-digit code.
-              </p>
+              </details>
             </div>
           )}
 

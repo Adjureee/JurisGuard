@@ -46,8 +46,8 @@ performs database setup; isolated tests intentionally omit those startup writes.
   persistence is not implemented. Existing sessions are not all revoked when MFA
   is enabled, and MFA setup currently relies on an authenticated session without
   a fresh password challenge. These need a coordinated session/schema change.
-- MFA recovery codes and a recovery workflow are absent. The current setup UI
-  provides a manual secret and URI, not a QR code.
+- MFA recovery codes and a recovery workflow are absent. Updated 1 November:
+  setup now generates a QR code locally in the browser, with manual-key fallback.
 - Multiple backend workers need a shared rate limiter; the local in-memory
   limiter does not coordinate across processes. Avoid treating it as distributed
   abuse protection.
@@ -56,8 +56,8 @@ performs database setup; isolated tests intentionally omit those startup writes.
 
 ## Browser and phone test
 
-Use a test account. In Profile, start MFA setup. Add the displayed secret manually
-to a time-based authenticator account; do not share it in chat. Enter the current
+Use a test account. In Profile, start MFA setup. Scan the displayed QR code with
+an authenticator app, or expand the manual-key fallback; do not share it in chat. Enter the current
 six-digit code to enable MFA. Sign out, then sign in with remember-device unchecked
 to verify the code challenge. Check a wrong code and a current code. Finally,
 disable MFA using a current code if the test account should return to its original

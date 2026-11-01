@@ -1,3 +1,4 @@
+import { useConfirmation } from "../../components/ConfirmationProvider";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -134,6 +135,7 @@ function priorityWeight(priority: ReminderPriority) {
 }
 
 export default function AdminDashboard() {
+  const confirm = useConfirmation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { date, greeting, now } = useGreetingClock();
@@ -303,7 +305,9 @@ export default function AdminDashboard() {
                       <CheckCircle2 className="h-4 w-4" />
                       {reminder.status}
                     </button>
-                    <button type="button" onClick={() => deleteReminder(reminder.id)} className="inline-flex items-center gap-1 rounded-lg border border-[#FECACA] bg-[#FFF1F2] px-2.5 py-1.5 text-xs font-bold text-[#9F1239] hover:bg-[#FFE4E6]">
+                    <button type="button" onClick={async () => {
+                      if (await confirm({ title: "Delete reminder?", message: "This reminder will be permanently removed.", confirmLabel: "Delete reminder" })) deleteReminder(reminder.id);
+                    }} className="inline-flex items-center gap-1 rounded-lg border border-[#FECACA] bg-[#FFF1F2] px-2.5 py-1.5 text-xs font-bold text-[#9F1239] hover:bg-[#FFE4E6]">
                       <Trash2 className="h-3.5 w-3.5" />
                       Remove
                     </button>
