@@ -179,7 +179,7 @@ export default function StaffAnalyticsPage() {
       ) : (
         <>
           <div className="grid gap-6 xl:grid-cols-2">
-            <AnalyticsPanel title="Monthly Productivity" subtitle="Cases encoded by month from your own workload.">
+            <AnalyticsPanel title="Monthly Productivity" subtitle="Cases encoded by month from your own workload." headerClassName="rounded-t-xl bg-[#E7D7EE]">
               {monthlyProductivity.length === 0 ? <EmptyState message="No personal case productivity data is available yet." /> : (
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
@@ -195,7 +195,7 @@ export default function StaffAnalyticsPage() {
               )}
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Weekly Intake Trend" subtitle="Recent weekly movement for your own intake records.">
+            <AnalyticsPanel title="Weekly Intake Trend" subtitle="Recent weekly movement for your own intake records." headerClassName="rounded-t-xl bg-[#E7D7EE]">
               {weeklyIntake.length === 0 ? <EmptyState message="No weekly intake records are available yet." /> : (
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
@@ -213,7 +213,7 @@ export default function StaffAnalyticsPage() {
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-3">
-            <AnalyticsPanel title="OCR Analytics" subtitle="Your extraction volume by OCR status.">
+            <AnalyticsPanel title="OCR Analytics" subtitle="Your extraction volume by OCR status." headerClassName="rounded-t-xl bg-[#E7D7EE]">
               {ocrStatus.length === 0 ? <EmptyState message="No personal OCR activity is available yet." /> : (
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
@@ -228,7 +228,7 @@ export default function StaffAnalyticsPage() {
               )}
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Case Status Distribution" subtitle="Breakdown of your assigned cases.">
+            <AnalyticsPanel title="Case Status Distribution" subtitle="Breakdown of your assigned cases." headerClassName="rounded-t-xl bg-[#E7D7EE]">
               {(workload?.status_breakdown ?? []).length === 0 ? <EmptyState message="No personal status breakdown is available yet." /> : (
                 <div className="space-y-3">
                   {(workload?.status_breakdown ?? []).map((row) => (
@@ -241,7 +241,7 @@ export default function StaffAnalyticsPage() {
               )}
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Case Type Breakdown" subtitle="Personal case categories only.">
+            <AnalyticsPanel title="Case Type Breakdown" subtitle="Personal case categories only." headerClassName="rounded-t-xl bg-[#E7D7EE]">
               {caseTypes.length === 0 ? <EmptyState message="No personal case type data is available yet." /> : (
                 <div className="space-y-3">
                   {caseTypes.slice(0, 6).map((row, index) => (
@@ -270,6 +270,7 @@ export default function StaffAnalyticsPage() {
             <AnalyticsPanel
               title="Shared Case GIS Map"
               subtitle="Barangay-centered map for the shared PAO criminal case workspace."
+              headerClassName="rounded-t-xl bg-[#E7D7EE]"
             >
               {heatmap && heatmap.points.length > 0 ? (
                 <Suspense fallback={<SkeletonBlock className="h-[28rem]" />}>
@@ -289,6 +290,7 @@ export default function StaffAnalyticsPage() {
             <AnalyticsPanel
               title="Barangay Hotspots"
               subtitle="Top locations from the current shared case records."
+              headerClassName="rounded-t-xl bg-[#E7D7EE]"
             >
               {!heatmap || heatmap.barangays.length === 0 ? (
                 <EmptyState message="No barangay hotspot data is available yet." />

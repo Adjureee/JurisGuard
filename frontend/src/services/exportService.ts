@@ -201,10 +201,26 @@ interface ExportParticipantRow {
   classification: Partial<ClientClassification> | undefined;
 }
 
+function partyRole(applicantRole: string, applicantRoleOther: string, fallback: string) {
+  return applicantRole === "Others"
+    ? applicantRoleOther || fallback
+    : applicantRole || fallback;
+}
+
 function participantInvolvement(participant: CaseParticipant) {
-  return participant.applicant_role === "Others"
-    ? participant.applicant_role_other
-    : participant.applicant_role;
+  return partyRole(
+    participant.applicant_role,
+    participant.applicant_role_other,
+    participant.party_represented,
+  );
+}
+
+function intakeInvolvement(record: CriminalCaseRecord) {
+  return partyRole(
+    record.intake_record.applicant_role,
+    record.intake_record.applicant_role_other,
+    record.intake_record.party_represented,
+  );
 }
 
 function exportParticipantRows(
@@ -213,8 +229,7 @@ function exportParticipantRows(
 ): ExportParticipantRow[] {
   if ((record.participants?.length ?? 0) > 1) {
     return (record.participants ?? []).map((participant) => ({
-      partyRepresented:
-        participant.party_represented || participantInvolvement(participant) || "Unknown party",
+      partyRepresented: participantInvolvement(participant),
       sex: participant.sex,
       age: participant.age,
       address: participant.address,
@@ -231,7 +246,9 @@ function exportParticipantRows(
 
   return [
     {
-      partyRepresented: record.intake_record.party_represented,
+      partyRepresented: record.participants?.[0]
+        ? participantInvolvement(record.participants[0])
+        : intakeInvolvement(record),
       sex: client?.client.sex,
       age: client?.client.age,
       address: client?.client_details.address,
@@ -298,7 +315,7 @@ export function buildCriminalCasesCsv(
     );
     return csvRow([
       record.intake_record.control_no,
-      record.intake_record.party_represented,
+      intakeInvolvement(record),
       client?.client.sex,
       record.cases.title_of_case,
       record.cases.court_body,

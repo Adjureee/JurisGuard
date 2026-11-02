@@ -20,6 +20,10 @@ import {
 } from "../../features/criminalCases/schemas";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
 import {
+  isContactNumberPasteAllowed,
+  sanitizeContactNumberInput,
+} from "../../utils/contactNumber";
+import {
   dataUrlToFile,
   extractClientFromDocument,
   type ExtractionEngineMode,
@@ -80,6 +84,43 @@ const religionOptions = [
   "Buddhist",
   "Indigenous Belief",
   "None",
+];
+
+const languageDialectOptions = [
+  "Filipino / Tagalog",
+  "Bisaya / Binisaya",
+  "Cebuano",
+  "Hiligaynon / Ilonggo",
+  "Ilocano",
+  "Bikol / Bicol",
+  "Waray",
+  "Kapampangan",
+  "Pangasinan",
+  "Maguindanaon",
+  "Maranao",
+  "Tausug",
+  "Chavacano",
+  "Surigaonon",
+];
+
+const relationshipOptions = [
+  "Self / Applicant",
+  "Mother",
+  "Father",
+  "Brother",
+  "Sister",
+  "Spouse",
+  "Son",
+  "Daughter",
+  "Grandparent",
+  "Grandchild",
+  "Uncle",
+  "Aunt",
+  "Cousin",
+  "Guardian",
+  "Other Relative",
+  "Friend",
+  "Authorized Representative",
 ];
 
 const defaultValues: ClientFormValues = {
@@ -176,6 +217,7 @@ function TextInput({
   inputMode,
   maxLength,
   onInput,
+  onPaste,
 }: {
   label: string;
   registration: UseFormRegisterReturn;
@@ -186,6 +228,7 @@ function TextInput({
   inputMode?: "none" | "text" | "tel" | "url" | "email" | "numeric" | "decimal" | "search";
   maxLength?: number;
   onInput?: (event: React.FormEvent<HTMLInputElement>) => void;
+  onPaste?: (event: React.ClipboardEvent<HTMLInputElement>) => void;
 }) {
   return (
     <label className="block">
@@ -199,6 +242,7 @@ function TextInput({
         inputMode={inputMode}
         maxLength={maxLength}
         onInput={onInput}
+        onPaste={onPaste}
         {...registration}
         className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20 disabled:cursor-not-allowed disabled:bg-[#F3F4F6] disabled:text-[#6B7280]"
       />
@@ -250,6 +294,8 @@ function ComboInput({
   status,
   options,
   listId,
+  disabled = false,
+  maxLength,
 }: {
   label: string;
   registration: UseFormRegisterReturn;
@@ -257,6 +303,8 @@ function ComboInput({
   status?: ExtractionMap[string];
   options: string[];
   listId: string;
+  disabled?: boolean;
+  maxLength?: number;
 }) {
   return (
     <label className="block">
@@ -267,8 +315,10 @@ function ComboInput({
       <input
         type="text"
         list={listId}
+        disabled={disabled}
+        maxLength={maxLength}
         {...registration}
-        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20 disabled:cursor-not-allowed disabled:bg-[#F3F4F6] disabled:text-[#6B7280]"
       />
       <datalist id={listId}>
         {options.map((option) => (
@@ -437,6 +487,8 @@ export default function AddClientModal({
     reset,
     getValues,
     setValue,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm<ClientFormValues>({
     resolver: zodResolver(clientFormSchema) as Resolver<ClientFormValues>,
@@ -1123,11 +1175,14 @@ export default function AddClientModal({
                       error={errors.client?.citizenship?.message}
                       status={indicators["client.citizenship"]}
                     />
-                    <TextInput
+                    <ComboInput
                       label="Language / Dialect"
                       registration={register("client.language_dialect")}
                       error={errors.client?.language_dialect?.message}
                       status={indicators["client.language_dialect"]}
+                      options={languageDialectOptions}
+                      listId="client-language-dialect-options"
+                      maxLength={100}
                     />
                     </div>
                   </div>
@@ -1149,9 +1204,39 @@ export default function AddClientModal({
                     </div>
                     <TextInput
                       label="Contact No."
+                      type="tel"
+                      inputMode="numeric"
                       registration={register("client_details.contact_no")}
                       error={errors.client_details?.contact_no?.message}
                       status={indicators["client_details.contact_no"]}
+                      maxLength={11}
+                      onInput={(event) => {
+                        const input = event.currentTarget;
+                        const sanitized = sanitizeContactNumberInput(input.value);
+                        if (input.value !== sanitized) {
+                          input.value = sanitized;
+                          setValue("client_details.contact_no", sanitized, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                        }
+                      }}
+                      onPaste={(event) => {
+                        if (
+                          !isContactNumberPasteAllowed(
+                            event.currentTarget,
+                            event.clipboardData.getData("text"),
+                          )
+                        ) {
+                          event.preventDefault();
+                          setError("client_details.contact_no", {
+                            type: "validate",
+                            message: "Enter up to 11 digits using numbers only.",
+                          });
+                          return;
+                        }
+                        clearErrors("client_details.contact_no");
+                      }}
                     />
                     <TextInput
                       label="Email"
@@ -1288,7 +1373,7 @@ export default function AddClientModal({
                       }
                       options={civilStatusOptions}
                     />
-                    <TextInput
+                    <ComboInput
                       label="Relationship to Applicant"
                       registration={register(
                         "client_details.representative_relationship",
@@ -1296,6 +1381,9 @@ export default function AddClientModal({
                       status={
                         indicators["client_details.representative_relationship"]
                       }
+                      options={relationshipOptions}
+                      listId="client-relationship-options"
+                      maxLength={100}
                       disabled={representativeNotApplicable}
                     />
                     <TextInput

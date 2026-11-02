@@ -94,10 +94,27 @@ export interface RecentActivity {
   id: string;
   timestamp: string;
   user: string;
+  role?: string;
   action: string;
+  title?: string;
   description: string;
+  status?: string | null;
   entity_type?: string | null;
   entity_id?: string | null;
+  href?: string | null;
+}
+
+export interface DashboardIntelligenceBrief {
+  total_cases: number;
+  active_cases: number;
+  criminal_cases: number;
+  civil_cases: number;
+  cases_this_month: number;
+  busiest_day: string | null;
+  busiest_hour: string | null;
+  top_barangay: string | null;
+  leading_category: string | null;
+  pending_reviews: number;
 }
 
 export interface IntakeLoadAnalytics {
@@ -284,6 +301,11 @@ function pointsSafeId(value: number | string | null | undefined) {
 
 export async function getDashboardOverview(range?: DashboardDateRange) {
   const response = await apiClient.get<DashboardOverview>("/dashboard/overview", { params: dateRangeParams(range) });
+  return response.data;
+}
+
+export async function getDashboardIntelligenceBrief() {
+  const response = await apiClient.get<DashboardIntelligenceBrief>("/dashboard/intelligence-brief");
   return response.data;
 }
 

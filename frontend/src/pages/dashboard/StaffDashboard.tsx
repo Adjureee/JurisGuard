@@ -12,8 +12,10 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import MainLayout from "../../layouts/MainLayout";
-import PageHeader from "../../components/PageHeader";
 import { EmptyState, SkeletonBlock } from "../../components/dashboard/AnalyticsPrimitives";
+import DashboardGreeting from "../../components/dashboard/DashboardGreeting";
+import IntelligenceBrief from "../../components/dashboard/IntelligenceBrief";
+import CalendarReminders from "../../features/dashboardReminders/CalendarReminders";
 import { StatusBadge } from "../../features/criminalCases/components/StatusBadge";
 import { useAuth } from "../../contexts/AuthContext";
 import { getStaffWorkload, type StaffWorkload } from "../../services/dashboardService";
@@ -117,10 +119,9 @@ export default function StaffDashboard() {
 
   return (
     <MainLayout>
-      <PageHeader
-        eyebrow="Staff Workspace"
-        title="My Legal Intake Dashboard"
-        description={`Personal workload, assigned cases, and intake operations for ${user?.full_name || user?.email || "staff"}.`}
+      <DashboardGreeting
+        name={user?.full_name || user?.email || "Attorney/Staff"}
+        context="Staff Workspace · My Legal Intake Dashboard"
         actions={
           <Link
             to="/case-submissions"
@@ -143,6 +144,9 @@ export default function StaffDashboard() {
           <StaffMetricCard label="OCR Usage" value={workload?.my_ocr_usage ?? 0} detail="Personal document scans" icon={<FileScan className="h-5 w-5" />} tone="bg-[#F5F3FF] text-[#5B21B6]" />
         </div>
       )}
+
+      <CalendarReminders />
+      <IntelligenceBrief />
 
       <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,0.38fr)_minmax(0,0.62fr)]">
         <section className="min-w-0 rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">

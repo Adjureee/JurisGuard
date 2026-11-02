@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import logo1 from "../logo/logo1.png";
 
 function DashboardIcon() {
   return (
@@ -123,16 +124,11 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         isOpen ? "translate-x-0" : "-translate-x-full"
       }`}>
       <div className="mb-7 flex justify-center">
-        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <img
-            src="/paologo.png"
-            alt="PAO Panabo logo"
-            className="h-full w-full object-contain p-2"
-            onError={(event) => {
-              event.currentTarget.style.display = "none";
-            }}
-          />
-        </div>
+        <img
+          src={logo1}
+          alt="JurisGuard logo"
+          className="h-36 w-36 object-cover object-center"
+        />
       </div>
 
       <nav className="flex flex-1 flex-col gap-5 overflow-y-auto">

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
 import MainLayout from "../layouts/MainLayout";
@@ -32,6 +33,8 @@ function statusClass(status: string) {
 
 export default function CaseTransferPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedReportId = searchParams.get("report");
   const [reports, setReports] = useState<CaseTransfer[]>([]);
   const [attorneys, setAttorneys] = useState<TransferAttorney[]>([]);
   const [selected, setSelected] = useState<CaseTransfer | null>(null);
@@ -57,6 +60,39 @@ export default function CaseTransferPage() {
     setReports(reportRows); setAttorneys(people);
   }, []);
   useEffect(() => { const timer = window.setTimeout(() => { void load().catch((error) => toast.error(error instanceof Error ? error.message : "Unable to load transfers")); }, 0); return () => window.clearTimeout(timer); }, [load]);
+
+  useEffect(() => {
+    if (!requestedReportId) return;
+    let cancelled = false;
+    const clearReportQuery = () => setSearchParams((params) => {
+      params.delete("report");
+      return params;
+    }, { replace: true });
+    const reportId = Number(requestedReportId);
+    if (!Number.isInteger(reportId) || reportId <= 0) {
+      clearReportQuery();
+      return;
+    }
+
+    void getCaseTransfer(reportId)
+      .then((report) => {
+        if (!cancelled) {
+          setSelected(report);
+          setModal("view");
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) toast.error(error instanceof Error ? error.message : "Unable to open transfer report");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBusy(false);
+          clearReportQuery();
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [requestedReportId, setSearchParams]);
 
   const sourceUserId = user?.role === "admin" ? Number(sourceAttorney) || undefined : user?.user_id;
   useEffect(() => {

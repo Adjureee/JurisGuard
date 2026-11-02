@@ -8,17 +8,19 @@ export function AnalyticsPanel({
   subtitle,
   children,
   className = "",
+  headerClassName = "",
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   className?: string;
+  headerClassName?: string;
 }) {
   return (
     <section
       className={`flex flex-col rounded-xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] ${className}`}
     >
-      <div className="border-b border-[#E5E7EB] px-5 py-4">
+      <div className={`border-b border-[#E5E7EB] px-5 py-4 ${headerClassName}`}>
         <h3 className="text-base font-bold text-[#2B3642]">{title}</h3>
         {subtitle && <p className="mt-1 text-sm font-medium leading-6 text-[#4B5563]">{subtitle}</p>}
       </div>

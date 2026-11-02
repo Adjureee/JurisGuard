@@ -525,7 +525,7 @@ export default function AnalyticsPage() {
         <>
           <div className="grid items-start gap-6 xl:grid-cols-[1.35fr_0.65fr]">
             <div ref={hotspotPanelRef}>
-              <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay.">
+              <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay." headerClassName="rounded-t-xl bg-[#E7D7EE]">
                 <div className="mb-4 flex flex-wrap gap-2">
                   <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
                     All Barangays
@@ -549,7 +549,7 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="min-h-0" style={hotspotPanelHeight ? { height: `${hotspotPanelHeight}px` } : undefined}>
-              <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-full min-h-0">
+              <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-full min-h-0" headerClassName="rounded-t-xl bg-[#E7D7EE]">
                 <div className="h-full min-h-0 space-y-3 overflow-y-auto pr-2">
                   {topBarangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : topBarangays.map((barangay, index) => (
                     <button key={barangay.barangay} type="button" onClick={() => setSelectedBarangay(barangay.barangay)} className="flex w-full items-center gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3 text-left hover:bg-[#F8FAFC]">
@@ -624,7 +624,7 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-2">
-            <AnalyticsPanel title="Case Intake Trends" subtitle="Case and client movement for the selected date range.">
+            <AnalyticsPanel title="Case Intake Trends" subtitle="Case and client movement for the selected date range." headerClassName="rounded-t-xl bg-[#E7D7EE]">
               <div className="mb-4 flex justify-end">
                 <ChartDownloadButton
                   label="Download PNG"
@@ -677,7 +677,7 @@ export default function AnalyticsPage() {
               </div>
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Weekly Volume Distribution" subtitle="Busiest intake days from encoded form dates.">
+            <AnalyticsPanel title="Weekly Volume Distribution" subtitle="Busiest intake days from encoded form dates." headerClassName="rounded-t-xl bg-[#E7D7EE]">
               <div className="mb-4 flex justify-end">
                 <ChartDownloadButton
                   label="Download PNG"
@@ -730,7 +730,7 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-            <AnalyticsPanel title="Hourly Intake Heat Analytics" subtitle="Actual encoded intake hours only.">
+            <AnalyticsPanel title="Hourly Intake Heat Analytics" subtitle="Actual encoded intake hours only." headerClassName="rounded-t-xl bg-[#E7D7EE]">
               <div className="mb-4 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-[#FEF3C7] bg-[#FFFBEB] p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-[#92400E]">Peak Intake Window</p>
@@ -761,7 +761,7 @@ export default function AnalyticsPage() {
               )}
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Legal Service Demand" subtitle="Most common encoded case types.">
+            <AnalyticsPanel title="Legal Service Demand" subtitle="Most common encoded case types." headerClassName="rounded-t-xl bg-[#E7D7EE]">
               <div className="mb-4 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-[#E7D7EE] bg-[#F7F0FA] p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">Leading Demand</p>
@@ -789,7 +789,7 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-3">
-            <AnalyticsPanel title="Case Category Analytics" subtitle="Common criminal case categories and distribution.">
+            <AnalyticsPanel title="Case Category Analytics" subtitle="Common criminal case categories and distribution." headerClassName="rounded-t-xl bg-[#E7D7EE]">
               <div className="mb-4 flex justify-end">
                 <ChartDownloadButton
                   label="Download PNG"
@@ -836,7 +836,7 @@ export default function AnalyticsPage() {
               </div>
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Terminated Case Analytics" subtitle="Closure volume, archive movement, and reason patterns." className="border-[#FECACA] xl:col-span-2">
+            <AnalyticsPanel title="Terminated Case Analytics" subtitle="Closure volume, archive movement, and reason patterns." className="border-[#FECACA] xl:col-span-2" headerClassName="rounded-t-xl bg-[#E7D7EE]">
               <div className="mb-4 flex justify-end">
                 <ChartDownloadButton
                   label="Download PNG"

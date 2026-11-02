@@ -1,14 +1,16 @@
+import asyncio
 import base64
 import hashlib
 import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import struct
 import unicodedata
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
@@ -19,6 +21,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import func, or_, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -26,8 +29,15 @@ import models
 from ai_service import process_document
 from extraction_mapping import ocr_status_for_result, public_extraction_payload
 from fastapi.concurrency import run_in_threadpool
-from database import engine, get_db
+from database import SessionLocal, engine, get_db
 from upload_validation import save_bounded_upload, verify_image
+from case_transfer_permissions import can_edit_transfer_report, can_submit_transfer_report
+from reminder_permissions import (
+    can_access_reminder,
+    can_edit_reminder,
+    can_manage_shared_reminders as role_can_manage_shared_reminders,
+)
+from reminder_status import PHILIPPINE_TIMEZONE, calculate_reminder_status, can_complete_reminder
 
 
 models.Base.metadata.create_all(bind=engine)
@@ -223,6 +233,32 @@ class TransferReportPayload(BaseModel):
 
 class TransferReturnPayload(BaseModel):
     remarks: str
+
+
+class ReminderPayload(BaseModel):
+    title: str
+    description: str = ""
+    date: date
+    start_time: time | None = None
+    end_time: time | None = None
+    category: Literal[
+        "Client Meeting", "Court Hearing", "Document Deadline", "Follow-up",
+        "Office Meeting", "Personal", "Other",
+    ] = "Other"
+    priority: Literal["Normal", "Important", "Urgent"] = "Normal"
+    visibility: Literal["personal", "shared"] = "personal"
+    notification_minutes_before: int | None = 15
+
+
+class CalendarHolidayPayload(BaseModel):
+    source_key: str
+    name: str
+    date: date
+    classification: str
+    coverage: Literal["National", "Provincial", "City"]
+    geographic_scope: str
+    reference: str
+    source_url: str
 
 
 def template_path(language: str) -> Path:
@@ -429,6 +465,7 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE case_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS entity_id VARCHAR(100)",
+        "ALTER TABLE reminder ALTER COLUMN status SET DEFAULT 'Upcoming'",
         """
         CREATE TABLE IF NOT EXISTS case_submission (
             submission_id SERIAL PRIMARY KEY,
@@ -552,8 +589,76 @@ def seed_roles() -> None:
         )
 
 
+CALENDAR_HOLIDAY_SEED = [
+    # Dates declared by Proclamation No. 1006, s. 2025.
+    ("PH-2026-NEW-YEAR", "New Year's Day", "2026-01-01", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-CHINESE-NEW-YEAR", "Chinese New Year", "2026-02-17", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-EDSA-ANNIVERSARY", "EDSA People Power Revolution Anniversary", "2026-02-25", "Special Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-MAUNDY-THURSDAY", "Maundy Thursday", "2026-04-02", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-GOOD-FRIDAY", "Good Friday", "2026-04-03", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-BLACK-SATURDAY", "Black Saturday", "2026-04-04", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-ARAW-KAGITINGAN", "Araw ng Kagitingan", "2026-04-09", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-LABOR-DAY", "Labor Day", "2026-05-01", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-INDEPENDENCE-DAY", "Independence Day", "2026-06-12", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-NINOY-AQUINO-DAY", "Ninoy Aquino Day", "2026-08-21", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-NATIONAL-HEROES-DAY", "National Heroes Day", "2026-08-31", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-ALL-SAINTS-DAY", "All Saints' Day", "2026-11-01", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-ALL-SOULS-DAY", "All Souls' Day", "2026-11-02", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-BONIFACIO-DAY", "Bonifacio Day", "2026-11-30", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-IMMACULATE-CONCEPTION", "Feast of the Immaculate Conception of Mary", "2026-12-08", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025; Republic Act No. 10966", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-CHRISTMAS-EVE", "Christmas Eve", "2026-12-24", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-CHRISTMAS-DAY", "Christmas Day", "2026-12-25", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-RIZAL-DAY", "Rizal Day", "2026-12-30", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    ("PH-2026-LAST-DAY", "Last Day of the Year", "2026-12-31", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
+    # The movable Eid dates were added by separate presidential proclamations.
+    ("PH-2026-EID-FITR", "Eid'l Fitr (Feast of Ramadan)", "2026-03-20", "Regular Holiday", "National", "Philippines", "Proclamation No. 1189, s. 2026", "https://pco.gov.ph/news_releases/palace-declares-march-20-regular-holiday-nationwide-for-eidl-fitr/"),
+    ("PH-2026-EID-ADHA", "Eid'l Adha (Feast of Sacrifice)", "2026-05-27", "Regular Holiday", "National", "Philippines", "Proclamation No. 1264, s. 2026", "https://pco.gov.ph/news_releases/palace-declares-may-27-as-a-regular-holiday-for-eidl-adha-observance/"),
+    ("PH-2026-PANABO-OCT-30", "Special Non-Working Day in Panabo City", "2026-10-30", "Special Non-Working Day", "City", "Panabo City, Davao del Norte", "Proclamation No. 1492, s. 2026", "https://officialgazette.gov.ph/2026/10/28/proclamation-no-1492-s-2026/"),
+    # 2027 dates declared by Proclamation No. 1427, s. 2026. Eid dates remain
+    # intentionally absent until separately proclaimed by the President.
+    ("PH-2027-NEW-YEAR", "New Year's Day", "2027-01-01", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-CHINESE-NEW-YEAR", "Chinese New Year", "2027-02-06", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-EDSA-ANNIVERSARY", "EDSA People Power Revolution Anniversary", "2027-02-25", "Special Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-MAUNDY-THURSDAY", "Maundy Thursday", "2027-03-25", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-GOOD-FRIDAY", "Good Friday", "2027-03-26", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-BLACK-SATURDAY", "Black Saturday", "2027-03-27", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-ARAW-KAGITINGAN", "Araw ng Kagitingan", "2027-04-09", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-LABOR-DAY", "Labor Day", "2027-05-01", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-INDEPENDENCE-DAY", "Independence Day", "2027-06-12", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-NINOY-AQUINO-DAY", "Ninoy Aquino Day", "2027-08-21", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-NATIONAL-HEROES-DAY", "National Heroes Day", "2027-08-30", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-ALL-SAINTS-DAY", "All Saints' Day", "2027-11-01", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-ALL-SOULS-DAY", "All Souls' Day", "2027-11-02", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-BONIFACIO-DAY", "Bonifacio Day", "2027-11-30", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-IMMACULATE-CONCEPTION", "Feast of the Immaculate Conception of Mary", "2027-12-08", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026; Republic Act No. 10966", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-CHRISTMAS-EVE", "Christmas Eve", "2027-12-24", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-CHRISTMAS-DAY", "Christmas Day", "2027-12-25", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-RIZAL-DAY", "Rizal Day", "2027-12-30", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+    ("PH-2027-LAST-DAY", "Last Day of the Year", "2027-12-31", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
+]
+
+
+def seed_calendar_holidays() -> None:
+    with SessionLocal() as db:
+        for source_key, name, holiday_date, classification, coverage, scope, reference, source_url in CALENDAR_HOLIDAY_SEED:
+            parsed_date = date.fromisoformat(holiday_date)
+            db.execute(pg_insert(models.CalendarHoliday).values(
+                source_key=source_key,
+                name=name,
+                holiday_date=parsed_date,
+                classification=classification,
+                coverage=coverage,
+                geographic_scope=scope,
+                reference=reference,
+                source_url=source_url,
+                year=parsed_date.year,
+            ).on_conflict_do_nothing(index_elements=[models.CalendarHoliday.source_key]))
+        db.commit()
+
+
 ensure_schema_compatibility()
 seed_roles()
+seed_calendar_holidays()
 
 
 def hash_password(password: str) -> str:
@@ -900,6 +1005,25 @@ def normalize_representative_details(details_data: dict[str, Any]) -> dict[str, 
         normalized["representative_contact_no"] = "None"
         normalized["representative_relationship"] = "None"
     return normalized
+
+
+def validate_client_contact_number(
+    value: Any,
+    existing_value: Any = None,
+    *,
+    required: bool = False,
+) -> None:
+    if value == existing_value and existing_value not in (None, ""):
+        return
+    if value in (None, ""):
+        if required:
+            raise HTTPException(status_code=422, detail="Contact number is required.")
+        return
+    if not isinstance(value, str) or re.fullmatch(r"[0-9]{1,11}", value) is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Contact number must contain up to 11 digits using numbers only.",
+        )
 
 
 def update_latest_client_representative(
@@ -1451,9 +1575,7 @@ def transfer_user(db: Session, user_id: int) -> models.User:
 
 
 def transfer_report_editor(report: models.CaseTransferReport, user: models.User) -> bool:
-    if report.initiated_by_user_id is not None:
-        return is_admin(user) and report.initiated_by_user_id == user.user_id
-    return report.from_user_id == user.user_id
+    return can_edit_transfer_report(report, user, is_admin(user))
 
 
 def build_transfer_payload(report: models.CaseTransferReport, include_items: bool = True) -> dict[str, Any]:
@@ -1540,6 +1662,10 @@ def apply_client_payload(client: models.Client, payload: ClientPayload) -> None:
     class_data = payload.client_classification
     details = client.details
     classification = client.classification
+    validate_client_contact_number(
+        details_data.get("contact_no"),
+        existing_value=details.contact_no if details else None,
+    )
     if details is None:
         details = models.ClientDetails(client_id=client.client_id)
         client.details = details
@@ -1941,6 +2067,69 @@ def dashboard_overview(
     }
 
 
+@app.get("/api/dashboard/intelligence-brief")
+def dashboard_intelligence_brief(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    role_name = (user.role.role_name or "").strip().lower() if user.role else ""
+    if not is_admin(user) and role_name not in {"staff", "attorney", "legal_staff", "legal staff", "user"}:
+        raise HTTPException(status_code=403, detail="Dashboard insights are not available for this role")
+    # This endpoint deliberately returns office-level aggregates only: no client,
+    # case title, or other personally identifying record data is exposed.
+    records = db.query(
+        models.Case.case_type,
+        models.Case.is_terminated,
+        models.Case.status_of_case,
+        models.Case.last_updated,
+        models.Case.incident_barangay,
+        models.Case.cause_of_action,
+        models.IntakeRecord.form_date,
+        models.IntakeRecord.nature_of_case,
+    ).outerjoin(models.IntakeRecord).all()
+    now = datetime.now()
+    month_start = datetime(now.year, now.month, 1)
+    total_cases = len(records)
+    terminated = sum(
+        1 for record in records
+        if record.is_terminated or (record.status_of_case or "").lower() == "terminated"
+    )
+    monthly_count = sum(
+        1 for record in records
+        if (record.form_date or record.last_updated) and (record.form_date or record.last_updated) >= month_start
+    )
+    counts_by_type: dict[str, int] = {}
+    counts_by_category: dict[str, int] = {}
+    counts_by_barangay: dict[str, int] = {}
+    weekday_counts = [0] * 7
+    hour_counts: dict[int, int] = {}
+    for record in records:
+        case_type = record.case_type or "Other"
+        counts_by_type[case_type] = counts_by_type.get(case_type, 0) + 1
+        category = record.nature_of_case or (str(record.cause_of_action).split(";")[0][:80] if record.cause_of_action else "Uncategorized")
+        counts_by_category[category] = counts_by_category.get(category, 0) + 1
+        barangay = record.incident_barangay or "Unspecified"
+        counts_by_barangay[barangay] = counts_by_barangay.get(barangay, 0) + 1
+        intake_date = record.form_date or record.last_updated
+        if intake_date:
+            weekday_counts[(intake_date.weekday())] += 1
+            hour_counts[intake_date.hour] = hour_counts.get(intake_date.hour, 0) + 1
+    pending_reviews = db.query(models.CaseSubmission).filter(
+        models.CaseSubmission.status.in_(["Submitted", "Under Review", "Resubmitted"])
+    ).count()
+    busiest_hour = max(hour_counts, key=hour_counts.get) if hour_counts else None
+    top_barangay = max(counts_by_barangay, key=counts_by_barangay.get) if counts_by_barangay else None
+    return {
+        "total_cases": total_cases,
+        "active_cases": max(total_cases - terminated, 0),
+        "criminal_cases": counts_by_type.get("Criminal", 0),
+        "civil_cases": counts_by_type.get("Civil", 0),
+        "cases_this_month": monthly_count,
+        "busiest_day": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][weekday_counts.index(max(weekday_counts))] if total_cases else None,
+        "busiest_hour": f"{busiest_hour:02d}:00" if busiest_hour is not None else None,
+        "top_barangay": top_barangay,
+        "leading_category": max(counts_by_category, key=counts_by_category.get) if counts_by_category else None,
+        "pending_reviews": pending_reviews,
+    }
+
+
 @app.get("/api/dashboard/monthly-trends")
 def dashboard_monthly_trends(
     user: models.User = Depends(current_user),
@@ -2109,18 +2298,76 @@ def dashboard_recent_activities(user: models.User = Depends(current_user), db: S
     if not is_admin(user):
         query = query.filter(models.AuditLog.user_id == user.user_id)
     rows = query.order_by(models.AuditLog.timestamp.desc()).limit(12).all()
-    return [
-        {
+    activities = []
+    transfer_titles = {
+        "Create Transfer Draft": "Transfer Report Created",
+        "Submit Case Transfer": "Transfer Report Submitted",
+        "Resubmit Case Transfer": "Transfer Report Resubmitted",
+        "Return Case Transfer": "Transfer Returned for Correction",
+        "Confirm Case Transfer": "Transfer Receipt Confirmed",
+        "Transfer Assignments Updated": "Case Assignments Updated",
+    }
+    for row in rows:
+        actor = row.user.full_name or row.user.email or row.user.username if row.user else "System"
+        role_name = row.user.role.role_name if row.user and row.user.role else "Attorney/Staff"
+        role = "Administrator" if row.user and is_admin(row.user) else role_name.replace("_", " ").title()
+        action_title = row.action.replace("_", " ").strip().title() or "Record Updated"
+        description = row.description or "Activity recorded."
+        href = None
+        status = None
+        transfer_report = None
+        if row.target_entity == "case_transfer" and row.entity_id:
+            try:
+                transfer_report = db.get(models.CaseTransferReport, int(row.entity_id))
+            except (TypeError, ValueError):
+                transfer_report = None
+        if transfer_report:
+            report_title = transfer_report.title or f"Transfer report #{transfer_report.report_id}"
+            from_name = transfer_report.from_user.full_name or transfer_report.from_user.email or transfer_report.from_user.username
+            to_name = transfer_report.to_user.full_name or transfer_report.to_user.email or transfer_report.to_user.username
+            action_title = transfer_titles.get(row.action, action_title)
+            status = {
+                "Create Transfer Draft": "Draft",
+                "Submit Case Transfer": "Awaiting Receipt",
+                "Resubmit Case Transfer": "Awaiting Receipt",
+                "Return Case Transfer": "Returned for Correction",
+                "Confirm Case Transfer": "Completed",
+                "Transfer Assignments Updated": "Completed",
+            }.get(row.action)
+            if row.action == "Create Transfer Draft":
+                description = f"{actor} created '{report_title}' for {from_name} to transfer cases to {to_name}."
+            elif row.action == "Submit Case Transfer":
+                description = f"{from_name} submitted '{report_title}' for receipt review by {to_name}."
+            elif row.action == "Resubmit Case Transfer":
+                description = f"{from_name} resubmitted '{report_title}' to {to_name} after correction."
+            elif row.action == "Return Case Transfer":
+                reason = (row.description or "Correction requested.").strip()
+                description = f"{to_name} returned '{report_title}' to {from_name} for correction: {reason}"
+            elif row.action == "Confirm Case Transfer":
+                description = f"{to_name} confirmed receipt of '{report_title}' from {from_name}; case assignments were updated."
+            elif row.action == "Transfer Assignments Updated":
+                description = f"{len(transfer_report.items)} case assignment(s) moved from {from_name} to {to_name} after receipt of '{report_title}' was confirmed."
+            href = f"/case-transfers?report={transfer_report.report_id}"
+        elif description.lstrip().startswith(("{", "[")):
+            try:
+                json.loads(description)
+                description = f"{action_title} activity was recorded."
+            except (TypeError, ValueError):
+                pass
+        activities.append({
             "id": str(row.log_id),
             "timestamp": row.timestamp.isoformat() if row.timestamp else "",
-            "user": row.user.full_name or row.user.email or row.user.username if row.user else "System",
+            "user": actor,
+            "role": role,
             "action": row.action,
-            "description": row.description or "",
+            "title": action_title,
+            "description": description,
+            "status": status,
             "entity_type": row.target_entity,
             "entity_id": row.entity_id,
-        }
-        for row in rows
-    ]
+            "href": href,
+        })
+    return activities
 
 
 @app.get("/api/dashboard/ocr-analytics")
@@ -2871,6 +3118,482 @@ def resubmit_case_submission(
     return submission_to_payload(submission)
 
 
+def create_user_notification(
+    db: Session,
+    user_id: int,
+    event_key: str,
+    title: str,
+    message: str,
+    redirect_to: str,
+    entity_type: str,
+    entity_id: str,
+) -> None:
+    statement = pg_insert(models.Notification).values(
+        user_id=user_id,
+        event_key=event_key,
+        notification_type="workflow",
+        title=title,
+        message=message,
+        redirect_to=redirect_to,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        is_read=False,
+    ).on_conflict_do_nothing(constraint="uq_notification_user_event")
+    db.execute(statement)
+
+
+REMINDER_TIMEZONE = PHILIPPINE_TIMEZONE
+REMINDER_NOTIFICATION_LEADS = {0, 5, 15, 30, 60, 1440}
+
+
+def reminder_status_at(reminder: models.Reminder, now: datetime) -> str:
+    return calculate_reminder_status(reminder.reminder_date, reminder.start_time, reminder.status, now)
+
+
+def refresh_reminder_status(reminder: models.Reminder, now: datetime | None = None) -> bool:
+    calculated = reminder_status_at(reminder, now or datetime.now(REMINDER_TIMEZONE))
+    if reminder.status != calculated:
+        reminder.status = calculated
+        reminder.updated_at = datetime.now(REMINDER_TIMEZONE).replace(tzinfo=None)
+        return True
+    return False
+
+
+def reconcile_reminder_statuses(db: Session, reminders: list[models.Reminder] | None = None) -> None:
+    candidates = reminders if reminders is not None else db.query(models.Reminder).filter(
+        models.Reminder.status != "Done",
+    ).all()
+    now = datetime.now(REMINDER_TIMEZONE)
+    changed = False
+    for reminder in candidates:
+        changed = refresh_reminder_status(reminder, now) or changed
+    if changed:
+        db.flush()
+
+
+def can_manage_shared_reminders(user: models.User) -> bool:
+    return role_can_manage_shared_reminders(user, is_admin(user))
+
+
+def ensure_reminder_access(
+    reminder_id: int,
+    user: models.User,
+    db: Session,
+    *,
+    lock: bool = False,
+) -> models.Reminder:
+    reminder = (
+        db.query(models.Reminder)
+        .filter(models.Reminder.reminder_id == reminder_id)
+        .with_for_update()
+        .first()
+        if lock
+        else db.get(models.Reminder, reminder_id)
+    )
+    if not reminder or not can_access_reminder(reminder, user):
+        raise HTTPException(status_code=404, detail="Reminder not found")
+    return reminder
+
+
+def ensure_reminder_edit_access(reminder: models.Reminder, user: models.User) -> None:
+    if not can_edit_reminder(reminder, user, can_manage_shared_reminders(user)):
+        if reminder.visibility == "personal":
+            raise HTTPException(status_code=404, detail="Reminder not found")
+        raise HTTPException(status_code=403, detail="You cannot manage shared office reminders")
+
+
+def validate_reminder_payload(payload: ReminderPayload) -> None:
+    if not payload.title.strip():
+        raise HTTPException(status_code=422, detail="Reminder title is required")
+    if len(payload.title.strip()) > 200:
+        raise HTTPException(status_code=422, detail="Reminder title must be 200 characters or fewer")
+    if len(payload.description) > 4000:
+        raise HTTPException(status_code=422, detail="Reminder notes must be 4,000 characters or fewer")
+    if any(value and value.tzinfo is not None for value in (payload.start_time, payload.end_time)):
+        raise HTTPException(status_code=422, detail="Reminder times must use local office time without a timezone offset")
+    if payload.end_time and not payload.start_time:
+        raise HTTPException(status_code=422, detail="An end time requires a start time")
+    if payload.start_time and payload.end_time and payload.end_time <= payload.start_time:
+        raise HTTPException(status_code=422, detail="End time must be later than start time")
+    if payload.notification_minutes_before not in REMINDER_NOTIFICATION_LEADS | {None}:
+        raise HTTPException(status_code=422, detail="Choose a supported notification time")
+
+
+def reminder_payload(reminder: models.Reminder) -> dict[str, Any]:
+    return {
+        "reminder_id": reminder.reminder_id,
+        "created_by_user_id": reminder.created_by_user_id,
+        "title": reminder.title,
+        "description": reminder.description or "",
+        "date": reminder.reminder_date.isoformat(),
+        "start_time": reminder.start_time.isoformat(timespec="minutes") if reminder.start_time else None,
+        "end_time": reminder.end_time.isoformat(timespec="minutes") if reminder.end_time else None,
+        "category": reminder.category,
+        "priority": reminder.priority,
+        "visibility": reminder.visibility,
+        "notification_minutes_before": reminder.notification_minutes_before,
+        "status": reminder.status,
+        "created_at": reminder.created_at.isoformat() if reminder.created_at else None,
+        "updated_at": reminder.updated_at.isoformat() if reminder.updated_at else None,
+    }
+
+
+def apply_reminder_payload(reminder: models.Reminder, payload: ReminderPayload) -> None:
+    validate_reminder_payload(payload)
+    reminder.title = payload.title.strip()
+    reminder.description = payload.description.strip()
+    reminder.reminder_date = payload.date
+    reminder.start_time = payload.start_time
+    reminder.end_time = payload.end_time
+    reminder.category = payload.category
+    reminder.priority = payload.priority
+    reminder.visibility = payload.visibility
+    reminder.notification_minutes_before = payload.notification_minutes_before
+    if reminder.status not in {"Done", "Completed"}:
+        refresh_reminder_status(reminder)
+    else:
+        reminder.status = "Done"
+    reminder.updated_at = datetime.now(REMINDER_TIMEZONE).replace(tzinfo=None)
+
+
+def dispatch_due_reminder_notifications() -> None:
+    now = datetime.now(REMINDER_TIMEZONE)
+    with SessionLocal() as db:
+        reconcile_reminder_statuses(db)
+        db.commit()
+        reminders = db.query(models.Reminder).filter(
+            models.Reminder.status.in_(("Upcoming", "Overdue", "Scheduled")),
+            models.Reminder.notification_minutes_before.isnot(None),
+            models.Reminder.reminder_date <= now.date() + timedelta(days=2),
+        ).all()
+        if not reminders:
+            return
+        office_users: list[models.User] | None = None
+        for reminder in reminders:
+            event_time = datetime.combine(
+                reminder.reminder_date,
+                reminder.start_time or time(9, 0),
+                tzinfo=REMINDER_TIMEZONE,
+            )
+            notify_at = event_time - timedelta(minutes=reminder.notification_minutes_before or 0)
+            if notify_at > now:
+                continue
+            if reminder.visibility == "personal":
+                recipients = [reminder.created_by_user_id]
+            else:
+                if office_users is None:
+                    office_users = db.query(models.User).filter(
+                        models.User.is_active.is_(True),
+                        models.User.approval_status == "approved",
+                    ).all()
+                recipients = [person.user_id for person in office_users]
+            time_label = reminder.start_time.strftime("%I:%M %p").lstrip("0") if reminder.start_time else "All day"
+            message = f"{reminder.title} is scheduled for {reminder.reminder_date.strftime('%B %d, %Y')} at {time_label}."
+            for recipient_id in recipients:
+                create_user_notification(
+                    db,
+                    recipient_id,
+                    f"reminder:{reminder.reminder_id}:due",
+                    "Reminder",
+                    message,
+                    f"/dashboard?reminder={reminder.reminder_id}",
+                    "reminder",
+                    str(reminder.reminder_id),
+                )
+        db.commit()
+
+
+async def reminder_notification_scheduler() -> None:
+    while True:
+        try:
+            await asyncio.to_thread(dispatch_due_reminder_notifications)
+        except Exception:
+            logging.getLogger("jurisguard.reminders").exception("Reminder notification dispatch failed")
+        await asyncio.sleep(30)
+
+
+@app.on_event("startup")
+async def start_reminder_notification_scheduler() -> None:
+    app.state.reminder_scheduler_task = asyncio.create_task(reminder_notification_scheduler())
+
+
+@app.on_event("shutdown")
+async def stop_reminder_notification_scheduler() -> None:
+    task = getattr(app.state, "reminder_scheduler_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+def notification_payload(notification: models.Notification) -> dict[str, Any]:
+    return {
+        "notification_id": notification.notification_id,
+        "user_id": notification.user_id,
+        "type": notification.notification_type,
+        "title": notification.title,
+        "message": notification.message,
+        "redirect_to": notification.redirect_to,
+        "is_read": notification.is_read,
+        "created_at": notification.created_at.isoformat() if notification.created_at else "",
+        "entity_type": notification.entity_type,
+        "entity_id": notification.entity_id,
+    }
+
+
+@app.get("/api/notifications")
+def list_notifications(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    notifications = (
+        db.query(models.Notification)
+        .filter(models.Notification.user_id == user.user_id)
+        .order_by(models.Notification.created_at.desc(), models.Notification.notification_id.desc())
+        .limit(100)
+        .all()
+    )
+    return [notification_payload(notification) for notification in notifications]
+
+
+@app.post("/api/notifications/read-all")
+def mark_all_notifications_read(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    db.query(models.Notification).filter(
+        models.Notification.user_id == user.user_id,
+        models.Notification.is_read.is_(False),
+    ).update({models.Notification.is_read: True}, synchronize_session=False)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/api/notifications/{notification_id}/read")
+def mark_notification_read(
+    notification_id: int,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    notification = db.query(models.Notification).filter(
+        models.Notification.notification_id == notification_id,
+        models.Notification.user_id == user.user_id,
+    ).first()
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    notification.is_read = True
+    db.commit()
+    return notification_payload(notification)
+
+
+@app.delete("/api/notifications/read")
+def clear_read_notifications(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    db.query(models.Notification).filter(
+        models.Notification.user_id == user.user_id,
+        models.Notification.is_read.is_(True),
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/notifications/{notification_id}")
+def delete_notification(
+    notification_id: int,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    deleted = db.query(models.Notification).filter(
+        models.Notification.notification_id == notification_id,
+        models.Notification.user_id == user.user_id,
+        models.Notification.is_read.is_(True),
+    ).delete(synchronize_session=False)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Read notification not found")
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/api/reminders")
+def list_reminders(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    reminders = db.query(models.Reminder).filter(
+        or_(
+            models.Reminder.visibility == "shared",
+            models.Reminder.created_by_user_id == user.user_id,
+        )
+    ).order_by(models.Reminder.reminder_date, models.Reminder.start_time, models.Reminder.reminder_id).all()
+    reconcile_reminder_statuses(db, reminders)
+    db.commit()
+    return {
+        "items": [reminder_payload(reminder) for reminder in reminders],
+        "can_manage_shared": can_manage_shared_reminders(user),
+    }
+
+
+@app.get("/api/reminders/{reminder_id}")
+def get_reminder(reminder_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    reminder = ensure_reminder_access(reminder_id, user, db)
+    reconcile_reminder_statuses(db, [reminder])
+    db.commit()
+    return reminder_payload(reminder)
+
+
+@app.post("/api/reminders")
+def create_reminder(
+    payload: ReminderPayload,
+    request: Request,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    validate_reminder_payload(payload)
+    if payload.visibility == "shared" and not can_manage_shared_reminders(user):
+        raise HTTPException(status_code=403, detail="You cannot create shared office reminders")
+    reminder = models.Reminder(created_by_user_id=user.user_id)
+    apply_reminder_payload(reminder, payload)
+    db.add(reminder)
+    db.flush()
+    write_audit(db, user.user_id, "Created Reminder", "reminder", reminder.title, str(reminder.reminder_id), request)
+    db.commit()
+    db.refresh(reminder)
+    return reminder_payload(reminder)
+
+
+@app.put("/api/reminders/{reminder_id}")
+def update_reminder(
+    reminder_id: int,
+    payload: ReminderPayload,
+    request: Request,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    reminder = ensure_reminder_access(reminder_id, user, db)
+    ensure_reminder_edit_access(reminder, user)
+    if payload.visibility == "shared" and not can_manage_shared_reminders(user):
+        raise HTTPException(status_code=403, detail="You cannot create shared office reminders")
+    prior_visibility = reminder.visibility
+    apply_reminder_payload(reminder, payload)
+    if prior_visibility == "shared" and reminder.visibility == "personal":
+        db.query(models.Notification).filter(
+            models.Notification.entity_type == "reminder",
+            models.Notification.entity_id == str(reminder.reminder_id),
+            models.Notification.user_id != reminder.created_by_user_id,
+        ).delete(synchronize_session=False)
+    write_audit(db, user.user_id, "Updated Reminder", "reminder", reminder.title, str(reminder.reminder_id), request)
+    db.commit()
+    db.refresh(reminder)
+    return reminder_payload(reminder)
+
+
+@app.patch("/api/reminders/{reminder_id}/complete")
+def complete_reminder(
+    reminder_id: int,
+    request: Request,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    reminder = ensure_reminder_access(reminder_id, user, db, lock=True)
+    ensure_reminder_edit_access(reminder, user)
+    if reminder.status in {"Done", "Completed"}:
+        raise HTTPException(status_code=409, detail="This reminder is already completed")
+    if not can_complete_reminder(
+        reminder.reminder_date,
+        reminder.start_time,
+        reminder.status,
+        datetime.now(REMINDER_TIMEZONE),
+    ):
+        raise HTTPException(status_code=400, detail="The reminder's scheduled time has not yet arrived")
+    reminder.status = "Done"
+    reminder.updated_at = datetime.now(REMINDER_TIMEZONE).replace(tzinfo=None)
+    write_audit(db, user.user_id, "Completed Reminder", "reminder", reminder.title, str(reminder.reminder_id), request)
+    db.commit()
+    db.refresh(reminder)
+    return reminder_payload(reminder)
+
+
+@app.delete("/api/reminders/{reminder_id}")
+def delete_reminder(
+    reminder_id: int,
+    request: Request,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    reminder = ensure_reminder_access(reminder_id, user, db)
+    ensure_reminder_edit_access(reminder, user)
+    write_audit(db, user.user_id, "Deleted Reminder", "reminder", reminder.title, str(reminder.reminder_id), request)
+    db.query(models.Notification).filter(
+        models.Notification.entity_type == "reminder",
+        models.Notification.entity_id == str(reminder.reminder_id),
+    ).delete(synchronize_session=False)
+    db.delete(reminder)
+    db.commit()
+    return {"ok": True}
+
+
+def calendar_holiday_payload(holiday: models.CalendarHoliday) -> dict[str, Any]:
+    return {
+        "holiday_id": holiday.holiday_id,
+        "source_key": holiday.source_key,
+        "name": holiday.name,
+        "date": holiday.holiday_date.isoformat(),
+        "classification": holiday.classification,
+        "coverage": holiday.coverage,
+        "geographic_scope": holiday.geographic_scope,
+        "reference": holiday.reference,
+        "source_url": holiday.source_url,
+        "year": holiday.year,
+        "updated_at": holiday.updated_at.isoformat() if holiday.updated_at else None,
+    }
+
+
+@app.get("/api/holidays")
+def list_calendar_holidays(
+    year: int = Query(ge=1900, le=2200),
+    _: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    holidays = db.query(models.CalendarHoliday).filter(
+        models.CalendarHoliday.year == year,
+    ).order_by(
+        models.CalendarHoliday.holiday_date,
+        models.CalendarHoliday.coverage,
+        models.CalendarHoliday.name,
+    ).all()
+    return [calendar_holiday_payload(holiday) for holiday in holidays]
+
+
+@app.put("/api/holidays/{source_key}")
+def upsert_calendar_holiday(
+    source_key: str,
+    payload: CalendarHolidayPayload,
+    request: Request,
+    user: models.User = Depends(admin_user),
+    db: Session = Depends(get_db),
+):
+    if source_key != payload.source_key or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,119}", source_key):
+        raise HTTPException(status_code=422, detail="Holiday source key is invalid")
+    fields = {
+        "name": payload.name.strip(),
+        "holiday_date": payload.date,
+        "classification": payload.classification.strip(),
+        "coverage": payload.coverage,
+        "geographic_scope": payload.geographic_scope.strip(),
+        "reference": payload.reference.strip(),
+        "source_url": payload.source_url.strip(),
+        "year": payload.date.year,
+        "updated_at": datetime.now(REMINDER_TIMEZONE).replace(tzinfo=None),
+    }
+    if not fields["name"] or len(fields["name"]) > 200 or not fields["classification"] or len(fields["classification"]) > 80:
+        raise HTTPException(status_code=422, detail="Holiday name and classification are required and must fit their limits")
+    if not fields["geographic_scope"] or len(fields["geographic_scope"]) > 160 or not fields["reference"] or len(fields["reference"]) > 255:
+        raise HTTPException(status_code=422, detail="Holiday scope and official reference are required")
+    if not fields["source_url"].startswith("https://"):
+        raise HTTPException(status_code=422, detail="Holiday source URL must use HTTPS")
+    statement = pg_insert(models.CalendarHoliday).values(source_key=source_key, **fields).on_conflict_do_update(
+        index_elements=[models.CalendarHoliday.source_key],
+        set_=fields,
+    )
+    db.execute(statement)
+    write_audit(db, user.user_id, "Upserted Calendar Holiday", "calendar_holiday", fields["name"], source_key, request)
+    db.commit()
+    holiday = db.query(models.CalendarHoliday).filter_by(source_key=source_key).one()
+    return calendar_holiday_payload(holiday)
+
+
 @app.get("/api/case-transfers/attorneys")
 def list_transfer_attorneys(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     people = db.query(models.User).join(models.Role).filter(
@@ -2973,6 +3696,18 @@ def create_case_transfer(
             status_of_case=raw.get("status_of_case"),
             cause_of_action=raw.get("cause_of_action"),
         ))
+    if report.initiated_by_user_id is not None:
+        recipient_name = report.to_user.full_name or report.to_user.email or report.to_user.username
+        create_user_notification(
+            db,
+            report.from_user_id,
+            f"case-transfer:{report.report_id}:draft-created",
+            "Transfer Draft Ready for Review",
+            f"An administrator prepared '{report.title}' for your review and submission. Receiving attorney: {recipient_name}.",
+            f"/case-transfers?report={report.report_id}",
+            "case_transfer",
+            str(report.report_id),
+        )
     write_audit(db, user.user_id, "Create Transfer Draft", "case_transfer", f"Created transfer report {report.title}", str(report.report_id), request)
     db.commit()
     db.refresh(report)
@@ -3032,15 +3767,31 @@ def update_case_transfer(
 @app.post("/api/case-transfers/{report_id}/submit")
 def submit_case_transfer(report_id: int, request: Request, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     report = ensure_transfer_access(report_id, user, db)
-    if not transfer_report_editor(report, user) or report.status not in {"Draft", "Returned for Correction"}:
+    if not can_submit_transfer_report(report, user, is_admin(user)) or report.status not in {"Draft", "Returned for Correction"}:
         raise HTTPException(status_code=403, detail="Only editable transfer reports may be submitted")
+    is_resubmission = report.status == "Returned for Correction"
     if not report.items:
         raise HTTPException(status_code=422, detail="Select at least one case before submission")
     validate_transfer_case_ids(db, user, [item.case_id for item in report.items], report.from_user_id, report.report_id)
     report.status = "Pending Receipt"
     report.submitted_at = datetime.now()
     report.updated_at = datetime.now()
-    write_audit(db, user.user_id, "Submit Case Transfer", "case_transfer", f"Submitted transfer report {report.title}", str(report.report_id), request)
+    source_name = report.from_user.full_name or report.from_user.email or report.from_user.username
+    create_user_notification(
+        db,
+        report.to_user_id,
+        f"case-transfer:{report.report_id}:submitted:{report.returned_at.isoformat() if report.returned_at else 'initial'}",
+        "Case Transfer Awaiting Receipt",
+        f"{source_name} submitted '{report.title}'. Review the report and confirm receipt.",
+        f"/case-transfers?report={report.report_id}",
+        "case_transfer",
+        str(report.report_id),
+    )
+    write_audit(
+        db, user.user_id,
+        "Resubmit Case Transfer" if is_resubmission else "Submit Case Transfer",
+        "case_transfer", f"Submitted transfer report {report.title}", str(report.report_id), request,
+    )
     db.commit()
     db.refresh(report)
     return build_transfer_payload(report)
@@ -3058,6 +3809,17 @@ def return_case_transfer(report_id: int, payload: TransferReturnPayload, request
     report.remarks = remarks
     report.returned_at = datetime.now()
     report.updated_at = datetime.now()
+    recipient_name = report.to_user.full_name or report.to_user.email or report.to_user.username
+    create_user_notification(
+        db,
+        report.from_user_id,
+        f"case-transfer:{report.report_id}:returned:{report.returned_at.isoformat()}",
+        "Case Transfer Returned for Correction",
+        f"{recipient_name} returned '{report.title}' for correction: {remarks}",
+        f"/case-transfers?report={report.report_id}",
+        "case_transfer",
+        str(report.report_id),
+    )
     write_audit(db, user.user_id, "Return Case Transfer", "case_transfer", remarks, str(report.report_id), request)
     db.commit()
     db.refresh(report)
@@ -3093,7 +3855,41 @@ def confirm_case_transfer(report_id: int, request: Request, user: models.User = 
     report.date_received = datetime.now()
     report.confirmed_at = datetime.now()
     report.updated_at = datetime.now()
-    write_audit(db, user.user_id, "Confirm Case Transfer", "case_transfer", json.dumps({"report_id": report.report_id, "case_ids": case_ids, "previous_assignments": previous_names, "new_assignment": user.user_id}), str(report.report_id), request)
+    source_name = report.from_user.full_name or report.from_user.email or report.from_user.username
+    notification_event_key = f"case-transfer:{report.report_id}:confirmed"
+    notification_message = f"'{report.title}' was received and confirmed by {user.full_name or user.email or user.username}. The transfer is complete."
+    notification_link = f"/case-transfers?report={report.report_id}"
+    create_user_notification(
+        db,
+        report.from_user_id,
+        notification_event_key,
+        "Case Transfer Completed",
+        notification_message,
+        notification_link,
+        "case_transfer",
+        str(report.report_id),
+    )
+    if report.initiated_by_user_id is not None and report.initiated_by_user_id != report.from_user_id:
+        create_user_notification(
+            db,
+            report.initiated_by_user_id,
+            notification_event_key,
+            "Case Transfer Completed",
+            f"'{report.title}' from {source_name} was received and confirmed. The transfer is complete.",
+            notification_link,
+            "case_transfer",
+            str(report.report_id),
+        )
+    write_audit(
+        db, user.user_id, "Confirm Case Transfer", "case_transfer",
+        f"{user.full_name or user.email or user.username} confirmed receipt of transfer report {report.title} from {source_name}.",
+        str(report.report_id), request,
+    )
+    write_audit(
+        db, user.user_id, "Transfer Assignments Updated", "case_transfer",
+        f"{len(case_ids)} case assignment(s) updated to {user.full_name or user.email or user.username} after receipt confirmation.",
+        str(report.report_id), request,
+    )
     db.commit()
     db.refresh(report)
     return build_transfer_payload(report)
@@ -3140,6 +3936,7 @@ def create_client(
     try:
         client_data = payload.client
         details_data = normalize_representative_details(normalize_spouse_details(payload.client_details))
+        validate_client_contact_number(details_data.get("contact_no"), required=True)
         class_data = payload.client_classification
         client = models.Client(
             created_by_user_id=user.user_id,

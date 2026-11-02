@@ -41,6 +41,10 @@ import {
   matchesDateFilter,
   type DateFilterValue,
 } from "../utils/dateFilters";
+import {
+  isContactNumberPasteAllowed,
+  sanitizeContactNumberInput,
+} from "../utils/contactNumber";
 
 const accordionBorderClass: Record<CaseStatus, string> = {
   Pending: "border-amber-200",
@@ -260,6 +264,13 @@ function participantNames(record: CriminalCaseRecord, fallbackClient?: ClientRec
     .filter(Boolean);
 }
 
+function participantPartyRole(participant: CaseParticipant) {
+  if (participant.applicant_role === "Others") {
+    return participant.applicant_role_other || participant.party_represented;
+  }
+  return participant.applicant_role || participant.party_represented;
+}
+
 function participantSexes(record: CriminalCaseRecord, fallbackClient?: ClientRecord) {
   return caseParticipants(record, fallbackClient)
     .map((participant) => participant.sex)
@@ -278,12 +289,20 @@ function TextField({
   onChange,
   type = "text",
   list,
+  maxLength,
+  inputMode,
+  onInput,
+  onPaste,
 }: {
   label: string;
   value: string | number;
   onChange: (value: string) => void;
   type?: string;
   list?: string;
+  maxLength?: number;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  onInput?: React.FormEventHandler<HTMLInputElement>;
+  onPaste?: React.ClipboardEventHandler<HTMLInputElement>;
 }) {
   return (
     <label className="block">
@@ -293,6 +312,10 @@ function TextField({
       <input
         type={type}
         list={list}
+        maxLength={maxLength}
+        inputMode={inputMode}
+        onInput={onInput}
+        onPaste={onPaste}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
@@ -696,8 +719,32 @@ function UpdateClientInfoModal({
             </datalist>
             <TextField
               label="Contact"
+              type="tel"
+              inputMode="numeric"
+              maxLength={11}
               value={values.client_details.contact_no}
-              onChange={(value) => updateDetails("contact_no", value)}
+              onChange={(value) =>
+                updateDetails("contact_no", sanitizeContactNumberInput(value))
+              }
+              onInput={(event) => {
+                const input = event.currentTarget;
+                const sanitized = sanitizeContactNumberInput(input.value);
+                if (input.value !== sanitized) {
+                  input.value = sanitized;
+                  updateDetails("contact_no", sanitized);
+                }
+              }}
+              onPaste={(event) => {
+                if (
+                  !isContactNumberPasteAllowed(
+                    event.currentTarget,
+                    event.clipboardData.getData("text"),
+                  )
+                ) {
+                  event.preventDefault();
+                  toast.error("Enter up to 11 digits using numbers only.");
+                }
+              }}
             />
             <TextField
               label="Email"
@@ -1843,7 +1890,9 @@ export default function CriminalCasesPage({
                   </tr>
                 ) : (
                   filteredRows.map(({ record, client }) => {
-                    const names = participantNames(record, client);
+                    const partyRoles = caseParticipants(record, client)
+                      .map(participantPartyRole)
+                      .filter(Boolean);
                     const sexes = participantSexes(record, client);
                     return (
                     <tr
@@ -1855,7 +1904,7 @@ export default function CriminalCasesPage({
                       </td>
                       <td className="px-3 py-4 text-[#4B5563]">
                         <div className="space-y-1">
-                          {names.length ? names.map((name) => <div key={name}>{name}</div>) : "-"}
+                          {partyRoles.length ? partyRoles.map((role, index) => <div key={`${role}-${index}`}>{role}</div>) : "-"}
                         </div>
                       </td>
                       <td className="px-3 py-4 text-[#4B5563]">

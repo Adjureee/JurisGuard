@@ -36,7 +36,10 @@ export const clientFormSchema = z.object({
   }),
   client_details: z.object({
     address: requiredText("Address"),
-    contact_no: requiredText("Contact number"),
+    contact_no: requiredText("Contact number").regex(
+      /^[0-9]{1,11}$/,
+      "Contact number must contain up to 11 digits",
+    ),
     email: z.string().trim().email("Enter a valid email").or(z.literal("")),
     individual_monthly_income: monthlyIncome,
     spouse: optionalText,

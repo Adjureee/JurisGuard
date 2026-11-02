@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, Time, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -433,6 +433,60 @@ class CaseTransferReport(Base):
     parent_report = relationship("CaseTransferReport", remote_side=[report_id])
     items = relationship("CaseTransferItem", back_populates="report", cascade="all, delete-orphan")
     administrative_entries = relationship("CaseTransferAdministrativeEntry", back_populates="report", cascade="all, delete-orphan")
+
+
+class Notification(Base):
+    __tablename__ = "notification"
+    __table_args__ = (
+        UniqueConstraint("user_id", "event_key", name="uq_notification_user_event"),
+    )
+
+    notification_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False, index=True)
+    event_key = Column(String(200), nullable=False)
+    notification_type = Column(String(50), nullable=False, default="workflow")
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    redirect_to = Column(Text, nullable=False)
+    entity_type = Column(String(50))
+    entity_id = Column(String(100))
+    is_read = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+
+class Reminder(Base):
+    __tablename__ = "reminder"
+
+    reminder_id = Column(Integer, primary_key=True, index=True)
+    created_by_user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=False, default="")
+    reminder_date = Column(Date, nullable=False, index=True)
+    start_time = Column(Time)
+    end_time = Column(Time)
+    category = Column(String(40), nullable=False, default="Other")
+    priority = Column(String(20), nullable=False, default="Normal")
+    visibility = Column(String(20), nullable=False, default="personal", index=True)
+    notification_minutes_before = Column(Integer)
+    status = Column(String(20), nullable=False, default="Upcoming", index=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class CalendarHoliday(Base):
+    __tablename__ = "calendar_holiday"
+
+    holiday_id = Column(Integer, primary_key=True, index=True)
+    source_key = Column(String(120), nullable=False, unique=True, index=True)
+    name = Column(String(200), nullable=False)
+    holiday_date = Column(Date, nullable=False, index=True)
+    classification = Column(String(80), nullable=False)
+    coverage = Column(String(20), nullable=False, index=True)
+    geographic_scope = Column(String(160), nullable=False)
+    reference = Column(String(255), nullable=False)
+    source_url = Column(Text, nullable=False)
+    year = Column(Integer, nullable=False, index=True)
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
 
 
 class CaseTransferItem(Base):

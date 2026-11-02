@@ -9,6 +9,7 @@ passlib[bcrypt]
 alembic
 email-validator
 python-dotenv
+tzdata
 requests
 pillow
 opencv-python==4.11.0.86

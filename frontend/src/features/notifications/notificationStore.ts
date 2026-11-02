@@ -24,6 +24,7 @@ export interface OperationalNotification {
   target_role?: "admin" | "staff";
   entity_type?: string;
   entity_id?: string;
+  isServerPersisted?: boolean;
 }
 
 interface AddNotificationInput {
@@ -40,6 +41,7 @@ interface AddNotificationInput {
 interface NotificationState {
   notifications: OperationalNotification[];
   addNotification: (notification: AddNotificationInput) => OperationalNotification;
+  replaceServerNotifications: (notifications: OperationalNotification[]) => void;
   markRead: (id: string) => void;
   markAllRead: (ids?: string[]) => void;
   removeNotification: (id: string) => void;
@@ -97,6 +99,16 @@ function persistNotifications(notifications: OperationalNotification[]) {
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: readStoredNotifications(),
+  replaceServerNotifications: (serverNotifications) => {
+    const localNotifications = get().notifications.filter(
+      (notification) => !notification.isServerPersisted,
+    );
+    const notifications = [...serverNotifications, ...localNotifications]
+      .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
+      .slice(0, 50);
+    persistNotifications(notifications);
+    set({ notifications });
+  },
   addNotification: (notification) => {
     const duplicate = get().notifications.find(
       (item) =>

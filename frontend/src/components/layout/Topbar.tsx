@@ -10,6 +10,13 @@ import {
 } from "../../features/notifications/notificationStore";
 import { listApplicants } from "../../services/adminService";
 import { listCaseSubmissions } from "../../services/caseSubmissionService";
+import {
+  clearReadNotifications,
+  deleteReadNotification,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "../../services/notificationService";
 
 interface TopbarProps {
   onToggleSidebar: () => void;
@@ -77,6 +84,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   const markAllRead = useNotificationStore((state) => state.markAllRead);
   const removeNotification = useNotificationStore((state) => state.removeNotification);
   const clearNotifications = useNotificationStore((state) => state.clearNotifications);
+  const replaceServerNotifications = useNotificationStore((state) => state.replaceServerNotifications);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -202,6 +210,27 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
     };
   }, [addNotification, user]);
 
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    async function syncNotifications() {
+      try {
+        const rows = await listNotifications();
+        if (!cancelled) replaceServerNotifications(rows);
+      } catch {
+        // Persisted notifications are opportunistic; shell rendering remains available offline.
+      }
+    }
+
+    void syncNotifications();
+    const interval = window.setInterval(syncNotifications, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [replaceServerNotifications, user]);
+
   const handleLogout = async () => {
     addLog({
       userId: user?.user_id,
@@ -222,9 +251,64 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   };
 
   const handleNotificationClick = (id: string, redirectTo: string) => {
-    markRead(id);
+    if (id.startsWith("server-")) {
+      const notificationId = Number(id.slice("server-".length));
+      void markNotificationRead(notificationId)
+        .then(() => markRead(id))
+        .catch(() => toast.error("Unable to mark notification as read."));
+    } else {
+      markRead(id);
+    }
     setNotificationsOpen(false);
     navigate(redirectTo);
+  };
+
+  const handleMarkRead = (id: string) => {
+    if (id.startsWith("server-")) {
+      const notificationId = Number(id.slice("server-".length));
+      void markNotificationRead(notificationId)
+        .then(() => markRead(id))
+        .catch(() => toast.error("Unable to mark notification as read."));
+      return;
+    }
+    markRead(id);
+  };
+
+  const handleMarkAllRead = () => {
+    const serverIds = visibleNotifications
+      .filter((notification) => notification.isServerPersisted)
+      .map((notification) => notification.id);
+    if (!serverIds.length) {
+      markAllRead(visibleNotificationIds);
+      return;
+    }
+    void markAllNotificationsRead()
+      .then(() => markAllRead(visibleNotificationIds))
+      .catch(() => toast.error("Unable to mark notifications as read."));
+  };
+
+  const handleClearNotifications = () => {
+    const serverIds = visibleNotifications
+      .filter((notification) => notification.isServerPersisted && notification.isRead)
+      .map((notification) => notification.id);
+    if (!serverIds.length) {
+      clearNotifications(visibleNotificationIds);
+      return;
+    }
+    void clearReadNotifications()
+      .then(() => clearNotifications(visibleNotificationIds))
+      .catch(() => toast.error("Unable to clear notifications."));
+  };
+
+  const handleRemoveNotification = (id: string) => {
+    if (id.startsWith("server-")) {
+      const notificationId = Number(id.slice("server-".length));
+      void deleteReadNotification(notificationId)
+        .then(() => removeNotification(id))
+        .catch(() => toast.error("Unable to remove notification."));
+      return;
+    }
+    removeNotification(id);
   };
 
   return (
@@ -275,14 +359,14 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => markAllRead(visibleNotificationIds)}
+                          onClick={handleMarkAllRead}
                           className="text-xs font-semibold text-[#704389] hover:text-[#704389]"
                         >
                           Mark all read
                         </button>
                         <button
                           type="button"
-                          onClick={() => clearNotifications(visibleNotificationIds)}
+                          onClick={handleClearNotifications}
                           className="text-xs font-semibold text-[#DC2626] hover:text-[#B91C1C]"
                         >
                           Clear all
@@ -344,7 +428,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                             {!notification.isRead && (
                               <button
                                 type="button"
-                                onClick={() => markRead(notification.id)}
+                                onClick={() => handleMarkRead(notification.id)}
                                 className="text-xs font-semibold text-[#704389] hover:text-[#704389]"
                               >
                                 Mark as Read
@@ -353,7 +437,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                             {notification.isRead && (
                               <button
                                 type="button"
-                                onClick={() => removeNotification(notification.id)}
+                                onClick={() => handleRemoveNotification(notification.id)}
                                 className="text-xs font-semibold text-[#DC2626] hover:text-[#B91C1C]"
                               >
                                 Remove
