@@ -3,7 +3,7 @@ import { Activity, CalendarClock, Clock3, FileText, Gavel, MapPin } from "lucide
 import { getDashboardIntelligenceBrief, type DashboardIntelligenceBrief } from "../../services/dashboardService";
 import { EmptyState, SkeletonBlock } from "./AnalyticsPrimitives";
 
-export default function IntelligenceBrief({ compact = false }: { compact?: boolean }) {
+export default function IntelligenceBrief({ compact = false, emphasized = false, fitContent = false, readable = false }: { compact?: boolean; emphasized?: boolean; fitContent?: boolean; readable?: boolean }) {
   const [brief, setBrief] = useState<DashboardIntelligenceBrief | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const load = useCallback(async () => {
@@ -27,9 +27,9 @@ export default function IntelligenceBrief({ compact = false }: { compact?: boole
     };
   }, [load]);
 
-  if (isLoading && !brief) return <SkeletonBlock className={`${compact ? "h-[360px]" : "mt-6 h-48"}`} />;
+  if (isLoading && !brief) return <SkeletonBlock className={`${fitContent ? "h-[240px]" : compact ? "h-[360px]" : "mt-6 h-48"}`} />;
   if (!brief) return (
-    <section className={`${compact ? "min-h-[360px] p-4" : "mt-6 p-5"} rounded-lg border border-[#E5E7EB] bg-white`}>
+    <section className={`${compact ? fitContent ? "p-4" : "min-h-[360px] p-4" : "mt-6 p-5"} rounded-lg border border-[#E5E7EB] bg-white`}>
       <h2 className="text-lg font-bold text-[#111827]">Today's Intelligence Brief</h2>
       <p className="mt-2 text-sm text-[#6B7280]">Office insights are temporarily unavailable.</p>
     </section>
@@ -37,32 +37,32 @@ export default function IntelligenceBrief({ compact = false }: { compact?: boole
 
   const compactInsights = [
     {
-      icon: <Activity className="mt-0.5 h-4 w-4 shrink-0 text-[#704389]" />,
+      icon: <Activity className={`mt-0.5 shrink-0 text-[#704389] ${emphasized ? "h-5 w-5" : readable ? "h-[18px] w-[18px]" : "h-4 w-4"}`} />,
       label: "Cases this month",
       value: `${brief.cases_this_month} total · ${brief.criminal_cases} criminal · ${brief.civil_cases} civil`,
     },
     {
-      icon: <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-[#704389]" />,
+      icon: <Clock3 className={`mt-0.5 shrink-0 text-[#704389] ${emphasized ? "h-5 w-5" : readable ? "h-[18px] w-[18px]" : "h-4 w-4"}`} />,
       label: "Peak intake",
       value: brief.busiest_day && brief.busiest_hour ? `${brief.busiest_day} · ${brief.busiest_hour}` : "Not enough history",
     },
     {
-      icon: <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#704389]" />,
+      icon: <MapPin className={`mt-0.5 shrink-0 text-[#704389] ${emphasized ? "h-5 w-5" : readable ? "h-[18px] w-[18px]" : "h-4 w-4"}`} />,
       label: "Top barangay",
       value: brief.top_barangay || "Not available",
     },
     {
-      icon: <Gavel className="mt-0.5 h-4 w-4 shrink-0 text-[#704389]" />,
+      icon: <Gavel className={`mt-0.5 shrink-0 text-[#704389] ${emphasized ? "h-5 w-5" : readable ? "h-[18px] w-[18px]" : "h-4 w-4"}`} />,
       label: "Leading category",
       value: brief.leading_category || "Not available",
     },
     {
-      icon: <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#704389]" />,
+      icon: <FileText className={`mt-0.5 shrink-0 text-[#704389] ${emphasized ? "h-5 w-5" : readable ? "h-[18px] w-[18px]" : "h-4 w-4"}`} />,
       label: "Pending reviews",
       value: `${brief.pending_reviews} awaiting review`,
     },
     {
-      icon: <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-[#704389]" />,
+      icon: <CalendarClock className={`mt-0.5 shrink-0 text-[#704389] ${emphasized ? "h-5 w-5" : readable ? "h-[18px] w-[18px]" : "h-4 w-4"}`} />,
       label: "Active cases",
       value: `${brief.active_cases}`,
     },
@@ -97,19 +97,19 @@ export default function IntelligenceBrief({ compact = false }: { compact?: boole
   ];
 
   return (
-    <section className={`${compact ? "" : "mt-6"} flex flex-col overflow-hidden rounded-lg border border-[#E5E7EB] bg-white ${compact ? "max-h-[460px] min-h-[360px]" : "max-h-[320px] min-h-[220px]"}`}>
+    <section className={`${compact ? "" : "mt-6"} flex flex-col overflow-hidden rounded-lg border border-[#E5E7EB] bg-white ${compact ? fitContent ? "max-h-[440px] min-h-0" : "max-h-[460px] min-h-[360px]" : "max-h-[320px] min-h-[220px]"}`}>
       <div className={`border-b border-[#E5E7EB] bg-[#604477] ${compact ? "px-4 py-3" : "px-5 py-4"}`}>
         <h2 className={`${compact ? "text-base" : "text-xl"} font-bold text-white`}>Today's Intelligence Brief</h2>
       </div>
-      <div className={`min-h-0 flex-1 overflow-y-auto text-sm font-semibold text-[#2B3642] ${compact ? "p-4" : "space-y-4 p-5 leading-6"}`}>
+      <div className={`overflow-y-auto text-sm font-semibold text-[#2B3642] ${compact ? fitContent ? "flex-none p-2" : "min-h-0 flex-1 p-4" : "min-h-0 flex-1 space-y-4 p-5 leading-6"}`}>
         {compact ? (
-          <div className="grid content-start grid-cols-1 gap-x-5 gap-y-3 md:grid-cols-2">
+          <div className={`grid content-start ${fitContent ? "grid-cols-2 gap-x-3 gap-y-1" : emphasized ? "grid-cols-1 gap-y-2" : "grid-cols-1 gap-x-5 gap-y-3 md:grid-cols-2"}`}>
             {compactInsights.map((insight) => (
-              <div className="flex min-w-0 gap-2 border-b border-[#E5E7EB] pb-3" key={insight.label}>
+              <div className={`flex min-w-0 border-b border-[#E5E7EB] ${fitContent ? "gap-2 pb-1" : emphasized ? "gap-3 pb-2" : "gap-2 pb-3"}`} key={insight.label}>
                 {insight.icon}
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold leading-4 text-[#6B7280]">{insight.label}</p>
-                  <p className="break-words text-xs font-semibold leading-5 text-[#2B3642]">{insight.value}</p>
+                  <p className={`${emphasized || readable ? "text-xs" : "text-[11px]"} font-semibold leading-4 text-[#6B7280]`}>{insight.label}</p>
+                  <p className={`break-words ${emphasized ? fitContent ? "text-[13px]" : "text-sm" : readable ? "text-[13px]" : "text-xs"} font-semibold leading-5 text-[#2B3642]`}>{insight.value}</p>
                 </div>
               </div>
             ))}

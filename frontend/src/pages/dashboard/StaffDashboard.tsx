@@ -148,8 +148,8 @@ export default function StaffDashboard() {
 
       <CalendarReminders />
       <div className="mt-6 grid items-stretch gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
-        <OfficePersonnelOverview />
-        <IntelligenceBrief compact />
+        <OfficePersonnelOverview staffLayout />
+        <IntelligenceBrief compact emphasized fitContent />
       </div>
 
       <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,0.38fr)_minmax(0,0.62fr)]">
