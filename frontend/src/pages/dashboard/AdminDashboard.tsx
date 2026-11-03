@@ -159,7 +159,7 @@ export default function AdminDashboard() {
 
       <div className="mt-6 grid items-stretch gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
         <OfficePersonnelOverview />
-        <IntelligenceBrief compact />
+        <IntelligenceBrief compact readable />
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-[0.42fr_0.58fr]">
         <section className="rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">

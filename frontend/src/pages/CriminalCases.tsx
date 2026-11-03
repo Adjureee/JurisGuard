@@ -390,7 +390,7 @@ function CaseAccordion({
 }) {
   const participants = caseParticipants(record, fallbackClient);
   const isMultiParty = participants.length > 1;
-  const [open, setOpen] = useState(isMultiParty);
+  const [open, setOpen] = useState(false);
 
   return (
     <div

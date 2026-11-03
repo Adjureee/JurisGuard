@@ -12,7 +12,7 @@ const presenceStyles = {
   Offline: "bg-gray-100 text-gray-600",
 } as const;
 
-export default function OfficePersonnelOverview() {
+export default function OfficePersonnelOverview({ staffLayout = false }: { staffLayout?: boolean }) {
   const [people, setPeople] = useState<MessagingPerson[]>([]);
   const [summary, setSummary] = useState<PersonnelSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,10 +57,10 @@ export default function OfficePersonnelOverview() {
 
   const updateUnread = useCallback(() => { void refresh(); }, [refresh]);
 
-  if (isLoading && !people.length) return <SkeletonBlock className="h-[360px]" />;
+  if (isLoading && !people.length) return <SkeletonBlock className={staffLayout ? "h-[240px]" : "h-[360px]"} />;
 
   return <>
-    <section className="flex max-h-[440px] min-h-[320px] flex-col overflow-hidden rounded-lg border border-[#E5E7EB] bg-white">
+    <section className={`flex max-h-[440px] flex-col overflow-hidden rounded-lg border border-[#E5E7EB] bg-white ${staffLayout ? "min-h-0" : "min-h-[320px]"}`}>
       <div className="flex items-center justify-between gap-2 border-b border-[#E5E7EB] bg-[#604477] px-4 py-3">
         <h2 className="flex items-center gap-2 text-base font-bold text-white"><Users className="h-4 w-4" /> Office Personnel</h2>
         <div className="flex items-center gap-3">
@@ -75,7 +75,7 @@ export default function OfficePersonnelOverview() {
         {summary.admin_staff && <SummaryCard label="Active Admin Staff" value={summary.admin_staff.active} detail={`${summary.admin_staff.online} online`} tone="green" />}
       </div>}
 
-      <div className="min-h-0 max-h-[186px] flex-1 overflow-y-auto">
+      <div className={staffLayout ? "max-h-[186px] flex-none overflow-y-auto" : "min-h-0 max-h-[186px] flex-1 overflow-y-auto"}>
         {hasError && !people.length ? <p className="p-4 text-sm text-[#6B7280]">Office personnel are temporarily unavailable.</p>
           : displayPeople.length ? <ul className="divide-y divide-[#E5E7EB]">
             {displayPeople.map((person) => <li key={person.user_id} className="flex min-h-[62px] items-center gap-3 px-4 py-2.5">
