@@ -110,54 +110,78 @@ export async function buildCaseTransferExcel(report: CaseTransfer, logo1Url: str
     { key: "no", width: 5 }, { key: "control", width: 14 }, { key: "title", width: 25 },
     { key: "docket", width: 12 }, { key: "date", width: 13 }, { key: "status", width: 15 }, { key: "cause", width: 26 },
   ];
-  sheet.pageSetup = { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.25, right: 0.25, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }, horizontalDpi: 300, verticalDpi: 300 };
+  sheet.pageSetup = { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, scale: 90, margins: { left: 0.25, right: 0.25, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }, horizontalDpi: 300, verticalDpi: 300 };
   const border = { style: "thin" as const, color: { argb: "FF000000" } };
   const allBorders = { top: border, left: border, bottom: border, right: border };
   const center = { horizontal: "center" as const, vertical: "middle" as const, wrapText: true };
   const left = { horizontal: "left" as const, vertical: "top" as const, wrapText: true };
   const blackFont = { name: "Arial", size: 9, color: { argb: "FF000000" } };
 
-  ["A1:G1", "A2:G2", "A3:G3", "A4:G4", "A5:G5", "A7:G7", "A8:G8"].forEach((range) => sheet.mergeCells(range));
+  ["A4:G4", "A5:G5", "A6:G6", "A8:G8", "A9:G9", "A12:G12", "A13:G13"].forEach((range) => sheet.mergeCells(range));
   const headingRows: Array<[number, string, number, boolean]> = [
-    [1, "Republic of the Philippines", 10, false], [2, "Department of Justice", 10, false], [3, "PUBLIC ATTORNEY'S OFFICE", 12, true],
-    [4, "Regional Office No. XI", 10, false], [5, "District Office: Panabo City", 10, false], [7, "TRANSFER OF CASES", 14, true], [8, `As of ${formatTransferDate(report.report_date)}`, 10, false],
+    [4, "Republic of the Philippines", 11, false],
+    [5, "Department of Justice", 11, false],
+    [6, "PUBLIC ATTORNEY'S OFFICE", 12, true],
+    [8, "Regional Office No. XI", 10, false],
+    [9, "District Office: Panabo City", 10, false],
+    [12, "TRANSFER OF CASES", 14, true],
+    [13, `As of ${formatTransferDate(report.report_date)}`, 10, false],
   ];
-  headingRows.forEach(([number, value, size, bold]) => { const cell = sheet.getCell(`A${number}`); cell.value = value; cell.font = { ...blackFont, size, bold }; cell.alignment = center; sheet.getRow(number).height = number === 7 ? 22 : 16; });
-  sheet.getRow(6).height = 6;
-  const details = [["A10", `FROM: ${report.from_user_name}`], ["A11", `Date Transferred: ${formatTransferDate(report.submitted_at || report.report_date)}`], ["A12", "Signature: ______________________________"], ["E10", `TO: ${report.to_user_name}`], ["E11", `Date Received: ${formatTransferDate(report.date_received)}`], ["E12", "Signature: ______________________________"]] as const;
-  sheet.mergeCells("A10:C10"); sheet.mergeCells("A11:C11"); sheet.mergeCells("A12:C12"); sheet.mergeCells("E10:G10"); sheet.mergeCells("E11:G11"); sheet.mergeCells("E12:G12");
+  headingRows.forEach(([number, value, size, bold]) => {
+    const cell = sheet.getCell(`A${number}`);
+    cell.value = value;
+    cell.font = { ...blackFont, size, bold };
+    cell.alignment = center;
+  });
+  for (const number of [4, 5, 6, 7, 8, 9, 13]) sheet.getRow(number).height = 16.05;
+  sheet.getRow(10).height = 6;
+  sheet.getRow(11).height = 6;
+  sheet.getRow(12).height = 22.05;
+  sheet.getRow(18).height = 7.95;
+
+  const details = [
+    ["A15", `FROM: ${report.from_user_name}`],
+    ["A16", `Date Transferred: ${formatTransferDate(report.submitted_at || report.report_date)}`],
+    ["A17", "Signature: ______________________________"],
+    ["E15", `TO: ${report.to_user_name}`],
+    ["E16", `Date Received: ${formatTransferDate(report.date_received)}`],
+    ["E17", "Signature: ______________________________"],
+  ] as const;
+  ["A15:C15", "A16:C16", "A17:C17", "E15:G15", "E16:G16", "E17:G17"].forEach((range) => sheet.mergeCells(range));
   details.forEach(([address, value]) => { const cell = sheet.getCell(address); cell.value = value; cell.font = blackFont; cell.alignment = left; });
-  sheet.getRow(13).height = 8;
 
   const sections: Array<{ title: string; rows: Array<TransferCase | TransferAdminEntry> }> = [
     { title: "A. CRIMINAL CASES", rows: report.items.filter((item) => item.section === "Criminal").map((item) => item.snapshot) },
     { title: "B. CIVIL CASES", rows: report.items.filter((item) => item.section === "Civil").map((item) => item.snapshot) },
     ...(["ADMIN 1", "ADMIN 2", "ADMIN 3"] as const).map((section) => ({ title: section, rows: report.administrative_entries.filter((entry) => entry.section === section) })),
   ];
-  let rowNumber = 15;
-  sections.forEach((section) => {
+  let rowNumber = 20;
+  sections.forEach((section, sectionIndex) => {
     sheet.mergeCells(rowNumber, 1, rowNumber, 7);
     const sectionCell = sheet.getCell(rowNumber, 1); sectionCell.value = section.title; sectionCell.font = { ...blackFont, bold: true, size: 10 }; sectionCell.alignment = left; sectionCell.border = allBorders; sheet.getRow(rowNumber).height = 18; rowNumber += 1;
-    const headerRow = sheet.getRow(rowNumber); headings.forEach((heading, index) => { const cell = headerRow.getCell(index + 1); cell.value = heading; cell.font = { ...blackFont, bold: true, size: 8 }; cell.alignment = center; cell.border = allBorders; }); headerRow.height = 28; rowNumber += 1;
+    const headerRow = sheet.getRow(rowNumber); headings.forEach((heading, index) => { const cell = headerRow.getCell(index + 1); cell.value = heading; cell.font = { ...blackFont, bold: true, size: 8 }; cell.alignment = center; cell.border = allBorders; }); headerRow.height = 28.05; rowNumber += 1;
     if (!section.rows.length) {
-      const emptyRow = sheet.getRow(rowNumber); emptyRow.getCell(3).value = "No entries"; for (let index = 1; index <= 7; index += 1) { const cell = emptyRow.getCell(index); cell.font = blackFont; cell.alignment = center; cell.border = allBorders; } emptyRow.height = 20; rowNumber += 1;
+      const emptyRow = sheet.getRow(rowNumber); emptyRow.getCell(3).value = "No entries"; for (let index = 1; index <= 7; index += 1) { const cell = emptyRow.getCell(index); cell.font = blackFont; cell.alignment = center; cell.border = allBorders; } emptyRow.height = 19.95; rowNumber += 1;
     } else {
       section.rows.forEach((row, index) => {
         const values = row as unknown as Record<string, unknown>;
-        const data = [index + 1, values.control_no ?? "", values.title_of_case ?? "", values.case_no ?? values.docket_no ?? "", formatTransferDate(String(values.date_received || "")), values.status_of_case ?? "", values.cause_of_action ?? ""];
+        const number = "row_number" in row ? row.row_number : index + 1;
+        const data = [number, values.control_no ?? "", values.title_of_case ?? "", values.case_no ?? values.docket_no ?? "", formatTransferDate(String(values.date_received || "")), values.status_of_case ?? "", values.cause_of_action ?? ""];
         const dataRow = sheet.getRow(rowNumber); data.forEach((value, columnIndex) => { const cell = dataRow.getCell(columnIndex + 1); cell.value = value as string | number; cell.font = blackFont; cell.alignment = columnIndex === 0 ? center : left; cell.border = allBorders; }); dataRow.height = Math.max(18, Math.min(72, 18 * Math.max(1, String(data[2]).length / 42, String(data[6]).length / 44))); rowNumber += 1;
       });
     }
-    rowNumber += 1;
+    if (sectionIndex < sections.length - 1) rowNumber += 1;
   });
   sheet.pageSetup.printArea = `A1:G${rowNumber - 1}`;
-  sheet.pageSetup.printTitlesRow = "15:16";
+  sheet.pageSetup.printTitlesRow = "20:21";
   sheet.headerFooter.oddFooter = "&CPage &P of &N";
   const [logo1Buffer, logo2Buffer] = await Promise.all([loadImage(logo1Url), loadImage(logo2Url)]);
   const logo1Id = workbook.addImage({ buffer: logo1Buffer, extension: "png" });
   const logo2Id = workbook.addImage({ buffer: logo2Buffer, extension: "png" });
-  // Fit each supplied logo inside a one-inch (96px at the workbook's screen/print CSS scale) box without distortion.
-  sheet.addImage(logo1Id, { tl: { col: 0.08, row: 0.15 }, ext: { width: 96, height: 58.5 } });
-  sheet.addImage(logo2Id, { tl: { col: 5.78, row: 0.15 }, ext: { width: 96, height: 89.5 } });
+  // Native anchors and extents preserve the reference's image placement and dimensions in EMUs.
+  const paoAnchor = { col: 1, row: 2, nativeCol: 1, nativeRow: 2, nativeColOff: 224980, nativeRowOff: 168779 };
+  const bagongPilipinasAnchor = { col: 5, row: 3, nativeCol: 5, nativeRow: 3, nativeColOff: 483313, nativeRowOff: 15240 };
+  sheet.addImage(logo1Id, { tl: paoAnchor, ext: { width: 250.5527, height: 152.6805 } });
+  sheet.addImage(logo2Id, { tl: bagongPilipinasAnchor, ext: { width: 144.161, height: 134.4 } });
   return workbook.xlsx.writeBuffer();
 }
