@@ -7,23 +7,24 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
+  Clock3,
   FileText,
   Gavel,
-  PlusCircle,
-  RotateCcw,
-  Send,
+  LocateFixed,
+  Trash2,
+  TrendingUp,
   Users,
 } from "lucide-react";
 import MainLayout from "../../layouts/MainLayout";
 import { EmptyState, SkeletonBlock, initials } from "../../components/dashboard/AnalyticsPrimitives";
-import DashboardGreeting from "../../components/dashboard/DashboardGreeting";
-import IntelligenceBrief from "../../components/dashboard/IntelligenceBrief";
-import OfficePersonnelOverview from "../../components/dashboard/OfficePersonnelOverview";
-import CalendarReminders from "../../features/dashboardReminders/CalendarReminders";
+import {
+  useDashboardReminderStore,
+} from "../../features/dashboardReminders/dashboardReminderStore";
+import type { ReminderPriority } from "../../features/dashboardReminders/dashboardReminderStore";
+import { useAuth } from "../../contexts/AuthContext";
 import ProtectedProfileImage from "../../components/ProtectedProfileImage";
 import { listCaseSubmissions, type CaseSubmission } from "../../services/caseSubmissionService";
 import { useDashboardAnalytics } from "./useDashboardAnalytics";
-import { useAuth } from "../../contexts/AuthContext";
 
 const REVIEW_STATUSES = new Set(["Submitted", "Under Review", "Resubmitted"]);
 
@@ -46,9 +47,34 @@ function formatLegalDateTime(value: string | null | undefined) {
     month: "long",
     day: "numeric",
     year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
   }).format(date);
+}
+
+function useGreetingClock() {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const hour = now.getHours();
+  const greeting =
+    hour >= 21 || hour < 5
+      ? "Working Late, Administrator"
+      : hour >= 17
+        ? "Good Evening, Administrator"
+        : hour >= 12
+          ? "Good Afternoon, Administrator"
+          : "Good Morning, Administrator";
+  const date = new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(now);
+
+  return { date, greeting, now };
 }
 
 function KpiCard({
@@ -83,11 +109,48 @@ function KpiCard({
   );
 }
 
+function priorityClass(priority: ReminderPriority) {
+  if (priority === "High") return "bg-[#FFF1F2] text-[#9F1239] border-[#FECACA]";
+  if (priority === "Medium") return "bg-[#FFFBEB] text-[#92400E] border-[#FEF3C7]";
+  return "bg-[#F3F4F6] text-[#4B5563] border-[#E5E7EB]";
+}
+
+function automaticReminderPriority(dueDate: string, status?: string): ReminderPriority {
+  if (status === "Completed") return "Low";
+  const due = new Date(`${dueDate}T00:00:00`);
+  if (Number.isNaN(due.getTime())) return "Low";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysUntilDue = Math.ceil((due.getTime() - today.getTime()) / 86_400_000);
+  if (daysUntilDue <= 1) return "High";
+  if (daysUntilDue <= 7) return "Medium";
+  return "Low";
+}
+
+function priorityWeight(priority: ReminderPriority) {
+  if (priority === "High") return 0;
+  if (priority === "Medium") return 1;
+  return 2;
+}
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { activities, isLoading, overview } = useDashboardAnalytics({ deep: false });
+  const { date, greeting, now } = useGreetingClock();
+  const { activities, barangays, caseCategories, intakeLoad, isLoading, overview } = useDashboardAnalytics({ deep: false });
+  const reminders = useDashboardReminderStore((state) => state.reminders);
+  const loadReminders = useDashboardReminderStore((state) => state.loadReminders);
+  const addReminder = useDashboardReminderStore((state) => state.addReminder);
+  const updateReminderStatus = useDashboardReminderStore((state) => state.updateReminderStatus);
+  const deleteReminder = useDashboardReminderStore((state) => state.deleteReminder);
   const [submissions, setSubmissions] = useState<CaseSubmission[]>([]);
+  const [showReminderForm, setShowReminderForm] = useState(false);
+  const [reminderTitle, setReminderTitle] = useState("");
+  const [reminderDate, setReminderDate] = useState(new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    if (user?.user_id) loadReminders(user.user_id);
+  }, [loadReminders, user?.user_id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,24 +173,58 @@ export default function AdminDashboard() {
     [submissions],
   );
   const recentSubmissions = useMemo(() => submissions.slice(0, 5), [submissions]);
+  const orderedReminders = useMemo(
+    () =>
+      [...reminders].sort((left, right) => {
+        const leftPriority = automaticReminderPriority(left.dueDate, left.status);
+        const rightPriority = automaticReminderPriority(right.dueDate, right.status);
+        if (left.status !== right.status) return left.status === "Completed" ? 1 : -1;
+        const priorityDelta = priorityWeight(leftPriority) - priorityWeight(rightPriority);
+        if (priorityDelta !== 0) return priorityDelta;
+        return new Date(left.dueDate).getTime() - new Date(right.dueDate).getTime();
+      }),
+    [reminders],
+  );
   const recentCaseUpdates = useMemo(
     () =>
       activities
         .filter((activity) => {
           const text = `${activity.entity_type ?? ""} ${activity.action ?? ""} ${activity.description ?? ""}`.toLowerCase();
           return text.includes("case") || text.includes("client");
-        }),
+        })
+        .slice(0, 5),
     [activities],
   );
 
-  const monthStart = new Date();
-  monthStart.setDate(1);
+  const busiestDay = intakeLoad?.busiest_day?.day ?? "No intake day";
+  const busiestHour = intakeLoad?.busiest_hour?.hour ?? "No peak hour";
+  const hotspot = barangays[0]?.barangay ?? "No barangay hotspot";
+  const leadingCategory = caseCategories[0]?.category ?? "No category trend";
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const addDashboardReminder = () => {
+    if (!user?.user_id || !reminderTitle.trim()) return;
+    addReminder({
+      userId: user.user_id,
+      title: reminderTitle.trim(),
+      dueDate: reminderDate,
+      priority: automaticReminderPriority(reminderDate),
+      status: "Open",
+    });
+    setReminderTitle("");
+    setShowReminderForm(false);
+  };
 
   return (
     <MainLayout>
-      <DashboardGreeting
-        name={user?.full_name || "Administrator"}
-        actions={
+      <section className="mb-6 rounded-2xl border border-[#E7D7EE] bg-gradient-to-br from-[#F7F0FA] via-white to-white px-6 py-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight text-[#111827]">{greeting}</h1>
+            <p className="mt-3 text-base font-medium text-[#6B7280]">
+              {date} - Here's today's operational summary for PAO Panabo.
+            </p>
+          </div>
           <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-700">
               <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
@@ -137,8 +234,8 @@ export default function AdminDashboard() {
               Database Live
             </span>
           </div>
-        }
-      />
+        </div>
+      </section>
 
       {isLoading && !overview ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
@@ -155,57 +252,97 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <CalendarReminders />
+      <div className="mt-6 grid items-stretch gap-6 xl:grid-cols-[0.6fr_0.4fr]">
+        <section className="flex h-[320px] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+          <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+            <h2 className="text-xl font-bold text-[#111827]">Today's Intelligence Brief</h2>
+          </div>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 text-base font-semibold text-[#2B3642]">
+            <p className="flex gap-3"><TrendingUp className="mt-1 h-5 w-5 shrink-0 text-[#704389]" /> {busiestDay} remains the busiest intake day.</p>
+            <p className="flex gap-3"><Clock3 className="mt-1 h-5 w-5 shrink-0 text-[#704389]" /> Most client arrivals occur around {busiestHour}.</p>
+            <p className="flex gap-3"><LocateFixed className="mt-1 h-5 w-5 shrink-0 text-[#704389]" /> {hotspot} currently generates the highest case volume.</p>
+            <p className="flex gap-3"><Gavel className="mt-1 h-5 w-5 shrink-0 text-[#704389]" /> {leadingCategory} remains the most common recorded offense.</p>
+            <p className="flex gap-3"><FileText className="mt-1 h-5 w-5 shrink-0 text-[#704389]" /> {awaitingReview.length} staff submissions require review.</p>
+          </div>
+        </section>
 
-      <div className="mt-6 grid items-stretch gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
-        <OfficePersonnelOverview />
-        <IntelligenceBrief compact readable />
+        <section className="flex h-[320px] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+          <div className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+            <h2 className="text-xl font-bold text-[#111827]">Administrative Reminders</h2>
+            <button type="button" onClick={() => setShowReminderForm((value) => !value)} className="text-sm font-bold text-[#704389] hover:text-[#5F3675]">
+              + Add Reminder
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
+            {showReminderForm && (
+              <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+                <input value={reminderTitle} onChange={(event) => setReminderTitle(event.target.value)} placeholder="Reminder title" className="h-10 w-full rounded-lg border border-[#D1D5DB] px-3 text-sm" />
+                <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <input type="date" value={reminderDate} onChange={(event) => setReminderDate(event.target.value)} className="h-10 rounded-lg border border-[#D1D5DB] px-3 text-sm" />
+                  <button type="button" onClick={addDashboardReminder} className="rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm font-semibold text-[#111827] hover:bg-[#F3F4F6]">Save</button>
+                </div>
+                <p className="mt-2 text-xs font-medium text-[#6B7280]">
+                  Priority is assigned automatically from the due date.
+                </p>
+              </div>
+            )}
+            {orderedReminders.length === 0 ? (
+              <EmptyState message="No administrative reminders yet." />
+            ) : (
+              orderedReminders.map((reminder) => {
+                const priority = automaticReminderPriority(reminder.dueDate, reminder.status);
+                return (
+                <article key={reminder.id} className="rounded-xl border border-[#E5E7EB] bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${priorityClass(priority)}`}>{priority}</span>
+                    <span className="text-sm font-semibold text-[#6B7280]">{formatLegalDate(reminder.dueDate)}</span>
+                  </div>
+                  <p className="mt-3 font-bold text-[#111827]">{reminder.title}</p>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <button type="button" onClick={() => updateReminderStatus(reminder.id, reminder.status === "Completed" ? "Open" : "Completed")} className="inline-flex items-center gap-2 text-sm font-semibold text-[#704389] hover:text-[#5F3675]">
+                      <CheckCircle2 className="h-4 w-4" />
+                      {reminder.status}
+                    </button>
+                    <button type="button" onClick={() => deleteReminder(reminder.id)} className="inline-flex items-center gap-1 rounded-lg border border-[#FECACA] bg-[#FFF1F2] px-2.5 py-1.5 text-xs font-bold text-[#9F1239] hover:bg-[#FFE4E6]">
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove
+                    </button>
+                  </div>
+                </article>
+              );
+              })
+            )}
+          </div>
+        </section>
       </div>
+
       <div className="mt-6 grid gap-6 xl:grid-cols-[0.42fr_0.58fr]">
         <section className="rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <div className="border-b border-[#E5E7EB] bg-[#604477] px-5 py-4">
-            <h2 className="text-xl font-bold text-white">Recent Case Updates</h2>
+          <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+            <h2 className="text-xl font-bold text-[#111827]">Recent Case Updates</h2>
           </div>
           <div className="max-h-[330px] overflow-y-auto p-5">
             {recentCaseUpdates.length === 0 ? (
               <EmptyState message="No recent case updates are available." />
             ) : (
               <div className="space-y-3">
-                {recentCaseUpdates.map((activity) => {
-                  const Icon = activity.action === "Create Transfer Draft" ? PlusCircle
-                    : activity.action === "Submit Case Transfer" || activity.action === "Resubmit Case Transfer" ? Send
-                      : activity.action === "Return Case Transfer" ? RotateCcw
-                        : activity.action === "Transfer Assignments Updated" ? Users
-                        : activity.action === "Confirm Case Transfer" ? CheckCircle2 : Activity;
-                  const content = (
-                    <div className="flex gap-3">
-                      <Icon className="mt-1 h-5 w-5 shrink-0 text-[#704389]" />
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-bold leading-5 text-[#111827]">{activity.title || activity.action}</p>
-                          {activity.status && <span className="rounded-full bg-[#F7F0FA] px-2 py-0.5 text-[11px] font-semibold text-[#704389]">{activity.status}</span>}
-                        </div>
-                        <p className="mt-1 text-sm leading-5 text-[#2B3642]">{activity.description}</p>
-                        <p className="mt-2 text-xs font-medium text-[#6B7280]">{activity.user} · {activity.role || "User"} · {formatLegalDateTime(activity.timestamp)}</p>
-                      </div>
+                {recentCaseUpdates.map((activity) => (
+                  <div key={activity.id} className="flex gap-3 rounded-xl border border-[#E5E7EB] bg-white p-3">
+                    <Activity className="mt-1 h-5 w-5 shrink-0 text-[#704389]" />
+                    <div>
+                      <p className="text-sm font-semibold leading-6 text-[#2B3642]">{activity.description}</p>
+                      <p className="mt-1 text-xs font-medium text-[#6B7280]">{formatLegalDateTime(activity.timestamp)}</p>
                     </div>
-                  );
-                  return activity.href ? (
-                    <Link key={activity.id} to={activity.href} className="block rounded-xl border border-[#E5E7EB] bg-white p-3 hover:border-[#D8C2E2] hover:bg-[#FCFAFD]">
-                      {content}
-                    </Link>
-                  ) : (
-                    <div key={activity.id} className="rounded-xl border border-[#E5E7EB] bg-white p-3">{content}</div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </section>
 
         <section className="rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <div className="border-b border-[#E5E7EB] bg-[#604477] px-5 py-4">
-            <h2 className="text-xl font-bold text-white">Recent Staff Submissions</h2>
+          <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+            <h2 className="text-xl font-bold text-[#111827]">Recent Staff Submissions</h2>
           </div>
           <div className="max-h-[330px] overflow-auto">
             {recentSubmissions.length === 0 ? (
@@ -257,3 +394,4 @@ export default function AdminDashboard() {
     </MainLayout>
   );
 }
+  
