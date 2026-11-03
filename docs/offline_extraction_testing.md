@@ -9,20 +9,22 @@ cd C:\Users\Adjureee\Documents\GitHub\JurisGuard
 .\backend\venv\Scripts\python.exe -c "import paddle, paddleocr; print('PaddlePaddle', paddle.__version__, 'PaddleOCR', paddleocr.__version__)"
 ```
 
-This implementation uses PaddleOCR **3.7.0** with PaddlePaddle **3.3.1** and cached PP-OCRv6 medium models. Both versions are pinned in `backend/requirements.txt`. To create a fresh environment, run `python -m venv backend\venv` followed by `.\backend\venv\Scripts\python.exe -m pip install -r backend\requirements.txt`. Installation may use the network; extraction does not. On the tested Windows CPU, `enable_mkldnn=False` is needed to avoid a PaddlePaddle oneDNN inference error.
+This implementation uses PaddleOCR **3.7.0** with PaddlePaddle **3.3.1**. Interactive application uploads default to cached `PP-OCRv5_mobile_det` and `en_PP-OCRv5_mobile_rec` models. PP-OCRv6 medium remains an optional profile for slower accuracy experiments. Both package versions are pinned in `backend/requirements.txt`. To create a fresh environment, run `python -m venv backend\venv` followed by `.\backend\venv\Scripts\python.exe -m pip install -r backend\requirements.txt`. Installation and model caching may use the network; runtime extraction does not. On the tested Windows CPU, `enable_mkldnn=False` is required because oneDNN inference raises `NotImplementedError`.
 
-PaddleOCR needs complete, already installed local PP-OCRv6 detection and recognition model directories. Defaults are under `%USERPROFILE%\.paddlex\official_models\`. Check them:
+PaddleOCR needs complete, already installed local detection and recognition model directories. Defaults are under `%USERPROFILE%\.paddlex\official_models\`. Check the interactive profile:
 
 ```powershell
-Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv6_medium_det\inference.json"
-Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv6_medium_det\inference.pdiparams"
-Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv6_medium_det\inference.yml"
-Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv6_medium_rec\inference.json"
-Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv6_medium_rec\inference.pdiparams"
-Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv6_medium_rec\inference.yml"
+Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv5_mobile_det\inference.json"
+Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv5_mobile_det\inference.pdiparams"
+Test-Path "$env:USERPROFILE\.paddlex\official_models\PP-OCRv5_mobile_det\inference.yml"
+Test-Path "$env:USERPROFILE\.paddlex\official_models\en_PP-OCRv5_mobile_rec\inference.json"
+Test-Path "$env:USERPROFILE\.paddlex\official_models\en_PP-OCRv5_mobile_rec\inference.pdiparams"
+Test-Path "$env:USERPROFILE\.paddlex\official_models\en_PP-OCRv5_mobile_rec\inference.yml"
 ```
 
-Each should print `True`. To use another local copy of the same PP-OCRv6 medium models, set `PADDLEOCR_DET_MODEL_DIR` and `PADDLEOCR_REC_MODEL_DIR` to their absolute directory paths. The adapter checks model files before construction and disables optional orientation/rectification models to prevent implicit downloads. Application OCR uses PaddleOCR only. If its models are missing or inference fails, extraction returns `OFFLINE_OCR_FAILED`, an empty 21-field inventory, and `needs_review=true`; it does not switch OCR engines. Tesseract and EasyOCR remain separate candidates in the [extraction lab comparison](../jurisguard-extraction-lab/MANUSCRIPT_TESTING.md).
+Each should print `True`. Set `PADDLEOCR_MODEL_PROFILE=medium` to use locally cached PP-OCRv6 medium models. Set `PADDLEOCR_MODEL_PROFILE=handwriting` for those same models with a 3200-pixel working-image limit and 1920-pixel detection limit. This preserves smaller writing on full-page scans but costs more CPU time and memory. Leave `LOCAL_OCR_MAX_DIMENSION` and `LOCAL_OCR_DET_MAX_DIMENSION` unset to use profile defaults; explicitly set them to override either limit. The interactive `mobile` default remains faster. Use `PADDLEOCR_DET_MODEL_DIR` and `PADDLEOCR_REC_MODEL_DIR` only for complete local model directories. The adapter checks model files before construction and disables optional orientation/rectification models to prevent implicit downloads. Application OCR uses PaddleOCR only. If its models are missing or inference fails, extraction returns `OFFLINE_OCR_FAILED`, an empty 21-field inventory, and `needs_review=true`; it does not switch OCR engines. Tesseract and EasyOCR remain separate candidates in the [extraction lab comparison](../jurisguard-extraction-lab/MANUSCRIPT_TESTING.md).
+
+The handwriting profile is an **evaluation candidate**, not a validated accuracy improvement. The local synthetic forms use font-simulated handwriting. Compare mobile, medium, and handwriting on the same annotated pages; report text CER/WER separately from checkbox and signature detection. Promote a profile only after it improves human-reviewed real handwriting without exceeding the upload time limit. PaddleOCR's published model scores use different datasets from JurisGuard and cannot be reported as JurisGuard accuracy.
 
 ## 2. Run tests in order
 

@@ -32,6 +32,39 @@ The Regional Trial Court was discussed in the case history."""
 
 
 class LocalOCRTests(unittest.TestCase):
+    def test_handwriting_profile_uses_cached_medium_models_and_higher_resolution(self):
+        with patch("local_ocr.os.getenv", side_effect=lambda name, default=None: "handwriting" if name == "PADDLEOCR_MODEL_PROFILE" else default):
+            ocr = LocalOCR()
+        self.assertEqual(ocr.det_model_name, "PP-OCRv6_medium_det")
+        self.assertEqual(ocr.rec_model_name, "PP-OCRv6_medium_rec")
+        self.assertEqual(ocr.max_dimension, 3200)
+        self.assertEqual(ocr.det_limit, 1920)
+
+    def test_handwriting_profile_respects_explicit_resolution_limits(self):
+        values = {
+            "PADDLEOCR_MODEL_PROFILE": "handwriting",
+            "LOCAL_OCR_MAX_DIMENSION": "2800",
+            "LOCAL_OCR_DET_MAX_DIMENSION": "1600",
+        }
+        with patch("local_ocr.os.getenv", side_effect=lambda name, default=None: values.get(name, default)):
+            ocr = LocalOCR()
+        self.assertEqual(ocr.max_dimension, 2800)
+        self.assertEqual(ocr.det_limit, 1600)
+
+    def test_legacy_performance_settings_remain_effective(self):
+        values = {
+            "PADDLEOCR_MAX_DIMENSION": "1600",
+            "PADDLEOCR_DET_LIMIT_SIDE_LEN": "960",
+            "PADDLEOCR_CPU_THREADS": "3",
+            "PADDLEOCR_ENABLE_MKLDNN": "true",
+        }
+        with patch("local_ocr.os.getenv", side_effect=lambda name, default=None: values.get(name, default)):
+            ocr = LocalOCR()
+        self.assertEqual(ocr.max_dimension, 1600)
+        self.assertEqual(ocr.det_limit, 960)
+        self.assertEqual(ocr.cpu_threads, 3)
+        self.assertTrue(ocr.enable_mkldnn)
+
     def test_missing_models_never_reach_paddle_constructor(self):
         ocr = LocalOCR()
         ocr.det_model = Path("missing-det-model")
@@ -52,8 +85,11 @@ class LocalOCRTests(unittest.TestCase):
             ocr._paddle_engine()
         self.assertEqual(called["text_detection_model_dir"], str(ocr.det_model))
         self.assertEqual(called["text_recognition_model_dir"], str(ocr.rec_model))
-        self.assertEqual(called["text_detection_model_name"], "PP-OCRv6_medium_det")
-        self.assertEqual(called["text_recognition_model_name"], "PP-OCRv6_medium_rec")
+        self.assertEqual(called["text_detection_model_name"], ocr.det_model_name)
+        self.assertEqual(called["text_recognition_model_name"], ocr.rec_model_name)
+        self.assertEqual(called["text_recognition_batch_size"], ocr.recognition_batch_size)
+        self.assertEqual(called["text_det_limit_side_len"], ocr.det_limit)
+        self.assertEqual(called["text_det_limit_type"], "max")
         self.assertFalse(called["enable_mkldnn"])
         self.assertFalse(called["use_doc_orientation_classify"])
         self.assertFalse(called["use_doc_unwarping"])
@@ -68,6 +104,60 @@ class LocalOCRTests(unittest.TestCase):
         lines = LocalOCR._paddle_lines([page], 1)
         self.assertEqual([item["text"] for item in lines], ["Name:", "Ana"])
         self.assertEqual(lines[1]["engine_score"], 0.2)
+
+    def test_paddle_boxes_with_vertical_jitter_are_ordered_by_form_row(self):
+        page = SimpleNamespace(json={"res": {
+            "rec_texts": ["Edad: 32", "Alina Testoria", "Pangalan:"],
+            "rec_scores": [.9, .9, .9],
+            "rec_boxes": [[500, 96, 620, 116], [150, 101, 310, 121], [10, 104, 130, 124]],
+        }})
+        lines = LocalOCR._paddle_lines([page], 1)
+        self.assertEqual([item["text"] for item in lines], ["Pangalan:", "Alina Testoria", "Edad: 32"])
+
+    def test_three_synthetic_large_intake_variations_keep_recognition_resolution(self):
+        # Exactly three stress variations: scan noise, changed layout, missing value.
+        variants = [
+            ("INTERV1EW SHEET\nName: Ana Sample\nContact No.: 0000-000-0000", (240, 240, 240)),
+            ("INTERVIEW SHEET\nPangalan:\nBela Sample\nTirahan: TEST Street", "white"),
+            ("INTERVIEW SHEET\nName:\nContact No.: 0000-000-0000", "white"),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            for i, (text, background) in enumerate(variants):
+                with self.subTest(variation=i):
+                    path = Path(directory) / f"synthetic_intake_{i}.png"
+                    image = Image.new("RGB", (2550, 3900), background)
+                    ImageDraw.Draw(image).multiline_text((150, 100), text, fill="black")
+                    ImageDraw.Draw(image).rectangle((100, 300, 2400, 310), fill="black")
+                    image.save(path)
+                    ocr = LocalOCR()
+                    with patch.object(ocr, "_paddle_page", return_value=[{
+                        "text": text, "page": 1, "bbox": [0, 0, 100, 100], "engine_score": .7,
+                    }]) as predict:
+                        result = ocr.extract(path)
+                    working = predict.call_args.args[0]
+                    self.assertEqual(max(working.size), ocr.max_dimension)
+                    self.assertGreater(max(working.size), ocr.det_limit)
+                    self.assertEqual(result.raw_text, text)
+                    self.assertEqual(result.timings["detection_max_dimension"], ocr.det_limit)
+
+    def test_client_target_reads_only_the_applicant_block(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "synthetic_standard_form.png"
+            image = Image.new("RGB", (2550, 3900), "white")
+            ImageDraw.Draw(image).rectangle((100, 1200, 2400, 1240), fill="black")
+            image.save(path)
+            ocr = LocalOCR()
+            with patch.object(ocr, "_paddle_page", return_value=[{
+                "text": "Pangalan: Alina Testoria", "page": 1,
+                "bbox": [10, 10, 100, 30], "engine_score": .9,
+            }]) as predict:
+                result = ocr.extract(path, "client")
+            working = predict.call_args.args[0]
+            self.assertLess(working.height, working.width)
+            self.assertEqual(result.raw_text, "Pangalan: Alina Testoria")
+            self.assertEqual(result.timings["target"], "client")
+            self.assertEqual(result.layout[0]["region"], "applicant_block")
+            self.assertGreater(result.layout[0]["bbox"][1], 1000)
 
     def test_mismatched_paddle_output_requires_review(self):
         page = SimpleNamespace(json={"res": {"rec_texts": ["Name"], "rec_scores": [], "rec_boxes": [[0, 0, 1, 1]]}})
@@ -132,14 +222,15 @@ class IntegrationTests(unittest.TestCase):
         self.assertTrue(result["needs_review"])
         self.assertEqual(ocr_status_for_result(result), "FAILED")
 
-    def test_sandiganbayan_routes_with_empty_inventory_and_review(self):
+    def test_sandiganbayan_routes_to_criminal_case_number_only(self):
         engine = object.__new__(JurisGuardExtractionEngine)
         engine.local_ocr = type("FakeOCR", (), {"extract": lambda self, _: OCRDocument(SANDIGANBAYAN_TEXT, [], "fake", 1, [])})()
         with patch("ai_service.spacy_extract_pao_fields", side_effect=AssertionError("intake parser called")):
             result = engine._run_offline_pipeline("unused.png")
         self.assertEqual(result["document_type"], "sandiganbayan_document")
-        self.assertEqual(result["inventory"], empty_inventory())
-        self.assertTrue(result["needs_review"])
+        self.assertEqual(result["inventory"]["Case No."], "SB-25-CRM-0042")
+        self.assertTrue(all(value is None for field, value in result["inventory"].items() if field != "Case No."))
+        self.assertFalse(result["needs_review"])
         self.assertEqual(public_extraction_payload(result)["document_type"], "sandiganbayan_document")
 
     def test_rtc_routes_without_running_intake_spacy(self):

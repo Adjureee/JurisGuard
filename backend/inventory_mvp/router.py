@@ -144,10 +144,17 @@ class DocumentRouter:
         return inventory
 
     def extract_rtc_decision(self, raw_text: str) -> dict[str, str | bool | None]:
-        """Extract explicit RTC court, case number, and caption only."""
+        """Extract only an explicitly labelled RTC criminal case number."""
         if _suspected_concatenation("\n".join(line.working for line in _lines(raw_text))) or self.classify_document(raw_text) != "rtc_decision":
             return empty_inventory()
         inventory, _ = self._extract_rtc(raw_text)
+        return inventory
+
+    def extract_sandiganbayan_document(self, raw_text: str) -> dict[str, str | bool | None]:
+        """Extract only an explicit Sandiganbayan CRM case number."""
+        if _suspected_concatenation("\n".join(line.working for line in _lines(raw_text))) or self.classify_document(raw_text) != "sandiganbayan_document":
+            return empty_inventory()
+        inventory, _ = self._extract_sandiganbayan(raw_text)
         return inventory
 
     def process(self, raw_text: str) -> dict[str, Any]:
@@ -165,8 +172,11 @@ class DocumentRouter:
             diagnostics["field_evidence"] = extraction["field_evidence"]
             diagnostics["warnings"].extend(extraction["warnings"])
         elif document_type == "sandiganbayan_document":
-            diagnostics["warnings"].append("Sandiganbayan routing is supported; PAO inventory field mapping for this court is not yet approved.")
-            diagnostics["review_question"] = "Review the document and define approved Sandiganbayan inventory mappings before field extraction."
+            inventory, extraction = self._extract_sandiganbayan(raw_text)
+            diagnostics["field_evidence"] = extraction["field_evidence"]
+            diagnostics["warnings"].extend(extraction["warnings"])
+            if inventory["Case No."] is None:
+                diagnostics["review_question"] = "Confirm the Sandiganbayan criminal case number from the source image."
         else:
             if diagnostics["out_of_scope_court_signal"]:
                 diagnostics["warnings"].append("Court heading or case number suggests Sandiganbayan; RTC mapping is unsupported and requires review.")
@@ -180,7 +190,7 @@ class DocumentRouter:
             "document_type": document_type,
             "inventory": inventory,
             "diagnostics": diagnostics,
-            "needs_review": document_type in {"unknown", "ambiguous", "sandiganbayan_document"} or diagnostics["suspected_concatenation"] or bool(diagnostics["warnings"]),
+            "needs_review": document_type in {"unknown", "ambiguous"} or diagnostics["suspected_concatenation"] or bool(diagnostics["warnings"]),
         }
 
     def _classify(self, raw_text: str) -> tuple[str, dict[str, Any]]:
@@ -280,33 +290,23 @@ class DocumentRouter:
     def _extract_rtc(self, raw_text: str) -> tuple[dict[str, str | bool | None], dict[str, Any]]:
         inventory = empty_inventory()
         diagnostics: dict[str, Any] = {"field_evidence": {}, "warnings": []}
-        lines = _lines(raw_text)
-        for index, line in enumerate(lines):
-            court_match = re.search(r"\bREGIONAL\s+TR[I1l]AL\s+COURT\b", line.working, re.IGNORECASE)
-            if court_match:
-                court = line.working[court_match.start() :].strip(" ,")
-                if index + 1 < len(lines) and re.fullmatch(r"Branch\s+(?:No\.?\s*)?[A-Z0-9-]+", lines[index + 1].working, re.IGNORECASE):
-                    court += ", " + lines[index + 1].working
-                _assign(inventory, diagnostics, "Court/Body", court, line)
-            case_match = re.match(r"^\s*(?:Criminal\s+)?Case\s+No\.\s*[:：]?\s*([A-Z0-9][A-Z0-9/ .-]*)\s*$", line.working, re.IGNORECASE)
+        for line in _lines(raw_text):
+            case_match = re.match(r"^\s*(?:Criminal|Crim\.?)\s+Case\s+No\.?\s*[:：]?\s*([A-Z0-9][A-Z0-9/ .\-–]*)\s*$", line.working, re.IGNORECASE)
             if case_match:
                 _assign(inventory, diagnostics, "Case No.", case_match.group(1).strip(), line)
-        for index, line in enumerate(lines):
-            if not re.match(r"^\s*PEOPLE\s+OF\s+THE\s+PHILIPPINES\b", line.working, re.IGNORECASE):
-                continue
-            versus_index = next((j for j in range(index + 1, min(index + 5, len(lines))) if re.fullmatch(r"-?\s*(?:versus|vs?\.?)\s*-?", lines[j].working, re.IGNORECASE)), None)
-            if versus_index is None:
-                continue
-            for accused_index in range(versus_index + 1, min(versus_index + 4, len(lines))):
-                accused = re.sub(r",?\s*Accus[ei]d\.?\s*$", "", lines[accused_index].working, flags=re.IGNORECASE).strip(" ,.")
-                has_role = bool(re.search(r"\bAccus[ei]d\b", lines[accused_index].working, re.IGNORECASE))
-                if not has_role and accused_index + 1 < len(lines) and re.fullmatch(r"Accus[ei]d\.?", lines[accused_index + 1].working, re.IGNORECASE):
-                    has_role = True
-                if has_role and accused and not _looks_like_heading(accused):
-                    title = "People of the Philippines v. " + accused
-                    _assign(inventory, diagnostics, "Title of the Case", title, lines[accused_index])
-                    break
-            break
+        if inventory["Case No."] is None:
+            diagnostics["warnings"].append("Explicit RTC criminal case number was not found; no court-document fields were mapped.")
+        return inventory, diagnostics
+
+    def _extract_sandiganbayan(self, raw_text: str) -> tuple[dict[str, str | bool | None], dict[str, Any]]:
+        inventory = empty_inventory()
+        diagnostics: dict[str, Any] = {"field_evidence": {}, "warnings": []}
+        for line in _lines(raw_text):
+            case_match = re.search(r"\b(SB\s*[-–]\s*\d{2}\s*[-–]\s*CRM\s*[-–]\s*\d{3,5})\b", line.working, re.IGNORECASE)
+            if case_match:
+                _assign(inventory, diagnostics, "Case No.", case_match.group(1).strip(), line)
+        if inventory["Case No."] is None:
+            diagnostics["warnings"].append("Explicit Sandiganbayan CRM criminal case number was not found; no court-document fields were mapped.")
         return inventory, diagnostics
 
 

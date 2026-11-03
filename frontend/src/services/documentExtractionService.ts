@@ -1,5 +1,6 @@
 import { AxiosError } from "axios";
 import { apiClient } from "../api/client";
+import { withExtractionDeadline } from "../features/documentExtraction/requestDeadline";
 import type { ExtractionMap } from "../types";
 import type { CaseFormValues, ClientFormValues } from "../features/criminalCases/schemas";
 
@@ -117,11 +118,11 @@ export type CaseExtractionResult = {
 
 type UploadOptions = {
   caseId?: number;
-  userId?: number;
   extractionMode?: ExtractionEngineMode;
+  extractionTarget?: "full" | "client";
+  signal?: AbortSignal;
 };
 
-const DEFAULT_BACKEND_USER_ID = 1;
 export type ExtractionEngineMode = "auto" | "offline" | "cloud";
 
 function cleanText(value: unknown): string | undefined {
@@ -298,6 +299,10 @@ function addIndicator(indicators: ExtractionMap, path: string, value: unknown) {
 
 function getUploadError(error: unknown) {
   if (error instanceof AxiosError) {
+    if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
+      return "Extraction took too long. Try one clear page at a time or enter fields manually.";
+    }
+    if (error.code === "ERR_NETWORK") return "Cannot reach the extraction service. Check that the local backend is running.";
     const detail = error.response?.data?.detail;
     return typeof detail === "string" ? detail : "Document extraction failed";
   }
@@ -306,22 +311,32 @@ function getUploadError(error: unknown) {
 
 async function uploadDocumentForExtraction(
   file: File,
-  { caseId, userId = DEFAULT_BACKEND_USER_ID, extractionMode = "auto" }: UploadOptions = {}
+  { caseId, extractionMode = "auto", extractionTarget = "full", signal }: UploadOptions = {}
 ) {
+  if (file.size > 25 * 1024 * 1024) throw new Error("Document is too large. Choose a file smaller than 25 MB.");
   const formData = new FormData();
   formData.append("file", file);
   const params: Record<string, number | string> = {
-    user_id: userId,
     extraction_mode: extractionMode,
+    extraction_target: extractionTarget,
   };
   if (caseId !== undefined) {
     params.case_id = caseId;
   }
 
   try {
-    const response = await apiClient.post<UploadDocumentResponse>("/upload-document/", formData, {
-      params,
-    });
+    const configured = Number(import.meta.env.VITE_DOCUMENT_EXTRACTION_TIMEOUT_MS);
+    const timeout = Number.isFinite(configured) && configured >= 1000 ? configured : 200000;
+    const response = await withExtractionDeadline(
+      (requestSignal) => apiClient.post<UploadDocumentResponse>("/upload-document/", formData, {
+        params, signal: requestSignal, timeout,
+      }), timeout, signal,
+    );
+    const mode = response.data.extracted_data.extraction_mode;
+    if (mode === "OFFLINE_OCR_EMPTY") throw new Error("No readable text was found. Try a clearer image or enter fields manually.");
+    if (mode === "OFFLINE_OCR_FAILED" || mode === "ONLINE_MISTRAL_FAILED" || mode === "ONLINE_MISTRAL_TIMEOUT") {
+      throw new Error("Document extraction failed. Check the local OCR setup, retry a clear page, or enter fields manually.");
+    }
     return response.data;
   } catch (error) {
     throw new Error(getUploadError(error));
@@ -332,7 +347,10 @@ export async function extractClientFromDocument(
   file: File,
   options?: UploadOptions
 ): Promise<ClientExtractionResult> {
-  const { document_id, extracted_data } = await uploadDocumentForExtraction(file, options);
+  const { document_id, extracted_data } = await uploadDocumentForExtraction(file, {
+    ...options,
+    extractionTarget: "client",
+  });
   const applicant = (fieldName: string, fallback?: unknown) =>
     sectionValue(extracted_data, "applicant_personal_circumstances", fieldName, fallback);
   const representative = (fieldName: string, fallback?: unknown) =>
@@ -566,10 +584,3 @@ export async function extractCaseFromDocument(
 
   return { documentId: document_id, documentType: extracted_data.document_type ?? "unknown", needsReview: extracted_data.needs_review !== false, extracted, indicators };
 }
-
-export async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
-  return new File([blob], filename, { type: blob.type || "image/png" });
-}
-

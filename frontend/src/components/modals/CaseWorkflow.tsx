@@ -12,18 +12,12 @@ import type {
 import { useAuth } from "../../contexts/AuthContext";
 import { FieldStatus } from "../../features/criminalCases/components/FieldStatus";
 import { StepIndicator } from "../../features/criminalCases/components/StepIndicator";
-import { useCamera } from "../../features/criminalCases/hooks/useCamera";
 import {
   caseFormSchema,
   type CaseFormValues,
 } from "../../features/criminalCases/schemas";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
-import {
-  dataUrlToFile,
-  extractCaseFromDocument,
-  type CaseExtractionResult,
-  type ExtractionEngineMode,
-} from "../../services/documentExtractionService";
+import { extractCaseFromDocument, type CaseExtractionResult, type ExtractionEngineMode } from "../../services/documentExtractionService";
 import type {
   CaseType,
   ClientRecord,
@@ -32,6 +26,9 @@ import type {
   IntakeMethod,
 } from "../../types";
 import ClientInformationModal from "./ClientInformationModal";
+import { useExtractionRequest } from "../../features/documentExtraction/useExtractionRequest";
+import { ExtractionProgress } from "../../features/documentExtraction/ExtractionProgress";
+import { CameraCapture } from "../../features/documentExtraction/CameraCapture";
 
 type CaseOcrPayload = CaseExtractionResult["extracted"];
 
@@ -66,7 +63,7 @@ const createDefaultValues = (
       year: "numeric",
     }),
     region: "",
-    district_office: "Panabo City Public Attorney's Office",
+    district_office: "",
     party_represented: "",
     applicant_role: "",
     applicant_role_other: "",
@@ -117,7 +114,7 @@ const createDefaultValues = (
     status_of_case: "Pending",
     case_status: "Pending",
     incident_barangay: "",
-    incident_city: "Panabo City",
+    incident_city: "",
     incident_address: "",
     latitude: "",
     longitude: "",
@@ -591,19 +588,11 @@ export function CaseWorkflow({
   const [documentPreview, setDocumentPreview] = useState<string | null>(null);
   const [documentLabel, setDocumentLabel] = useState("");
   const [indicators, setIndicators] = useState<ExtractionMap>({});
-  const [isExtracting, setIsExtracting] = useState(false);
+  const { isExtracting, elapsedSeconds, startExtraction, finishExtraction, isCurrentExtraction, cancelExtraction } = useExtractionRequest();
   const [extractionEngine, setExtractionEngine] =
     useState<ExtractionEngineMode>("auto");
   const [replaceExistingWithOcr, setReplaceExistingWithOcr] = useState(false);
   const [useClientRepresentative, setUseClientRepresentative] = useState(false);
-  const {
-    videoRef,
-    isCameraActive,
-    cameraError,
-    startCamera,
-    stopCamera,
-    captureFrame,
-  } = useCamera();
   const standaloneSteps = requireReviewBeforeSubmit
     ? [
         "Select Client",
@@ -820,7 +809,9 @@ export function CaseWorkflow({
     setValue("cases.incident_barangay", "", { shouldDirty: true, shouldValidate: true });
   }, [filteredBarangays, incidentBarangay, setValue]);
 
-  useEffect(() => () => stopCamera(), [stopCamera]);
+  useEffect(() => () => {
+    if (documentPreview?.startsWith("blob:")) URL.revokeObjectURL(documentPreview);
+  }, [documentPreview]);
 
   const selectClient = (client: ClientRecord) => {
     setSelectedClientIds((current) => {
@@ -926,16 +917,21 @@ export function CaseWorkflow({
   };
 
   const runOcr = async (file: File, preview: string, label: string) => {
+    const request = startExtraction("Extracting case fields...");
+    if (!request) {
+      if (preview.startsWith("blob:")) URL.revokeObjectURL(preview);
+      return;
+    }
     setDocumentPreview(preview);
     setDocumentLabel(label);
-    setIsExtracting(true);
-    const toastId = toast.loading("Extracting case fields...");
+    const { toastId } = request;
 
     try {
       const result = await extractCaseFromDocument(file, {
-        userId: user?.user_id,
         extractionMode: extractionEngine,
+        signal: request.controller.signal,
       });
+      if (!isCurrentExtraction(request)) return;
       setIndicators(result.indicators);
       applyExtractedPayload(result.extracted);
       addNotification({
@@ -954,44 +950,27 @@ export function CaseWorkflow({
         toast.success("OCR extraction completed", { id: toastId });
       }
     } catch (error) {
+      if (!isCurrentExtraction(request)) return;
       toast.error(error instanceof Error ? error.message : "OCR failed", {
         id: toastId,
       });
     } finally {
-      setIsExtracting(false);
+      finishExtraction(request);
     }
-  };
-
-  const handleCapture = async () => {
-    const captured = captureFrame() || "";
-    if (!captured) {
-      toast.error("Camera did not return an image.");
-      return;
-    }
-
-    const file = await dataUrlToFile(
-      captured,
-      `live-case-scan-${Date.now()}.png`,
-    );
-    await runOcr(file, captured, "Live camera case scan");
   };
 
   const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     try {
       const file = event.target.files?.[0];
-      if (!file) return;
+      event.target.value = "";
+      if (!file || isExtracting) return;
 
-      if (!file.type.startsWith("image/")) {
-        toast.error("Please upload a JPG, PNG, or WEBP image.");
+      if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type)) {
+        toast.error("Please upload a JPG, PNG, WEBP, or PDF document.");
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = async () => {
-        await runOcr(file, String(reader.result), file.name);
-      };
-      reader.onerror = () => toast.error("Upload error");
-      reader.readAsDataURL(file);
+      await runOcr(file, file.type === "application/pdf" ? "" : URL.createObjectURL(file), file.name);
     } catch {
       toast.error("Upload error");
     }
@@ -1023,9 +1002,7 @@ export function CaseWorkflow({
         client_ids: selectedClients.map((client) => client.client_id),
         intake_record: {
           ...values.intake_record,
-          district_office:
-            values.intake_record.district_office ||
-            "Panabo City Public Attorney's Office",
+          district_office: values.intake_record.district_office,
           party_represented: representedParty,
           inv_plaintiff: values.intake_record.applicant_role === "Plaintiff",
           inv_defendant: values.intake_record.applicant_role === "Defendant",
@@ -1050,7 +1027,7 @@ export function CaseWorkflow({
           status_of_case: normalizedStatus,
           case_status: normalizedStatus,
           pending_in_court: normalizedStatus === "Pending",
-          incident_city: values.cases.incident_city || "Panabo City",
+          incident_city: values.cases.incident_city,
           detained: caseDetained,
           date_of_confinement: caseDetained
             ? values.cases.date_of_confinement
@@ -1222,8 +1199,8 @@ export function CaseWorkflow({
               />
               <MethodCard
                 value="camera"
-                title="Live OCR Scan"
-                description="Use live camera scanning."
+                title="Document Camera"
+                description="Capture a page with a connected document camera, then review it before OCR."
                 icon="fa-camera"
                 selected={method === "camera"}
                 onSelect={setMethod}
@@ -1265,7 +1242,7 @@ export function CaseWorkflow({
                   {method === "manual"
                     ? "Manual Entry"
                     : method === "camera"
-                      ? "Live OCR Scan"
+                      ? "Document Camera"
                       : "Upload Document"}
                 </p>
               </div>
@@ -1318,60 +1295,30 @@ export function CaseWorkflow({
             )}
 
             {method === "camera" && (
-              <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-                <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
-                  <video
-                    ref={videoRef}
-                    muted
-                    playsInline
-                    className="aspect-video w-full rounded-md border border-[#E5E7EB] bg-white object-cover"
-                  />
-                  <div className="space-y-3">
-                    <button
-                      type="button"
-                      onClick={startCamera}
-                      className="w-full rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:bg-[#5F3675]"
-                    >
-                      Start Camera
-                    </button>
-                    <button
-                      type="button"
-                      onClick={stopCamera}
-                      className="w-full rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] transition duration-200 hover:bg-[#F8FAFC]"
-                    >
-                      Stop Camera
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!isCameraActive || isExtracting}
-                      onClick={handleCapture}
-                      className="w-full rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#704389] hover:text-white disabled:opacity-50"
-                    >
-                      {isExtracting ? "Extracting..." : "Capture Case Fields"}
-                    </button>
-                    {cameraError && (
-                      <p className="text-sm text-red-600">{cameraError}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <CameraCapture
+                isExtracting={isExtracting}
+                onUsePhoto={(file) => void runOcr(file, URL.createObjectURL(file), file.name)}
+              />
             )}
 
             {method === "upload" && (
               <div className="rounded-lg border border-dashed border-[#E5E7EB] bg-[#F9FAFB] p-4">
                 <label className="block">
                   <span className="text-sm font-semibold text-[#4B5563]">
-                    Upload case document image
+                    Upload case image or PDF
                   </span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept=".jpg,.jpeg,.jfif,.png,.webp,.pdf"
+                    disabled={isExtracting}
                     onChange={handleUpload}
                     className="mt-3 block w-full text-sm text-[#4B5563] file:mr-4 file:rounded-md file:border-0 file:bg-[#704389] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
                   />
                 </label>
               </div>
             )}
+
+            {isExtracting && <ExtractionProgress elapsedSeconds={elapsedSeconds} onCancel={cancelExtraction} />}
 
             {hasOcrResult && (
               <div className="grid gap-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 lg:grid-cols-[220px_1fr]">
@@ -2104,7 +2051,10 @@ export function CaseWorkflow({
       <div className="sticky bottom-0 flex justify-between border-t border-[#E5E7EB] bg-white px-6 py-4 shadow-[0_-6px_18px_rgba(17,24,39,0.04)]">
         <button
           type="button"
-          onClick={() => setStep((current) => Math.max(current - 1, 0))}
+          onClick={() => {
+            if (isCaseFormStep) cancelExtraction();
+            setStep((current) => Math.max(current - 1, 0));
+          }}
           disabled={step === 0}
           className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#E5E7EB] hover:text-[#2B3642] disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -2115,7 +2065,10 @@ export function CaseWorkflow({
           {isCaseFormStep && (
             <button
               type="button"
-              onClick={() => setStep(hasLockedSelection ? 0 : 1)}
+              onClick={() => {
+                cancelExtraction();
+                setStep(hasLockedSelection ? 0 : 1);
+              }}
               className="rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#704389] hover:text-white"
             >
               Change Method

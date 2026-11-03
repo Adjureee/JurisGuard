@@ -91,6 +91,43 @@ class SpacyExtractorTests(unittest.TestCase):
     def test_synthetic_intake_and_blank_template(self):
         main()
 
+    def test_paddle_separate_label_and_handwritten_value_lines(self):
+        sample_ocr = """II. IMPORMASYON UKOL SA APLIKANTE
+Pangalan:
+Alina Testoria
+Edad: 32
+Sex:
+Female
+Civil Status:
+Single
+Relihiyon:
+None
+Naabot na pag-aaral:
+College
+Pagkamamamayan:
+Filipino
+Salita/Dialekto:
+English
+Tirahan:
+12 Luntian St., Testville
+Contact No.:
+0000-000-0001
+E-mail:
+alina.testoria@example.com
+Individual Monthly Income:
+6,500
+II-A. IMPORMASYON UKOL SA REPRESENTATIVE"""
+        schema = JurisGuardExtractionEngine.__new__(JurisGuardExtractionEngine)._get_empty_schema()
+        extracted = spacy_extract_pao_fields(sample_ocr, schema)
+        self.assertEqual(extracted["applicant_name"], "Alina Testoria")
+        self.assertEqual(extracted["applicant_age"], "32")
+        self.assertEqual(extracted["applicant_sex"], "Female")
+        self.assertEqual(extracted["applicant_civil_status"], "Single")
+        self.assertEqual(extracted["applicant_address"], "12 Luntian St., Testville")
+        self.assertEqual(extracted["applicant_contact"], "0000-000-0001")
+        self.assertEqual(extracted["applicant_email"], "alina.testoria@example.com")
+        self.assertEqual(extracted["individual_monthly_income"], "6,500")
+
 
 if __name__ == "__main__":
     main()

@@ -182,6 +182,9 @@ export default function ClientInformationModal({
             </Section>
 
             <Section title="Applicant Classification">
+              <InfoTile label="Female (reviewed evidence)" value={client.client_classification.flag_female ?? "Unresolved"} />
+              <InfoTile label="Senior Citizen (reviewed evidence)" value={client.client_classification.flag_senior ?? "Unresolved"} />
+              <InfoTile label="CICL (reviewed evidence)" value={client.client_classification.flag_cicl ?? "Unresolved"} />
               <div className="md:col-span-2 lg:col-span-3">
                 <p className="rounded-md border border-[#E5E7EB] bg-white p-3 text-sm font-semibold text-[#2B3642]">
                   {selectedClassifications.join(", ") || "None selected"}

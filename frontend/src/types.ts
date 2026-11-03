@@ -37,9 +37,10 @@ export interface ClientDetails {
 }
 
 export interface ClientClassification {
-  flag_senior: boolean;
-  flag_cicl: boolean;
-  flag_female: boolean;
+  flag_senior: boolean | null;
+  flag_cicl: boolean | null;
+  flag_female: boolean | null;
+  flags_reviewed: boolean;
   flag_urban: boolean;
   flag_rural: boolean;
   flag_drugs: boolean;

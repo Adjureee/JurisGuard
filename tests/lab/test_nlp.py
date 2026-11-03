@@ -69,10 +69,9 @@ class NLPTests(unittest.TestCase):
             with self.subTest(text=text.splitlines()[1]):
                 result = self.router.process(text)
                 self.assertEqual(result["document_type"], "sandiganbayan_document")
-                self.assertEqual(result["inventory"], empty_inventory())
                 self.assertEqual(self.router.extract_rtc_decision(text), empty_inventory())
                 self.assertIsNotNone(result["diagnostics"]["out_of_scope_court_signal"])
-                self.assertTrue(result["needs_review"])
+                self.assertTrue(all(value is None for field, value in result["inventory"].items() if field != "Case No."))
 
     def test_rtc_heading_precedes_historical_sandiganbayan_reference(self):
         text = RTC + "\nThe Sandiganbayan was mentioned in procedural history."
@@ -112,11 +111,23 @@ class NLPTests(unittest.TestCase):
         result = self.router.process(RTC)
         self.assertEqual(result["document_type"], "rtc_decision")
         self.assertEqual(result["inventory"]["Case No."], "00045-24")
-        self.assertEqual(result["inventory"]["Title of the Case"], "People of the Philippines v. JUAN DELA CRUZ")
-        self.assertEqual(result["inventory"]["Court/Body"], "REGIONAL TRIAL COURT, Branch 12")
-        for name in ("Party Represented", "Control Number", "Status of the Case", "Date of Termination"):
+        for name in ("Party Represented", "Title of the Case", "Court/Body", "Control Number", "Status of the Case", "Date of Termination"):
             self.assertIsNone(result["inventory"][name])
         validate_inventory(result["inventory"])
+
+    def test_court_documents_map_only_explicit_criminal_case_number(self):
+        synthetic_variations = (
+            ("REPUBLIC OF THE PHILIPPINES\nSANDIGANBAYAN\nSIXTH DIVISION\nCriminal Case No. SB-25-CRM-0001\nDECISION", "SB-25-CRM-0001"),
+            ("REPUBLIC OF THE PHILIPPINES\nSand1ganbayan\nPEOPLE OF THE PHILIPPINES\nCase No.: SB - 25 - CRM - 0002\nDECISION", "SB - 25 - CRM - 0002"),
+            ("REPUBLIC OF THE PHILIPPINES\nSANDIGANBAYAN\nFOURTH DIVISION\nCriminal Case No.\nDECISION", None),
+        )
+        for text, expected in synthetic_variations:
+            with self.subTest(expected=expected):
+                result = self.router.process(text)
+                self.assertEqual(result["document_type"], "sandiganbayan_document")
+                self.assertEqual(result["inventory"]["Case No."], expected)
+                self.assertTrue(all(value is None for field, value in result["inventory"].items() if field != "Case No."))
+                self.assertEqual(result["needs_review"], expected is None)
 
     def test_unknown_and_ambiguous(self):
         self.assertEqual(self.router.classify_document("Name: Someone\nDECISION"), "unknown")
@@ -141,7 +152,7 @@ class NLPTests(unittest.TestCase):
         self.assertTrue(result["needs_review"])
 
     def test_direct_extraction_contracts(self):
-        for inventory in (self.router.extract_intake_form(ENGLISH), self.router.extract_rtc_decision(RTC)):
+        for inventory in (self.router.extract_intake_form(ENGLISH), self.router.extract_rtc_decision(RTC), self.router.extract_sandiganbayan_document(SANDIGANBAYAN)):
             validate_inventory(inventory)
             self.assertEqual(set(inventory), set(INVENTORY_FIELDS))
             for name in CLASSIFICATION_FIELDS:

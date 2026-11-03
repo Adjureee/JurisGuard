@@ -6,7 +6,15 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .extractors import _lines, extract_intake, extract_intake_form, extract_rtc, extract_rtc_decision
+from .extractors import (
+    _lines,
+    extract_intake,
+    extract_intake_form,
+    extract_rtc,
+    extract_rtc_decision,
+    extract_sandiganbayan,
+    extract_sandiganbayan_document,
+)
 from .schema import empty_inventory
 
 
@@ -94,6 +102,11 @@ class DocumentRouter:
             return empty_inventory()
         return extract_rtc_decision(raw_text)
 
+    def extract_sandiganbayan_document(self, raw_text: str) -> dict[str, str | bool | None]:
+        if self._concatenated(raw_text) or self.classify_document(raw_text) != "sandiganbayan_document":
+            return empty_inventory()
+        return extract_sandiganbayan_document(raw_text)
+
     def process(self, raw_text: str) -> dict[str, Any]:
         kind, diagnostics = self._classify(raw_text)
         inventory = empty_inventory()
@@ -111,8 +124,12 @@ class DocumentRouter:
             diagnostics["field_evidence"] = extraction.field_evidence
             diagnostics["warnings"].extend(extraction.warnings)
         elif kind == "sandiganbayan_document":
-            diagnostics["warnings"].append("Sandiganbayan routing is supported; PAO inventory field mapping for this court is not yet approved.")
-            diagnostics["review_question"] = "Review the document and define approved Sandiganbayan inventory mappings before field extraction."
+            extraction = extract_sandiganbayan(raw_text)
+            inventory = extraction.inventory
+            diagnostics["field_evidence"] = extraction.field_evidence
+            diagnostics["warnings"].extend(extraction.warnings)
+            if inventory["Case No."] is None:
+                diagnostics["review_question"] = "Confirm the Sandiganbayan criminal case number from the source image."
         else:
             if diagnostics["out_of_scope_court_signal"]:
                 diagnostics["warnings"].append("Court heading or case number suggests Sandiganbayan; RTC mapping is unsupported and requires review.")
@@ -124,7 +141,7 @@ class DocumentRouter:
             "document_type": kind,
             "inventory": inventory,
             "diagnostics": diagnostics,
-            "needs_review": kind in {"unknown", "ambiguous", "sandiganbayan_document"} or diagnostics["suspected_concatenation"] or bool(diagnostics["warnings"]),
+            "needs_review": kind in {"unknown", "ambiguous"} or diagnostics["suspected_concatenation"] or bool(diagnostics["warnings"]),
         }
 
     def _classify(self, raw_text: str) -> tuple[str, dict[str, Any]]:
