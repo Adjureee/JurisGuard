@@ -57,6 +57,7 @@ interface GeoAnalyticsMapProps {
   selectedBarangay?: string | null;
   onSelectBarangay?: (barangay: string) => void;
   tileLayerUrl?: string;
+  aggregateOnly?: boolean;
 }
 
 const STATUS_STYLE: Record<
@@ -233,6 +234,7 @@ export default function GeoAnalyticsMap({
   selectedBarangay = null,
   onSelectBarangay,
   tileLayerUrl,
+  aggregateOnly = false,
 }: GeoAnalyticsMapProps) {
   const enrichedCases = useMemo(
     () => (cases?.length ? enrichCasesWithCoordinates(cases) : []),
@@ -288,23 +290,25 @@ export default function GeoAnalyticsMap({
 
   return (
     <div className="relative z-0 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E7EB] bg-[#604477] px-4 py-3">
         <div>
-          <p className="text-sm font-semibold text-[#2B3642]">
+          <p className="text-sm font-semibold text-white">
             PAO Case Distribution
           </p>
-          <p className="text-xs text-[#6B7280]">
+          <p className="text-xs text-[#F0EAF4]">
             Local barangay geocoding, no external geocoding API required
           </p>
         </div>
-        <div className="flex gap-2 text-xs font-semibold">
-          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 ring-1 ring-amber-200">
-            Pending
-          </span>
-          <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700 ring-1 ring-red-200">
-            Terminated
-          </span>
-        </div>
+        {!aggregateOnly && (
+          <div className="flex gap-2 text-xs font-semibold">
+            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 ring-1 ring-amber-200">
+              Pending
+            </span>
+            <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700 ring-1 ring-red-200">
+              Terminated
+            </span>
+          </div>
+        )}
       </div>
 
       {!tileLayer && (
@@ -375,18 +379,20 @@ export default function GeoAnalyticsMap({
                       </p>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-[#4B5563]">
-                    Common type:{" "}
-                    <span className="font-semibold">
-                      {barangay.most_common_category}
-                    </span>
-                  </p>
+                  {!aggregateOnly && (
+                    <p className="mt-3 text-xs text-[#4B5563]">
+                      Common type:{" "}
+                      <span className="font-semibold">
+                        {barangay.most_common_category}
+                      </span>
+                    </p>
+                  )}
                 </div>
               </Popup>
             </Marker>
           ))}
 
-          {visiblePoints.slice(0, 250).map((point) => {
+          {!aggregateOnly && visiblePoints.slice(0, 250).map((point) => {
             const style = statusStyle(point.caseStatus);
 
             return (

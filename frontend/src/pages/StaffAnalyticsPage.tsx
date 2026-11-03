@@ -17,60 +17,72 @@ import MainLayout from "../layouts/MainLayout";
 import PageHeader from "../components/PageHeader";
 import {
   AnalyticsPanel,
+  CHART_COLORS,
   EmptyState,
+  getStableCategoryColorMap,
   SkeletonBlock,
 } from "../components/dashboard/AnalyticsPrimitives";
 import ReportExportModal, { type ReportExportRow } from "../components/modals/ReportExportModal";
 import {
-  getHeatmap,
   getStaffWorkload,
-  type HeatmapResponse,
   type StaffWorkload,
 } from "../services/dashboardService";
+import { formatLegalMonth } from "../services/dashboardService";
+import { useDashboardAnalytics } from "./dashboard/useDashboardAnalytics";
 
 const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsMap"));
 
-const COLORS = ["#704389", "#F59E0B", "#15803D", "#DC2626", "#7C3AED"];
+const OCR_STATUS_COLORS: Record<string, string> = {
+  COMPLETED: "#15803D",
+  FAILED: "#DC2626",
+  PROCESSING: "#D9AD65",
+  PENDING: "#729FC5",
+};
 
-function monthKey(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unscheduled";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+function ocrStatusColor(status: string) {
+  return OCR_STATUS_COLORS[status.trim().toUpperCase()] ?? "#64748B";
 }
 
-function weekKey(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unscheduled";
-  const start = new Date(date);
-  start.setDate(date.getDate() - date.getDay());
-  return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+type AnalyticsPreset = "last30" | "last90" | "year";
+
+function analyticsPresetRange(preset: AnalyticsPreset) {
+  const end = new Date();
+  const start = new Date(end);
+  if (preset === "last30") start.setDate(end.getDate() - 29);
+  if (preset === "last90") start.setDate(end.getDate() - 89);
+  if (preset === "year") {
+    start.setMonth(0, 1);
+  }
+  return { dateFrom: start.toISOString().slice(0, 10), dateTo: end.toISOString().slice(0, 10) };
 }
 
-function tally<T extends { label: string }>(rows: T[]) {
-  const counts = new Map<string, number>();
-  rows.forEach((row) => counts.set(row.label, (counts.get(row.label) ?? 0) + 1));
-  return Array.from(counts.entries()).map(([label, total_cases]) => ({ label, total_cases }));
+function formatTrendLabel(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const date = new Date(`${value}T00:00:00`);
+    return Number.isNaN(date.getTime())
+      ? value
+      : date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+  return formatLegalMonth(value);
 }
 
 export default function StaffAnalyticsPage() {
   const [workload, setWorkload] = useState<StaffWorkload | null>(null);
-  const [heatmap, setHeatmap] = useState<HeatmapResponse | null>(null);
   const [selectedBarangay, setSelectedBarangay] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [exportOpen, setExportOpen] = useState(false);
+  const [datePreset, setDatePreset] = useState<AnalyticsPreset>("last30");
+  const [dateRange, setDateRange] = useState(() => analyticsPresetRange("last30"));
+  const { monthlyTrends, intakeLoad, caseCategories, heatmap, terminatedStats, ocrAnalytics, isLoading: trendsLoading } = useDashboardAnalytics({ dateRange, heatmapScope: "office" });
 
   useEffect(() => {
     let cancelled = false;
     async function loadWorkload() {
       setIsLoading(true);
       try {
-        const [workloadData, heatmapData] = await Promise.all([
-          getStaffWorkload(),
-          getHeatmap(),
-        ]);
+        const workloadData = await getStaffWorkload();
         if (!cancelled) {
           setWorkload(workloadData);
-          setHeatmap(heatmapData);
         }
       } catch (error) {
         if (!cancelled) toast.error(error instanceof Error ? error.message : "Unable to load staff analytics");
@@ -84,42 +96,29 @@ export default function StaffAnalyticsPage() {
     };
   }, []);
 
-  const monthlyProductivity = useMemo(() => {
-    const counts = new Map<string, number>();
-    (workload?.recent_cases ?? []).forEach((record) => {
-      const key = monthKey(record.intake_record.form_date || record.last_updated);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    });
-    return Array.from(counts.entries())
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([month, total_cases]) => ({ month, total_cases }));
-  }, [workload]);
+  const monthlyProductivity = useMemo(
+    () => monthlyTrends.map((row) => ({ month: formatTrendLabel(row.month), total_cases: row.total_cases })),
+    [monthlyTrends],
+  );
 
-  const weeklyIntake = useMemo(() => {
-    const counts = new Map<string, number>();
-    (workload?.recent_cases ?? []).forEach((record) => {
-      const key = weekKey(record.intake_record.form_date || record.last_updated);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    });
-    return Array.from(counts.entries())
-      .sort(([left], [right]) => left.localeCompare(right))
-      .slice(-8)
-      .map(([week, total_cases]) => ({ week, total_cases }));
-  }, [workload]);
+  const weeklyIntake = useMemo(
+    () => intakeLoad?.weekly.map((row) => ({ week: row.day, total_cases: row.total_cases })) ?? [],
+    [intakeLoad],
+  );
 
   const caseTypes = useMemo(
     () =>
-      tally(
-        (workload?.recent_cases ?? []).map((record) => ({
-          label: record.cases.cause_of_action || record.intake_record.nature_of_case || "Uncategorized",
-        }))
-      ),
-    [workload]
+      caseCategories.map((row) => ({ label: row.category, total_cases: row.total_cases })),
+    [caseCategories]
+  );
+  const caseTypeColors = useMemo(
+    () => getStableCategoryColorMap(caseTypes.map((row) => row.label)),
+    [caseTypes],
   );
 
   const ocrStatus = useMemo(
-    () => tally((workload?.ocr_recent ?? []).map((row) => ({ label: row.ocr_status || "Unknown" }))),
-    [workload]
+    () => (ocrAnalytics?.status_breakdown ?? []).map((row) => ({ label: row.status, total_cases: row.total_scans })),
+    [ocrAnalytics],
   );
 
   const exportRows = useMemo<ReportExportRow[]>(() => {
@@ -171,40 +170,102 @@ export default function StaffAnalyticsPage() {
         }
       />
 
-      {isLoading ? (
-        <div className="grid gap-6 xl:grid-cols-2">
-          <SkeletonBlock className="h-80" />
-          <SkeletonBlock className="h-80" />
-        </div>
+      {isLoading || trendsLoading ? (
+        <>
+          <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+            <SkeletonBlock className="h-[590px]" />
+            <SkeletonBlock className="h-[590px]" />
+          </div>
+          <div className="mt-6 grid gap-6 xl:grid-cols-2">
+            <SkeletonBlock className="h-80" />
+            <SkeletonBlock className="h-80" />
+          </div>
+        </>
       ) : (
         <>
+          <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+            <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Office-wide barangay markers with aggregate case counts." headerClassName="rounded-t-xl bg-[#604477]">
+              {heatmap && heatmap.barangays.length > 0 ? (
+                <Suspense fallback={<SkeletonBlock className="h-[520px]" />}>
+                  <GeoAnalyticsMap
+                    center={heatmap.center}
+                    points={heatmap.points}
+                    barangays={heatmap.barangays}
+                    selectedBarangay={selectedBarangay}
+                    onSelectBarangay={setSelectedBarangay}
+                    aggregateOnly
+                  />
+                </Suspense>
+              ) : <EmptyState message="No office-wide hotspot data is available yet." />}
+            </AnalyticsPanel>
+
+            <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-full min-h-0" headerClassName="rounded-t-xl bg-[#604477]">
+              <div className="max-h-[520px] min-h-[460px] space-y-3 overflow-y-auto pr-2">
+                {!heatmap || heatmap.barangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : heatmap.barangays.map((barangay, index) => (
+                  <button
+                    key={barangay.barangay}
+                    type="button"
+                    onClick={() => setSelectedBarangay(barangay.barangay)}
+                    aria-pressed={selectedBarangay === barangay.barangay}
+                    className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${selectedBarangay === barangay.barangay ? "border-[#704389] bg-[#F7F0FA]" : "border-[#E5E7EB] bg-[#F9FAFB] hover:bg-[#F8FAFC]"}`}
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#704389] text-sm font-bold text-white">{index + 1}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#2B3642]">{barangay.barangay}</span>
+                    <span className="rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-bold text-[#704389]">{barangay.total_cases}</span>
+                  </button>
+                ))}
+              </div>
+            </AnalyticsPanel>
+          </div>
+
+          <div className="mt-6 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-bold text-[#111827]">Analytics Date Range</p>
+                <p className="mt-1 text-xs font-medium text-[#6B7280]">Personal trends and closure analytics refresh from this range.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {([["last30", "Last 30 Days"], ["last90", "Last 90 Days"], ["year", "This Year"]] as Array<[AnalyticsPreset, string]>).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => { setDatePreset(value); setDateRange(analyticsPresetRange(value)); }}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold ${datePreset === value ? "border-[#704389] bg-[#F7F0FA] text-[#704389]" : "border-[#D1D5DB] bg-white text-[#4B5563] hover:bg-[#F3F4F6]"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-6 xl:grid-cols-2">
-            <AnalyticsPanel title="Monthly Productivity" subtitle="Cases encoded by month from your own workload." headerClassName="rounded-t-xl bg-[#E7D7EE]">
+            <AnalyticsPanel title="Case Intake Trends" subtitle="Case movement from your currently assigned cases." headerClassName="rounded-t-xl bg-[#604477]">
               {monthlyProductivity.length === 0 ? <EmptyState message="No personal case productivity data is available yet." /> : (
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
                     <BarChart data={monthlyProductivity}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
-                      <YAxis allowDecimals={false} stroke="#6B7280" fontSize={12} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                      <XAxis dataKey="month" stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} />
+                      <YAxis allowDecimals={false} stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} />
                       <Tooltip />
-                      <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill="#704389" />
+                      <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill={CHART_COLORS[0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               )}
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Weekly Intake Trend" subtitle="Recent weekly movement for your own intake records." headerClassName="rounded-t-xl bg-[#E7D7EE]">
+            <AnalyticsPanel title="Weekly Volume Distribution" subtitle="Busiest intake days from your currently assigned cases." headerClassName="rounded-t-xl bg-[#604477]">
               {weeklyIntake.length === 0 ? <EmptyState message="No weekly intake records are available yet." /> : (
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
                     <BarChart data={weeklyIntake}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="week" stroke="#6B7280" fontSize={11} />
-                      <YAxis allowDecimals={false} stroke="#6B7280" fontSize={12} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                      <XAxis dataKey="week" stroke="#475569" tick={{ fill: "#475569" }} fontSize={11} />
+                      <YAxis allowDecimals={false} stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} />
                       <Tooltip />
-                      <Bar dataKey="total_cases" name="Intake" radius={[8, 8, 0, 0]} fill="#704389" />
+                      <Bar dataKey="total_cases" name="Intake" radius={[8, 8, 0, 0]} fill={CHART_COLORS[0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -213,13 +274,13 @@ export default function StaffAnalyticsPage() {
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-3">
-            <AnalyticsPanel title="OCR Analytics" subtitle="Your extraction volume by OCR status." headerClassName="rounded-t-xl bg-[#E7D7EE]">
+            <AnalyticsPanel title="OCR Analytics" subtitle="Your extraction volume by OCR status." headerClassName="rounded-t-xl bg-[#604477]">
               {ocrStatus.length === 0 ? <EmptyState message="No personal OCR activity is available yet." /> : (
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
                     <PieChart>
                       <Pie data={ocrStatus} dataKey="total_cases" nameKey="label" innerRadius={54} outerRadius={88} paddingAngle={3}>
-                        {ocrStatus.map((item, index) => <Cell key={item.label} fill={COLORS[index % COLORS.length]} />)}
+                        {ocrStatus.map((item) => <Cell key={item.label} fill={ocrStatusColor(item.label)} />)}
                       </Pie>
                       <Tooltip />
                     </PieChart>
@@ -227,8 +288,7 @@ export default function StaffAnalyticsPage() {
                 </div>
               )}
             </AnalyticsPanel>
-
-            <AnalyticsPanel title="Case Status Distribution" subtitle="Breakdown of your assigned cases." headerClassName="rounded-t-xl bg-[#E7D7EE]">
+            <AnalyticsPanel title="Case Status Distribution" subtitle="Breakdown of your currently assigned cases." headerClassName="rounded-t-xl bg-[#604477]">
               {(workload?.status_breakdown ?? []).length === 0 ? <EmptyState message="No personal status breakdown is available yet." /> : (
                 <div className="space-y-3">
                   {(workload?.status_breakdown ?? []).map((row) => (
@@ -240,89 +300,32 @@ export default function StaffAnalyticsPage() {
                 </div>
               )}
             </AnalyticsPanel>
-
-            <AnalyticsPanel title="Case Type Breakdown" subtitle="Personal case categories only." headerClassName="rounded-t-xl bg-[#E7D7EE]">
-              {caseTypes.length === 0 ? <EmptyState message="No personal case type data is available yet." /> : (
+            <AnalyticsPanel title="Case Type Breakdown" subtitle="Categories from your currently assigned cases." headerClassName="rounded-t-xl bg-[#604477]">
+              {caseTypes.length === 0 ? <EmptyState message="No personal case category data is available yet." /> : (
                 <div className="space-y-3">
-                  {caseTypes.slice(0, 6).map((row, index) => (
+                  {caseTypes.slice(0, 6).map((row) => (
                     <div key={row.label}>
-                      <div className="mb-1 flex justify-between text-sm">
-                        <span className="font-semibold text-[#111827]">{row.label}</span>
-                        <span className="text-[#6B7280]">{row.total_cases}</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-[#E9EEF3]">
-                        <div
-                          className="h-2 rounded-full"
-                          style={{
-                            backgroundColor: COLORS[index % COLORS.length],
-                            width: `${Math.max((row.total_cases / Math.max(...caseTypes.map((item) => item.total_cases), 1)) * 100, 6)}%`,
-                          }}
-                        />
-                      </div>
+                      <div className="mb-1 flex justify-between text-sm"><span className="font-semibold text-[#111827]">{row.label}</span><span className="text-[#475569]">{row.total_cases}</span></div>
+                      <div className="h-2 rounded-full bg-[#E9EEF3]"><div className="h-2 rounded-full" style={{ backgroundColor: caseTypeColors.get(row.label) ?? CHART_COLORS[0], width: `${Math.max((row.total_cases / Math.max(...caseTypes.map((item) => item.total_cases), 1)) * 100, 6)}%` }} /></div>
                     </div>
                   ))}
                 </div>
               )}
             </AnalyticsPanel>
           </div>
-
-          <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <AnalyticsPanel
-              title="Shared Case GIS Map"
-              subtitle="Barangay-centered map for the shared PAO criminal case workspace."
-              headerClassName="rounded-t-xl bg-[#E7D7EE]"
-            >
-              {heatmap && heatmap.points.length > 0 ? (
-                <Suspense fallback={<SkeletonBlock className="h-[28rem]" />}>
-                  <GeoAnalyticsMap
-                    center={heatmap.center}
-                    points={heatmap.points}
-                    barangays={heatmap.barangays}
-                    selectedBarangay={selectedBarangay}
-                    onSelectBarangay={setSelectedBarangay}
-                  />
-                </Suspense>
-              ) : (
-                <EmptyState message="No GIS data is available yet. Encode incident barangay or coordinates in case records to activate the staff map." />
-              )}
-            </AnalyticsPanel>
-
-            <AnalyticsPanel
-              title="Barangay Hotspots"
-              subtitle="Top locations from the current shared case records."
-              headerClassName="rounded-t-xl bg-[#E7D7EE]"
-            >
-              {!heatmap || heatmap.barangays.length === 0 ? (
-                <EmptyState message="No barangay hotspot data is available yet." />
-              ) : (
-                <div className="space-y-3">
-                  {heatmap.barangays.slice(0, 8).map((barangay, index) => (
-                    <button
-                      key={barangay.barangay}
-                      type="button"
-                      onClick={() => setSelectedBarangay(barangay.barangay)}
-                      className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${
-                        selectedBarangay === barangay.barangay
-                          ? "border-[#704389] bg-[#F7F0FA]"
-                          : "border-[#E5E7EB] bg-[#F9FAFB] hover:bg-white"
-                      }`}
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#704389] text-sm font-bold text-white">
-                        {index + 1}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-[#2B3642]">
-                          {barangay.barangay}
-                        </span>
-                        <span className="text-xs text-[#4B5563]">
-                          {barangay.most_common_category}
-                        </span>
-                      </span>
-                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-[#704389]">
-                        {barangay.total_cases}
-                      </span>
-                    </button>
-                  ))}
+          <div className="mt-6 grid gap-6">
+            <AnalyticsPanel title="Terminated Case Analytics" subtitle="Closure distribution for your currently assigned cases." headerClassName="rounded-t-xl bg-[#604477]">
+              {(terminatedStats?.by_reason ?? []).length === 0 ? <EmptyState message="No terminated case data is available in this range." /> : (
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
+                    <BarChart data={terminatedStats?.by_reason ?? []}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                      <XAxis dataKey="reason" stroke="#475569" tick={{ fill: "#475569" }} fontSize={11} />
+                      <YAxis allowDecimals={false} stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} />
+                      <Tooltip />
+                      <Bar dataKey="total_cases" name="Closed cases" radius={[8, 8, 0, 0]} fill="#DC2626" />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               )}
             </AnalyticsPanel>

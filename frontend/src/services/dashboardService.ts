@@ -131,6 +131,7 @@ export interface OcrAnalytics {
   successful_extractions: number;
   failed_scans: number;
   document_types: Array<{ document_type: string; total_scans: number }>;
+  status_breakdown: Array<{ status: string; total_scans: number }>;
   trends: Array<{ month: string; total_scans: number }>;
   recent: Array<{
     document_id: number;
@@ -341,6 +342,11 @@ export async function getBarangayStats() {
 
 export async function getHeatmap() {
   const response = await apiClient.get<HeatmapResponse>("/dashboard/heatmap");
+  return response.data;
+}
+
+export async function getOfficeHotspots() {
+  const response = await apiClient.get<HeatmapResponse>("/dashboard/office-hotspots");
   return response.data;
 }
 

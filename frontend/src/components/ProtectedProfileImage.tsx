@@ -10,6 +10,7 @@ type Props = {
 
 export default function ProtectedProfileImage({ path, alt = "", className, fallback = null }: Props) {
   const [loaded, setLoaded] = useState<{ path: string; url: string } | null>(null);
+  const [failedPath, setFailedPath] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,5 +30,7 @@ export default function ProtectedProfileImage({ path, alt = "", className, fallb
     };
   }, [path]);
 
-  return loaded && loaded.path === path ? <img src={loaded.url} alt={alt} className={className} /> : <>{fallback}</>;
+  return loaded && loaded.path === path && failedPath !== path
+    ? <img src={loaded.url} alt={alt} className={className} onError={() => setFailedPath(path ?? null)} />
+    : <>{fallback}</>;
 }

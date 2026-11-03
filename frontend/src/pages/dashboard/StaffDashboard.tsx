@@ -15,6 +15,7 @@ import MainLayout from "../../layouts/MainLayout";
 import { EmptyState, SkeletonBlock } from "../../components/dashboard/AnalyticsPrimitives";
 import DashboardGreeting from "../../components/dashboard/DashboardGreeting";
 import IntelligenceBrief from "../../components/dashboard/IntelligenceBrief";
+import OfficePersonnelOverview from "../../components/dashboard/OfficePersonnelOverview";
 import CalendarReminders from "../../features/dashboardReminders/CalendarReminders";
 import { StatusBadge } from "../../features/criminalCases/components/StatusBadge";
 import { useAuth } from "../../contexts/AuthContext";
@@ -146,12 +147,15 @@ export default function StaffDashboard() {
       )}
 
       <CalendarReminders />
-      <IntelligenceBrief />
+      <div className="mt-6 grid items-stretch gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
+        <OfficePersonnelOverview />
+        <IntelligenceBrief compact />
+      </div>
 
       <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,0.38fr)_minmax(0,0.62fr)]">
         <section className="min-w-0 rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-            <h2 className="text-xl font-bold text-[#111827]">Quick Actions</h2>
+          <div className="border-b border-[#E5E7EB] bg-[#604477] px-5 py-4">
+            <h2 className="text-xl font-bold text-white">Quick Actions</h2>
           </div>
           <div className="grid gap-3 p-5">
             <ActionCard to="/cases" label="Add Client" description="Create a client intake record." icon={<UserPlus className="h-5 w-5" />} />
@@ -161,8 +165,8 @@ export default function StaffDashboard() {
         </section>
 
         <section className="min-w-0 rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-            <h2 className="text-xl font-bold text-[#111827]">My Recent Assigned Cases</h2>
+          <div className="border-b border-[#E5E7EB] bg-[#604477] px-5 py-4">
+            <h2 className="text-xl font-bold text-white">My Recent Assigned Cases</h2>
           </div>
           <div className="max-h-[360px] max-w-full overflow-auto">
             {recentCases.length === 0 ? (
@@ -198,8 +202,8 @@ export default function StaffDashboard() {
       </div>
 
       <section className="mt-6 min-w-0 rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-        <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <h2 className="text-xl font-bold text-[#111827]">Recent Clients</h2>
+        <div className="border-b border-[#E5E7EB] bg-[#604477] px-5 py-4">
+          <h2 className="text-xl font-bold text-white">Recent Clients</h2>
         </div>
         <div className="grid max-h-[290px] gap-3 overflow-y-auto p-5 sm:grid-cols-2 xl:grid-cols-3">
           {recentClients.length === 0 ? (

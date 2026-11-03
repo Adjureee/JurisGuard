@@ -18,6 +18,7 @@ import MainLayout from "../../layouts/MainLayout";
 import { EmptyState, SkeletonBlock, initials } from "../../components/dashboard/AnalyticsPrimitives";
 import DashboardGreeting from "../../components/dashboard/DashboardGreeting";
 import IntelligenceBrief from "../../components/dashboard/IntelligenceBrief";
+import OfficePersonnelOverview from "../../components/dashboard/OfficePersonnelOverview";
 import CalendarReminders from "../../features/dashboardReminders/CalendarReminders";
 import ProtectedProfileImage from "../../components/ProtectedProfileImage";
 import { listCaseSubmissions, type CaseSubmission } from "../../services/caseSubmissionService";
@@ -155,11 +156,15 @@ export default function AdminDashboard() {
       )}
 
       <CalendarReminders />
-      <IntelligenceBrief />
+
+      <div className="mt-6 grid items-stretch gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
+        <OfficePersonnelOverview />
+        <IntelligenceBrief compact />
+      </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-[0.42fr_0.58fr]">
         <section className="rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-            <h2 className="text-xl font-bold text-[#111827]">Recent Case Updates</h2>
+          <div className="border-b border-[#E5E7EB] bg-[#604477] px-5 py-4">
+            <h2 className="text-xl font-bold text-white">Recent Case Updates</h2>
           </div>
           <div className="max-h-[330px] overflow-y-auto p-5">
             {recentCaseUpdates.length === 0 ? (
@@ -199,8 +204,8 @@ export default function AdminDashboard() {
         </section>
 
         <section className="rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-            <h2 className="text-xl font-bold text-[#111827]">Recent Staff Submissions</h2>
+          <div className="border-b border-[#E5E7EB] bg-[#604477] px-5 py-4">
+            <h2 className="text-xl font-bold text-white">Recent Staff Submissions</h2>
           </div>
           <div className="max-h-[330px] overflow-auto">
             {recentSubmissions.length === 0 ? (

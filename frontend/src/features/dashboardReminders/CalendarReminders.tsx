@@ -565,9 +565,9 @@ export default function CalendarReminders() {
     <section className="mt-6 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white">
       <div className="grid min-w-0 lg:grid-cols-[minmax(270px,0.34fr)_minmax(0,0.66fr)]">
         <section className="flex min-h-[600px] min-w-0 flex-col border-b border-[#E5E7EB] lg:border-b-0 lg:border-r">
-          <header className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] px-5 py-4">
-            <div><h2 className="text-lg font-bold text-[#2B3642]">Upcoming Events</h2><p className="mt-0.5 text-sm text-[#6B7280]">Don't miss your schedule</p></div>
-            <button type="button" onClick={openCreate} title="Add reminder" aria-label="Add reminder" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#704389] text-white hover:bg-[#5F3675]"><Plus className="h-4 w-4" /></button>
+          <header className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] bg-[#604477] px-5 py-4">
+            <div><h2 className="text-lg font-bold text-white">Upcoming Events</h2><p className="mt-0.5 text-sm text-[#F0EAF4]">Don't miss your schedule</p></div>
+            <button type="button" onClick={openCreate} title="Add reminder" aria-label="Add reminder" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/10 text-white hover:bg-white/20"><Plus className="h-4 w-4" /></button>
           </header>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
             {filterDate && <div className="flex items-center justify-between text-xs text-[#6B7280]"><span>Showing {formatDate(parseDate(filterDate))}</span><button type="button" onClick={() => setFilterDate(null)} className="font-semibold text-[#704389]">All upcoming</button></div>}

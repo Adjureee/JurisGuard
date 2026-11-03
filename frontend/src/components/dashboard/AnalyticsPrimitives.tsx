@@ -3,6 +3,60 @@ import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import ErrorBoundary from "../ErrorBoundary";
 
+export const CHART_COLORS = [
+  "#66AFA5",
+  "#729FC5",
+  "#D8897D",
+  "#D9AD65",
+  "#8EAD88",
+  "#A18AB9",
+] as const;
+
+const EXTENDED_CHART_COLORS = [
+  "#7B8FA3",
+  "#B67F79",
+  "#91A17B",
+  "#8979A2",
+  "#C29558",
+  "#5C9E92",
+];
+const categoryColorAssignments = new Map<string, string>();
+
+function normalizeCategoryLabel(label: string) {
+  return label.trim().toLocaleLowerCase("en");
+}
+
+export function getStableCategoryColorMap(labels: readonly string[]) {
+  const palette = [...CHART_COLORS, ...EXTENDED_CHART_COLORS];
+  const unassigned = [...new Set(labels.map(normalizeCategoryLabel))]
+    .filter((label) => label && !categoryColorAssignments.has(label));
+
+  for (const [label, color] of [["criminal", CHART_COLORS[0]], ["civil", CHART_COLORS[1]] ] as const) {
+    if (unassigned.includes(label)) categoryColorAssignments.set(label, color);
+  }
+
+  for (const label of unassigned.filter((item) => !categoryColorAssignments.has(item)).sort((left, right) => left.localeCompare(right, "en"))) {
+    const usedColors = new Set(categoryColorAssignments.values());
+    const availableColor = palette.find((color) => !usedColors.has(color));
+    if (availableColor) {
+      categoryColorAssignments.set(label, availableColor);
+      continue;
+    }
+
+    let hash = 2166136261;
+    for (const character of label) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+    let hue = (hash >>> 0) % 360;
+    let color = `hsl(${hue} 30% 58%)`;
+    while (usedColors.has(color)) {
+      hue = (hue + 137) % 360;
+      color = `hsl(${hue} 30% 58%)`;
+    }
+    categoryColorAssignments.set(label, color);
+  }
+
+  return new Map(labels.map((label) => [label, categoryColorAssignments.get(normalizeCategoryLabel(label)) ?? CHART_COLORS[0]]));
+}
+
 export function AnalyticsPanel({
   title,
   subtitle,
@@ -20,9 +74,9 @@ export function AnalyticsPanel({
     <section
       className={`flex flex-col rounded-xl border border-[#E5E7EB] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] ${className}`}
     >
-      <div className={`border-b border-[#E5E7EB] px-5 py-4 ${headerClassName}`}>
-        <h3 className="text-base font-bold text-[#2B3642]">{title}</h3>
-        {subtitle && <p className="mt-1 text-sm font-medium leading-6 text-[#4B5563]">{subtitle}</p>}
+      <div className={`border-b border-[#E5E7EB] bg-[#604477] px-5 py-4 ${headerClassName}`}>
+        <h3 className="text-base font-bold text-white">{title}</h3>
+        {subtitle && <p className="mt-1 text-sm font-medium leading-6 text-[#F0EAF4]">{subtitle}</p>}
       </div>
       <div className="min-h-0 flex-1 p-5">
         <ErrorBoundary fallback={<EmptyState message="This dashboard widget could not render. Other widgets remain available." />}>

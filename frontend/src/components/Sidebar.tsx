@@ -123,7 +123,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
       <aside className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-[#E5E7EB] bg-white px-5 py-5 text-[#111827] transition duration-200 md:translate-x-0 ${
         isOpen ? "translate-x-0" : "-translate-x-full"
       }`}>
-      <div className="mb-7 flex justify-center">
+      <div className="mb-4 flex justify-center">
         <img
           src={logo1}
           alt="JurisGuard logo"

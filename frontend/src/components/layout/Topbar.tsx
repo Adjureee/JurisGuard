@@ -339,8 +339,13 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                 setNotificationsOpen((current) => !current);
                 setProfileOpen(false);
               }}
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#E5E7EB] bg-white text-[#2B3642] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
+              className={`relative inline-flex h-10 w-10 items-center justify-center rounded-md border transition duration-200 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#704389] focus-visible:ring-offset-2 active:bg-[#704389] active:text-white ${
+                notificationsOpen
+                  ? "border-[#704389] bg-[#704389] text-white hover:bg-[#604477]"
+                  : "border-[#E5E7EB] bg-white text-[#2B3642] hover:bg-[#F8FAFC]"
+              }`}
               aria-label="Open notifications"
+              aria-expanded={notificationsOpen}
             >
               <BellIcon />
               {unreadCount > 0 && (

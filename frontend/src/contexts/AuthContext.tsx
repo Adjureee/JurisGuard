@@ -11,6 +11,7 @@ import { TOKEN_STORAGE_KEY } from "../api/client";
 import { useAuditLogStore } from "../features/auditLogs/auditLogStore";
 import { useCriminalCasesStore } from "../features/criminalCases/criminalCasesStore";
 import * as authService from "../services/authService";
+import { sendPresenceHeartbeat } from "../services/presenceService";
 import type { AuthUser, LoginPayload, RegisterPayload, RegisterResponse } from "../types/auth";
 
 interface AuthContextValue {
@@ -96,6 +97,39 @@ export function AuthProvider({ children }: AuthProviderProps) {
     window.addEventListener("jurisguard:unauthorized", handleUnauthorized);
     return () => window.removeEventListener("jurisguard:unauthorized", handleUnauthorized);
   }, [logout]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    let interactionPending = true;
+    const markInteraction = () => { interactionPending = true; };
+    const sendHeartbeat = () => {
+      const interacting = interactionPending && document.visibilityState === "visible";
+      interactionPending = false;
+      void sendPresenceHeartbeat(interacting).catch(() => undefined);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") interactionPending = true;
+      sendHeartbeat();
+    };
+
+    window.addEventListener("pointerdown", markInteraction, { passive: true });
+    window.addEventListener("keydown", markInteraction);
+    window.addEventListener("touchstart", markInteraction, { passive: true });
+    window.addEventListener("scroll", markInteraction, { passive: true });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    sendHeartbeat();
+    const timer = window.setInterval(sendHeartbeat, 30_000);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("pointerdown", markInteraction);
+      window.removeEventListener("keydown", markInteraction);
+      window.removeEventListener("touchstart", markInteraction);
+      window.removeEventListener("scroll", markInteraction);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [token]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

@@ -25,7 +25,9 @@ import {
 import ErrorBoundary from "../components/ErrorBoundary";
 import {
   AnalyticsPanel,
+  CHART_COLORS,
   EmptyState,
+  getStableCategoryColorMap,
   SkeletonBlock,
 } from "../components/dashboard/AnalyticsPrimitives";
 import ReportExportModal, { type ReportExportRow } from "../components/modals/ReportExportModal";
@@ -36,7 +38,6 @@ import { useDashboardAnalytics } from "./dashboard/useDashboardAnalytics";
 
 const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsMap"));
 
-const COLORS = ["#704389", "#9F5AA6", "#F59E0B", "#DC2626", "#7C3AED", "#0F766E"];
 type DatePreset = "last7" | "last30" | "month" | "year" | "custom";
 
 const datePresetLabels: Record<Exclude<DatePreset, "custom">, string> = {
@@ -60,6 +61,20 @@ function formatExportDate(value: string) {
         day: "numeric",
         year: "numeric",
       });
+}
+
+function formatIntakeTrendDate(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const date = new Date(`${value}T00:00:00`);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+  }
+  return formatLegalMonth(value);
 }
 
 function coveragePeriodLabel(
@@ -97,7 +112,7 @@ function ChartTooltip({
     <div className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm shadow-xl ">
       <p className="font-semibold text-[#2B3642]">{label}</p>
       {payload.map((item) => (
-        <p key={item.name ?? "value"} className="text-[#4B5563]">
+        <p key={item.name ?? "value"} className="text-[#475569]">
           {item.name ?? "Cases"}: <span className="font-semibold">{item.value}</span>
         </p>
       ))}
@@ -330,7 +345,7 @@ export default function AnalyticsPage() {
 
   const intakeTotal = useMemo(() => monthlyTrends.reduce((sum, row) => sum + row.total_cases, 0), [monthlyTrends]);
   const displayMonthlyTrends = useMemo(
-    () => monthlyTrends.map((row) => ({ ...row, month: formatLegalMonth(row.month) })),
+    () => monthlyTrends.map((row) => ({ ...row, month: formatIntakeTrendDate(row.month) })),
     [monthlyTrends]
   );
   const displayTerminatedMonthly = useMemo(
@@ -345,18 +360,22 @@ export default function AnalyticsPage() {
   const averageDailyIntake = intakeLoad?.average_daily_intake ?? 0;
   const topBarangays = useMemo(() => barangays, [barangays]);
   const categoryPie = useMemo(() => caseCategories.slice(0, 7), [caseCategories]);
+  const categoryColors = useMemo(
+    () => getStableCategoryColorMap(caseCategories.map((row) => row.category)),
+    [caseCategories],
+  );
   const categoryTotal = caseCategories.reduce((sum, row) => sum + row.total_cases, 0);
   const categoryLegendItems = useMemo(
     () =>
-      categoryPie.map((row, index) => ({
+      categoryPie.map((row) => ({
         label: row.category,
         value: row.total_cases,
         percentage: categoryTotal
           ? Math.round((row.total_cases / categoryTotal) * 100)
           : 0,
-        color: COLORS[index % COLORS.length],
+        color: categoryColors.get(row.category) ?? CHART_COLORS[0],
       })),
-    [categoryPie, categoryTotal],
+    [categoryPie, categoryTotal, categoryColors],
   );
   const hourlyRows = useMemo(
     () => (intakeLoad?.hourly ?? []).filter((row) => Number.isFinite(row.total_cases) && row.total_cases > 0),
@@ -525,13 +544,13 @@ export default function AnalyticsPage() {
         <>
           <div className="grid items-start gap-6 xl:grid-cols-[1.35fr_0.65fr]">
             <div ref={hotspotPanelRef}>
-              <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay." headerClassName="rounded-t-xl bg-[#E7D7EE]">
+              <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Barangay-centered markers with case density and heatmap overlay." headerClassName="rounded-t-xl bg-[#604477]">
                 <div className="mb-4 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setSelectedBarangay(null)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === null ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
+                  <button type="button" onClick={() => setSelectedBarangay(null)} aria-pressed={selectedBarangay === null} className={`rounded-full px-3 py-1.5 text-xs font-semibold transition active:bg-[#704389] active:text-white ${selectedBarangay === null ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
                     All Barangays
                   </button>
                   {topBarangays.slice(0, 8).map((barangay) => (
-                    <button type="button" key={barangay.barangay} onClick={() => setSelectedBarangay(barangay.barangay)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selectedBarangay === barangay.barangay ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
+                    <button type="button" key={barangay.barangay} onClick={() => setSelectedBarangay(barangay.barangay)} aria-pressed={selectedBarangay === barangay.barangay} className={`rounded-full px-3 py-1.5 text-xs font-semibold transition active:bg-[#704389] active:text-white ${selectedBarangay === barangay.barangay ? "bg-[#704389] text-white" : "border border-[#E5E7EB] text-[#4B5563]"}`}>
                       {barangay.barangay}
                     </button>
                   ))}
@@ -549,7 +568,7 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="min-h-0" style={hotspotPanelHeight ? { height: `${hotspotPanelHeight}px` } : undefined}>
-              <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-full min-h-0" headerClassName="rounded-t-xl bg-[#E7D7EE]">
+              <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-full min-h-0" headerClassName="rounded-t-xl bg-[#604477]">
                 <div className="h-full min-h-0 space-y-3 overflow-y-auto pr-2">
                   {topBarangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : topBarangays.map((barangay, index) => (
                     <button key={barangay.barangay} type="button" onClick={() => setSelectedBarangay(barangay.barangay)} className="flex w-full items-center gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3 text-left hover:bg-[#F8FAFC]">
@@ -624,7 +643,7 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-2">
-            <AnalyticsPanel title="Case Intake Trends" subtitle="Case and client movement for the selected date range." headerClassName="rounded-t-xl bg-[#E7D7EE]">
+            <AnalyticsPanel title="Case Intake Trends" subtitle="Case and client movement for the selected date range." headerClassName="rounded-t-xl bg-[#604477]">
               <div className="mb-4 flex justify-end">
                 <ChartDownloadButton
                   label="Download PNG"
@@ -660,16 +679,16 @@ export default function AnalyticsPage() {
                 {displayMonthlyTrends.length === 0 ? <EmptyState message="No intake records match the selected date range." /> : (
                   <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
                     <LineChart data={displayMonthlyTrends}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="month" stroke="#6B7280" fontSize={12}>
-                        <Label value="Month" offset={-4} position="insideBottom" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                      <XAxis dataKey="month" stroke="#475569" tick={{ fill: "#475569" }} fontSize={12}>
+                        <Label value="Month" offset={-4} position="insideBottom" fill="#475569" />
                       </XAxis>
-                      <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false}>
-                        <Label value="Number of Cases" angle={-90} position="insideLeft" />
+                      <YAxis stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} allowDecimals={false}>
+                        <Label value="Number of Cases" angle={-90} position="insideLeft" fill="#475569" />
                       </YAxis>
                       <Tooltip content={<ChartTooltip />} />
-                      <Line type="monotone" dataKey="total_cases" name="Cases" stroke="#704389" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 7 }}>
-                        <LabelList dataKey="total_cases" position="top" fill="#4B5563" fontSize={10} />
+                      <Line type="monotone" dataKey="total_cases" name="Cases" stroke={CHART_COLORS[0]} strokeWidth={3} dot={{ r: 4, fill: CHART_COLORS[0], stroke: CHART_COLORS[0] }} activeDot={{ r: 7, fill: CHART_COLORS[0], stroke: CHART_COLORS[0] }}>
+                        <LabelList dataKey="total_cases" position="top" fill="#475569" fontSize={10} />
                       </Line>
                     </LineChart>
                   </ResponsiveContainer>
@@ -677,7 +696,7 @@ export default function AnalyticsPage() {
               </div>
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Weekly Volume Distribution" subtitle="Busiest intake days from encoded form dates." headerClassName="rounded-t-xl bg-[#E7D7EE]">
+            <AnalyticsPanel title="Weekly Volume Distribution" subtitle="Busiest intake days from encoded form dates." headerClassName="rounded-t-xl bg-[#604477]">
               <div className="mb-4 flex justify-end">
                 <ChartDownloadButton
                   label="Download PNG"
@@ -712,16 +731,16 @@ export default function AnalyticsPage() {
               <div ref={weeklyChartRef} className="h-80">
                 <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
                   <BarChart data={intakeLoad?.weekly ?? []}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="day" stroke="#6B7280" fontSize={11}>
-                        <Label value="Day of Week" offset={-4} position="insideBottom" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                      <XAxis dataKey="day" stroke="#475569" tick={{ fill: "#475569" }} fontSize={11}>
+                        <Label value="Day of Week" offset={-4} position="insideBottom" fill="#475569" />
                       </XAxis>
-                      <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false}>
-                        <Label value="Recorded Cases" angle={-90} position="insideLeft" />
+                      <YAxis stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} allowDecimals={false}>
+                        <Label value="Recorded Cases" angle={-90} position="insideLeft" fill="#475569" />
                       </YAxis>
                       <Tooltip content={<ChartTooltip />} />
-                      <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill="#704389">
-                        <LabelList dataKey="total_cases" position="top" fill="#4B5563" fontSize={10} />
+                      <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill={CHART_COLORS[0]}>
+                        <LabelList dataKey="total_cases" position="top" fill="#475569" fontSize={10} />
                       </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -730,7 +749,7 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-            <AnalyticsPanel title="Hourly Intake Heat Analytics" subtitle="Actual encoded intake hours only." headerClassName="rounded-t-xl bg-[#E7D7EE]">
+            <AnalyticsPanel title="Hourly Intake Heat Analytics" subtitle="Actual encoded intake hours only." headerClassName="rounded-t-xl bg-[#604477]">
               <div className="mb-4 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-[#FEF3C7] bg-[#FFFBEB] p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-[#92400E]">Peak Intake Window</p>
@@ -751,9 +770,9 @@ export default function AnalyticsPage() {
                     <div key={item.hour} className="grid grid-cols-[64px_1fr_42px] items-center gap-3 text-sm">
                       <span className="font-semibold text-[#4B5563]">{item.hour}</span>
                       <div className="h-3 overflow-hidden rounded-full bg-[#E5E7EB]">
-                        <div className="h-full rounded-full bg-[#F59E0B]" style={{ width: `${Math.max((item.total_cases / max) * 100, 8)}%` }} />
+                        <div className="h-full rounded-full" style={{ width: `${Math.max((item.total_cases / max) * 100, 8)}%`, backgroundColor: CHART_COLORS[0] }} />
                       </div>
-                      <span className="text-right font-bold text-[#2B3642]">{item.total_cases}</span>
+                      <span className="text-right font-bold text-[#475569]">{item.total_cases}</span>
                     </div>
                   );
                   })}
@@ -761,7 +780,7 @@ export default function AnalyticsPage() {
               )}
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Legal Service Demand" subtitle="Most common encoded case types." headerClassName="rounded-t-xl bg-[#E7D7EE]">
+            <AnalyticsPanel title="Legal Service Demand" subtitle="Most common encoded case types." headerClassName="rounded-t-xl bg-[#604477]">
               <div className="mb-4 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-[#E7D7EE] bg-[#F7F0FA] p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">Leading Demand</p>
@@ -773,14 +792,14 @@ export default function AnalyticsPage() {
                 </div>
               </div>
               <div className="space-y-3">
-                {caseCategories.length === 0 ? <EmptyState message="No case category data is available yet." /> : caseCategories.slice(0, 6).map((item, index) => (
+                {caseCategories.length === 0 ? <EmptyState message="No case category data is available yet." /> : caseCategories.slice(0, 6).map((item) => (
                   <div key={item.category}>
                     <div className="mb-1 flex justify-between text-sm">
                       <span className="font-semibold text-[#2B3642]">{item.category}</span>
-                      <span className="text-[#4B5563]">{item.total_cases}</span>
+                      <span className="text-[#475569]">{item.total_cases}</span>
                     </div>
                     <div className="h-2 rounded-full bg-[#E5E7EB]">
-                      <div className="h-2 rounded-full" style={{ width: `${Math.max((item.total_cases / Math.max(...caseCategories.map((row) => row.total_cases), 1)) * 100, 4)}%`, backgroundColor: COLORS[index % COLORS.length] }} />
+                      <div className="h-2 rounded-full" style={{ width: `${Math.max((item.total_cases / Math.max(...caseCategories.map((row) => row.total_cases), 1)) * 100, 4)}%`, backgroundColor: categoryColors.get(item.category) ?? CHART_COLORS[0] }} />
                     </div>
                   </div>
                 ))}
@@ -789,7 +808,7 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-3">
-            <AnalyticsPanel title="Case Category Analytics" subtitle="Common criminal case categories and distribution." headerClassName="rounded-t-xl bg-[#E7D7EE]">
+            <AnalyticsPanel title="Case Category Analytics" subtitle="Common criminal case categories and distribution." headerClassName="rounded-t-xl bg-[#604477]">
               <div className="mb-4 flex justify-end">
                 <ChartDownloadButton
                   label="Download PNG"
@@ -817,7 +836,7 @@ export default function AnalyticsPage() {
                   <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
                     <PieChart>
                       <Pie data={categoryPie} dataKey="total_cases" nameKey="category" innerRadius={58} outerRadius={96} paddingAngle={3}>
-                        {categoryPie.map((entry, index) => <Cell key={entry.category} fill={COLORS[index % COLORS.length]} />)}
+                        {categoryPie.map((entry) => <Cell key={entry.category} fill={categoryColors.get(entry.category) ?? CHART_COLORS[0]} />)}
                       </Pie>
                       <Tooltip content={<ChartTooltip />} />
                     </PieChart>
@@ -836,7 +855,7 @@ export default function AnalyticsPage() {
               </div>
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Terminated Case Analytics" subtitle="Closure volume, archive movement, and reason patterns." className="border-[#FECACA] xl:col-span-2" headerClassName="rounded-t-xl bg-[#E7D7EE]">
+            <AnalyticsPanel title="Terminated Case Analytics" subtitle="Closure volume, archive movement, and reason patterns." className="border-[#FECACA] xl:col-span-2" headerClassName="rounded-t-xl bg-[#604477]">
               <div className="mb-4 flex justify-end">
                 <ChartDownloadButton
                   label="Download PNG"
@@ -884,16 +903,16 @@ export default function AnalyticsPage() {
                             <stop offset="95%" stopColor="#DC2626" stopOpacity={0} />
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#FECACA" />
-                        <XAxis dataKey="month" stroke="#6B7280" fontSize={11}>
-                          <Label value="Month" offset={-4} position="insideBottom" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                        <XAxis dataKey="month" stroke="#475569" tick={{ fill: "#475569" }} fontSize={11}>
+                          <Label value="Month" offset={-4} position="insideBottom" fill="#475569" />
                         </XAxis>
-                        <YAxis allowDecimals={false} stroke="#6B7280" fontSize={12}>
-                          <Label value="Terminated Cases" angle={-90} position="insideLeft" />
+                        <YAxis allowDecimals={false} stroke="#475569" tick={{ fill: "#475569" }} fontSize={12}>
+                          <Label value="Terminated Cases" angle={-90} position="insideLeft" fill="#475569" />
                         </YAxis>
                         <Tooltip content={<ChartTooltip />} />
                         <Area type="monotone" dataKey="total_cases" name="Terminated" stroke="#DC2626" strokeWidth={2.5} fill="url(#terminatedGradient)">
-                          <LabelList dataKey="total_cases" position="top" fill="#991B1B" fontSize={10} />
+                          <LabelList dataKey="total_cases" position="top" fill="#475569" fontSize={10} />
                         </Area>
                       </AreaChart>
                     </ResponsiveContainer>

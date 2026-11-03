@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -38,6 +38,8 @@ from reminder_permissions import (
     can_manage_shared_reminders as role_can_manage_shared_reminders,
 )
 from reminder_status import PHILIPPINE_TIMEZONE, calculate_reminder_status, can_complete_reminder
+from presence_status import calculate_presence_status, personnel_designation
+from messaging_permissions import can_message_designations, normalize_message_content
 
 
 models.Base.metadata.create_all(bind=engine)
@@ -61,6 +63,15 @@ app.add_middleware(
 
 SECRET_KEY = os.getenv("SECRET_KEY", "jurisguard-dev-secret-change-me")
 TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "720"))
+PRESENCE_HEARTBEAT_INTERVAL_SECONDS = max(10, int(os.getenv("PRESENCE_HEARTBEAT_INTERVAL_SECONDS", "30")))
+PRESENCE_HEARTBEAT_STALE_SECONDS = max(
+    PRESENCE_HEARTBEAT_INTERVAL_SECONDS * 3,
+    int(os.getenv("PRESENCE_HEARTBEAT_STALE_SECONDS", "120")),
+)
+PRESENCE_AWAY_SECONDS = max(
+    PRESENCE_HEARTBEAT_STALE_SECONDS,
+    int(os.getenv("PRESENCE_AWAY_SECONDS", "300")),
+)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
@@ -151,6 +162,14 @@ class MfaSetupResponse(BaseModel):
 
 class MfaVerifyPayload(BaseModel):
     code: str
+
+
+class PresenceHeartbeatPayload(BaseModel):
+    interacting: bool = False
+
+
+class PrivateMessagePayload(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
 
 
 class ApprovalUpdatePayload(BaseModel):
@@ -816,6 +835,35 @@ def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
     if not user or not user.is_active or user.approval_status != "approved":
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     return user
+
+
+@app.post("/api/presence/heartbeat")
+def update_presence_heartbeat(
+    payload: PresenceHeartbeatPayload,
+    token: str = Depends(oauth2_scheme),
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    token_expiry = int(json.loads(b64url_decode(token.split(".", 1)[0]))["exp"])
+    presence = db.get(models.UserPresence, token_hash)
+    if presence is None:
+        presence = models.UserPresence(
+            token_hash=token_hash,
+            user_id=user.user_id,
+            last_seen_at=now,
+            last_interaction_at=now if payload.interacting else None,
+            expires_at=datetime.fromtimestamp(token_expiry, timezone.utc).replace(tzinfo=None),
+        )
+        db.add(presence)
+    else:
+        presence.last_seen_at = now
+        presence.expires_at = datetime.fromtimestamp(token_expiry, timezone.utc).replace(tzinfo=None)
+        if payload.interacting:
+            presence.last_interaction_at = now
+    db.commit()
+    return {"accepted": True}
 
 
 def admin_user(user: models.User = Depends(current_user)) -> models.User:
@@ -2067,6 +2115,12 @@ def dashboard_overview(
     }
 
 
+def ensure_staff_analytics_access(user: models.User) -> None:
+    role_name = (user.role.role_name or "").strip().lower() if user.role else ""
+    if is_admin(user) or role_name not in {"staff", "attorney", "legal_staff", "legal staff", "user"}:
+        raise HTTPException(status_code=403, detail="Staff analytics are not available for this role")
+
+
 @app.get("/api/dashboard/intelligence-brief")
 def dashboard_intelligence_brief(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     role_name = (user.role.role_name or "").strip().lower() if user.role else ""
@@ -2255,6 +2309,26 @@ def dashboard_heatmap(user: models.User = Depends(current_user), db: Session = D
     return {"center": PANABO_CENTER, "points": points, "barangays": build_barangay_stats(records)}
 
 
+@app.get("/api/dashboard/office-hotspots")
+def dashboard_office_hotspots(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    ensure_staff_analytics_access(user)
+    records = db.query(models.Case).outerjoin(models.IntakeRecord).all()
+    barangays = [
+        {
+            "barangay": row["barangay"],
+            "city": row["city"],
+            "total_cases": row["total_cases"],
+            "active_cases": row["active_cases"],
+            "terminated_cases": row["terminated_cases"],
+            "latitude": row["latitude"],
+            "longitude": row["longitude"],
+        }
+        for row in build_barangay_stats(records)
+        if row["latitude"] is not None and row["longitude"] is not None
+    ]
+    return {"center": PANABO_CENTER, "points": [], "barangays": barangays}
+
+
 @app.get("/api/dashboard/terminated-cases")
 def dashboard_terminated_cases(
     user: models.User = Depends(current_user),
@@ -2380,10 +2454,13 @@ def dashboard_ocr_analytics(user: models.User = Depends(current_user), db: Sessi
     successful = len([row for row in rows if row.ocr_status == "COMPLETED"])
     failed = len([row for row in rows if row.ocr_status == "FAILED"])
     type_counts: dict[str, int] = {}
+    status_counts: dict[str, int] = {}
     trend_counts: dict[str, int] = {}
     for row in rows:
         doc_type = row.document_type or "Unknown"
         type_counts[doc_type] = type_counts.get(doc_type, 0) + 1
+        status = row.ocr_status or "Unknown"
+        status_counts[status] = status_counts.get(status, 0) + 1
         month = row.uploaded_at.strftime("%Y-%m") if row.uploaded_at else "Unscheduled"
         trend_counts[month] = trend_counts.get(month, 0) + 1
     return {
@@ -2393,6 +2470,10 @@ def dashboard_ocr_analytics(user: models.User = Depends(current_user), db: Sessi
         "document_types": [
             {"document_type": key, "total_scans": value}
             for key, value in sorted(type_counts.items(), key=lambda item: item[1], reverse=True)
+        ],
+        "status_breakdown": [
+            {"status": key, "total_scans": value}
+            for key, value in sorted(status_counts.items(), key=lambda item: item[1], reverse=True)
         ],
         "trends": [
             {"month": key, "total_scans": value}
@@ -2596,11 +2677,13 @@ def logout_access_token(
     # Store only the token digest, not a reusable bearer credential.
     payload_segment = token.split(".", 1)[0]
     expiry = int(json.loads(b64url_decode(payload_segment))["exp"])
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     db.add(models.RevokedAccessToken(
-        token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+        token_hash=token_hash,
         user_id=user.user_id,
         expires_at=datetime.fromtimestamp(expiry, timezone.utc).replace(tzinfo=None),
     ))
+    db.query(models.UserPresence).filter(models.UserPresence.token_hash == token_hash).delete()
     write_audit(db, user.user_id, "Logout", "user", "Session revoked", str(user.user_id), request)
     db.commit()
     return {"message": "Signed out"}
@@ -2662,7 +2745,19 @@ def get_profile_image(
     owner = db.query(models.User).filter(models.User.profile_image_path == path).first()
     if not owner or not owner.is_active or owner.approval_status != "approved":
         raise HTTPException(status_code=404, detail="Profile image not found")
-    if viewer.user_id != owner.user_id and not is_admin(viewer):
+    owner_designation = personnel_designation(
+        owner.role.role_name if owner.role else None,
+        is_admin_role(owner.role),
+    )
+    viewer_is_attorney = personnel_designation(
+        viewer.role.role_name if viewer.role else None,
+        is_admin_role(viewer.role),
+    ) == "Attorney"
+    if (
+        viewer.user_id != owner.user_id
+        and not is_admin(viewer)
+        and not (viewer_is_attorney and owner_designation in {"Administrator", "Attorney"})
+    ):
         raise HTTPException(status_code=403, detail="Profile image access denied")
     location = PROFILE_UPLOAD_DIR / filename
     if not location.is_file():
@@ -2793,6 +2888,263 @@ def list_applicants(
     if approval_status:
         query = query.filter(models.User.approval_status == approval_status)
     return [user_to_admin(user) for user in query.all()]
+
+
+@app.get("/api/admin/personnel-overview")
+def get_personnel_overview(_: models.User = Depends(admin_user), db: Session = Depends(get_db)):
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    users = (
+        db.query(models.User)
+        .join(models.Role, models.User.role_id == models.Role.role_id)
+        .filter(
+            models.User.is_active.is_(True),
+            models.User.approval_status == "approved",
+        )
+        .order_by(models.User.full_name, models.User.user_id)
+        .all()
+    )
+    personnel = []
+    users_by_id = {}
+    for person in users:
+        designation = personnel_designation(
+            person.role.role_name if person.role else None,
+            is_admin_role(person.role),
+        )
+        if designation is None:
+            continue
+        users_by_id[person.user_id] = person
+        personnel.append({
+            "user_id": person.user_id,
+            "full_name": person.full_name or person.username,
+            "profile_image_path": person.profile_image_path or person.profile_picture_path,
+            "designation": designation,
+            "presence": "Offline",
+        })
+
+    presence_by_user: dict[int, str] = {}
+    if users_by_id:
+        active_presence = (
+            db.query(models.UserPresence)
+            .outerjoin(
+                models.RevokedAccessToken,
+                models.RevokedAccessToken.token_hash == models.UserPresence.token_hash,
+            )
+            .filter(
+                models.UserPresence.user_id.in_(users_by_id),
+                models.UserPresence.expires_at > now,
+                models.UserPresence.last_seen_at >= now - timedelta(seconds=PRESENCE_HEARTBEAT_STALE_SECONDS),
+                models.RevokedAccessToken.token_hash.is_(None),
+            )
+            .all()
+        )
+        priority = {"Offline": 0, "Away": 1, "Online": 2}
+        for session in active_presence:
+            status = calculate_presence_status(
+                session.last_seen_at,
+                session.last_interaction_at,
+                session.expires_at,
+                now,
+                stale_after_seconds=PRESENCE_HEARTBEAT_STALE_SECONDS,
+                away_after_seconds=PRESENCE_AWAY_SECONDS,
+            )
+            if priority[status] > priority.get(presence_by_user.get(session.user_id, "Offline"), 0):
+                presence_by_user[session.user_id] = status
+
+    for row in personnel:
+        row["presence"] = presence_by_user.get(row["user_id"], "Offline")
+
+    def role_counts(designation: str):
+        matching = [person for person in personnel if person["designation"] == designation]
+        return {"active": len(matching), "online": sum(person["presence"] == "Online" for person in matching)}
+
+    summary = {
+        "attorneys": role_counts("Attorney"),
+        "administrators": role_counts("Administrator"),
+    }
+    admin_staff_counts = role_counts("Admin Staff")
+    if admin_staff_counts["active"]:
+        summary["admin_staff"] = admin_staff_counts
+
+    return {
+        "summary": summary,
+        "personnel": personnel,
+    }
+
+
+def messaging_designation(user: models.User) -> str | None:
+    return personnel_designation(user.role.role_name if user.role else None, is_admin_role(user.role))
+
+
+def require_messaging_user(user: models.User) -> str:
+    designation = messaging_designation(user)
+    if designation not in {"Administrator", "Attorney"}:
+        raise HTTPException(status_code=403, detail="Office messaging is available to administrators and attorneys")
+    return designation
+
+
+def messaging_person_payload(person: models.User, unread_count: int, include_presence: bool, presence: str | None = None):
+    result = {
+        "user_id": person.user_id,
+        "full_name": person.full_name or person.username,
+        # profile_picture_path stores the registration ID photo; only expose the dedicated avatar.
+        "profile_image_path": person.profile_image_path,
+        "designation": messaging_designation(person),
+        "is_self": False,
+        "unread_count": unread_count,
+    }
+    if include_presence:
+        result["presence"] = presence or "Offline"
+    return result
+
+
+@app.get("/api/messages/personnel")
+def list_messaging_personnel(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    designation = require_messaging_user(user)
+    is_administrator = designation == "Administrator"
+    candidates = (
+        db.query(models.User)
+        .join(models.Role, models.User.role_id == models.Role.role_id)
+        .filter(models.User.is_active.is_(True), models.User.approval_status == "approved")
+        .order_by(models.User.full_name, models.User.user_id)
+        .all()
+    )
+    eligible = [
+        person for person in candidates
+        if person.user_id == user.user_id
+        or messaging_designation(person) == "Attorney"
+        or (not is_administrator and messaging_designation(person) == "Administrator")
+    ]
+    unread_rows = (
+        db.query(models.PrivateMessage.sender_user_id, func.count(models.PrivateMessage.message_id))
+        .filter(models.PrivateMessage.recipient_user_id == user.user_id, models.PrivateMessage.read_at.is_(None))
+        .group_by(models.PrivateMessage.sender_user_id)
+        .all()
+    )
+    unread_by_sender = {sender_id: count for sender_id, count in unread_rows}
+    presence_by_id: dict[int, str] = {}
+    summary = None
+    if is_administrator:
+        # Presence and role totals are never included in an attorney's response.
+        admin_overview = get_personnel_overview(user, db)
+        presence_by_id = {row["user_id"]: row["presence"] for row in admin_overview["personnel"]}
+        summary = admin_overview["summary"]
+    people = []
+    for person in eligible:
+        item = messaging_person_payload(
+            person,
+            unread_by_sender.get(person.user_id, 0),
+            is_administrator,
+            presence_by_id.get(person.user_id),
+        )
+        item["is_self"] = person.user_id == user.user_id
+        people.append(item)
+    return {"personnel": people, "summary": summary}
+
+
+def get_messaging_peer(peer_id: int, user: models.User, db: Session) -> models.User:
+    if peer_id == user.user_id:
+        raise HTTPException(status_code=400, detail="You cannot message yourself")
+    peer = db.get(models.User, peer_id)
+    if (
+        not peer
+        or not peer.is_active
+        or peer.approval_status != "approved"
+        or messaging_designation(peer) not in {"Administrator", "Attorney"}
+    ):
+        raise HTTPException(status_code=404, detail="Personnel member not found")
+    current_designation = require_messaging_user(user)
+    peer_designation = messaging_designation(peer)
+    if not can_message_designations(current_designation, peer_designation):
+        raise HTTPException(status_code=403, detail="Messages are only available between attorneys and administrators")
+    return peer
+
+
+def private_message_payload(message: models.PrivateMessage, user_id: int):
+    return {
+        "message_id": message.message_id,
+        "sender_user_id": message.sender_user_id,
+        "recipient_user_id": message.recipient_user_id,
+        "content": message.content,
+        "created_at": message.created_at.isoformat() if message.created_at else "",
+        "read_at": message.read_at.isoformat() if message.read_at else None,
+        "is_mine": message.sender_user_id == user_id,
+    }
+
+
+@app.get("/api/messages/{peer_id}")
+def get_private_messages(
+    peer_id: int,
+    limit: int = Query(default=50, ge=1, le=100),
+    before_message_id: int | None = Query(default=None, ge=1),
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    get_messaging_peer(peer_id, user, db)
+    query = db.query(models.PrivateMessage).filter(
+        or_(
+            (models.PrivateMessage.sender_user_id == user.user_id) & (models.PrivateMessage.recipient_user_id == peer_id),
+            (models.PrivateMessage.sender_user_id == peer_id) & (models.PrivateMessage.recipient_user_id == user.user_id),
+        )
+    )
+    if before_message_id is not None:
+        query = query.filter(models.PrivateMessage.message_id < before_message_id)
+    rows = query.order_by(models.PrivateMessage.message_id.desc()).limit(limit + 1).all()
+    has_more = len(rows) > limit
+    rows = list(reversed(rows[:limit]))
+    return {"messages": [private_message_payload(row, user.user_id) for row in rows], "has_more": has_more}
+
+
+@app.post("/api/messages/{peer_id}")
+def send_private_message(
+    peer_id: int,
+    payload: PrivateMessagePayload,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    peer = get_messaging_peer(peer_id, user, db)
+    try:
+        content = normalize_message_content(payload.content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    message = models.PrivateMessage(sender_user_id=user.user_id, recipient_user_id=peer.user_id, content=content)
+    db.add(message)
+    db.flush()
+    create_user_notification(
+        db,
+        peer.user_id,
+        f"private-message:{message.message_id}",
+        f"New message from {user.full_name or user.username}",
+        "You have a new private message.",
+        f"/dashboard?messageFrom={user.user_id}",
+        "private_message",
+        str(user.user_id),
+    )
+    db.commit()
+    db.refresh(message)
+    return private_message_payload(message, user.user_id)
+
+
+@app.post("/api/messages/{peer_id}/read")
+def mark_private_messages_read(
+    peer_id: int,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    get_messaging_peer(peer_id, user, db)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.query(models.PrivateMessage).filter(
+        models.PrivateMessage.sender_user_id == peer_id,
+        models.PrivateMessage.recipient_user_id == user.user_id,
+        models.PrivateMessage.read_at.is_(None),
+    ).update({models.PrivateMessage.read_at: now}, synchronize_session=False)
+    db.query(models.Notification).filter(
+        models.Notification.user_id == user.user_id,
+        models.Notification.entity_type == "private_message",
+        models.Notification.entity_id == str(peer_id),
+        models.Notification.is_read.is_(False),
+    ).update({models.Notification.is_read: True}, synchronize_session=False)
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/api/admin/users/{user_id}")

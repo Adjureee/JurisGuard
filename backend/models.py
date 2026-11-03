@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, Time, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, Time, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -53,6 +53,16 @@ class RevokedAccessToken(Base):
 
     token_hash = Column(String(64), primary_key=True)
     user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+
+class UserPresence(Base):
+    __tablename__ = "user_presence"
+
+    token_hash = Column(String(64), primary_key=True)
+    user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False, index=True)
+    last_seen_at = Column(DateTime, nullable=False, index=True)
+    last_interaction_at = Column(DateTime)
     expires_at = Column(DateTime, nullable=False, index=True)
 
 
@@ -452,6 +462,21 @@ class Notification(Base):
     entity_id = Column(String(100))
     is_read = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+
+class PrivateMessage(Base):
+    __tablename__ = "private_message"
+    __table_args__ = (
+        Index("ix_private_message_conversation", "sender_user_id", "recipient_user_id", "message_id"),
+        Index("ix_private_message_unread", "recipient_user_id", "sender_user_id", "read_at"),
+    )
+
+    message_id = Column(Integer, primary_key=True, index=True)
+    sender_user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False, index=True)
+    recipient_user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    read_at = Column(DateTime)
 
 
 class Reminder(Base):

@@ -4,6 +4,7 @@ import {
   getCaseCategories,
   getDashboardOverview,
   getHeatmap,
+  getOfficeHotspots,
   getIntakeLoadAnalytics,
   getMonthlyTrends,
   getOcrAnalytics,
@@ -67,6 +68,7 @@ export const emptyOcrAnalytics: OcrAnalytics = {
   successful_extractions: 0,
   failed_scans: 0,
   document_types: [],
+    status_breakdown: [],
   trends: [],
   recent: [],
 };
@@ -150,14 +152,16 @@ function safeOcrAnalytics(value: unknown): OcrAnalytics {
         : 0,
     failed_scans: typeof candidate.failed_scans === "number" && Number.isFinite(candidate.failed_scans) ? candidate.failed_scans : 0,
     document_types: safeArray<OcrAnalytics["document_types"][number]>(candidate.document_types),
+    status_breakdown: safeArray<OcrAnalytics["status_breakdown"][number]>(candidate.status_breakdown),
     trends: safeArray<OcrAnalytics["trends"][number]>(candidate.trends),
     recent: safeArray<OcrAnalytics["recent"][number]>(candidate.recent),
   };
 }
 
-function analyticsCacheKey(deep: boolean, dateRange?: DashboardDateRange) {
+function analyticsCacheKey(deep: boolean, dateRange?: DashboardDateRange, heatmapScope: "personal" | "office" | "none" = "personal") {
   return JSON.stringify({
     deep,
+    heatmapScope,
     dateFrom: dateRange?.dateFrom ?? "",
     dateTo: dateRange?.dateTo ?? "",
   });
@@ -177,8 +181,8 @@ function emptySnapshot(): DashboardAnalyticsSnapshot {
   };
 }
 
-export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boolean; dateRange?: DashboardDateRange } = {}) {
-  const cacheKey = analyticsCacheKey(deep, dateRange);
+export function useDashboardAnalytics({ deep = true, dateRange, heatmapScope = "personal" }: { deep?: boolean; dateRange?: DashboardDateRange; heatmapScope?: "personal" | "office" | "none" } = {}) {
+  const cacheKey = analyticsCacheKey(deep, dateRange, heatmapScope);
   const initialSnapshot = analyticsCache.get(cacheKey) ?? emptySnapshot();
   const [overview, setOverview] = useState<DashboardOverview | null>(initialSnapshot.overview);
   const [monthlyTrends, setMonthlyTrends] = useState<MonthlyTrend[]>(initialSnapshot.monthlyTrends);
@@ -248,7 +252,7 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
         getMonthlyTrends(dateRange),
         getCaseCategories(),
         getBarangayStats(),
-        getHeatmap(),
+        heatmapScope === "office" ? getOfficeHotspots() : heatmapScope === "none" ? Promise.resolve(null) : getHeatmap(),
         getTerminatedCaseStats(dateRange),
         getRecentActivities(),
         getIntakeLoadAnalytics(dateRange),
@@ -293,7 +297,7 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
     return () => {
       cancelled = true;
     };
-  }, [cacheKey, dateRange, deep]);
+  }, [cacheKey, dateRange, deep, heatmapScope]);
 
   return {
     activities,
