@@ -108,8 +108,12 @@ function persistNotifications(accountScope: string | null, notifications: Operat
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
-<<<<<<< HEAD
-  notifications: readStoredNotifications(),
+  notifications: [],
+  userScope: null,
+  setUserScope: (accountScope) => {
+    if (get().userScope === accountScope) return;
+    set({ userScope: accountScope, notifications: readStoredNotifications(accountScope) });
+  },
   replaceServerNotifications: (serverNotifications) => {
     const localNotifications = get().notifications.filter(
       (notification) => !notification.isServerPersisted,
@@ -117,15 +121,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const notifications = [...serverNotifications, ...localNotifications]
       .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
       .slice(0, 50);
-    persistNotifications(notifications);
+    persistNotifications(get().userScope, notifications);
     set({ notifications });
-=======
-  notifications: [],
-  userScope: null,
-  setUserScope: (accountScope) => {
-    if (get().userScope === accountScope) return;
-    set({ userScope: accountScope, notifications: readStoredNotifications(accountScope) });
->>>>>>> upstream/master
   },
   addNotification: (notification) => {
     const duplicate = get().notifications.find(

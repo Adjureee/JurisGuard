@@ -18,19 +18,11 @@ import {
   type ClientFormValues,
 } from "../../features/criminalCases/schemas";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
-<<<<<<< HEAD
 import {
   isContactNumberPasteAllowed,
   sanitizeContactNumberInput,
 } from "../../utils/contactNumber";
-import {
-  dataUrlToFile,
-  extractClientFromDocument,
-  type ExtractionEngineMode,
-} from "../../services/documentExtractionService";
-=======
 import { extractClientFromDocument, type ExtractionEngineMode } from "../../services/documentExtractionService";
->>>>>>> upstream/master
 import {
   createCaseRecord,
   createClientRecord,

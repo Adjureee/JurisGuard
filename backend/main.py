@@ -32,12 +32,7 @@ from extraction_runtime import (
     ExtractionCancelled, ExtractionWorkerError,
 )
 from extraction_mapping import ocr_status_for_result, public_extraction_payload
-<<<<<<< HEAD
-from fastapi.concurrency import run_in_threadpool
 from database import SessionLocal, engine, get_db
-=======
-from database import engine, get_db
->>>>>>> upstream/master
 from upload_validation import save_bounded_upload, verify_image
 from case_transfer_permissions import can_edit_transfer_report, can_submit_transfer_report
 from reminder_permissions import (
