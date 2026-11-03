@@ -17,6 +17,14 @@ import {
   clientFormSchema,
   type ClientFormValues,
 } from "../../features/criminalCases/schemas";
+import {
+  civilStatusOptions,
+  educationalAttainmentOptions,
+  languageDialectOptions,
+  relationshipOptions,
+  religionOptions,
+  sexOptions,
+} from "../../features/criminalCases/clientFieldOptions";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
 import {
   isContactNumberPasteAllowed,
@@ -51,75 +59,6 @@ const extractionEngineLabels: Record<ExtractionEngineMode, string> = {
   offline: "Offline PaddleOCR",
   cloud: "Cloud Vision",
 };
-
-const civilStatusOptions = [
-  "Single",
-  "Married",
-  "Widowed",
-  "Separated",
-  "Annulled",
-  "Divorced",
-  "None",
-];
-
-const educationalAttainmentOptions = [
-  "None",
-  "Elementary Level",
-  "Elementary Graduate",
-  "High School Level",
-  "High School Graduate",
-  "Vocational",
-  "College Level",
-  "College Graduate",
-  "Postgraduate",
-];
-
-const religionOptions = [
-  "Roman Catholic",
-  "Christian",
-  "Iglesia ni Cristo",
-  "Islam",
-  "Buddhist",
-  "Indigenous Belief",
-  "None",
-];
-
-const languageDialectOptions = [
-  "Filipino / Tagalog",
-  "Bisaya / Binisaya",
-  "Cebuano",
-  "Hiligaynon / Ilonggo",
-  "Ilocano",
-  "Bikol / Bicol",
-  "Waray",
-  "Kapampangan",
-  "Pangasinan",
-  "Maguindanaon",
-  "Maranao",
-  "Tausug",
-  "Chavacano",
-  "Surigaonon",
-];
-
-const relationshipOptions = [
-  "Self / Applicant",
-  "Mother",
-  "Father",
-  "Brother",
-  "Sister",
-  "Spouse",
-  "Son",
-  "Daughter",
-  "Grandparent",
-  "Grandchild",
-  "Uncle",
-  "Aunt",
-  "Cousin",
-  "Guardian",
-  "Other Relative",
-  "Friend",
-  "Authorized Representative",
-];
 
 const defaultValues: ClientFormValues = {
   client: {
@@ -1094,7 +1033,7 @@ export default function AddClientModal({
                       registration={register("client.sex")}
                       error={errors.client?.sex?.message}
                       status={indicators["client.sex"]}
-                      options={["Female", "Male"]}
+                      options={sexOptions}
                     />
                     <SelectInput
                       label="Civil Status"
@@ -1309,7 +1248,7 @@ export default function AddClientModal({
                         "client_details.representative_sex",
                       )}
                       status={indicators["client_details.representative_sex"]}
-                      options={["Female", "Male"]}
+                      options={sexOptions}
                       disabled={representativeNotApplicable}
                     />
                     <SelectInput

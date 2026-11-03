@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { FileUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import MainLayout from "../layouts/MainLayout";
@@ -8,6 +9,7 @@ import PageHeader from "../components/PageHeader";
 import AddCaseModal from "../components/modals/AddCaseModal";
 import AddClientModal from "../components/modals/AddClientModal";
 import ExportCsvModal from "../components/modals/ExportCsvModal";
+import CaseImportModal from "../features/caseImport/CaseImportModal";
 import ModalPortal from "../components/modals/ModalPortal";
 import { StatusBadge } from "../features/criminalCases/components/StatusBadge";
 import { useCriminalCasesStore } from "../features/criminalCases/criminalCasesStore";
@@ -1680,6 +1682,7 @@ export default function CriminalCasesPage({
   const [showCaseModal, setShowCaseModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
   const [actionMode, setActionMode] = useState<"view" | "update">("view");
 
@@ -1844,7 +1847,7 @@ export default function CriminalCasesPage({
         <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#CBD5E1] bg-white p-4 shadow-sm">
           
           {/* 4. Filters Area: shrink-0 preserves its height */}
-          <div className="mb-3 grid min-w-0 shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_170px_165px_165px_auto_auto] xl:items-end">
+          <div className="mb-3 grid min-w-0 shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_170px_165px_165px_auto_auto_auto] xl:items-end">
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
                 Search
@@ -1881,6 +1884,14 @@ export default function CriminalCasesPage({
                 {filteredRows.length}
               </span>
             </div>
+            {user?.role === "admin" && <button
+              type="button"
+              onClick={() => setShowImportModal(true)}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
+            >
+              <FileUp className="h-4 w-4" aria-hidden="true" />
+              Import Excel
+            </button>}
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
@@ -1992,6 +2003,19 @@ export default function CriminalCasesPage({
         caseType={caseType}
         onClose={() => setShowExportModal(false)}
       />
+      {user?.role === "admin" && showImportModal && <CaseImportModal
+        caseType={caseType}
+        existingClients={visibleClients}
+        onClose={() => setShowImportModal(false)}
+        onImported={async () => {
+          const [clientRows, caseRows] = await Promise.all([
+            listClientRecords(),
+            listCaseRecords(caseType),
+          ]);
+          setClients(clientRows);
+          setCases(caseRows);
+        }}
+      />}
       <ClientRecordModal
         mode={actionMode}
         caseType={caseType}

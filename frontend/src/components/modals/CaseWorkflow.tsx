@@ -16,6 +16,7 @@ import {
   caseFormSchema,
   type CaseFormValues,
 } from "../../features/criminalCases/schemas";
+import { applicantRoleOptions } from "../../features/criminalCases/clientFieldOptions";
 import { useNotificationStore } from "../../features/notifications/notificationStore";
 import { extractCaseFromDocument, type CaseExtractionResult, type ExtractionEngineMode } from "../../services/documentExtractionService";
 import type {
@@ -263,17 +264,6 @@ const natureOfCaseOptions = [
   "Civil",
   "Labor",
   "Appeal",
-];
-
-const applicantRoleOptions = [
-  "Plaintiff",
-  "Defendant",
-  "Oppositor",
-  "Petitioner",
-  "Respondent",
-  "Complainant",
-  "Accused",
-  "Others",
 ];
 
 function generatedCaseTitle(clients: ClientRecord[], caseType: CaseType) {
