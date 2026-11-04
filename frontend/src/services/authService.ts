@@ -90,7 +90,7 @@ export async function login(payload: LoginPayload): Promise<TokenResponse> {
 
 export async function getMe(): Promise<AuthUser> {
   try {
-    const response = await apiClient.get<AuthUser>("/auth/me");
+    const response = await apiClient.get<AuthUser>("/auth/me", { timeout: 15000 });
     return response.data;
   } catch (error) {
     throw new Error(getErrorMessage(error, "Unable to load current user"));

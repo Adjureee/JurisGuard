@@ -1675,7 +1675,7 @@ export function CaseWorkflow({
             </section>
             )}
 
-            {caseType === "Civil" && (
+            {(
             <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
               <h3 className="text-base font-semibold text-[#1F2937]">
                 Incident Location

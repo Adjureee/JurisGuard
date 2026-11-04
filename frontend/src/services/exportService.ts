@@ -1,4 +1,5 @@
 import { z } from "zod";
+import paoLogo from "../assets/pao-logo.jpg?inline";
 import type {
   CaseParticipant,
   ClientClassification,
@@ -339,11 +340,18 @@ function htmlCell(value: string | number | undefined | null) {
 
 export function buildCriminalCasesExcelHtml(
   rows: CriminalCaseRow[],
-  filters: CriminalCaseExportFilterDto
+  filters: CriminalCaseExportFilterDto,
+  includeAdditionalFields = true,
 ) {
   const parsedFilters = criminalCaseExportFilterSchema.parse(filters);
   const filteredRows = filterCriminalCaseRows(rows, parsedFilters);
-  const headers = [...PAO_INVENTORY_HEADERS];
+  // Match the supplied inventory report, including its item-number column.
+  const inventoryColumns = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ...(includeAdditionalFields ? [11, 12, 13, 18, 19, 20, 21, 22, 23] : [])];
+  const headers = ["Item No.", ...inventoryColumns.map((index) => PAO_INVENTORY_HEADERS[index])];
+  const widths = [48, 150, 130, 85, 230, 110, 130, 220, 130, 200, 190, 130,
+    ...(includeAdditionalFields ? [65, 65, 65, 140, 200, 140, 250, 150, 180] : [])];
+  let itemNumber = 0;
   const participantRows = filteredRows.flatMap(({ record, client }) =>
     exportParticipantRows(record, client).map((participant) => ({
       record,
@@ -355,7 +363,6 @@ export function buildCriminalCasesExcelHtml(
       ({ record }) => record.intake_record.control_no || record.case_id,
     ),
   ).size;
-  const totalParticipants = participantRows.length;
   const totals = participantRows.reduce(
     (current, { participant }) => ({
       urban:
@@ -420,7 +427,7 @@ export function buildCriminalCasesExcelHtml(
             `<td>${htmlCell(participantData[10])}</td>`,
             `<td>${htmlCell(participantData[11])}</td>`,
           ];
-          return `<tr>${cells.join("")}</tr>`;
+          return `<tr>${index === 0 ? `<td${rowSpan}>${++itemNumber}</td>` : ""}${inventoryColumns.map((column) => cells[column]).join("")}</tr>`;
         })
         .join("");
     })
@@ -437,7 +444,7 @@ export function buildCriminalCasesExcelHtml(
     "",
     "",
     "",
-    totalParticipants,
+    "",
     totals.urban,
     totals.rural,
     totals.drugs,
@@ -451,9 +458,88 @@ export function buildCriminalCasesExcelHtml(
     "",
     "",
   ];
-  const totalRow = `<tr class="total">${totalValues.map((value) => `<td>${htmlCell(value)}</td>`).join("")}</tr>`;
+  const totalRow = `<tr class="total"><td></td>${inventoryColumns.map((column) => `<td>${htmlCell(totalValues[column])}</td>`).join("")}</tr>`;
 
-  return `<!doctype html><html><head><meta charset="utf-8" /><style>body{font-family:Arial,sans-serif;color:#2B3642}table{border-collapse:collapse;width:100%}th{background:#E9EEF3;text-transform:uppercase;letter-spacing:.04em}th,td{border:1px solid #D6DEE7;padding:8px;font-size:12px;vertical-align:middle}.title{text-align:center;font-weight:700}.total td{background:#F3F4F6;font-weight:700}</style></head><body><p class="title">REPUBLIKA NG PILIPINAS</p><p class="title">KAGAWARAN NG KATARUNGAN</p><p class="title">TANGGAPAN NG MANANANGGOL PAMBAYAN</p><p class="title">(PUBLIC ATTORNEY'S OFFICE)</p><p class="title">${htmlCell(officeHeading(filteredRows, "region"))}</p><p class="title">${htmlCell(officeHeading(filteredRows, "district_office"))}</p><p class="title">YEAR-END INVENTORY OF CASES</p><p class="title">As of ${htmlCell(formatAsOfDate())}</p><table><thead><tr>${headers.map((header) => `<th>${htmlCell(header)}</th>`).join("")}</tr></thead><tbody>${body}${totalRow}</tbody></table></body></html>`;
+  const titles = [
+    "Republika ng Pilipinas", "Kagawaran ng Katarungan",
+    "TANGGAPAN NG MANANANGGOL PAMBAYAN", "(PUBLIC ATTORNEY'S OFFICE)",
+    officeHeading(filteredRows, "region"), officeHeading(filteredRows, "district_office"),
+    "", "YEAR-END INVENTORY OF CASES", `As of ${formatAsOfDate()}`,
+  ].map((title, index) => {
+    const logoCell = index === 0
+      ? `<td colspan="3" rowspan="6" style="border:0;text-align:center;vertical-align:middle"><img src="${paoLogo}" alt="Public Attorney's Office seal" width="110" height="110" /></td>`
+      : "";
+    const span = index < 6 ? headers.length - 3 : headers.length;
+    return `<tr>${logoCell}<td colspan="${span}" class="title${index === 7 ? " report-title" : ""}">${htmlCell(title)}</td></tr>`;
+  }).join("");
+
+  return `<!doctype html><html><head><meta charset="utf-8" /><style>
+    @page{size:landscape}body{font-family:Arial,sans-serif;color:#000}
+    table{border-collapse:collapse;table-layout:fixed}
+    th,td{border:1px solid #000;padding:6px;font-size:11px;vertical-align:middle;white-space:normal;word-wrap:break-word}
+    th{height:48px;text-align:center;font-weight:bold;background:#fff}
+    .title{text-align:center;font-weight:bold;border:0;height:22px}
+    .report-title{background:#D9E8FC;border:1px solid #8AAFE0}
+    .total td{font-weight:bold}td{mso-number-format:"\\@"}
+</style></head><body><table><colgroup>${widths.map((width) => `<col width="${width}" style="width:${width}px" />`).join("")}</colgroup><tbody>${titles}<tr><td colspan="${headers.length}" style="border:0;height:28px">${filteredRows[0]?.record.case_type === "Civil" ? "B. CIVIL" : "A. CRIMINAL"}</td></tr><tr>${headers.map((header, index) => `<th width="${widths[index]}" style="width:${widths[index]}px">${htmlCell(header)}</th>`).join("")}</tr>${body}${totalRow}</tbody></table></body></html>`;
+}
+
+export async function downloadInventoryWorkbook(filename: string, html: string) {
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.default.Workbook();
+  const sheet = workbook.addWorksheet("Inventory", {
+    pageSetup: { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+  const reportDocument = new DOMParser().parseFromString(html, "text/html");
+  const columnWidths = Array.from(reportDocument.querySelectorAll("colgroup col"));
+  const columnCount = columnWidths.length;
+  sheet.columns = columnWidths.map((col) => ({ width: Math.max(7, Number(col.getAttribute("width")) / 7) }));
+  const rows = Array.from(reportDocument.querySelectorAll("table > tbody > tr"));
+  const occupied = new Set<string>();
+  rows.forEach((row, rowIndex) => {
+    const r = rowIndex + 1;
+    // Full-width headings keep the report centered independently of the seal.
+    if (rowIndex < 9) {
+      sheet.mergeCells(r, 1, r, columnCount);
+      const cell = sheet.getCell(r, 1);
+      cell.value = row.querySelector(".title")?.textContent ?? "";
+      cell.font = { name: "Arial", size: 11, bold: rowIndex === 3 || rowIndex === 7 };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      sheet.getRow(r).height = 20;
+      return;
+    }
+    let column = 1;
+    for (const element of Array.from(row.children)) {
+      while (occupied.has(`${r}:${column}`)) column++;
+      const colspan = Number(element.getAttribute("colspan") || 1);
+      const rowspan = Number(element.getAttribute("rowspan") || 1);
+      const cell = sheet.getCell(r, column);
+      cell.value = element.textContent ?? "";
+      cell.numFmt = "@";
+      cell.font = { name: "Arial", size: 11, bold: element.tagName === "TH" || row.classList.contains("total") };
+      cell.alignment = { vertical: "middle", horizontal: element.tagName === "TH" ? "center" : "left", wrapText: true };
+      if (colspan === 1) cell.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+      if (colspan > 1 || rowspan > 1) sheet.mergeCells(r, column, r + rowspan - 1, column + colspan - 1);
+      for (let rr = r; rr < r + rowspan; rr++) for (let cc = column; cc < column + colspan; cc++) occupied.add(`${rr}:${cc}`);
+      column += colspan;
+    }
+    sheet.getRow(r).height = row.querySelector("th") ? 44 : 56;
+  });
+  const logo = workbook.addImage({ base64: paoLogo, extension: "jpeg" });
+  sheet.addImage(logo, { tl: { col: 3, row: 1 }, ext: { width: 104, height: 104 } });
+  sheet.views = [{ state: "frozen", ySplit: 11 }];
+  sheet.pageSetup.printTitlesRow = "1:11";
+  sheet.pageSetup.printArea = `A1:${sheet.getColumn(columnCount).letter}${rows.length}`;
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([new Uint8Array(buffer)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename.replace(/\.xls$/i, ".xlsx");
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function downloadCsv(filename: string, csv: string) {

@@ -41,6 +41,8 @@ export interface DashboardOverview {
   cases_this_month: number;
   cases_in_range?: number;
   clients_in_range?: number;
+  range_active_cases?: number;
+  range_terminated_cases?: number;
   ocr_scanned_documents: number;
 }
 
@@ -282,17 +284,17 @@ function pointsSafeId(value: number | string | null | undefined) {
 }
 
 export async function getDashboardOverview(range?: DashboardDateRange) {
-  const response = await apiClient.get<DashboardOverview>("/dashboard/overview", { params: dateRangeParams(range) });
+  const response = await apiClient.get<DashboardOverview>("/dashboard/overview", { params: dateRangeParams(range), timeout: 20000 });
   return response.data;
 }
 
 export async function getMonthlyTrends(range?: DashboardDateRange) {
-  const response = await apiClient.get<MonthlyTrend[]>("/dashboard/monthly-trends", { params: dateRangeParams(range) });
+  const response = await apiClient.get<MonthlyTrend[]>("/dashboard/monthly-trends", { params: dateRangeParams(range), timeout: 20000 });
   return response.data;
 }
 
-export async function getCaseCategories() {
-  const response = await apiClient.get<CaseCategoryStat[]>("/dashboard/case-categories");
+export async function getCaseCategories(range?: DashboardDateRange) {
+  const response = await apiClient.get<CaseCategoryStat[]>("/dashboard/case-categories", { params: dateRangeParams(range), timeout: 20000 });
   return response.data;
 }
 
@@ -307,32 +309,32 @@ export function formatLegalMonth(value: string | number | undefined | null) {
 }
 
 export async function getIntakeLoadAnalytics(range?: DashboardDateRange) {
-  const response = await apiClient.get<IntakeLoadAnalytics>("/dashboard/intake-load", { params: dateRangeParams(range) });
+  const response = await apiClient.get<IntakeLoadAnalytics>("/dashboard/intake-load", { params: dateRangeParams(range), timeout: 20000 });
   return response.data;
 }
 
-export async function getBarangayStats() {
-  const response = await apiClient.get<BarangayStat[]>("/dashboard/barangay-stats");
+export async function getBarangayStats(range?: DashboardDateRange) {
+  const response = await apiClient.get<BarangayStat[]>("/dashboard/barangay-stats", { params: dateRangeParams(range), timeout: 20000 });
   return response.data;
 }
 
-export async function getHeatmap() {
-  const response = await apiClient.get<HeatmapResponse>("/dashboard/heatmap");
+export async function getHeatmap(range?: DashboardDateRange) {
+  const response = await apiClient.get<HeatmapResponse>("/dashboard/heatmap", { params: dateRangeParams(range), timeout: 20000 });
   return response.data;
 }
 
 export async function getTerminatedCaseStats(range?: DashboardDateRange) {
-  const response = await apiClient.get<TerminatedDashboardStats>("/dashboard/terminated-cases", { params: dateRangeParams(range) });
+  const response = await apiClient.get<TerminatedDashboardStats>("/dashboard/terminated-cases", { params: dateRangeParams(range), timeout: 20000 });
   return response.data;
 }
 
 export async function getRecentActivities() {
-  const response = await apiClient.get<RecentActivity[]>("/dashboard/recent-activities");
+  const response = await apiClient.get<RecentActivity[]>("/dashboard/recent-activities", { timeout: 20000 });
   return response.data;
 }
 
-export async function getOcrAnalytics() {
-  const response = await apiClient.get<OcrAnalytics>("/dashboard/ocr-analytics");
+export async function getOcrAnalytics(range?: DashboardDateRange) {
+  const response = await apiClient.get<OcrAnalytics>("/dashboard/ocr-analytics", { params: dateRangeParams(range), timeout: 20000 });
   return response.data;
 }
 

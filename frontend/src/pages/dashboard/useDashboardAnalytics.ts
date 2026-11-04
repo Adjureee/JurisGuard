@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   getBarangayStats,
   getCaseCategories,
@@ -178,7 +179,10 @@ function emptySnapshot(): DashboardAnalyticsSnapshot {
 }
 
 export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boolean; dateRange?: DashboardDateRange } = {}) {
-  const cacheKey = analyticsCacheKey(deep, dateRange);
+  const { user } = useAuth();
+  const cacheKey = `${user?.user_id ?? "anonymous"}:${analyticsCacheKey(deep, dateRange)}`;
+  const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
   const initialSnapshot = analyticsCache.get(cacheKey) ?? emptySnapshot();
   const [overview, setOverview] = useState<DashboardOverview | null>(initialSnapshot.overview);
   const [monthlyTrends, setMonthlyTrends] = useState<MonthlyTrend[]>(initialSnapshot.monthlyTrends);
@@ -206,7 +210,8 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
         setIntakeLoad(cachedSnapshot.intakeLoad);
         setOcrAnalytics(cachedSnapshot.ocrAnalytics);
       }
-      setIsLoading(!cachedSnapshot);
+      setIsLoading(true);
+      setError(null);
       if (!deep) {
         const results = await Promise.allSettled([
           getDashboardOverview(),
@@ -246,15 +251,18 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
       const results = await Promise.allSettled([
         getDashboardOverview(dateRange),
         getMonthlyTrends(dateRange),
-        getCaseCategories(),
-        getBarangayStats(),
-        getHeatmap(),
+        getCaseCategories(dateRange),
+        getBarangayStats(dateRange),
+        getHeatmap(dateRange),
         getTerminatedCaseStats(dateRange),
         getRecentActivities(),
         getIntakeLoadAnalytics(dateRange),
-        getOcrAnalytics(),
+        getOcrAnalytics(dateRange),
       ]);
       if (cancelled) return;
+      if (results.some((result) => result.status === "rejected")) {
+        setError("Some analytics could not be loaded. Retry to retrieve the complete report.");
+      }
       const [
         overviewResult,
         monthlyResult,
@@ -293,10 +301,12 @@ export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boole
     return () => {
       cancelled = true;
     };
-  }, [cacheKey, dateRange, deep]);
+  }, [cacheKey, dateRange, deep, revision]);
 
   return {
     activities,
+    error,
+    retry: () => setRevision((value) => value + 1),
     barangays,
     caseCategories,
     heatmap,

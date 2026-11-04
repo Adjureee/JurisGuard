@@ -1685,6 +1685,16 @@ def case_date_column():
     return func.coalesce(models.IntakeRecord.form_date, models.Case.last_updated)
 
 
+def analytics_client_query(db, user, date_from=None, date_to=None):
+    query = scoped_client_query(db, user)
+    start, end = parse_date(date_from), parse_date(date_to)
+    if start:
+        query = query.filter(models.Client.created_at >= start)
+    if end:
+        query = query.filter(models.Client.created_at < end + timedelta(days=1))
+    return query
+
+
 def apply_case_date_filters(query, date_from: str | None = None, date_to: str | None = None):
     from_date = parse_date(date_from)
     if from_date:
@@ -1759,6 +1769,8 @@ def dashboard_overview(
     if client_to:
         client_range_query = client_range_query.filter(models.Client.created_at < client_to + timedelta(days=1))
     clients_in_range = client_range_query.count()
+    range_query = apply_case_date_filters(scoped_case_query(db, user), date_from, date_to)
+    range_terminated = range_query.filter((models.Case.is_terminated.is_(True)) | (models.Case.status_of_case == "Terminated")).count()
     ocr_query = db.query(models.Document).filter(models.Document.ocr_status == "COMPLETED")
     if not is_admin(user):
         ocr_query = ocr_query.filter(models.Document.uploaded_by == user.user_id)
@@ -1771,6 +1783,8 @@ def dashboard_overview(
         "cases_this_month": cases_this_month,
         "cases_in_range": cases_in_range,
         "clients_in_range": clients_in_range,
+        "range_active_cases": max(cases_in_range - range_terminated, 0),
+        "range_terminated_cases": range_terminated,
         "ocr_scanned_documents": ocr_scanned_documents,
     }
 
@@ -1848,56 +1862,32 @@ def dashboard_intake_load(
 
 
 @app.get("/api/dashboard/case-categories")
-def dashboard_case_categories(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def dashboard_case_categories(user: models.User = Depends(current_user), db: Session = Depends(get_db), date_from: str | None = Query(None), date_to: str | None = Query(None)):
     rows = (
-        scoped_case_query(db, user)
+        apply_case_date_filters(scoped_case_query(db, user), date_from, date_to)
         .with_entities(models.IntakeRecord.nature_of_case, func.count(models.Case.case_id).label("total_cases"))
         .group_by(models.IntakeRecord.nature_of_case)
         .order_by(func.count(models.Case.case_id).desc())
         .all()
     )
-    uncategorized = scoped_case_query(db, user).filter(models.Case.intake_id.is_(None)).count()
     categories = [
         {"category": row.nature_of_case or "Uncategorized", "total_cases": row.total_cases}
         for row in rows
     ]
-    if uncategorized:
-        categories.append({"category": "Uncategorized", "total_cases": uncategorized})
     return categories
 
 
 @app.get("/api/dashboard/barangay-stats")
-def dashboard_barangay_stats(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    return build_barangay_stats(dashboard_records(db, user))
+def dashboard_barangay_stats(user: models.User = Depends(current_user), db: Session = Depends(get_db), date_from: str | None = Query(None), date_to: str | None = Query(None)):
+    from client_hotspots import client_hotspots
+    return client_hotspots(analytics_client_query(db, user, date_from, date_to).all(), BARANGAY_CENTROIDS)[0]
 
 
 @app.get("/api/dashboard/heatmap")
-def dashboard_heatmap(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    records = dashboard_records(db, user)
-    points: list[dict[str, Any]] = []
-    for record in records:
-        lat = parse_float(record.latitude)
-        lng = parse_float(record.longitude)
-        source = "coordinates"
-        if lat is None or lng is None:
-            fallback = barangay_coordinates(record.incident_barangay or "")
-            if not fallback:
-                continue
-            lat, lng = fallback
-            source = "barangay"
-        points.append(
-            {
-                "case_id": record.case_id,
-                "barangay": case_barangay(record),
-                "latitude": lat,
-                "longitude": lng,
-                "weight": 1,
-                "source": source,
-                "status": normalize_case_status(record.status_of_case or record.case_status),
-                "category": case_category(record),
-            }
-        )
-    return {"center": PANABO_CENTER, "points": points, "barangays": build_barangay_stats(records)}
+def dashboard_heatmap(user: models.User = Depends(current_user), db: Session = Depends(get_db), date_from: str | None = Query(None), date_to: str | None = Query(None)):
+    from client_hotspots import client_hotspots
+    stats, points = client_hotspots(analytics_client_query(db, user, date_from, date_to).all(), BARANGAY_CENTROIDS)
+    return {"center": PANABO_CENTER, "points": points, "barangays": stats}
 
 
 @app.get("/api/dashboard/terminated-cases")
@@ -1958,10 +1948,15 @@ def dashboard_recent_activities(user: models.User = Depends(current_user), db: S
 
 
 @app.get("/api/dashboard/ocr-analytics")
-def dashboard_ocr_analytics(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def dashboard_ocr_analytics(user: models.User = Depends(current_user), db: Session = Depends(get_db), date_from: str | None = Query(None), date_to: str | None = Query(None)):
     query = db.query(models.Document)
     if not is_admin(user):
         query = query.filter(models.Document.uploaded_by == user.user_id)
+    start, end = parse_date(date_from), parse_date(date_to)
+    if start:
+        query = query.filter(models.Document.uploaded_at >= start)
+    if end:
+        query = query.filter(models.Document.uploaded_at < end + timedelta(days=1))
     rows = query.order_by(models.Document.uploaded_at.desc()).all()
     total = len(rows)
     successful = len([row for row in rows if row.ocr_status == "COMPLETED"])

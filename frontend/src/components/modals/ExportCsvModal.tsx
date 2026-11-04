@@ -7,6 +7,7 @@ import { useNotificationStore } from "../../features/notifications/notificationS
 import { createAuditLog } from "../../services/auditService";
 import {
   buildCriminalCasesExcelHtml,
+  downloadInventoryWorkbook,
   filterCriminalCaseRows,
   type CriminalCaseExportFilterDto,
   type CriminalCaseRow,
@@ -36,16 +37,6 @@ function uniqueValues(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
 
-function downloadText(filename: string, content: string, type: string) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function ExportCsvModal({
   isOpen,
   rows,
@@ -56,6 +47,7 @@ export default function ExportCsvModal({
   const addLog = useAuditLogStore((state) => state.addLog);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const [filters, setFilters] = useState<CriminalCaseExportFilterDto>(initialFilters);
+  const [includeAdditionalFields, setIncludeAdditionalFields] = useState(true);
   const exportRows = useMemo(() => filterCriminalCaseRows(rows, filters), [filters, rows]);
   const options = useMemo(
     () => ({
@@ -90,7 +82,7 @@ export default function ExportCsvModal({
         entity_type: "criminal_case_export",
         entity_id: entityId,
       });
-      downloadText(`jurisguard-${caseLabel}-cases_${stamp}.xls`, buildCriminalCasesExcelHtml(rows, filters), "application/vnd.ms-excel;charset=utf-8");
+      await downloadInventoryWorkbook(`jurisguard-${caseLabel}-cases_${stamp}.xlsx`, buildCriminalCasesExcelHtml(rows, filters, includeAdditionalFields));
       addLog({
         userId: user?.user_id,
         user: user?.full_name || user?.email,
@@ -219,6 +211,13 @@ export default function ExportCsvModal({
             </label>
           </div>
 
+          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#CBD5E1] p-4 focus-within:ring-2 focus-within:ring-[#704389]">
+            <input type="checkbox" checked={includeAdditionalFields} onChange={(event) => setIncludeAdditionalFields(event.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-[#704389]" />
+            <span className="text-sm text-[#2B3642]">
+              <strong>Include additional inventory fields</strong>
+              <span className="mt-1 block text-[#4B5563]">After Date of Termination: Age, Urban, Rural, Date of Confinement, Place of Detention, Case Received, Address, Contact Number, and Relationship to Applicant.</span>
+            </span>
+          </label>
           <div className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-sm text-[#4B5563]">
             {exportRows.length} record{exportRows.length === 1 ? "" : "s"} will be exported.
           </div>
@@ -227,7 +226,7 @@ export default function ExportCsvModal({
         <div className="sticky bottom-0 flex justify-between border-t border-[#E5E7EB] bg-[#F8FAFC] px-6 py-4">
           <button
             type="button"
-            onClick={() => setFilters(initialFilters)}
+            onClick={() => { setFilters(initialFilters); setIncludeAdditionalFields(true); }}
             className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] transition duration-200 hover:bg-[#F8FAFC]"
           >
             Reset
