@@ -6,14 +6,29 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
 
-from case_import import read_workbook
+from case_import import read_workbook, resolve_incident_location
 
 
 class CaseImportWorkbookTests(unittest.TestCase):
+    def test_incident_location_maps_unambiguous_indicators(self):
+        self.assertEqual(("Urban", False), resolve_incident_location([("1", "0")]))
+        self.assertEqual(("Rural", False), resolve_incident_location([("0", "1")]))
+        self.assertEqual(("Urban", False), resolve_incident_location([("1", "0"), (1, 0)]))
+        self.assertEqual(("Rural", False), resolve_incident_location([(0, 1), ("0", "1")]))
+
+    def test_incident_location_requires_review_for_missing_or_conflicting_indicators(self):
+        self.assertEqual((None, False), resolve_incident_location([]))
+        self.assertEqual((None, False), resolve_incident_location([(None, None)]))
+        self.assertEqual((None, False), resolve_incident_location([("0", "0")]))
+        self.assertEqual((None, False), resolve_incident_location([("1", "0"), (None, None)]))
+        self.assertEqual((None, True), resolve_incident_location([("1", "1")]))
+        self.assertEqual((None, True), resolve_incident_location([("1", "0"), ("0", "1")]))
+        self.assertEqual((None, True), resolve_incident_location([("urban?", "0")]))
+
     def test_html_export_preserves_rowspans_groups_clients_and_skips_total(self):
         html = """<!doctype html><html><body><table>
-        <tr><th>CONTROL NUMBER</th><th>CLIENT NAME</th><th>AGE</th><th>ADDRESS</th><th>TITLE OF THE CASE</th><th>STATUS OF THE CASE</th><th>CASE RECEIVED</th></tr>
-        <tr><td rowspan="2">PAO-DEMO-087</td><td>Kennet Lico</td><td>21</td><td>Tibungco</td><td rowspan="2">PP vs. Lico</td><td rowspan="2">Pending</td><td rowspan="2">2026-10-02</td></tr>
+        <tr><th>CONTROL NUMBER</th><th>CLIENT NAME</th><th>AGE</th><th>ADDRESS</th><th>TITLE OF THE CASE</th><th>STATUS OF THE CASE</th><th>CASE RECEIVED</th><th>LOCATION TYPE</th><th>INCIDENT BARANGAY</th></tr>
+        <tr><td rowspan="2">PAO-DEMO-087</td><td>Kennet Lico</td><td>21</td><td>Tibungco</td><td rowspan="2">PP vs. Lico</td><td rowspan="2">Pending</td><td rowspan="2">2026-10-02</td><td rowspan="2">Urban</td><td rowspan="2">Cagangohan</td></tr>
         <tr><td>Christian Misal</td><td>26</td><td>Tubod</td></tr>
         <tr><td>TOTAL CASES: 1</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
         </table></body></html>"""
@@ -25,6 +40,8 @@ class CaseImportWorkbookTests(unittest.TestCase):
         self.assertEqual(["Kennet Lico", "Christian Misal"], [row["client_name"] for row in records])
         self.assertEqual(["21", "26"], [row["age"] for row in records])
         self.assertEqual(["PP vs. Lico", "PP vs. Lico"], [row["title"] for row in records])
+        self.assertEqual(["Urban", "Urban"], [row["location_type"] for row in records])
+        self.assertEqual(["Cagangohan", "Cagangohan"], [row["incident_barangay"] for row in records])
 
     @unittest.skipUnless(importlib.util.find_spec("openpyxl"), "openpyxl is not installed in this environment")
     def test_xlsx_detects_header_below_title_and_keeps_missing_client_name_blank(self):
@@ -42,6 +59,21 @@ class CaseImportWorkbookTests(unittest.TestCase):
         self.assertEqual(1, len(records))
         self.assertNotIn("client_name", records[0])
         self.assertEqual("PAO-DEMO-101", records[0]["control_no"])
+
+    @unittest.skipUnless(importlib.util.find_spec("openpyxl"), "openpyxl is not installed in this environment")
+    def test_xlsx_preserves_explicit_zero_padded_contact_format(self):
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["CONTROL NUMBER", "CLIENT NAME", "AGE", "CONTACT NUMBER"])
+        sheet.append(["PAO-DEMO-102", "Sample Client", 30, 9123456789])
+        sheet["D2"].number_format = "00000000000"
+        stream = io.BytesIO()
+        workbook.save(stream)
+
+        records, _, _ = read_workbook(stream.getvalue(), "inventory.xlsx")
+        self.assertEqual("09123456789", records[0]["contact_no"])
 
     def test_unsupported_or_corrupt_file_is_rejected_by_content(self):
         with self.assertRaisesRegex(ValueError, "contents are not a supported"):

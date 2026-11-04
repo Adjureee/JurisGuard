@@ -11,6 +11,7 @@ import {
   type CaseImportReviewCase,
 } from "../../services/caseImportService";
 import type { CaseType, ClientRecord } from "../../types";
+import { natureOfCaseOptions, ruralBarangays, urbanBarangays } from "../criminalCases/locationOptions";
 import {
   applicantRoleOptions,
   civilStatusOptions,
@@ -63,11 +64,16 @@ function caseIssues(entry: CaseImportReviewCase) {
   const issues: string[] = [];
   if (isMissingReviewValue(entry.control_no) || entry.control_no.length > 20) issues.push("Control Number is required (20 characters maximum).");
   if (isMissingReviewValue(entry.title) || entry.title.length > 255) issues.push("Title of the Case is required (255 characters maximum).");
+  if (isMissingReviewValue(entry.nature_of_case) || !natureOfCaseOptions.includes(entry.nature_of_case)) issues.push("Choose a valid Nature of Case.");
   if (entry.court.length > 255) issues.push("Court / Body must be 255 characters or fewer.");
   if (entry.case_no.length > 20) issues.push("Case Number must be 20 characters or fewer.");
   if (isMissingReviewValue(entry.case_received) || !toDateInput(entry.case_received)) issues.push("A valid Case Received date is required.");
   if (!isMissingReviewValue(entry.date_of_termination) && !toDateInput(entry.date_of_termination)) issues.push("Date of Termination is invalid.");
   if (!isMissingReviewValue(entry.date_of_confinement) && !toDateInput(entry.date_of_confinement)) issues.push("Date of Confinement is invalid.");
+  const allowedBarangays = entry.location_type === "Urban" ? urbanBarangays : entry.location_type === "Rural" ? ruralBarangays : [];
+  if (!entry.location_type) issues.push("Review and select an Incident Location type.");
+  else if (!["Urban", "Rural"].includes(entry.location_type)) issues.push("Choose Urban or Rural for Incident Location.");
+  if (!entry.incident_barangay || !allowedBarangays.includes(entry.incident_barangay)) issues.push("Select a Barangay that matches the Incident Location type.");
   if (!["Pending", "Terminated"].includes(entry.status)) issues.push("Choose a valid case status.");
   if (entry.duplicate) issues.push(entry.duplicate_message || "Possible duplicate Control Number.");
   if (entry.errors.some((error) => error.startsWith("Conflicting")) && !entry.conflict_reviewed) {
@@ -108,18 +114,11 @@ function caseIssues(entry: CaseImportReviewCase) {
       }
       if (!/^[0-9]{1,11}$/.test(client.contact_no.trim())) issues.push(`Client ${index + 1}: a valid Contact Number is required for a new client.`);
     }
-    for (const flag of [client.urban, client.rural, client.drugs, client.female, client.senior, client.cicl]) {
+    for (const flag of [client.drugs, client.female, client.senior, client.cicl]) {
       const value = String(flag ?? "").trim().toLowerCase();
       if (value && !["1", "0", "yes", "no", "true", "false", "y", "n"].includes(value)) {
         issues.push(`Client ${index + 1}: classification values must be yes/no.`);
         break;
-      }
-    }
-    if (client.location_indicators_present) {
-      const rural = String(client.rural ?? "").trim().toLowerCase();
-      const urban = String(client.urban ?? "").trim().toLowerCase();
-      if (!((rural === "1" && urban === "0") || (rural === "0" && urban === "1"))) {
-        issues.push(`Client ${index + 1}: choose exactly one location indicator, Rural or Urban; zero or conflicting values need review.`);
       }
     }
     if (creatingClient && [client.female, client.senior, client.cicl].some((flag) => flag !== null && flag !== "") && !client.flags_reviewed) {
@@ -130,30 +129,24 @@ function caseIssues(entry: CaseImportReviewCase) {
   return issues;
 }
 
-function Field({ label, value, onChange, type = "text", showNA = true }: {
+function Field({ label, value, onChange, type = "text" }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: "text" | "date" | "number" | "tel";
-  showNA?: boolean;
 }) {
   const dateValue = type === "date" ? toDateInput(value) : "";
-  const handleBlur = () => {
-    if (showNA && isMissingReviewValue(value)) onChange("NA");
-  };
   return (
     <label className="block min-w-0">
       <span className="text-xs font-semibold text-[#4B5563]">{label}</span>
       <span className="relative mt-1 block">
-        {showNA && type === "date" && isMissingReviewValue(value) && <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-2.5 z-10 flex items-center text-sm text-[#6B7280]">NA</span>}
         <input
           type={type}
           value={type === "date" ? dateValue : value}
-          placeholder={showNA && type === "text" ? "NA" : undefined}
           onChange={(event) => onChange(event.target.value)}
-          onBlur={handleBlur}
           className="h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-2.5 text-sm text-[#2B3642] outline-none placeholder:text-[#6B7280] focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
         />
+        {type === "date" && isReviewNA(value) && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 bg-white pr-1 text-sm text-[#6B7280]">NA</span>}
       </span>
     </label>
   );
@@ -200,6 +193,7 @@ function ComboField({ label, value, options, listId, onChange }: {
 export default function CaseImportModal({ caseType, existingClients, onClose, onImported }: CaseImportModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const extractionInFlight = useRef(false);
+  const importInFlight = useRef(false);
   const extractionAbort = useRef<AbortController | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState<ModalPhase>("upload");
@@ -333,7 +327,8 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
   };
 
   const importReady = async () => {
-    if (!preview || phase !== "review" || readyEntries.length === 0) return;
+    if (!preview || phase !== "review" || readyEntries.length === 0 || importInFlight.current) return;
+    importInFlight.current = true;
     setPhase("importing");
     setError("");
     try {
@@ -361,6 +356,8 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
       setError(caseImportErrorMessage(cause, "The import could not be completed. Review the records and retry."));
       setPhase("failed");
       toast.error("Import could not be confirmed. Review the file before trying again.");
+    } finally {
+      importInFlight.current = false;
     }
   };
 
@@ -445,6 +442,7 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#F9FAFB] px-4 py-4 sm:px-6">
                 {visibleEntries.map((entry) => {
                   const issues = caseIssues(entry);
+                  const hasInvalidValue = issues.some((issue) => /invalid|must be|unrecognized|choose a valid|conflicting/i.test(issue));
                   const casePatch = (patch: Partial<CaseImportReviewCase>) => updateEntry(entry.import_key, patch);
                   return <details key={entry.import_key} className="overflow-hidden rounded-lg border border-[#9CA3AF] bg-white shadow-sm open:border-[#704389]" open={openCases.has(entry.import_key)} onToggle={(event) => {
                     const isOpen = event.currentTarget.open;
@@ -457,18 +455,18 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
                   }}>
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
                       <span className="min-w-0"><span className="block truncate text-sm font-bold text-[#2B3642]">{entry.control_no || "Missing Control Number"} · {entry.title || "Untitled case"}</span><span className="mt-0.5 block text-xs text-[#6B7280]">{entry.clients.length} client row(s) · source row{entry.source_rows.length === 1 ? "" : "s"} {entry.source_rows.join(", ")}</span></span>
-                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${entry.duplicate ? "bg-amber-100 text-amber-800" : issues.length ? "bg-red-100 text-red-700" : "bg-green-100 text-green-800"}`}>{entry.duplicate ? "Possible duplicate" : issues.length ? "Needs review" : "Ready"}</span>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${entry.duplicate ? "bg-amber-100 text-amber-800" : issues.length ? "bg-red-100 text-red-700" : "bg-green-100 text-green-800"}`}>{entry.duplicate ? "Duplicate" : issues.length ? hasInvalidValue ? "Invalid" : "Needs review" : "Ready to Import"}</span>
                     </summary>
                     {openCases.has(entry.import_key) && <div className="space-y-4 border-t border-[#E5E7EB] p-4">
                       {entry.duplicate && <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">{entry.duplicate_message} This record will be held; existing data will not be overwritten.</p>}
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <Field label="Control Number" value={entry.control_no} onChange={(value) => casePatch({ control_no: value })} />
+                        <Field label="Control Number" value={entry.control_no} onChange={(value) => casePatch({ control_no: value, ...(value.trim() !== entry.control_no.trim() ? { duplicate: false, duplicate_message: null } : {}) })} />
                         <Field label="Title of the Case" value={entry.title} onChange={(value) => casePatch({ title: value })} />
                         <Field label="Court / Body" value={entry.court} onChange={(value) => casePatch({ court: value })} />
                         <Field label="Case Number" value={entry.case_no} onChange={(value) => casePatch({ case_no: value })} />
                         <Field label="Cause of Action" value={entry.cause_of_action} onChange={(value) => casePatch({ cause_of_action: value })} />
-                        <Field label="Nature of Case" value={entry.nature_of_case} onChange={(value) => casePatch({ nature_of_case: value })} />
-                        <label className="block"><span className="text-xs font-semibold text-[#4B5563]">Status</span><select value={entry.status} onChange={(event) => casePatch({ status: event.target.value })} className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-2.5 text-sm"><option value="NA">NA</option><option>Pending</option><option>Terminated</option></select></label>
+                        <SelectField label="Nature of Case" value={entry.nature_of_case} options={natureOfCaseOptions} onChange={(value) => casePatch({ nature_of_case: value })} />
+                        <label className="block"><span className="text-xs font-semibold text-[#4B5563]">Status</span><select value={entry.status} onChange={(event) => casePatch({ status: event.target.value })} className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-2.5 text-sm"><option value="">Select</option><option>Pending</option><option>Terminated</option></select></label>
                         <Field label="Case Received" type="date" value={entry.case_received} onChange={(value) => casePatch({ case_received: value })} />
                         <Field label="Last Action Taken" value={entry.last_action} onChange={(value) => casePatch({ last_action: value })} />
                         <Field label="Cause of Termination" value={entry.cause_of_termination} onChange={(value) => casePatch({ cause_of_termination: value })} />
@@ -476,6 +474,18 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
                         <Field label="Date of Confinement" type="date" value={entry.date_of_confinement} onChange={(value) => casePatch({ date_of_confinement: value })} />
                         <Field label="Place of Detention" value={entry.place_of_detention} onChange={(value) => casePatch({ place_of_detention: value })} />
                       </div>
+                      <section className="rounded-md border border-[#E5E7EB] bg-[#FBFCFD] p-3">
+                        <h4 className="text-sm font-bold text-[#2B3642]">Incident Location</h4>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          <label className="block"><span className="text-xs font-semibold text-[#4B5563]">Location Type</span><select value={entry.location_type} onChange={(event) => {
+                            const locationType = event.target.value;
+                            const barangays = locationType === "Urban" ? urbanBarangays : locationType === "Rural" ? ruralBarangays : [];
+                            casePatch({ location_type: locationType, incident_barangay: barangays.includes(entry.incident_barangay) ? entry.incident_barangay : "", incident_city: locationType ? "Panabo City" : "" });
+                          }} className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-2.5 text-sm"><option value="">Select</option><option value="Urban">Urban</option><option value="Rural">Rural</option></select></label>
+                          <label className="block"><span className="text-xs font-semibold text-[#4B5563]">Barangay</span><select value={entry.incident_barangay} disabled={!entry.location_type} onChange={(event) => casePatch({ incident_barangay: event.target.value, incident_city: event.target.value ? "Panabo City" : "" })} className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-2.5 text-sm disabled:bg-[#F3F4F6]"><option value="">{entry.location_type ? "Select barangay" : "Select location type first"}</option>{(entry.location_type === "Urban" ? urbanBarangays : entry.location_type === "Rural" ? ruralBarangays : []).map((barangay) => <option key={barangay} value={barangay}>{barangay}</option>)}</select></label>
+                          <div className="block"><span className="text-xs font-semibold text-[#4B5563]">City</span><p className="mt-1 flex h-9 items-center rounded-md border border-[#E5E7EB] bg-[#F3F4F6] px-2.5 text-sm text-[#4B5563]">Panabo City</p></div>
+                        </div>
+                      </section>
                       {Object.keys(entry.conflicting_values).length > 0 && <>
                         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"><p className="font-bold">Conflicting shared values</p><ul className="mt-1 space-y-1 text-xs">{Object.entries(entry.conflicting_values).map(([field, values]) => <li key={field}><span className="font-semibold">{field.replaceAll("_", " ")}:</span> {values.map((value) => value || "(blank)").join(" · ")}</li>)}</ul><p className="mt-2 text-xs">Conflicting fields are left blank above. Choose or enter the value to keep before confirming.</p></div>
                         <label className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"><input type="checkbox" checked={Boolean(entry.conflict_reviewed)} onChange={(event) => casePatch({ conflict_reviewed: event.target.checked })} className="mt-1 accent-[#704389]" /><span>I reviewed the source values and resolved each conflicting field above.</span></label>
@@ -486,24 +496,23 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
                           <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Client {index + 1} · source row {client.source_row}</p>{client.possible_matches.length > 0 && <span className="rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-800">{client.possible_matches.length} possible match(es)</span>}</div>
                           {client.possible_matches.length > 0 && <label className="mb-3 block"><span className="text-xs font-semibold text-[#4B5563]">Client matching (confirm manually)</span><select value={client.existing_client_id ?? ""} onChange={(event) => updateClient(entry.import_key, index, { existing_client_id: event.target.value ? Number(event.target.value) : null })} className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-2.5 text-sm"><option value="">Create a new client</option>{client.possible_matches.map((match) => <option key={match.client_id} value={match.client_id}>{match.name} · #{match.client_id}{match.age == null ? "" : ` · age ${match.age}`}{match.address ? ` · ${match.address}` : ""}</option>)}</select></label>}
                           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                            <Field showNA={false} label="Client Name" value={client.client_name} onChange={(value) => updateClient(entry.import_key, index, { client_name: value })} />
-                            <Field showNA={false} label="Age" type="number" value={String(client.age ?? "")} onChange={(value) => updateClient(entry.import_key, index, { age: value })} />
+                            <Field label="Client Name" value={client.client_name} onChange={(value) => updateClient(entry.import_key, index, { client_name: value })} />
+                            <Field label="Age" type="number" value={String(client.age ?? "")} onChange={(value) => updateClient(entry.import_key, index, { age: value })} />
                             <SelectField label="Gender / Sex" value={client.sex} options={sexOptions} onChange={(value) => updateClient(entry.import_key, index, { sex: value })} />
                             <SelectField label="Civil Status" value={client.civil_status} options={civilStatusOptions} onChange={(value) => updateClient(entry.import_key, index, { civil_status: value })} />
                             <ComboField label="Religion" value={client.religion} options={religionOptions} listId={`client-religion-${entry.import_key}-${index}`} onChange={(value) => updateClient(entry.import_key, index, { religion: value })} />
                             <SelectField label="Educational Attainment" value={client.educational_attainment} options={educationalAttainmentOptions} onChange={(value) => updateClient(entry.import_key, index, { educational_attainment: value })} />
-                            <Field showNA={false} label="Citizenship" value={client.citizenship} onChange={(value) => updateClient(entry.import_key, index, { citizenship: value })} />
+                            <Field label="Citizenship" value={client.citizenship} onChange={(value) => updateClient(entry.import_key, index, { citizenship: value })} />
                             <ComboField label="Language / Dialect" value={client.language_dialect} options={languageDialectOptions} listId={`client-language-${entry.import_key}-${index}`} onChange={(value) => updateClient(entry.import_key, index, { language_dialect: value })} />
                             <SelectField label="Party Represented" value={client.party_represented} options={applicantRoleOptions} onChange={(value) => updateClient(entry.import_key, index, { party_represented: value })} />
-                            <Field showNA={false} label="Address" value={client.address} onChange={(value) => updateClient(entry.import_key, index, { address: value })} />
-                            <Field showNA={false} label="Contact Number" type="tel" value={client.contact_no} onChange={(value) => updateClient(entry.import_key, index, { contact_no: value })} />
+                            <Field label="Address" value={client.address} onChange={(value) => updateClient(entry.import_key, index, { address: value })} />
+                            <Field label="Contact Number" type="tel" value={client.contact_no} onChange={(value) => updateClient(entry.import_key, index, { contact_no: value })} />
                             <ComboField label="Relationship to Applicant" value={client.relationship} options={relationshipOptions} listId={`client-relationship-${entry.import_key}-${index}`} onChange={(value) => updateClient(entry.import_key, index, { relationship: value })} />
-                            {(["urban", "rural", "drugs", "female", "senior", "cicl"] as const).map((flag) => {
+                            {(["drugs", "female", "senior", "cicl"] as const).map((flag) => {
                               const rawValue = client[flag];
                               const value = rawValue === true ? "1" : rawValue === false ? "0" : String(rawValue ?? "").toLowerCase();
                               const label = flag === "cicl" ? "CICL" : flag === "drugs" ? "Drug-related" : flag.charAt(0).toUpperCase() + flag.slice(1);
-                              const positiveLabel = flag === "rural" ? "Rural" : flag === "urban" ? "Urban" : "Yes";
-                              return <label key={flag} className="block"><span className="text-xs font-semibold text-[#4B5563]">{label}</span><select value={value === "yes" || value === "true" ? "1" : value === "no" || value === "false" ? "0" : value} onChange={(event) => updateClient(entry.import_key, index, { [flag]: event.target.value })} className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-2.5 text-sm"><option value="">Not provided</option><option value="1">{positiveLabel}</option><option value="0">No</option></select></label>;
+                              return <label key={flag} className="block"><span className="text-xs font-semibold text-[#4B5563]">{label}</span><select value={value === "yes" || value === "true" ? "1" : value === "no" || value === "false" ? "0" : value} onChange={(event) => updateClient(entry.import_key, index, { [flag]: event.target.value })} className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-2.5 text-sm"><option value="">Not provided</option><option value="1">Yes</option><option value="0">No</option></select></label>;
                             })}
                           </div>
                           <label className="mt-3 flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"><input type="checkbox" checked={Boolean(client.flags_reviewed)} onChange={(event) => updateClient(entry.import_key, index, { flags_reviewed: event.target.checked })} className="mt-1 accent-[#704389]" /><span>I reviewed the source indicators for Female, Senior, and CICL for this client.</span></label>
@@ -546,9 +555,18 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {[["Cases imported", result.cases_imported], ["New clients created", result.clients_created], ["Existing clients linked", result.existing_clients_linked], ["Skipped records", skippedRecords], ["Failed records", result.failed_records]].map(([label, value]) => <div key={label} className="rounded-lg border border-[#E5E7EB] bg-white p-4"><p className="text-xs font-semibold text-[#6B7280]">{label}</p><p className="mt-1 text-2xl font-bold text-[#2B3642]">{value}</p>{label === "Failed records" && result.failed_records > 0 && <p className="mt-1 text-[11px] text-[#6B7280]">Failures may also be included in held records.</p>}</div>)}
               </div>
+              <p className="text-xs text-[#6B7280]">Cases held for review: {result.cases_held} · Duplicate records skipped: {result.duplicate_cases_skipped}</p>
               {result.failures.length > 0 && <div className={`rounded-lg p-4 ${importOutcome === "failed" ? "border border-red-200 bg-red-50" : "border border-amber-200 bg-amber-50"}`}><p className="text-sm font-bold text-[#2B3642]">Records needing attention</p><ul className="mt-2 space-y-1 text-xs text-[#4B5563]">{result.failures.map((failure, index) => <li key={`${failure.control_no}-${index}`}>{failure.control_no}: {failure.reason}</li>)}</ul></div>}
             </>}
             <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] pt-4">
+              {result && (result.cases_held > 0 || result.duplicate_cases_skipped > 0) && <button type="button" onClick={() => {
+                const failureControls = new Set(result.failures.map((failure) => failure.control_no));
+                const heldEntries = entries.filter((entry) => entry.duplicate || caseIssues(entry).length > 0 || failureControls.has(entry.control_no));
+                setEntries(heldEntries);
+                setReviewPage(0);
+                setOpenCases(new Set(heldEntries.map((entry) => entry.import_key)));
+                setPhase("review");
+              }} className="h-9 rounded-md border border-[#704389] px-4 text-sm font-semibold text-[#704389] hover:bg-[#F7F0FA]">Review Held Cases</button>}
               {importOutcome === "failed"
                 ? <button type="button" onClick={() => { setPhase("upload"); setPreview(null); setEntries([]); setResult(null); setError(""); }} className="h-9 rounded-md border border-[#D1D5DB] px-4 text-sm font-semibold text-[#4B5563]">Review File Again</button>
                 : <button type="button" onClick={onClose} className="h-9 rounded-md bg-[#704389] px-5 text-sm font-semibold text-white hover:bg-[#5F3675]">Done</button>}

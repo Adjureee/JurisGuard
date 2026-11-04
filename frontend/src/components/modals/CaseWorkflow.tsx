@@ -10,6 +10,7 @@ import type {
   UseFormRegisterReturn,
 } from "react-hook-form";
 import { useAuth } from "../../contexts/AuthContext";
+import { natureOfCaseOptions } from "../../features/criminalCases/locationOptions";
 import { FieldStatus } from "../../features/criminalCases/components/FieldStatus";
 import { StepIndicator } from "../../features/criminalCases/components/StepIndicator";
 import {
@@ -256,14 +257,6 @@ const natureOfRequestOptions = [
   "Mediation/Conciliation",
   "Representation in Court/Quasi-Judicial Bodies",
   "Administration of Oath",
-];
-
-const natureOfCaseOptions = [
-  "Criminal",
-  "Administrative",
-  "Civil",
-  "Labor",
-  "Appeal",
 ];
 
 function generatedCaseTitle(clients: ClientRecord[], caseType: CaseType) {

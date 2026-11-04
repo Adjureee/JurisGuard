@@ -9,6 +9,7 @@ import {
   sexOptions,
 } from "../features/criminalCases/clientFieldOptions";
 import type { CaseType } from "../types";
+import { panaboBarangays } from "../features/criminalCases/locationOptions";
 
 export interface CaseImportClient {
   client_name: string;
@@ -57,6 +58,9 @@ export interface CaseImportReviewCase {
   date_of_confinement: string;
   place_of_detention: string;
   case_received: string;
+  location_type: string;
+  incident_barangay: string;
+  incident_city: string;
   clients: CaseImportClient[];
   source_rows: number[];
   conflicting_values: Record<string, string[]>;
@@ -109,7 +113,7 @@ function asString(value: unknown): string {
 
 function asReviewValue(value: unknown): string {
   const text = asString(value);
-  return text.trim() ? text : "NA";
+  return text.trim() ? text : "";
 }
 
 function matchOption(value: unknown, options: string[]): string {
@@ -128,6 +132,8 @@ function matchSexOption(value: unknown): string {
 function isReviewNA(value: unknown): boolean {
   return typeof value === "string" && value.trim().toUpperCase() === "NA";
 }
+
+const datePlaceholderFields = new Set(["date_of_termination", "date_of_confinement"]);
 
 function asNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);
@@ -162,7 +168,7 @@ function normalizePreview(value: unknown): CaseImportPreview {
         civil_status: matchOption(client.civil_status, civilStatusOptions),
         religion: matchOption(client.religion, religionOptions),
         educational_attainment: matchOption(client.educational_attainment, educationalAttainmentOptions),
-        citizenship: asString(client.citizenship).trim() || "Filipino",
+        citizenship: asReviewValue(client.citizenship) || "Filipino",
         language_dialect: matchOption(client.language_dialect, languageDialectOptions),
         address: asString(client.address),
         contact_no: asString(client.contact_no),
@@ -175,7 +181,7 @@ function normalizePreview(value: unknown): CaseImportPreview {
         senior: client.senior == null ? null : typeof client.senior === "boolean" || typeof client.senior === "number" ? client.senior : asString(client.senior),
         cicl: client.cicl == null ? null : typeof client.cicl === "boolean" || typeof client.cicl === "number" ? client.cicl : asString(client.cicl),
         location_indicators_present: Boolean(client.location_indicators_present),
-        flags_reviewed: true,
+        flags_reviewed: Boolean(client.flags_reviewed),
         source_row: asNumber(client.source_row),
         possible_matches: rawMatches.map((rawMatch) => {
           const match = asRecord(rawMatch);
@@ -200,12 +206,15 @@ function normalizePreview(value: unknown): CaseImportPreview {
       cause_of_action: asReviewValue(entry.cause_of_action),
       nature_of_case: asReviewValue(entry.nature_of_case),
       status: asReviewValue(entry.status),
-      last_action: asReviewValue(entry.last_action),
-      cause_of_termination: asReviewValue(entry.cause_of_termination),
-      date_of_termination: asReviewValue(entry.date_of_termination),
-      date_of_confinement: asReviewValue(entry.date_of_confinement),
-      place_of_detention: asReviewValue(entry.place_of_detention),
+      last_action: asReviewValue(entry.last_action) || "NA",
+      cause_of_termination: asReviewValue(entry.cause_of_termination) || "NA",
+      date_of_termination: asReviewValue(entry.date_of_termination) || "NA",
+      date_of_confinement: asReviewValue(entry.date_of_confinement) || "NA",
+      place_of_detention: asReviewValue(entry.place_of_detention) || "NA",
       case_received: asReviewValue(entry.case_received),
+      location_type: matchOption(entry.location_type, ["Urban", "Rural"]),
+      incident_barangay: matchOption(entry.incident_barangay, panaboBarangays),
+      incident_city: asString(entry.incident_city),
       clients,
       source_rows: Array.isArray(entry.source_rows) ? entry.source_rows.map((row) => asNumber(row)).filter(Number.isFinite) : [],
       conflicting_values: Object.fromEntries(Object.entries(rawConflicts).map(([field, values]) => [
@@ -289,11 +298,11 @@ export async function importCaseRecords(
     duplicate_case_count: duplicateCaseCount,
     cases: cases.map((entry) => {
       const caseData = omitKeys(entry, ["import_key", "errors", "duplicate", "duplicate_message", "ready", "source_rows", "conflicting_values", "clients"]);
-      const caseFields = Object.fromEntries(Object.entries(caseData).map(([key, value]) => [key, isReviewNA(value) ? "" : value]));
+      const caseFields = Object.fromEntries(Object.entries(caseData).map(([key, value]) => [key, datePlaceholderFields.has(key) && isReviewNA(value) ? "" : value]));
       return {
         ...caseFields,
         clients: entry.clients.map((client) => {
-          const clientData = omitKeys(client, ["possible_matches", "source_row"]);
+          const clientData = omitKeys(client, ["possible_matches", "source_row", "urban", "rural", "location_indicators_present"]);
           const ordinaryFields = new Set(["client_name", "age", "sex", "civil_status", "religion", "educational_attainment", "citizenship", "language_dialect", "address", "contact_no", "relationship", "party_represented"]);
           return Object.fromEntries(Object.entries(clientData).map(([key, value]) => [key, ordinaryFields.has(key) && isReviewNA(value) ? "" : value]));
         }),

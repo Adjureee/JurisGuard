@@ -39,6 +39,8 @@ HEADER_ALIASES: dict[str, tuple[str, ...]] = {
     "date_of_confinement": ("DATE OF CONFINEMENT", "DATE CONFINED"),
     "place_of_detention": ("PLACE OF DETENTION", "DETENTION PLACE"),
     "case_received": ("CASE RECEIVED", "DATE RECEIVED", "DATE OF RECEIPT"),
+    "location_type": ("LOCATION TYPE", "INCIDENT LOCATION TYPE"),
+    "incident_barangay": ("INCIDENT BARANGAY", "BARANGAY OF INCIDENT", "PLACE OF INCIDENT"),
     "address": ("ADDRESS", "CLIENT ADDRESS"),
     "contact_no": ("CONTACT NUMBER", "CONTACT NO", "CONTACT NO.", "PHONE NUMBER"),
     "relationship": ("RELATIONSHIP TO APPLICANT", "RELATIONSHIP"),
@@ -111,6 +113,35 @@ def normalize_binary_indicator(value: Any, *, blank_default: str | None = None) 
     if text in {"0", "0.0", "no", "false", "n"}:
         return "0"
     return str(value).strip()
+
+
+def resolve_incident_location(indicator_rows: list[tuple[Any, Any]]) -> tuple[str | None, bool]:
+    """Resolve case location only when every source row has one consistent binary pair."""
+    if not indicator_rows:
+        return None, False
+
+    resolved: list[str] = []
+    incomplete = False
+    conflict = False
+    for urban_value, rural_value in indicator_rows:
+        urban = normalize_binary_indicator(urban_value)
+        rural = normalize_binary_indicator(rural_value)
+        if urban == "1" and rural == "0":
+            resolved.append("Urban")
+        elif urban == "0" and rural == "1":
+            resolved.append("Rural")
+        elif urban == "1" and rural == "1":
+            conflict = True
+        elif urban in {None, "0"} and rural in {None, "0"}:
+            incomplete = True
+        else:
+            conflict = True
+
+    if len(set(resolved)) > 1:
+        conflict = True
+    if conflict or incomplete or len(resolved) != len(indicator_rows):
+        return None, conflict
+    return resolved[0], False
 
 
 def _rows_to_records(rows: list[list[Any]]) -> tuple[list[dict[str, Any]], int]:
@@ -235,6 +266,14 @@ def _header_score(rows: list[list[Any]]) -> int:
     return max((len(_mapped_header(row)) for row in rows[:40]), default=0)
 
 
+def _zero_padded_contact(value: Any, number_format: str) -> Any:
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and float(value).is_integer():
+        match = re.fullmatch(r"0+", number_format or "")
+        if match:
+            return str(int(value)).zfill(len(number_format))
+    return value
+
+
 def read_workbook(content: bytes, filename: str) -> tuple[list[dict[str, Any]], int, str]:
     if not content:
         raise ValueError("The selected file is empty.")
@@ -260,7 +299,24 @@ def read_workbook(content: bytes, filename: str) -> tuple[list[dict[str, Any]], 
             workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
             best_rows: list[list[Any]] = []
             for sheet in workbook.worksheets:
-                candidate = [list(row) for row in sheet.iter_rows(values_only=True)]
+                raw_rows = list(sheet.iter_rows())
+                contact_column = next(
+                    (
+                        mapped["contact_no"]
+                        for row in raw_rows[:40]
+                        if (mapped := _mapped_header([cell.value for cell in row])).get("contact_no") is not None
+                    ),
+                    None,
+                )
+                candidate = [
+                    [
+                        _zero_padded_contact(cell.value, cell.number_format)
+                        if index == contact_column
+                        else cell.value
+                        for index, cell in enumerate(row)
+                    ]
+                    for row in raw_rows
+                ]
                 if _header_score(candidate) > _header_score(best_rows):
                     best_rows = candidate
             rows, processed = _rows_to_records(best_rows)
@@ -279,12 +335,28 @@ def read_workbook(content: bytes, filename: str) -> tuple[list[dict[str, Any]], 
             workbook = xlrd.open_workbook(file_contents=content, on_demand=True)
             best_rows: list[list[Any]] = []
             for sheet in workbook.sheets():
+                contact_column = next(
+                    (
+                        mapped["contact_no"]
+                        for row_index in range(min(sheet.nrows, 40))
+                        if (mapped := _mapped_header([cell.value for cell in sheet.row(row_index)])).get("contact_no") is not None
+                    ),
+                    None,
+                )
                 candidate = []
                 for row_index in range(sheet.nrows):
                     values = []
-                    for cell in sheet.row(row_index):
+                    row_cells = sheet.row(row_index)
+                    for column_index, cell in enumerate(row_cells):
                         if cell.ctype == xlrd.XL_CELL_DATE:
                             values.append(xlrd.xldate.xldate_as_datetime(cell.value, workbook.datemode))
+                        elif column_index == contact_column and cell.ctype == xlrd.XL_CELL_NUMBER:
+                            try:
+                                xf = workbook.xf_list[cell.xf_index]
+                                number_format = workbook.format_map[xf.format_key].format_str
+                            except (AttributeError, IndexError, KeyError):
+                                number_format = ""
+                            values.append(_zero_padded_contact(cell.value, number_format))
                         else:
                             values.append(cell.value)
                     candidate.append(values)

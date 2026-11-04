@@ -40,6 +40,7 @@ from case_import import (
     MAX_WORKBOOK_BYTES,
     extract_case_title_client_names,
     normalize_binary_indicator,
+    resolve_incident_location,
     read_workbook,
 )
 from case_transfer_permissions import can_edit_transfer_report, can_submit_transfer_report
@@ -2243,10 +2244,25 @@ def dashboard_intake_load(
         .group_by("weekday")
         .all()
     )
+    actual_intake_time = models.IntakeRecord.form_date
+    hour_query = scoped_case_query(db, user).filter(actual_intake_time.isnot(None))
+    from_date = parse_date(date_from)
+    to_date = parse_date(date_to)
+    if from_date:
+        hour_query = hour_query.filter(actual_intake_time >= from_date)
+    if to_date:
+        hour_query = hour_query.filter(actual_intake_time < to_date + timedelta(days=1))
     hour_rows = (
-        apply_case_date_filters(scoped_case_query(db, user), date_from, date_to)
+        hour_query
+        .filter(
+            or_(
+                func.extract("hour", actual_intake_time) != 0,
+                func.extract("minute", actual_intake_time) != 0,
+                func.extract("second", actual_intake_time) != 0,
+            ),
+        )
         .with_entities(
-            func.extract("hour", case_date_column()).label("hour"),
+            func.extract("hour", actual_intake_time).label("hour"),
             func.count(models.Case.case_id).label("total_cases"),
         )
         .group_by("hour")
@@ -4449,14 +4465,15 @@ async def preview_case_import(
             group_key,
             {
                 "control_no": control_no, "source_rows": [], "clients": [], "conflicts": [],
-                "conflict_values": {}, "fields": {}, "has_client_name_column": bool(row.get("_client_name_column_present")),
+                "conflict_values": {}, "fields": {}, "location_indicator_rows": [],
+                "has_client_name_column": bool(row.get("_client_name_column_present")),
             },
         )
         group["source_rows"].append(row["_row_number"])
         shared_fields = (
             "title", "court", "case_no", "cause_of_action", "nature_of_case", "status", "last_action",
             "cause_of_termination", "date_of_termination", "date_of_confinement",
-            "place_of_detention", "case_received",
+            "place_of_detention", "case_received", "location_type", "incident_barangay",
         )
         for field in shared_fields:
             value = row.get(field)
@@ -4490,20 +4507,14 @@ async def preview_case_import(
 
         for flag in ("urban", "rural"):
             client_values[flag] = normalize_binary_indicator(client_values[flag])
+        grouped[group_key]["location_indicator_rows"].append((client_values["urban"], client_values["rural"]))
         for flag in ("drugs", "female", "senior", "cicl"):
-            present = bool(row.get(f"_{flag}_column_present"))
-            client_values[flag] = normalize_binary_indicator(client_values[flag], blank_default="0" if present else None)
-        if client_values["female"] in {"0", "1"}:
-            client_values["sex"] = "Female" if client_values["female"] == "1" else "Male"
-        if client_values["rural"] == "1" and client_values["urban"] in (None, ""):
-            client_values["urban"] = "0"
-        elif client_values["urban"] == "1" and client_values["rural"] in (None, ""):
-            client_values["rural"] = "0"
+            client_values[flag] = normalize_binary_indicator(client_values[flag])
         client_values["location_indicators_present"] = bool(
             row.get("_urban_column_present") or row.get("_rural_column_present")
         )
         client_values["source_row"] = row["_row_number"]
-        client_values["flags_reviewed"] = False
+        client_values["flags_reviewed"] = True
         client_values["possible_matches"] = []
         grouped[group_key]["clients"].append(client_values)
 
@@ -4551,9 +4562,18 @@ async def preview_case_import(
     results = []
     for index, (key, group) in enumerate(grouped.items()):
         fields = dict(group["fields"])
+        mapped_location, location_conflict = resolve_incident_location(group["location_indicator_rows"])
         for conflict in group["conflicts"]:
             fields[conflict] = ""
+        fields["location_type"] = mapped_location or ""
+        fields["incident_barangay"] = ""
         errors: list[str] = []
+        if location_conflict:
+            errors.append("Conflicting Urban/Rural indicators require Incident Location review.")
+            group["conflict_values"]["incident_location_indicators"] = [
+                f"Urban={urban or '(blank)'}, Rural={rural or '(blank)'}"
+                for urban, rural in group["location_indicator_rows"]
+            ]
         control_no = group["control_no"]
         if not control_no:
             errors.append("Control Number is missing.")
@@ -4623,7 +4643,7 @@ async def preview_case_import(
             contact = str(client.get("contact_no") or "").strip()
             if not contact or re.fullmatch(r"[0-9]{1,11}", contact) is None:
                 errors.append(f"Client {client_index + 1}: Contact Number is required and must contain up to 11 digits.")
-            for flag in ("urban", "rural", "drugs", "female", "senior", "cicl"):
+            for flag in ("drugs", "female", "senior", "cicl"):
                 flag_value = str(client.get(flag) or "").strip().lower()
                 if flag_value and flag_value not in {"1", "0", "yes", "no", "true", "false", "y", "n"}:
                     errors.append(f"Client {client_index + 1}: {flag.title()} must be a yes/no value.")
@@ -4655,6 +4675,9 @@ async def preview_case_import(
                 "date_of_confinement": fields.get("date_of_confinement") or "",
                 "place_of_detention": fields.get("place_of_detention") or "",
                 "case_received": received or "",
+                "location_type": fields.get("location_type") or "",
+                "incident_barangay": fields.get("incident_barangay") or "",
+                "incident_city": "Panabo City" if fields.get("location_type") or fields.get("incident_barangay") else "",
                 "clients": group["clients"],
                 "source_rows": group["source_rows"],
                 "errors": errors,
@@ -4696,6 +4719,18 @@ def import_case_records(
     imported = created_clients = linked_clients = failed = 0
     held = max(0, payload.held_case_count)
     failures: list[dict[str, str]] = []
+    urban_barangays = {
+        "Cagangohan", "Datu Abdul Dadia", "Gredu (Poblacion)", "J.P. Laurel",
+        "New Pandan (Poblacion)", "New Visayas", "Quezon", "San Francisco (Poblacion)",
+        "San Vicente", "Salvacion", "Santo Nino (Poblacion)",
+    }
+    rural_barangays = {
+        "A. O. Floirendo", "Buenavista", "Cacao", "Consolacion", "Dapco", "Kasilak",
+        "Katipunan", "Katualan", "Kauswagan", "Kiotoy", "Little Panay",
+        "Lower Panaga (Roxas)", "Mabunao", "Maduao", "Malativas", "Manay", "Nanyo",
+        "New Malaga (Dalisay)", "New Malitbog", "San Nicolas", "San Pedro", "San Roque",
+        "Santa Cruz", "Sindaton", "Southern Davao", "Tagpore", "Tibungol", "Upper Licanan", "Waterfall",
+    }
     for entry in payload.cases:
         entry_case_type = entry.get("case_type")
         if entry_case_type not in (None, "", payload.case_type):
@@ -4712,6 +4747,7 @@ def import_case_records(
         received_raw = entry.get("case_received")
         if (
             not control_no or len(control_no) > 20 or not title or len(title) > 255
+            or str(entry.get("nature_of_case") or "").strip() not in {"Criminal", "Administrative", "Civil", "Labor", "Appeal"}
             or status_raw.lower() not in {"pending", "terminated"}
             or not clients or parse_date(received_raw) is None
             or len(str(entry.get("case_no") or "")) > 20
@@ -4723,6 +4759,13 @@ def import_case_records(
             or (entry.get("has_conflicts") and not entry.get("conflict_reviewed"))
         ):
             held += 1
+            continue
+        location_type = str(entry.get("location_type") or "").strip()
+        incident_barangay = str(entry.get("incident_barangay") or "").strip()
+        allowed_barangays = urban_barangays if location_type == "Urban" else rural_barangays if location_type == "Rural" else set()
+        if location_type not in {"Urban", "Rural"} or not incident_barangay or incident_barangay not in allowed_barangays:
+            held += 1
+            failures.append({"control_no": control_no or "(missing)", "reason": "Review and select a valid Incident Location type and matching Panabo Barangay."})
             continue
         if (
             db.query(models.Case.case_id)
@@ -4740,15 +4783,10 @@ def import_case_records(
             for client_data in clients:
                 if len(str(client_data.get("party_represented") or "")) > 100:
                     raise ValueError("Party Represented exceeds the 100-character limit.")
-                for indicator in ("urban", "rural", "drugs", "female", "senior", "cicl"):
+                for indicator in ("drugs", "female", "senior", "cicl"):
                     raw_value = str(client_data.get(indicator) or "").strip().lower()
                     if raw_value and raw_value not in {"1", "0", "yes", "no", "true", "false", "y", "n"}:
                         raise ValueError(f"{indicator.title()} must be a yes/no value.")
-                if client_data.get("location_indicators_present"):
-                    rural = normalize_binary_indicator(client_data.get("rural"))
-                    urban = normalize_binary_indicator(client_data.get("urban"))
-                    if not ((rural == "1" and urban == "0") or (rural == "0" and urban == "1")):
-                        raise ValueError("Choose exactly one location indicator, Rural or Urban.")
                 if any(client_data.get(flag) not in (None, "") for flag in ("female", "senior", "cicl")) and not client_data.get("flags_reviewed"):
                     raise ValueError("Review the Female, Senior, and CICL indicators before import.")
                 client_id = client_data.get("existing_client_id")
@@ -4819,8 +4857,6 @@ def import_case_records(
                     representative_relationship=limit_text(client_data.get("relationship"), 100),
                 )
                 classification_flags = {
-                    "urban": "class_urban",
-                    "rural": "class_rural",
                     "drugs": "class_drug_related",
                     "female": "class_female",
                     "senior": "class_senior_citizen",
@@ -4879,6 +4915,9 @@ def import_case_records(
                 date_of_termination=parse_date(entry.get("date_of_termination")),
                 date_of_confinement=parse_date(entry.get("date_of_confinement")),
                 place_of_detention=limit_text(entry.get("place_of_detention"), 255),
+                incident_barangay=incident_barangay or None,
+                incident_city="Panabo City" if location_type or incident_barangay else None,
+                location_type=location_type or None,
                 detained=bool(entry.get("date_of_confinement") or entry.get("place_of_detention")),
                 pending_in_court=normalized_status == "Pending",
                 is_terminated=normalized_status == "Terminated",

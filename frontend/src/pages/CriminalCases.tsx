@@ -46,6 +46,7 @@ import {
   isContactNumberPasteAllowed,
   sanitizeContactNumberInput,
 } from "../utils/contactNumber";
+import { panaboBarangays, ruralBarangays, urbanBarangays } from "../features/criminalCases/locationOptions";
 
 const accordionBorderClass: Record<CaseStatus, string> = {
   Pending: "border-amber-200",
@@ -61,54 +62,6 @@ const religionOptions = [
   "Indigenous Belief",
   "None",
 ];
-
-const urbanBarangays = [
-  "Cagangohan",
-  "Datu Abdul Dadia",
-  "Gredu (Poblacion)",
-  "J.P. Laurel",
-  "New Pandan (Poblacion)",
-  "New Visayas",
-  "Quezon",
-  "San Francisco (Poblacion)",
-  "San Vicente",
-  "Salvacion",
-  "Santo Nino (Poblacion)",
-];
-
-const ruralBarangays = [
-  "A. O. Floirendo",
-  "Buenavista",
-  "Cacao",
-  "Consolacion",
-  "Dapco",
-  "Kasilak",
-  "Katipunan",
-  "Katualan",
-  "Kauswagan",
-  "Kiotoy",
-  "Little Panay",
-  "Lower Panaga (Roxas)",
-  "Mabunao",
-  "Maduao",
-  "Malativas",
-  "Manay",
-  "Nanyo",
-  "New Malaga (Dalisay)",
-  "New Malitbog",
-  "San Nicolas",
-  "San Pedro",
-  "San Roque",
-  "Santa Cruz",
-  "Sindaton",
-  "Southern Davao",
-  "Tagpore",
-  "Tibungol",
-  "Upper Licanan",
-  "Waterfall",
-];
-
-const panaboBarangays = [...urbanBarangays, ...ruralBarangays];
 
 const courtBodyOptions = [
   "RTC Branch 4",
