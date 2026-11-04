@@ -10,16 +10,16 @@ import ClientInformationModal from './ClientInformationModal';
 import { useConfirmation } from '../ConfirmationProvider';
 import ModalPortal from './ModalPortal';
 
-interface Props { isOpen: boolean; onClose: () => void }
+interface Props { isOpen: boolean; onClose: () => void; initialMode?: 'manual' | 'scan' }
 
-function IntakeSession({ onClose }: { onClose: () => void }) {
+function IntakeSession({ onClose, initialMode }: { onClose: () => void; initialMode?: 'manual' | 'scan' }) {
   const confirm = useConfirmation();
   const [dirty, setDirty] = useState(false);
   async function leave(action: () => void) {
     if (phase === 'scan' && dirty && !await confirm({ title: 'Discard unsaved corrections?', message: 'Your reviewed draft has not been saved. Cancel to keep reviewing.', confirmLabel: 'Discard draft' })) return;
     setDirty(false); action();
   }
-  const [phase, setPhase] = useState<'method' | 'manual' | 'scan' | 'saved' | 'case'>('method');
+  const [phase, setPhase] = useState<'method' | 'manual' | 'scan' | 'saved' | 'case'>(initialMode ?? 'method');
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [viewing, setViewing] = useState<ClientRecord | null>(null);
   const [session, setSession] = useState(0);
@@ -59,6 +59,6 @@ function IntakeSession({ onClose }: { onClose: () => void }) {
   </div><ClientInformationModal client={viewing} onClose={() => setViewing(null)} /></ModalPortal>;
 }
 
-export default function AddClientModal({ isOpen, onClose }: Props) {
-  return isOpen ? <IntakeSession onClose={onClose} /> : null;
+export default function AddClientModal({ isOpen, onClose, initialMode }: Props) {
+  return isOpen ? <IntakeSession onClose={onClose} initialMode={initialMode} /> : null;
 }

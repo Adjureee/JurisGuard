@@ -339,7 +339,7 @@ export async function getOcrAnalytics(range?: DashboardDateRange) {
 }
 
 export async function getStaffWorkload() {
-  const response = await apiClient.get<StaffWorkload>("/dashboard/staff-workload");
+  const response = await apiClient.get<StaffWorkload>("/dashboard/staff-workload", { timeout: 20000 });
   return response.data;
 }
 

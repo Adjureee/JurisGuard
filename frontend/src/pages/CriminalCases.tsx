@@ -1,7 +1,7 @@
 import { useConfirmation } from "../components/ConfirmationProvider";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import MainLayout from "../layouts/MainLayout";
 import DateFilterSelect from "../components/DateFilterSelect";
@@ -1653,8 +1653,31 @@ export default function CriminalCasesPage({
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
   const [showCaseModal, setShowCaseModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
+  const [dashboardIntakeMode, setDashboardIntakeMode] = useState<'manual' | 'scan' | undefined>();
   const [showExportModal, setShowExportModal] = useState(false);
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
+  const [dashboardParams, setDashboardParams] = useSearchParams();
+  useEffect(() => {
+    const action = dashboardParams.get('action');
+    if (action === 'intake' || action === 'client') {
+      setDashboardIntakeMode(action === 'intake' ? 'scan' : 'manual');
+      setShowClientModal(true);
+    }
+    if (action === 'case') setShowCaseModal(true);
+    const clientId = dashboardParams.get('client');
+    const caseId = dashboardParams.get('case');
+    if (clientId && clients.some(client => client.client_id === clientId)) setActiveClientId(clientId);
+    if (caseId) {
+      const record = cases.find(record => record.case_id === caseId);
+      if (record) setActiveClientId(record.client_id); else return;
+    }
+    if (clientId && !clients.some(client => client.client_id === clientId)) return;
+    if (action || clientId || caseId) {
+      const next = new URLSearchParams(dashboardParams);
+      next.delete('action'); next.delete('client'); next.delete('case');
+      setDashboardParams(next, { replace: true });
+    }
+  }, [dashboardParams, setDashboardParams, clients, cases]);
   const [actionMode, setActionMode] = useState<"view" | "update">("view");
 
   useEffect(() => {
@@ -1951,7 +1974,8 @@ export default function CriminalCasesPage({
       {/* Modals */}
       <AddClientModal
         isOpen={showClientModal}
-        onClose={() => setShowClientModal(false)}
+        initialMode={dashboardIntakeMode}
+        onClose={() => { setShowClientModal(false); setDashboardIntakeMode(undefined); }}
       />
       <AddCaseModal
         isOpen={showCaseModal}

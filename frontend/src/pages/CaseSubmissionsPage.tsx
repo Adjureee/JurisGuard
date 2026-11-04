@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
+import { useSearchParams } from 'react-router-dom';
 import MainLayout from "../layouts/MainLayout";
 import DateFilterSelect from "../components/DateFilterSelect";
 import PageHeader from "../components/PageHeader";
@@ -135,6 +136,15 @@ export default function CaseSubmissionsPage() {
   const [notes, setNotes] = useState("");
   const [preview, setPreview] = useState<SubmissionSnapshot[]>([]);
   const [search, setSearch] = useState("");
+  const [dashboardParams, setDashboardParams] = useSearchParams();
+  useEffect(() => {
+    const id = dashboardParams.get('submission');
+    if (!id || loadingSubmissions) return;
+    const match = submissions.find(row => row.submission_id === id);
+    if (match) setSearch(match.title);
+    const next = new URLSearchParams(dashboardParams); next.delete('submission');
+    setDashboardParams(next, { replace: true });
+  }, [dashboardParams, setDashboardParams, submissions, loadingSubmissions]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
 

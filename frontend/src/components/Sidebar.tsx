@@ -118,8 +118,8 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           className="fixed inset-0 z-30 bg-black/60 md:hidden"
         />
       )}
-      <aside className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-[#E5E7EB] bg-white px-5 py-5 text-[#111827] transition duration-200 md:translate-x-0 ${
-        isOpen ? "translate-x-0" : "-translate-x-full"
+      <aside className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-[#E5E7EB] bg-white px-5 py-5 text-[#111827] transition duration-200 md:visible md:translate-x-0 ${
+        isOpen ? "visible translate-x-0" : "invisible -translate-x-full"
       }`}>
       <div className="mb-7 flex justify-center">
         <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
