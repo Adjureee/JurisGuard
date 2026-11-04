@@ -77,6 +77,29 @@ class Client(Base):
     intakes = relationship("IntakeRecord", back_populates="client")
     cases = relationship("Case", back_populates="client")
     case_participations = relationship("CaseClient", back_populates="client")
+    paper_intake = relationship("ReviewedPaperIntake", uselist=False, lazy="selectin")
+
+
+class PaperExtractionDraft(Base):
+    __tablename__ = 'paper_extraction_draft'
+    draft_id = Column(String(64), primary_key=True)
+    document_id = Column(Integer, ForeignKey('document.document_id'), nullable=False, index=True)
+    extraction_json = Column(JSONB, nullable=False)
+
+
+class ReviewedPaperIntake(Base):
+    __tablename__ = 'reviewed_paper_intake'
+    id = Column(Integer, primary_key=True)
+    client_id = Column(Integer, ForeignKey('client.client_id'), nullable=False, unique=True)
+    document_id = Column(Integer, ForeignKey('document.document_id'), nullable=False, unique=True)
+    reviewed_by = Column(Integer, ForeignKey('user.user_id'), nullable=False)
+    reviewed_at = Column(DateTime, nullable=False, server_default=func.now())
+    sections = Column(JSONB, nullable=False)
+    unreadable_fields = Column(JSONB, nullable=False)
+    field_reviews = Column(JSONB)
+    checkbox_states = Column(JSONB)
+    source_draft_id = Column(String(64))
+    candidate_snapshot = Column(JSONB)
 
 
 class ClientClassification(Base):

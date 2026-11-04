@@ -1487,6 +1487,7 @@ class JurisGuardExtractionEngine:
         self.mistral_connect_timeout = get_int_env("MISTRAL_CONNECT_TIMEOUT_SECONDS", 10)
         self.mistral_read_timeout = get_int_env("MISTRAL_READ_TIMEOUT_SECONDS", 60)
         self.mistral_model = os.getenv("MISTRAL_MODEL", "pixtral-12b-2409")
+        self.mistral_random_seed = get_int_env("MISTRAL_RANDOM_SEED", 0)
 
     def _get_empty_schema(self) -> dict:
         return {
@@ -1888,7 +1889,7 @@ class JurisGuardExtractionEngine:
             flat["adversary_role"] = "Defendant/Respondent/Accused"
         return flat
 
-    def _run_online_pipeline(self, base64_image: str) -> dict:
+    def _run_online_pipeline(self, base64_image: str, paper_intake: bool = False) -> dict:
         """Primary Mode: Mistral Vision AI (Cloud)"""
         if not self.mistral_api_key:
             raise RuntimeError("MISTRAL_API_KEY is not configured")
@@ -1896,6 +1897,13 @@ class JurisGuardExtractionEngine:
         print("[System] Network Healthy. Routing to Cloud Pipeline (Mistral)...")
         from cloud_intake import vision_content, validate_sections
         schema = self._get_sectioned_schema()
+        if paper_intake:
+            from paper_intake import empty_sections, SCHEMA
+            schema = empty_sections()
+        if paper_intake:
+            from paper_checkboxes import unknown_boxes
+            schema = {**schema, 'checkbox_states': unknown_boxes()}
+        content = vision_content(base64_image, schema, paper_only=True) if paper_intake else vision_content(base64_image, schema)
 
         headers = {
             "Content-Type": "application/json",
@@ -1904,12 +1912,14 @@ class JurisGuardExtractionEngine:
         payload = {
             "model": self.mistral_model,
             "messages": [
-                {"role": "user", "content": vision_content(base64_image, schema)}
+                {"role": "user", "content": content}
             ],
             "temperature": 0.0,
             "response_format": {"type": "json_object"}
         }
 
+        if paper_intake:
+            payload.update(random_seed=getattr(self, 'mistral_random_seed', 0), max_tokens=4096)
         response = requests.post(
             "https://api.mistral.ai/v1/chat/completions",
             headers=headers,
@@ -1921,6 +1931,29 @@ class JurisGuardExtractionEngine:
         clean_json_text = response.json()['choices'][0]['message']['content'].strip().replace("```json", "").replace("```", "").strip()
         cloud_response = json.loads(clean_json_text)
         cloud_warnings = ["Cloud vision candidates require human review."]
+        if paper_intake:
+            import hashlib
+            from cloud_intake import validate_paper_response
+            from paper_intake import extract_paper_intake
+            from paper_checkboxes import checkbox_review_warnings
+            sections, boxes, field_states, issues = validate_paper_response(cloud_response)
+            result = extract_paper_intake('')
+            result['sections'], result['checkbox_states'] = sections, boxes
+            result['diagnostics'].update({
+                'field_states': field_states, 'cloud_response_text': clean_json_text,
+                'source_text_kind': 'cloud_json_candidates_not_ocr_transcript',
+                'cloud_model_requested': self.mistral_model,
+                'cloud_model_returned': response.json().get('model'),
+                'cloud_random_seed': payload['random_seed'], 'cloud_temperature': payload['temperature'],
+                'cloud_prompt_sha256': hashlib.sha256(json.dumps(content[0], sort_keys=True).encode()).hexdigest(),
+            })
+            returned_model = response.json().get('model')
+            result['diagnostics']['cloud_model_mismatch'] = bool(returned_model and returned_model != self.mistral_model)
+            if result['diagnostics']['cloud_model_mismatch']:
+                issues.append('Cloud provider returned a different model identifier; model version is not pinned by the requested name.')
+            result['extraction_mode'] = 'ONLINE_MISTRAL'
+            result['diagnostics']['warnings'] = cloud_warnings + issues + checkbox_review_warnings(boxes) + ['Verify every field against the scan. Blank or unclear entries remain empty.']
+            return result
         sections = validate_sections(cloud_response, schema, cloud_warnings)
         extracted_data = self._flat_from_sectioned(sections)
         extracted_data["sections"] = sections
@@ -2019,6 +2052,49 @@ class JurisGuardExtractionEngine:
                 return fallback_data
 
     def execute_extraction(self, file_path: str, extraction_mode: str = "auto", extraction_target: str = "full") -> dict:
+        if extraction_target == "paper_boundaries":
+            from paper_capture import heading_positions
+            ocr = self.local_ocr.extract(file_path, target="boundaries")
+            return {"headings": heading_positions(ocr.raw_text, ocr.layout), "warnings": ocr.warnings}
+        if extraction_target == "paper_intake":
+            from paper_intake import extract_paper_intake
+            cloud_failed = False
+            if extraction_mode == 'cloud':
+                compressed = compress_image_for_vlm(file_path)
+                try:
+                    result = self._run_online_pipeline(encode_image_to_base64(compressed), paper_intake=True)
+                    from paper_provenance import attach_provenance
+                    return attach_provenance(result, file_path, 'cloud', {'model': self.mistral_model, 'temperature': 0, 'random_seed': self.mistral_random_seed, 'max_tokens': 4096})
+                except Exception:
+                    cloud_failed = True
+                finally:
+                    if compressed != file_path and os.path.exists(compressed):
+                        os.remove(compressed)
+            try:
+                ocr = self.local_ocr.extract(file_path)
+                result = extract_paper_intake(ocr.raw_text, ocr.layout, getattr(ocr, 'refinements', None))
+                from paper_checkboxes import extract_visual_boxes, answer_from_boxes, checkbox_review_warnings
+                checkbox_diagnostics = {}
+                boxes, evidence = extract_visual_boxes(file_path, ocr.raw_text, ocr.layout, checkbox_diagnostics)
+                result['diagnostics']['checkbox_detection'] = checkbox_diagnostics
+                result['diagnostics']['warnings'].extend(checkbox_review_warnings(boxes))
+                result['checkbox_states'] = boxes
+                result['sections']['applicant_personal_circumstances']['detained'] = answer_from_boxes(boxes)
+                result['diagnostics'].setdefault('field_evidence', {}).update(evidence)
+                from paper_provenance import attach_provenance, local_settings
+                attach_provenance(result, file_path, 'local', local_settings(self.local_ocr))
+                result['diagnostics']['recognized_text_sha256'] = __import__('hashlib').sha256(ocr.raw_text.encode()).hexdigest()
+                result['diagnostics']['page_count'] = ocr.page_count
+                result['extraction_mode'] = 'OFFLINE_PAPER_INTAKE' if ocr.raw_text.strip() else 'OFFLINE_OCR_EMPTY'
+                result['diagnostics']['warnings'].extend(ocr.warnings)
+                if cloud_failed:
+                    result['diagnostics']['cloud_fallback'] = True
+                    result['diagnostics']['warnings'].append('Cloud extraction unavailable; local OCR was used. This is not a successful cloud result. Compare with the scan.')
+                return result
+            except OfflineOCRError:
+                result = extract_paper_intake('')
+                result['extraction_mode'] = 'OFFLINE_OCR_FAILED'
+                return result
         final_data = self._get_empty_schema()
         mode = (extraction_mode or "auto").strip().lower()
 

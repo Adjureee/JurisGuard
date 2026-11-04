@@ -100,8 +100,8 @@ export const caseFormSchema = z
       party_represented: optionalText,
       applicant_role: requiredText("Applicant case involvement"),
       applicant_role_other: optionalText,
-      nature_of_request: requiredText("Nature of request"),
-      nature_of_case: requiredText("Nature of case"),
+      nature_of_request: optionalText,
+      nature_of_case: optionalText,
       coi_agree_different_office: z.boolean(),
       coi_agree_same_dept_appeal: z.boolean(),
       coi_waive_right_to_complain: z.boolean(),
@@ -151,13 +151,13 @@ export const caseFormSchema = z
       incident_address: optionalText,
       latitude: optionalText,
       longitude: optionalText,
-      last_action_taken: requiredText("Last action taken"),
+      last_action_taken: optionalText,
       detained: z.boolean().optional(),
       date_of_confinement: optionalText,
       place_of_detention: optionalText,
       location_type: z.enum(["Urban", "Rural", ""]),
       cause_of_action: requiredText("Cause of action"),
-      facts_of_case: requiredText("Facts of case"),
+      facts_of_case: optionalText,
       pending_in_court: z.boolean(),
       cause_of_termination: optionalText,
       date_of_termination: optionalText,
@@ -168,6 +168,18 @@ export const caseFormSchema = z
     }),
   })
   .superRefine((data, ctx) => {
+    if (data.case_type === "Civil") {
+      (
+        [
+          [["intake_record", "nature_of_request"], data.intake_record.nature_of_request, "Nature of request is required"],
+          [["intake_record", "nature_of_case"], data.intake_record.nature_of_case, "Nature of case is required"],
+          [["cases", "last_action_taken"], data.cases.last_action_taken, "Last action taken is required"],
+          [["cases", "facts_of_case"], data.cases.facts_of_case, "Facts of case is required"],
+        ] as const
+      ).forEach(([path, value, message]) => {
+        if (!value.trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [...path], message });
+      });
+    }
     if (
       data.intake_record.applicant_role === "Others" &&
       !data.intake_record.applicant_role_other.trim()
@@ -180,7 +192,7 @@ export const caseFormSchema = z
     }
     const representativeNotApplicable =
       data.representative.civil_status.trim().toLowerCase() === "none";
-    if (!representativeNotApplicable) {
+    if (data.case_type === "Civil" && !representativeNotApplicable) {
       (
         [
           ["rep_name", "Representative name is required"],

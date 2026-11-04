@@ -8,6 +8,7 @@ import DateFilterSelect from "../components/DateFilterSelect";
 import PageHeader from "../components/PageHeader";
 import AddCaseModal from "../components/modals/AddCaseModal";
 import AddClientModal from "../components/modals/AddClientModal";
+import { PaperIntakeReview } from '../features/documentExtraction/PaperIntakeReview';
 import ExportCsvModal from "../components/modals/ExportCsvModal";
 import ModalPortal from "../components/modals/ModalPortal";
 import { StatusBadge } from "../features/criminalCases/components/StatusBadge";
@@ -198,7 +199,7 @@ function InfoTile({ label, value }: { label: string; value: string | number }) {
 function toClientFormValues(client: ClientRecord): ClientFormValues {
   return {
     client: { ...client.client },
-    client_details: { ...client.client_details },
+    client_details: { ...client.client_details, detained: client.client_details.detained ?? undefined },
     client_classification: { ...client.client_classification },
   };
 }
@@ -579,6 +580,23 @@ function CaseAccordion({
 }
 
 function UpdateClientInfoModal({
+  client, onClose, onSaved,
+}: { client: ClientRecord; onClose: () => void; onSaved: (client: ClientRecord) => void }) {
+  const confirm = useConfirmation();
+  const [dirty, setDirty] = useState(false);
+  async function closeReview() {
+    if (dirty && !await confirm({ title: 'Discard unsaved corrections?', message: 'Cancel to keep reviewing your corrections.', confirmLabel: 'Discard corrections' })) return;
+    onClose();
+  }
+  if (!client.paper_intake) return <LegacyUpdateClientInfoModal client={client} onClose={onClose} onSaved={onSaved} />;
+  return <ModalPortal><div className="jurisguard-modal-overlay bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Review PAO intake">
+    <div className="flex h-[95dvh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white"><div className="flex shrink-0 items-center justify-between border-b p-4">
+      <h2 className="font-semibold">Review PAO Parts II and II-A</h2><button type="button" onClick={() => void closeReview()} className="min-h-11 rounded border px-3 py-2">Close</button></div>
+      <PaperIntakeReview key={client.client_id} onDirtyChange={setDirty} saved={client.paper_intake} clientId={client.client_id} onSaved={updated => { onSaved(updated); onClose(); }} />
+    </div></div></ModalPortal>;
+}
+
+function LegacyUpdateClientInfoModal({
   client,
   onClose,
   onSaved,

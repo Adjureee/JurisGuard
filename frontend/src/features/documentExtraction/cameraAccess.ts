@@ -33,6 +33,32 @@ export async function requestCameraStream(
   }
 }
 
+/** A resolved play() call alone does not guarantee a drawable video frame. */
+export function waitForPreviewFrame(video: HTMLVideoElement, timeoutMs = 10000): Promise<void> {
+  const HAVE_CURRENT_DATA = 2;
+  if (video.readyState >= HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const events = ["loadeddata", "playing", "resize"] as const;
+    const cleanup = () => {
+      clearTimeout(timer);
+      events.forEach((event) => video.removeEventListener(event, check));
+    };
+    const check = () => {
+      if (video.readyState < HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) return;
+      cleanup();
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new CameraStartTimeout());
+    }, timeoutMs);
+    events.forEach((event) => video.addEventListener(event, check));
+    check();
+  });
+}
+
 /** Keep the live preview available until the browser has encoded the still frame. */
 export function encodeJpegFrame(canvas: HTMLCanvasElement, timeoutMs = 10000): Promise<Blob> {
   return new Promise((resolve, reject) => {
