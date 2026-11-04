@@ -61,7 +61,7 @@ with sync_playwright() as p:
    page.keyboard.press('Tab');assert page.evaluate('document.activeElement.tagName')!='BODY'
    page.set_viewport_size({'width':1440,'height':1000})
    page.get_by_role('link',name='Scan interview sheet',exact=True).focus();page.keyboard.press('Enter');page.get_by_role('heading',name='Add client',exact=True).wait_for()
-   page.locator('input[type=file]').wait_for()
+   page.locator('input[type=file]').wait_for(state='attached')
    page.screenshot(path=str(out/f'{role}-intake-shortcut.png'))
    page.goto('http://localhost:5173/dashboard');page.wait_for_load_state('networkidle')
    mode['value']='error';page.reload();page.wait_for_load_state('networkidle');assert page.get_by_role('button',name='Retry dashboard data').count()==1

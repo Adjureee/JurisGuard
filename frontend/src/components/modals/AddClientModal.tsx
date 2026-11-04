@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { FileScan, Keyboard, ArrowRight, X } from 'lucide-react';
+import type { IntakeStage } from '../../features/documentExtraction/PaperDocumentSetup';
+import '../../features/documentExtraction/intake-modal.css';
 import toast from 'react-hot-toast';
 import type { ClientRecord } from '../../types';
 import { PaperIntakeReview } from '../../features/documentExtraction/PaperIntakeReview';
@@ -15,8 +18,10 @@ interface Props { isOpen: boolean; onClose: () => void; initialMode?: 'manual' |
 function IntakeSession({ onClose, initialMode }: { onClose: () => void; initialMode?: 'manual' | 'scan' }) {
   const confirm = useConfirmation();
   const [dirty, setDirty] = useState(false);
+  const [stage,setStage] = useState<IntakeStage>('select');
+  const dialog = useRef<HTMLDivElement>(null);
   async function leave(action: () => void) {
-    if (phase === 'scan' && dirty && !await confirm({ title: 'Discard unsaved corrections?', message: 'Your reviewed draft has not been saved. Cancel to keep reviewing.', confirmLabel: 'Discard draft' })) return;
+    if (dirty && !await confirm({ title: 'Discard unsaved entry?', message: 'Your selected document or corrections have not been saved. Cancel to keep working.', confirmLabel: 'Discard entry' })) return;
     setDirty(false); action();
   }
   const [phase, setPhase] = useState<'method' | 'manual' | 'scan' | 'saved' | 'case'>(initialMode ?? 'method');
@@ -26,19 +31,31 @@ function IntakeSession({ onClose, initialMode }: { onClose: () => void; initialM
   const upsertClient = useCriminalCasesStore(state => state.upsertClient);
   const upsertCase = useCriminalCasesStore(state => state.upsertCase);
   const setStoreClients = useCriminalCasesStore(state => state.setClients);
-  return <ModalPortal><div className="jurisguard-modal-overlay bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="paper-intake-title">
-    <div className={`flex ${phase === 'scan' ? 'h-[95dvh]' : ''} max-h-[95dvh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-xl`}>
-      <header className="flex shrink-0 flex-wrap gap-2 items-center justify-between border-b px-5 py-4"><div><h2 id="paper-intake-title" className="text-xl font-semibold">Add client</h2>
-        <p className="text-sm text-slate-600">Enter client details manually, or review Parts II and II-A from a scan.</p></div>
-        <div className="flex flex-wrap gap-3">{(phase === 'scan' || phase === 'manual') && <button type="button" onClick={() => void leave(() => setPhase('method'))} className="min-h-11 rounded border px-4 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]">Discard entry / change method</button>}
-        <button type="button" onClick={() => void leave(onClose)} className="min-h-11 rounded border px-4 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]">Close</button></div></header>
+  useEffect(()=>{
+    function keyboard(event:KeyboardEvent){
+      const overlays=document.querySelectorAll('.jurisguard-modal-overlay');
+      if(overlays[overlays.length-1]!==dialog.current)return;
+      if(event.key==='Escape'){event.preventDefault();void leave(onClose);}
+      if(event.key!=='Tab')return;
+      const controls=Array.from(dialog.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]')??[]).filter(node=>node.getClientRects().length>0);
+      const first=controls[0],last=controls.at(-1);
+      if(event.shiftKey&&(document.activeElement===first||document.activeElement===dialog.current)){event.preventDefault();last?.focus();}
+      else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+    }
+    document.addEventListener('keydown',keyboard);return()=>document.removeEventListener('keydown',keyboard);
+  });
+  const expanded=phase==='case'||(phase==='scan'&&stage!=='select');
+  return <ModalPortal><div ref={dialog} className="jurisguard-modal-overlay intake-modal bg-black/60 p-3 sm:p-5" role="dialog" aria-modal="true" aria-labelledby="paper-intake-title">
+    <div className={`flex ${expanded?'h-[95dvh] max-w-[1600px]':'max-w-3xl'} max-h-[95dvh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-xl`}>
+      <header className="flex shrink-0 gap-3 items-start justify-between border-b px-5 py-4"><div className="min-w-0 flex-1"><h2 id="paper-intake-title" className="text-xl font-semibold">Add client</h2>
+        <p className="mt-1 text-sm text-slate-600">{phase==='scan'?'PAO Interview Sheet · Parts II and II-A':'Create a client record.'}</p></div>
+        <button type="button" onClick={() => void leave(onClose)} className="intake-secondary"><X size={16} aria-hidden="true"/>Close</button></header>
+      {(phase==='scan'||phase==='manual')&&<div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-5 py-2"><button type="button" className="intake-link" onClick={()=>void leave(()=>{setPhase('method');setStage('select');setSession(s=>s+1);})}>Change method</button>{dirty&&<button type="button" className="intake-link text-rose-800" onClick={()=>void leave(()=>{setSession(s=>s+1);setStage('select');})}>Discard entry</button>}</div>}
+      {phase==='scan'&&<ol aria-label="Document intake stages" className="flex shrink-0 flex-wrap gap-x-4 gap-y-2 border-b bg-slate-50 px-5 py-3 text-xs sm:text-sm">{(['Select document','Review crop (optional)','Extract','Review details','Save'] as const).map((label,i)=>{const active=['select','crop','extract','review','save'].indexOf(stage)===i;return <li key={label} aria-current={active?'step':undefined} className={`flex items-center gap-2 ${active?'font-semibold text-[#704389]':'text-slate-600'}`}><span>{label}</span>{i<4&&<ArrowRight size={12} aria-hidden="true"/>}</li>;})}</ol>}
       <div className={`min-h-0 flex-1 ${phase === 'scan' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
-        {phase === 'method' && <div className="space-y-4 p-5"><h3 className="text-lg font-semibold">How would you like to add this client?</h3><div className="flex flex-wrap gap-3">
-          <button type="button" onClick={() => setPhase('manual')} className="rounded bg-[#704389] px-4 py-3 font-semibold text-white">Manual entry</button>
-          <button type="button" onClick={() => setPhase('scan')} className="rounded border border-[#704389] px-4 py-3 font-semibold text-[#704389]">Scan or upload PAO sheet</button>
-        </div><p className="text-sm text-slate-600">Manual entry requires no document. Document intake retains the original scan and requires attorney review.</p></div>}
-        {phase === 'manual' && <ManualClientCreation key={session} onSaved={client => { setDirty(false); upsertClient(client); setClients(current => [...current, client]); setPhase('saved'); }} />}
-        {phase === 'scan' && <PaperIntakeReview key={session} onDirtyChange={setDirty} onSaved={client => {
+        {phase === 'method' && <div className="space-y-5 p-6"><h3 className="text-lg font-semibold">Choose an intake method</h3><button type="button" onClick={() => setPhase('scan')} className="flex min-h-24 w-full items-center gap-4 rounded-xl border border-[#704389] bg-[#FAF7FC] p-5 text-left hover:bg-[#F2E9F7]"><FileScan className="shrink-0 text-[#704389]" size={26} aria-hidden="true"/><span className="flex-1"><span className="block font-semibold text-slate-900">Use a PAO interview sheet</span><span className="mt-1 block text-sm leading-6 text-slate-600">Upload or scan the paper, then review Parts II and II-A.</span></span><ArrowRight size={18} aria-hidden="true"/></button><button type="button" onClick={() => setPhase('manual')} className="flex min-h-24 w-full items-center gap-4 rounded-xl border border-slate-300 p-5 text-left hover:bg-slate-50"><Keyboard size={26} aria-hidden="true" className="shrink-0 text-slate-600"/><span className="flex-1"><span className="block font-semibold text-slate-900">Manual entry</span><span className="mt-1 block text-sm leading-6 text-slate-600">Create a client record without a scanned document.</span></span><ArrowRight size={18} aria-hidden="true"/></button></div>}
+        {phase === 'manual' && <ManualClientCreation key={session} onDirtyChange={setDirty} onSaved={client => { setDirty(false); upsertClient(client); setClients(current => [...current, client]); setPhase('saved'); }} />}
+        {phase === 'scan' && <PaperIntakeReview key={session} onStageChange={setStage} onDirtyChange={setDirty} onSaved={client => {
           setDirty(false); upsertClient(client); setClients(current => [...current, client]); setPhase('saved');
         }} />}
         {phase === 'saved' && <div className="space-y-4 p-5"><p role="status" className="font-semibold text-emerald-800">{clients.at(-1)?.paper_intake ? 'Reviewed intake saved with its original scan.' : 'Client created manually.'}</p>

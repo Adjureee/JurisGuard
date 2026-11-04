@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import type { ClientRecord } from '../../types';
 import type { ClientFormValues } from '../criminalCases/schemas';
@@ -31,13 +31,14 @@ const otherFlags = [
 ] as const;
 
 /** Direct client creation through the existing service; no scan or OCR required. */
-export function ManualClientCreation({ onSaved }: { onSaved: (client: ClientRecord) => void }) {
+export function ManualClientCreation({ onSaved, onDirtyChange }: { onSaved: (client: ClientRecord) => void; onDirtyChange?: (dirty:boolean)=>void }) {
   const [fields, setFields] = useState<Record<string, string>>({});
   const [flags, setFlags] = useState<Record<string, boolean | null>>({});
   const [flagsReviewed, setFlagsReviewed] = useState(false);
   const [review, setReview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  useEffect(()=>{onDirtyChange?.(Object.keys(fields).length>0||Object.keys(flags).length>0);},[fields,flags,onDirtyChange]);
   function input(key: string, label: string) {
     return <label key={key} className="block text-sm font-medium text-slate-700" htmlFor={`manual-${key}`}>{label}{key === 'name' ? ' (required)' : ''}
       <input id={`manual-${key}`} type={key.includes('email') ? 'email' : 'text'} value={fields[key] ?? ''}

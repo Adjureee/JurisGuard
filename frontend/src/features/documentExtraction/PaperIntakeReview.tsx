@@ -3,10 +3,10 @@ import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { ScanViewer } from './ScanViewer';
 import { useConfirmation } from '../../components/ConfirmationProvider';
-import { CameraCapture } from './CameraCapture';
+import { PaperDocumentSetup, type IntakeStage } from './PaperDocumentSetup';
 import { useExtractionRequest } from './useExtractionRequest';
 import { extractPaper, getPaperScan, getPaperSchema, rereadPaper, savePaper, type PaperExtraction,
-  getPaperPage, type FieldEvidence, type PaperSchema, type PaperSection, type PaperSections, type SavedPaperIntake } from '../../services/paperIntakeService';
+  getPaperPage, type FieldEvidence, type PaperSchema, type PaperSection, type PaperSections, type SavedPaperIntake, type PaperCropPlan } from '../../services/paperIntakeService';
 import type { ClientRecord } from '../../types';
 import { representativeIsEmpty, reviewLabels, unknownBoxes, checkboxPrefix, detainedSummary, type CheckboxStates, type CheckboxState } from './paperReviewState';
 
@@ -20,13 +20,15 @@ function message(error: unknown) {
   return typeof detail === 'string' ? detail : error instanceof Error ? error.message : 'Unable to process intake.';
 }
 
-export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange }: {
-  onSaved?: (client: ClientRecord) => void; saved?: SavedPaperIntake; clientId?: string; onDirtyChange?: (dirty: boolean) => void;
+export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onStageChange }: {
+  onSaved?: (client: ClientRecord) => void; saved?: SavedPaperIntake; clientId?: string; onDirtyChange?: (dirty: boolean) => void; onStageChange?: (stage: IntakeStage)=>void;
 }) {
   const confirm = useConfirmation();
   const [dirty, setDirty] = useState(false);
   const [activeField, setActiveField] = useState<{ path: string; label: string }>();
   const [fieldEvidence, setFieldEvidence] = useState<Record<string, FieldEvidence>>(saved?.candidate_snapshot?.diagnostics.field_evidence ?? {});
+  const [fieldStates, setFieldStates] = useState<Record<string, string>>(saved?.candidate_snapshot?.diagnostics.field_states ?? {});
+  const [unreadableFields, setUnreadableFields] = useState<string[]>(saved?.unreadable_fields ?? []);
   const [mobilePane, setMobilePane] = useState<'scan' | 'fields'>('fields');
   const [pageNumber, setPageNumber] = useState(1);
   const [pageCount, setPageCount] = useState(1);
@@ -57,17 +59,20 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange }: {
   const [previewUrl, setPreviewUrl] = useState('');
   const [scanError, setScanError] = useState('');
   const [retryFile, setRetryFile] = useState<File>();
+  const [retryPlan, setRetryPlan] = useState<PaperCropPlan>();
   const [ocrFailure, setOcrFailure] = useState('');
   const [representativeExpanded, setRepresentativeExpanded] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
-  const [camera, setCamera] = useState(false);
+  const [setupStage, setSetupStage] = useState<IntakeStage>('select');
   const [mode, setMode] = useState<'auto' | 'offline' | 'cloud'>('auto');
   const errorRef = useRef<HTMLDivElement>(null);
   const representativeNameRef = useRef<HTMLInputElement>(null);
   const extraction = useExtractionRequest();
   const busy = saving || extraction.isExtracting;
+  const stage = saving ? 'save' : sections ? 'review' : extraction.isExtracting ? 'extract' : setupStage;
+  useEffect(()=>{onStageChange?.(stage);},[stage,onStageChange]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -108,6 +113,8 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange }: {
   function applyExtraction(result: PaperExtraction) {
     setDirty(true); setMobilePane('fields');
     setFieldEvidence(result.extracted_data.diagnostics.field_evidence ?? {});
+    setFieldStates(result.extracted_data.diagnostics.field_states ?? {});
+    setUnreadableFields([]);
     setPageCount(result.extracted_data.diagnostics.page_count ?? 1); setPageNumber(1);
     setSourceDraftId(result.source_draft_id);
     setCandidateSections(result.extracted_data.sections);
@@ -117,18 +124,18 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange }: {
       ? 'No text could be read from this scan. Enter the details from the paper or try another scan.' : '');
     setRepresentativeExpanded(false); setSaveError(''); setSuccess('');
   }
-  async function scan(file: File) {
-    if (!await mayReplace()) return;
+  async function scan(file: File, plan?: PaperCropPlan) {
+    if (sections && !await mayReplace()) return;
     const request = extraction.startExtraction('Reading Parts II and II-A…');
     if (!request) return;
-    setCamera(false); setDirty(true); setRetryFile(file);
+    setDirty(true); setRetryFile(file); setRetryPlan(plan);
     setSections(undefined); setDocumentId(undefined); setPreview(file); setScanError(''); setOcrFailure(''); setSaveError(''); setSuccess('');
     try {
-      const result = await extractPaper(file, request.controller.signal, mode);
+      const result = await extractPaper(file, request.controller.signal, mode, plan);
       if (extraction.isCurrentExtraction(request)) { applyExtraction(result); setRetryFile(undefined); }
     } catch (error) {
       if (extraction.isCurrentExtraction(request)) {
-        setDirty(false);
+        setDirty(true);
         setScanError(`Could not extract the sheet: ${message(error)}. Retry OCR or choose another scan.`);
       }
     } finally { toast.dismiss(request.toastId); extraction.finishExtraction(request); }
@@ -148,7 +155,7 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange }: {
     if (!sections || !documentId || !schema || busy) return;
     setSaving(true); setSaveError(''); setSuccess('');
     try {
-      const client = await savePaper(documentId, sections, clientId, checkboxStates, sourceDraftId);
+      const client = await savePaper(documentId, sections, clientId, checkboxStates, sourceDraftId, unreadableFields);
       setDirty(false);
       setSuccess('Reviewed record saved successfully.');
       toast.success('Reviewed record saved successfully.', { position: 'top-center', duration: 3000 });
@@ -164,6 +171,7 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange }: {
     const original = candidateSections?.[section][key];
     const change = (next: string) => {
       setDirty(true); setSaveError(''); setSuccess('');
+      setUnreadableFields(current => current.filter(field => field !== path));
       if (section === 'representative_personal_circumstances') setRepresentativeExpanded(true);
       setSections(current => current && ({ ...current, [section]: { ...current[section], [key]: next } }));
     };
@@ -171,6 +179,8 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange }: {
       <button type="button" onClick={() => { setActiveField({ path, label: `${section === 'applicant_personal_circumstances' ? 'Part II' : 'Part II-A'} — ${label}` }); setMobilePane('scan'); requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label^="Scan viewport"]')?.focus()); }} className="float-right rounded px-2 text-xs font-medium text-purple-800 underline lg:hidden" aria-label={`View scan for ${label}`}>View scan</button>
       <label className="block text-sm font-medium text-slate-700" htmlFor={checkbox ? 'paper-detained-oo' : `paper-${section}-${key}`}>{label}:</label>
       {!checkbox && original !== undefined && original !== value && <p className="mt-1 text-sm text-slate-600">Original extracted reading: {original || 'No text recognized'}</p>}
+      {!checkbox && original === value && ['ocr_failed', 'uncertain'].includes(fieldStates[path]) && <p className="mt-1 text-sm text-amber-800">{value ? 'Check this reading against the scan.' : 'No reliable reading. Check the scan for a blank or unreadable entry.'}</p>}
+      {!checkbox && unreadableFields.includes(path) && <p className="mt-1 text-sm text-amber-800">Marked unreadable after review. The value will remain empty.</p>}
       {checkbox ? <div className="mt-2 space-y-2">
         <div className="grid grid-cols-2 gap-3">{(['oo', 'hindi'] as const).map(option => {
           const optionPath = checkboxPrefix + option, state = checkboxStates?.[optionPath] ?? 'unknown';
@@ -187,10 +197,16 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange }: {
             </select>}
           </label>;
         })}</div>
+        {checkboxStates && Object.values(checkboxStates).every(state => state === 'checked') && <p role="status" className="text-sm text-amber-800">Both boxes are marked. Confirm the selections against the scan; no single answer is assumed.</p>}
+        {checkboxStates && Object.values(checkboxStates).some(state => state === 'unknown') && <p className="text-sm text-amber-800">An unclear box remains unknown. Inspect its mark in the scan before confirming.</p>}
       </div> : <input id={`paper-${section}-${key}`} type="text" value={value} readOnly={readOnly} disabled={busy}
         ref={section === 'representative_personal_circumstances' && key === 'name' ? representativeNameRef : undefined}
         autoComplete="off" onChange={event => change(event.target.value)}
         className="mt-2 min-h-11 w-full rounded border border-slate-300 bg-white px-3 py-2 text-base disabled:bg-slate-100" />}
+      {!checkbox && !readOnly && <button type="button" disabled={busy} aria-pressed={unreadableFields.includes(path)} onClick={() => {
+        if (unreadableFields.includes(path)) { setUnreadableFields(current => current.filter(field => field !== path)); setDirty(true); return; }
+        change(''); setUnreadableFields(current => [...current, path]);
+      }} className="mt-1 rounded px-2 py-2 text-sm text-purple-800 underline">{unreadableFields.includes(path) ? 'Remove unreadable flag' : 'Mark unreadable'}</button>}
     </div>;
   }
   return <div className="flex h-full min-h-0 flex-col [&_button]:min-h-11 [&_button:focus-visible]:outline [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-2 [&_button:focus-visible]:outline-[#704389] [&_input:focus-visible]:outline [&_input:focus-visible]:outline-2 [&_input:focus-visible]:outline-[#704389] [&_select:focus-visible]:outline [&_select:focus-visible]:outline-2 [&_select:focus-visible]:outline-[#704389] [&_a:focus-visible]:outline [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-[#704389]">
@@ -198,17 +214,11 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange }: {
       className={sections ? 'max-h-[36dvh] shrink-0 overflow-y-auto border-b px-4 py-2' : 'min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8'}>
       <summary className={sections ? 'cursor-pointer py-2 text-sm font-semibold' : 'hidden'} tabIndex={sections ? 0 : -1} aria-hidden={!sections}>Replace scan or change OCR settings</summary>
       <div className={`space-y-5 ${sections ? 'pb-3' : 'mx-auto w-full max-w-5xl pb-8'}`}>
-      {!sections && <div className="space-y-2"><h3 className="text-xl font-semibold text-slate-900">Scan or upload the completed PAO sheet</h3><p className="max-w-3xl text-sm leading-6 text-slate-600">Upload the sheet or capture a clear photo. JurisGuard reads Parts II and II-A, then you compare the results with the complete original scan before saving.</p></div>}
-      <div className="flex flex-wrap items-center gap-4"><label className="block min-w-0 rounded border border-purple-300 bg-purple-50 px-4 py-3 text-sm font-semibold">Upload PAO sheet
-        <input type="file" accept=".jpg,.jpeg,.jfif,.png,.webp,.pdf" disabled={busy || !schema} className="mt-2 block max-w-full text-base"
-          onChange={event => { const file = event.target.files?.[0]; if (file) void scan(file); event.target.value = ''; }} /></label>
-        <button type="button" disabled={busy || !schema} onClick={() => setCamera(current => !current)} className="rounded border border-slate-300 px-5 py-3 text-sm font-semibold">{camera ? 'Hide camera' : 'Scan with camera'}</button></div>
-      <label className="block text-sm font-medium">OCR engine <select value={mode} disabled={busy} onChange={event => setMode(event.target.value as typeof mode)} className="ml-3 min-h-11 rounded border border-slate-300 px-3 py-2"><option value="auto">Auto</option><option value="offline">Offline PaddleOCR</option><option value="cloud">Cloud Vision</option></select></label>
-      {camera && <CameraCapture isExtracting={busy} nextStepLabel="Extract Parts II and II-A" onUsePhoto={file => { void scan(file); }} />}
+      <PaperDocumentSetup disabled={busy || !schema} mode={mode} onModeChange={setMode} onExtract={(file,plan)=>void scan(file,plan)} onPending={setDirty} onStageChange={setSetupStage}/>
     </div></details>}
-    {extraction.isExtracting && <div role="status" className="flex flex-wrap items-center gap-4 rounded bg-blue-50 p-4 text-sm">Reading the scan… {extraction.elapsedSeconds}s<button type="button" onClick={() => { extraction.cancelExtraction(); setDirty(false); setScanError('OCR stopped. Retry the same scan or choose another.'); }} className="rounded border border-blue-300 bg-white px-4 py-2 font-semibold">Cancel extraction</button></div>}
+    {extraction.isExtracting && <div role="status" className="flex flex-wrap items-center gap-4 rounded bg-blue-50 p-4 text-sm">Reading the scan… {extraction.elapsedSeconds}s<button type="button" onClick={() => { extraction.cancelExtraction(); setDirty(true); setScanError('OCR stopped. Retry the same scan or choose another.'); }} className="rounded border border-blue-300 bg-white px-4 py-2 font-semibold">Cancel extraction</button></div>}
     {schemaError && <p role="alert" className="text-rose-700">{schemaError}</p>}
-    {scanError && <div role="alert" className="flex shrink-0 flex-wrap items-center gap-3 border-b bg-rose-50 px-4 py-2 text-sm text-rose-800"><span>{scanError}</span>{retryFile && !busy && <button type="button" onClick={() => void scan(retryFile)} className="rounded border border-rose-300 bg-white px-3 py-2 font-semibold">Retry OCR</button>}</div>}
+    {scanError && <div role="alert" className="flex shrink-0 flex-wrap items-center gap-3 border-b bg-rose-50 px-4 py-2 text-sm text-rose-800"><span>{scanError}</span>{retryFile && !busy && <button type="button" onClick={() => void scan(retryFile, retryPlan)} className="rounded border border-rose-300 bg-white px-3 py-2 font-semibold">Retry OCR</button>}</div>}
     {ocrFailure && <p role="alert" className="shrink-0 border-b bg-rose-50 px-4 py-2 text-sm text-rose-800">{ocrFailure}</p>}
     {sections && <p className="shrink-0 border-b bg-slate-50 px-4 py-2 text-sm text-slate-700">Compare every entry, including the Oo/Hindi boxes, with the complete original scan. Correct the fields before saving.</p>}
     {sections && <div className="flex shrink-0 gap-2 border-b px-4 lg:hidden" role="group" aria-label="Review view">
@@ -231,8 +241,8 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange }: {
         const blankRepresentative = section === 'representative_personal_circumstances' && representativeIsEmpty(sections);
         return <fieldset key={section} data-section={section} tabIndex={-1} className="min-w-0 scroll-mt-2 border-b border-slate-200 pb-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]">
           <legend className="px-1 font-semibold">{titles[section]}</legend>
-          {blankRepresentative && <p className="my-3 text-sm text-slate-700">No representative details provided</p>}
-          {blankRepresentative && !representativeExpanded ? (!readOnly && <button type="button" onClick={() => { setRepresentativeExpanded(true); requestAnimationFrame(() => representativeNameRef.current?.focus()); }} className="rounded border border-slate-300 bg-white px-4 py-3 text-sm font-semibold">Add representative details</button>) :
+          {blankRepresentative && <p className="my-3 text-sm text-slate-700">{saved ? 'No representative details provided' : 'No representative text was extracted. Check Part II-A in the scan before leaving it blank.'}</p>}
+          {blankRepresentative && !representativeExpanded ? (!readOnly && <button type="button" onClick={() => { setRepresentativeExpanded(true); requestAnimationFrame(() => representativeNameRef.current?.focus()); }} className="rounded border border-slate-300 bg-white px-4 py-3 text-sm font-semibold">Review representative fields</button>) :
             <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
               <div className="sm:col-span-2">{field(section, ...schema[section][0])}</div>
               <div className="grid gap-4 sm:col-span-2 sm:grid-cols-3">{schema[section].slice(1, 4).map(([key, label]) => field(section, key, label))}</div>

@@ -16,16 +16,24 @@ export type PaperExtraction = {
 export async function getPaperSchema(signal?: AbortSignal) {
   return (await apiClient.get<PaperSchema>('/pao-intakes/schema', { signal })).data;
 }
-export async function extractPaper(file: File, signal: AbortSignal, mode: 'auto' | 'offline' | 'cloud' = 'auto') {
+export type PaperCropPlan = { corners: number[][]; rotation: number; sections: {part_ii: number[]; part_iia: number[]}; document_reviewed: true; sections_reviewed: true };
+export type PaperCaptureAnalysis = { document: {corners: number[][]; confidence: string}; rotation: number; page: {preview: string}; sections: {part_ii: number[]; part_iia: number[]; confidence: string}; warnings: string[] };
+export async function analyzePaperCapture(file: File, signal: AbortSignal, corners?: number[][], rotation = 0) {
+  const form = new FormData(); form.append('file', file); form.append('rotation', String(rotation));
+  if (corners) form.append('corners_json', JSON.stringify(corners));
+  return (await apiClient.post<PaperCaptureAnalysis>('/pao-intakes/capture-analyze', form, {signal, timeout: 200000})).data;
+}
+export async function extractPaper(file: File, signal: AbortSignal, mode: 'auto' | 'offline' | 'cloud' = 'auto', plan?: PaperCropPlan) {
   const form = new FormData();
   form.append('file', file);
+  if (plan) form.append('crop_plan', JSON.stringify(plan));
   return withExtractionDeadline(async (deadlineSignal) => (await apiClient.post<PaperExtraction>(
     '/upload-document/', form, { params: { extraction_target: 'paper_intake', extraction_mode: mode }, signal: deadlineSignal },
   )).data, Number(import.meta.env.VITE_DOCUMENT_EXTRACTION_TIMEOUT_MS) || 200000, signal);
 }
-export async function savePaper(documentId: number, sections: PaperSections, clientId?: string, checkboxStates?: CheckboxStates, sourceDraftId?: string) {
+export async function savePaper(documentId: number, sections: PaperSections, clientId?: string, checkboxStates?: CheckboxStates, sourceDraftId?: string, unreadableFields?: string[]) {
   return (await apiClient.request<ClientRecord>({ method: clientId ? 'patch' : 'post', url: clientId ? `/pao-intakes/${clientId}` : '/pao-intakes/', data: {
-    document_id: documentId, sections, reviewed: true, ...(sourceDraftId ? { source_draft_id: sourceDraftId } : {}), ...(checkboxStates ? { checkbox_states: checkboxStates } : {}),
+    document_id: documentId, sections, reviewed: true, ...(sourceDraftId ? { source_draft_id: sourceDraftId } : {}), ...(checkboxStates ? { checkbox_states: checkboxStates } : {}), ...(unreadableFields ? { unreadable_fields: unreadableFields } : {}),
   } })).data;
 }
 export async function getPaperScan(documentId: number, signal: AbortSignal) {
