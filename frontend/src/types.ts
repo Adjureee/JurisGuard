@@ -1,5 +1,6 @@
 export type CaseStatus = "Pending" | "Terminated";
 export type CaseType = "Criminal" | "Civil";
+export type IntakeMethod = "manual" | "camera" | "upload";
 export type ExtractionStatus = "extracted" | "missing";
 
 export interface Client {
@@ -30,7 +31,7 @@ export interface ClientDetails {
   representative_contact_no: string;
   representative_relationship: string;
   representative_email: string;
-  detained: boolean | null;
+  detained: boolean;
   detained_since: string;
   place_of_detention: string;
 }
@@ -61,7 +62,6 @@ export interface ClientClassification {
 }
 
 export interface ClientRecord {
-  paper_intake?: import('./services/paperIntakeService').SavedPaperIntake | null;
   client_id: string;
   created_by_user_id: number | null;
   client: Client;

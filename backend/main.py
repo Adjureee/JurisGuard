@@ -3,29 +3,24 @@ import base64
 import hashlib
 import hmac
 import json
-import logging
 import os
-import re
 import secrets
 import struct
 import unicodedata
 import uuid
-from collections import OrderedDict
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
-from sqlalchemy import func, null, or_, text
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from pydantic import BaseModel
+from sqlalchemy import func, or_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session, joinedload
-from starlette.concurrency import run_in_threadpool
+from sqlalchemy.orm import Session
 
 import models
 from auth_limits import auth_attempts, source_attempts
@@ -35,30 +30,13 @@ from extraction_runtime import (
     ExtractionCancelled, ExtractionWorkerError,
 )
 from extraction_mapping import ocr_status_for_result, public_extraction_payload
-from database import SessionLocal, engine, get_db
+from database import engine, get_db
 from upload_validation import save_bounded_upload, verify_image
-from case_import import (
-    MAX_WORKBOOK_BYTES,
-    extract_case_title_client_names,
-    normalize_binary_indicator,
-    resolve_incident_location,
-    read_workbook,
-)
-from case_transfer_permissions import can_edit_transfer_report, can_submit_transfer_report
-from reminder_permissions import (
-    can_access_reminder,
-    can_edit_reminder,
-    can_manage_shared_reminders as role_can_manage_shared_reminders,
-)
-from reminder_status import PHILIPPINE_TIMEZONE, calculate_reminder_status, can_complete_reminder
-from presence_status import calculate_presence_status, personnel_designation
-from messaging_permissions import can_message_designations, normalize_message_content
 
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="JurisGuard API")
-template_logger = logging.getLogger("jurisguard.templates")
 
 app.add_middleware(
     CORSMiddleware,
@@ -78,15 +56,6 @@ SECRET_KEY = os.getenv("SECRET_KEY", "").strip()
 if len(SECRET_KEY) < 32:
     raise RuntimeError("SECRET_KEY must be set to a private random value of at least 32 characters.")
 TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "720"))
-PRESENCE_HEARTBEAT_INTERVAL_SECONDS = max(10, int(os.getenv("PRESENCE_HEARTBEAT_INTERVAL_SECONDS", "30")))
-PRESENCE_HEARTBEAT_STALE_SECONDS = max(
-    PRESENCE_HEARTBEAT_INTERVAL_SECONDS * 3,
-    int(os.getenv("PRESENCE_HEARTBEAT_STALE_SECONDS", "120")),
-)
-PRESENCE_AWAY_SECONDS = max(
-    PRESENCE_HEARTBEAT_STALE_SECONDS,
-    int(os.getenv("PRESENCE_AWAY_SECONDS", "300")),
-)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
@@ -175,14 +144,6 @@ class MfaVerifyPayload(BaseModel):
     code: str
 
 
-class PresenceHeartbeatPayload(BaseModel):
-    interacting: bool = False
-
-
-class PrivateMessagePayload(BaseModel):
-    content: str = Field(min_length=1, max_length=2000)
-
-
 class ApprovalUpdatePayload(BaseModel):
     approval_status: Literal["pending", "under_review", "approved", "rejected", "suspended"]
 
@@ -191,24 +152,6 @@ class ClientPayload(BaseModel):
     client: dict[str, Any]
     client_details: dict[str, Any]
     client_classification: dict[str, Any]
-
-
-class PaperIntakePayload(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    document_id: int
-    sections: dict[str, dict[str, StrictStr]]
-    unreadable_fields: list[str] | None = None
-    field_reviews: dict[str, StrictStr] | None = None
-    checkbox_states: dict[str, StrictStr] | None = None
-    source_draft_id: StrictStr | None = None
-    reviewed: Literal[True]
-
-
-def paper_compat_text(model, key, value):
-    # Lossless text stays in ReviewedPaperIntake. Legacy varchar projections
-    # cannot represent every paper entry and must never truncate it.
-    limit = getattr(model.__table__.c[key].type, 'length', None)
-    return value if limit is None or len(value) <= limit else None
 
 
 class CasePayload(BaseModel):
@@ -226,14 +169,6 @@ class CaseClientPayload(BaseModel):
     applicant_role: str | None = None
     applicant_role_other: str | None = None
     party_represented: str | None = None
-
-
-class CaseImportPayload(BaseModel):
-    case_type: Literal["Criminal", "Civil"]
-    source_filename: str
-    cases: list[dict[str, Any]]
-    held_case_count: int = Field(default=0, ge=0)
-    duplicate_case_count: int = Field(default=0, ge=0)
 
 
 class TerminationPayload(BaseModel):
@@ -277,46 +212,6 @@ class SubmissionFeedbackPayload(BaseModel):
     comments: str
 
 
-class TransferReportPayload(BaseModel):
-    title: str
-    report_date: str
-    from_user_id: int | None = None
-    to_user_id: int
-    case_ids: list[int] = []
-    administrative_entries: list[dict[str, Any]] = []
-    remarks: str | None = None
-
-
-class TransferReturnPayload(BaseModel):
-    remarks: str
-
-
-class ReminderPayload(BaseModel):
-    title: str
-    description: str = ""
-    date: date
-    start_time: time | None = None
-    end_time: time | None = None
-    category: Literal[
-        "Client Meeting", "Court Hearing", "Document Deadline", "Follow-up",
-        "Office Meeting", "Personal", "Other",
-    ] = "Other"
-    priority: Literal["Normal", "Important", "Urgent"] = "Normal"
-    visibility: Literal["personal", "shared"] = "personal"
-    notification_minutes_before: int | None = 15
-
-
-class CalendarHolidayPayload(BaseModel):
-    source_key: str
-    name: str
-    date: date
-    classification: str
-    coverage: Literal["National", "Provincial", "City"]
-    geographic_scope: str
-    reference: str
-    source_url: str
-
-
 def template_path(language: str) -> Path:
     if language == "filipino":
         candidate = Path(__file__).resolve().parent.parent / "formx.html"
@@ -328,21 +223,11 @@ def read_form_template(language: str) -> str:
     path = template_path(language)
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Printable form template not found: {path.name}")
-    content = path.read_text(encoding="utf-8")
-    template_logger.info(
-        "Printable Interview Sheet template: %s SHA-256: %s",
-        path,
-        hashlib.sha256(content.encode("utf-8")).hexdigest(),
-    )
-    return content
+    return path.read_text(encoding="utf-8")
 
 
 def ensure_schema_compatibility() -> None:
     statements = [
-        'ALTER TABLE reviewed_paper_intake ADD COLUMN IF NOT EXISTS field_reviews JSONB',
-        'ALTER TABLE reviewed_paper_intake ADD COLUMN IF NOT EXISTS checkbox_states JSONB',
-        'ALTER TABLE reviewed_paper_intake ADD COLUMN IF NOT EXISTS source_draft_id VARCHAR(64)',
-        'ALTER TABLE reviewed_paper_intake ADD COLUMN IF NOT EXISTS candidate_snapshot JSONB',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS email VARCHAR(255)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS full_name VARCHAR(255) DEFAULT \'\'',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS approval_status VARCHAR(30) NOT NULL DEFAULT \'pending\'',
@@ -530,7 +415,6 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE case_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS entity_id VARCHAR(100)",
-        "ALTER TABLE reminder ALTER COLUMN status SET DEFAULT 'Upcoming'",
         """
         CREATE TABLE IF NOT EXISTS case_submission (
             submission_id SERIAL PRIMARY KEY,
@@ -574,58 +458,6 @@ def ensure_schema_compatibility() -> None:
         """,
         "CREATE INDEX IF NOT EXISTS ix_submission_feedback_feedback_id ON submission_feedback (feedback_id)",
         "CREATE INDEX IF NOT EXISTS ix_submission_feedback_submission_id ON submission_feedback (submission_id)",
-        """
-        CREATE TABLE IF NOT EXISTS case_transfer_report (
-            report_id SERIAL PRIMARY KEY,
-            parent_report_id INTEGER REFERENCES case_transfer_report(report_id),
-            from_user_id INTEGER NOT NULL REFERENCES "user"(user_id),
-            to_user_id INTEGER NOT NULL REFERENCES "user"(user_id),
-            initiated_by_user_id INTEGER REFERENCES "user"(user_id),
-            title TEXT NOT NULL,
-            report_date TIMESTAMP NOT NULL,
-            date_received TIMESTAMP,
-            status VARCHAR(30) NOT NULL DEFAULT 'Draft',
-            remarks TEXT,
-            submitted_at TIMESTAMP,
-            returned_at TIMESTAMP,
-            confirmed_at TIMESTAMP,
-            version INTEGER NOT NULL DEFAULT 1,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-        'ALTER TABLE case_transfer_report ADD COLUMN IF NOT EXISTS initiated_by_user_id INTEGER REFERENCES "user"(user_id)',
-        "CREATE INDEX IF NOT EXISTS ix_case_transfer_report_initiated_by_user_id ON case_transfer_report (initiated_by_user_id)",
-        "CREATE INDEX IF NOT EXISTS ix_case_transfer_report_from_user_id ON case_transfer_report (from_user_id)",
-        "CREATE INDEX IF NOT EXISTS ix_case_transfer_report_to_user_id ON case_transfer_report (to_user_id)",
-        "CREATE INDEX IF NOT EXISTS ix_case_transfer_report_status ON case_transfer_report (status)",
-        """
-        CREATE TABLE IF NOT EXISTS case_transfer_item (
-            item_id SERIAL PRIMARY KEY,
-            report_id INTEGER NOT NULL REFERENCES case_transfer_report(report_id),
-            case_id INTEGER NOT NULL REFERENCES "case"(case_id),
-            section VARCHAR(20) NOT NULL,
-            snapshot_json JSONB NOT NULL,
-            CONSTRAINT uq_case_transfer_report_case UNIQUE (report_id, case_id)
-        )
-        """,
-        "CREATE INDEX IF NOT EXISTS ix_case_transfer_item_report_id ON case_transfer_item (report_id)",
-        "CREATE INDEX IF NOT EXISTS ix_case_transfer_item_case_id ON case_transfer_item (case_id)",
-        """
-        CREATE TABLE IF NOT EXISTS case_transfer_administrative_entry (
-            entry_id SERIAL PRIMARY KEY,
-            report_id INTEGER NOT NULL REFERENCES case_transfer_report(report_id),
-            section VARCHAR(10) NOT NULL,
-            row_number INTEGER NOT NULL,
-            control_no VARCHAR(100),
-            title_of_case TEXT,
-            docket_no VARCHAR(100),
-            date_received TIMESTAMP,
-            status_of_case VARCHAR(100),
-            cause_of_action TEXT
-        )
-        """,
-        "CREATE INDEX IF NOT EXISTS ix_case_transfer_admin_report_id ON case_transfer_administrative_entry (report_id)",
     ]
     with engine.begin() as connection:
         for statement in statements:
@@ -654,76 +486,8 @@ def seed_roles() -> None:
         )
 
 
-CALENDAR_HOLIDAY_SEED = [
-    # Dates declared by Proclamation No. 1006, s. 2025.
-    ("PH-2026-NEW-YEAR", "New Year's Day", "2026-01-01", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-CHINESE-NEW-YEAR", "Chinese New Year", "2026-02-17", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-EDSA-ANNIVERSARY", "EDSA People Power Revolution Anniversary", "2026-02-25", "Special Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-MAUNDY-THURSDAY", "Maundy Thursday", "2026-04-02", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-GOOD-FRIDAY", "Good Friday", "2026-04-03", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-BLACK-SATURDAY", "Black Saturday", "2026-04-04", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-ARAW-KAGITINGAN", "Araw ng Kagitingan", "2026-04-09", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-LABOR-DAY", "Labor Day", "2026-05-01", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-INDEPENDENCE-DAY", "Independence Day", "2026-06-12", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-NINOY-AQUINO-DAY", "Ninoy Aquino Day", "2026-08-21", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-NATIONAL-HEROES-DAY", "National Heroes Day", "2026-08-31", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-ALL-SAINTS-DAY", "All Saints' Day", "2026-11-01", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-ALL-SOULS-DAY", "All Souls' Day", "2026-11-02", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-BONIFACIO-DAY", "Bonifacio Day", "2026-11-30", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-IMMACULATE-CONCEPTION", "Feast of the Immaculate Conception of Mary", "2026-12-08", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025; Republic Act No. 10966", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-CHRISTMAS-EVE", "Christmas Eve", "2026-12-24", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-CHRISTMAS-DAY", "Christmas Day", "2026-12-25", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-RIZAL-DAY", "Rizal Day", "2026-12-30", "Regular Holiday", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    ("PH-2026-LAST-DAY", "Last Day of the Year", "2026-12-31", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1006, s. 2025", "https://pco.gov.ph/news_releases/pbbm-issues-proclamation-declaring-regular-holidays-special-non-working-days-for-2026/"),
-    # The movable Eid dates were added by separate presidential proclamations.
-    ("PH-2026-EID-FITR", "Eid'l Fitr (Feast of Ramadan)", "2026-03-20", "Regular Holiday", "National", "Philippines", "Proclamation No. 1189, s. 2026", "https://pco.gov.ph/news_releases/palace-declares-march-20-regular-holiday-nationwide-for-eidl-fitr/"),
-    ("PH-2026-EID-ADHA", "Eid'l Adha (Feast of Sacrifice)", "2026-05-27", "Regular Holiday", "National", "Philippines", "Proclamation No. 1264, s. 2026", "https://pco.gov.ph/news_releases/palace-declares-may-27-as-a-regular-holiday-for-eidl-adha-observance/"),
-    ("PH-2026-PANABO-OCT-30", "Special Non-Working Day in Panabo City", "2026-10-30", "Special Non-Working Day", "City", "Panabo City, Davao del Norte", "Proclamation No. 1492, s. 2026", "https://officialgazette.gov.ph/2026/10/28/proclamation-no-1492-s-2026/"),
-    # 2027 dates declared by Proclamation No. 1427, s. 2026. Eid dates remain
-    # intentionally absent until separately proclaimed by the President.
-    ("PH-2027-NEW-YEAR", "New Year's Day", "2027-01-01", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-CHINESE-NEW-YEAR", "Chinese New Year", "2027-02-06", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-EDSA-ANNIVERSARY", "EDSA People Power Revolution Anniversary", "2027-02-25", "Special Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-MAUNDY-THURSDAY", "Maundy Thursday", "2027-03-25", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-GOOD-FRIDAY", "Good Friday", "2027-03-26", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-BLACK-SATURDAY", "Black Saturday", "2027-03-27", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-ARAW-KAGITINGAN", "Araw ng Kagitingan", "2027-04-09", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-LABOR-DAY", "Labor Day", "2027-05-01", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-INDEPENDENCE-DAY", "Independence Day", "2027-06-12", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-NINOY-AQUINO-DAY", "Ninoy Aquino Day", "2027-08-21", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-NATIONAL-HEROES-DAY", "National Heroes Day", "2027-08-30", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-ALL-SAINTS-DAY", "All Saints' Day", "2027-11-01", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-ALL-SOULS-DAY", "All Souls' Day", "2027-11-02", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-BONIFACIO-DAY", "Bonifacio Day", "2027-11-30", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-IMMACULATE-CONCEPTION", "Feast of the Immaculate Conception of Mary", "2027-12-08", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026; Republic Act No. 10966", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-CHRISTMAS-EVE", "Christmas Eve", "2027-12-24", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-CHRISTMAS-DAY", "Christmas Day", "2027-12-25", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-RIZAL-DAY", "Rizal Day", "2027-12-30", "Regular Holiday", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-    ("PH-2027-LAST-DAY", "Last Day of the Year", "2027-12-31", "Special Non-Working Day", "National", "Philippines", "Proclamation No. 1427, s. 2026", "https://pco.gov.ph/news_releases/pbbm-declares-2027-regular-and-special-holidays/"),
-]
-
-
-def seed_calendar_holidays() -> None:
-    with SessionLocal() as db:
-        for source_key, name, holiday_date, classification, coverage, scope, reference, source_url in CALENDAR_HOLIDAY_SEED:
-            parsed_date = date.fromisoformat(holiday_date)
-            db.execute(pg_insert(models.CalendarHoliday).values(
-                source_key=source_key,
-                name=name,
-                holiday_date=parsed_date,
-                classification=classification,
-                coverage=coverage,
-                geographic_scope=scope,
-                reference=reference,
-                source_url=source_url,
-                year=parsed_date.year,
-            ).on_conflict_do_nothing(index_elements=[models.CalendarHoliday.source_key]))
-        db.commit()
-
-
 ensure_schema_compatibility()
 seed_roles()
-seed_calendar_holidays()
 
 
 def hash_password(password: str) -> str:
@@ -892,35 +656,6 @@ def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
     if not user or not user.is_active or user.approval_status != "approved":
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     return user
-
-
-@app.post("/api/presence/heartbeat")
-def update_presence_heartbeat(
-    payload: PresenceHeartbeatPayload,
-    token: str = Depends(oauth2_scheme),
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    token_expiry = int(json.loads(b64url_decode(token.split(".", 1)[0]))["exp"])
-    presence = db.get(models.UserPresence, token_hash)
-    if presence is None:
-        presence = models.UserPresence(
-            token_hash=token_hash,
-            user_id=user.user_id,
-            last_seen_at=now,
-            last_interaction_at=now if payload.interacting else None,
-            expires_at=datetime.fromtimestamp(token_expiry, timezone.utc).replace(tzinfo=None),
-        )
-        db.add(presence)
-    else:
-        presence.last_seen_at = now
-        presence.expires_at = datetime.fromtimestamp(token_expiry, timezone.utc).replace(tzinfo=None)
-        if payload.interacting:
-            presence.last_interaction_at = now
-    db.commit()
-    return {"accepted": True}
 
 
 def admin_user(user: models.User = Depends(current_user)) -> models.User:
@@ -1099,25 +834,6 @@ def normalize_representative_details(details_data: dict[str, Any]) -> dict[str, 
     return normalized
 
 
-def validate_client_contact_number(
-    value: Any,
-    existing_value: Any = None,
-    *,
-    required: bool = False,
-) -> None:
-    if value == existing_value and existing_value not in (None, ""):
-        return
-    if value in (None, ""):
-        if required:
-            raise HTTPException(status_code=422, detail="Contact number is required.")
-        return
-    if not isinstance(value, str) or re.fullmatch(r"[0-9]{1,11}", value) is None:
-        raise HTTPException(
-            status_code=422,
-            detail="Contact number must contain up to 11 digits using numbers only.",
-        )
-
-
 def update_latest_client_representative(
     client: models.Client,
     representative_data: dict[str, Any],
@@ -1180,22 +896,6 @@ def case_participants(record: models.Case) -> list[models.CaseClient]:
             )
         ]
     return []
-
-
-def attach_case_participants(
-    record: models.Case,
-    participants: list[tuple[models.Client, Any, Any, Any]],
-) -> None:
-    """Attach clients through the shared CaseClient relationship used by case creation."""
-    for client, party_represented, applicant_role, applicant_role_other in participants:
-        record.participants.append(
-            models.CaseClient(
-                client=client,
-                party_represented=limit_text(party_represented, 100),
-                applicant_role=applicant_role,
-                applicant_role_other=applicant_role_other,
-            )
-        )
 
 
 def generated_case_title_for_case(record: models.Case) -> str:
@@ -1331,14 +1031,6 @@ def get_client_payload(client: models.Client) -> dict[str, Any]:
     reviewed_flags = stored_reviewed_flags(classification)
     return {
         "client_id": str(client.client_id),
-        "paper_intake": ({'document_id': client.paper_intake.document_id,
-                          'sections': client.paper_intake.sections,
-                          'field_reviews': client.paper_intake.field_reviews,
-                          'checkbox_states': client.paper_intake.checkbox_states,
-                          'source_draft_id': client.paper_intake.source_draft_id,
-                          'candidate_snapshot': client.paper_intake.candidate_snapshot,
-                          'unreadable_fields': client.paper_intake.unreadable_fields}
-                         if client.paper_intake else None),
         "created_by_user_id": client.created_by_user_id,
         "client": {
             "client_id": str(client.client_id),
@@ -1367,7 +1059,7 @@ def get_client_payload(client: models.Client) -> dict[str, Any]:
             "representative_contact_no": details.representative_contact_no or "",
             "representative_relationship": details.representative_relationship or "",
             "representative_email": details.representative_email or "",
-            "detained": details.detained if client.paper_intake else bool(details.detained),
+            "detained": bool(details.detained),
             "detained_since": details.detained_since.date().isoformat() if details.detained_since else "",
             "place_of_detention": details.place_of_detention or "",
         },
@@ -1645,139 +1337,12 @@ def populate_submission_items(
         )
 
 
-def transfer_group_id(report: models.CaseTransferReport) -> int:
-    return report.parent_report_id or report.report_id
-
-
-def transfer_case_snapshot(record: models.Case) -> dict[str, Any]:
-    payload = get_case_payload(record)
-    return {
-        "case_id": record.case_id,
-        "case_type": record.case_type,
-        "control_no": payload["intake_record"].get("control_no", ""),
-        "title_of_case": record.title_of_case or "",
-        "case_no": record.case_no or "",
-        "date_received": payload["intake_record"].get("form_date", ""),
-        "status_of_case": record.status_of_case or record.case_status or "",
-        "cause_of_action": record.cause_of_action or "",
-        "assigned_pao": record.assigned_pao or "",
-    }
-
-
-def transfer_report_access(report: models.CaseTransferReport, user: models.User) -> bool:
-    return is_admin(user) or report.from_user_id == user.user_id or report.to_user_id == user.user_id
-
-
-def ensure_transfer_access(report_id: int, user: models.User, db: Session) -> models.CaseTransferReport:
-    report = db.get(models.CaseTransferReport, report_id)
-    if not report or not transfer_report_access(report, user):
-        raise HTTPException(status_code=404, detail="Transfer report not found")
-    return report
-
-
-def transfer_user(db: Session, user_id: int) -> models.User:
-    person = db.query(models.User).join(models.Role).filter(
-        models.User.user_id == user_id,
-        models.User.is_active.is_(True),
-        models.User.approval_status == "approved",
-    ).first()
-    if not person or is_admin(person):
-        raise HTTPException(status_code=422, detail="Select an active approved staff recipient")
-    return person
-
-
-def transfer_report_editor(report: models.CaseTransferReport, user: models.User) -> bool:
-    return can_edit_transfer_report(report, user, is_admin(user))
-
-
-def build_transfer_payload(report: models.CaseTransferReport, include_items: bool = True) -> dict[str, Any]:
-    items = sorted(report.items, key=lambda item: (item.section, item.item_id))
-    admin_entries = sorted(report.administrative_entries, key=lambda entry: (entry.section, entry.row_number, entry.entry_id))
-    return {
-        "report_id": report.report_id,
-        "parent_report_id": report.parent_report_id,
-        "title": report.title,
-        "report_date": report.report_date.isoformat() if report.report_date else "",
-        "date_received": report.date_received.isoformat() if report.date_received else None,
-        "status": report.status,
-        "remarks": report.remarks or "",
-        "version": report.version,
-        "from_user_id": report.from_user_id,
-        "from_user_name": report.from_user.full_name or report.from_user.email or report.from_user.username,
-        "to_user_id": report.to_user_id,
-        "to_user_name": report.to_user.full_name or report.to_user.email or report.to_user.username,
-        "initiated_by_user_id": report.initiated_by_user_id,
-        "initiated_by_user_name": (
-            (report.initiated_by_user.full_name or report.initiated_by_user.email or report.initiated_by_user.username)
-            if report.initiated_by_user else None
-        ),
-        "submitted_at": report.submitted_at.isoformat() if report.submitted_at else None,
-        "returned_at": report.returned_at.isoformat() if report.returned_at else None,
-        "confirmed_at": report.confirmed_at.isoformat() if report.confirmed_at else None,
-        "created_at": report.created_at.isoformat() if report.created_at else "",
-        "updated_at": report.updated_at.isoformat() if report.updated_at else "",
-        "items": [
-            {"item_id": item.item_id, "case_id": item.case_id, "section": item.section, "snapshot": item.snapshot_json}
-            for item in items
-        ] if include_items else [],
-        "administrative_entries": [
-            {
-                "entry_id": entry.entry_id,
-                "section": entry.section,
-                "row_number": entry.row_number,
-                "control_no": entry.control_no or "",
-                "title_of_case": entry.title_of_case or "",
-                "docket_no": entry.docket_no or "",
-                "date_received": entry.date_received.isoformat() if entry.date_received else "",
-                "status_of_case": entry.status_of_case or "",
-                "cause_of_action": entry.cause_of_action or "",
-            }
-            for entry in admin_entries
-        ],
-    }
-
-
-def validate_transfer_case_ids(
-    db: Session,
-    user: models.User,
-    case_ids: list[int],
-    source_user_id: int,
-    exclude_report_id: int | None = None,
-) -> list[models.Case]:
-    unique_ids = list(dict.fromkeys(case_ids))
-    if len(unique_ids) != len(case_ids):
-        raise HTTPException(status_code=422, detail="Duplicate case references are not allowed")
-    if not unique_ids:
-        raise HTTPException(status_code=422, detail="Select at least one Criminal or Civil case")
-    records = []
-    for case_id in unique_ids:
-        record = ensure_case_access(db.get(models.Case, case_id), user)
-        if record.is_terminated or (record.status_of_case or "").lower() == "terminated":
-            raise HTTPException(status_code=409, detail=f"Case {case_id} is not eligible for transfer")
-        if not record.intake or record.intake.interviewer_id != source_user_id:
-            raise HTTPException(status_code=403, detail=f"Case {case_id} is not assigned to the selected transferring attorney")
-        records.append(record)
-    conflict_query = db.query(models.CaseTransferItem).join(models.CaseTransferReport).filter(
-        models.CaseTransferItem.case_id.in_(unique_ids),
-        models.CaseTransferReport.status == "Pending Receipt",
-    )
-    if exclude_report_id is not None:
-        conflict_query = conflict_query.filter(models.CaseTransferReport.report_id != exclude_report_id)
-    if conflict_query.first():
-        raise HTTPException(status_code=409, detail="One or more selected cases are already in a pending transfer")
-    return records
-
-
 def apply_client_payload(client: models.Client, payload: ClientPayload) -> None:
     client_data = payload.client
     details_data = normalize_representative_details(normalize_spouse_details(payload.client_details))
     class_data = payload.client_classification
     details = client.details
     classification = client.classification
-    validate_client_contact_number(
-        details_data.get("contact_no"),
-        existing_value=details.contact_no if details else None,
-    )
     if details is None:
         details = models.ClientDetails(client_id=client.client_id)
         client.details = details
@@ -2180,75 +1745,6 @@ def dashboard_overview(
     }
 
 
-def ensure_staff_analytics_access(user: models.User) -> None:
-    role_name = (user.role.role_name or "").strip().lower() if user.role else ""
-    if is_admin(user) or role_name not in {"staff", "attorney", "legal_staff", "legal staff", "user"}:
-        raise HTTPException(status_code=403, detail="Staff analytics are not available for this role")
-
-
-@app.get("/api/dashboard/intelligence-brief")
-def dashboard_intelligence_brief(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    role_name = (user.role.role_name or "").strip().lower() if user.role else ""
-    if not is_admin(user) and role_name not in {"staff", "attorney", "legal_staff", "legal staff", "user"}:
-        raise HTTPException(status_code=403, detail="Dashboard insights are not available for this role")
-    # This endpoint deliberately returns office-level aggregates only: no client,
-    # case title, or other personally identifying record data is exposed.
-    records = db.query(
-        models.Case.case_type,
-        models.Case.is_terminated,
-        models.Case.status_of_case,
-        models.Case.last_updated,
-        models.Case.incident_barangay,
-        models.Case.cause_of_action,
-        models.IntakeRecord.form_date,
-        models.IntakeRecord.nature_of_case,
-    ).outerjoin(models.IntakeRecord).all()
-    now = datetime.now()
-    month_start = datetime(now.year, now.month, 1)
-    total_cases = len(records)
-    terminated = sum(
-        1 for record in records
-        if record.is_terminated or (record.status_of_case or "").lower() == "terminated"
-    )
-    monthly_count = sum(
-        1 for record in records
-        if (record.form_date or record.last_updated) and (record.form_date or record.last_updated) >= month_start
-    )
-    counts_by_type: dict[str, int] = {}
-    counts_by_category: dict[str, int] = {}
-    counts_by_barangay: dict[str, int] = {}
-    weekday_counts = [0] * 7
-    hour_counts: dict[int, int] = {}
-    for record in records:
-        case_type = record.case_type or "Other"
-        counts_by_type[case_type] = counts_by_type.get(case_type, 0) + 1
-        category = record.nature_of_case or (str(record.cause_of_action).split(";")[0][:80] if record.cause_of_action else "Uncategorized")
-        counts_by_category[category] = counts_by_category.get(category, 0) + 1
-        barangay = record.incident_barangay or "Unspecified"
-        counts_by_barangay[barangay] = counts_by_barangay.get(barangay, 0) + 1
-        intake_date = record.form_date or record.last_updated
-        if intake_date:
-            weekday_counts[(intake_date.weekday())] += 1
-            hour_counts[intake_date.hour] = hour_counts.get(intake_date.hour, 0) + 1
-    pending_reviews = db.query(models.CaseSubmission).filter(
-        models.CaseSubmission.status.in_(["Submitted", "Under Review", "Resubmitted"])
-    ).count()
-    busiest_hour = max(hour_counts, key=hour_counts.get) if hour_counts else None
-    top_barangay = max(counts_by_barangay, key=counts_by_barangay.get) if counts_by_barangay else None
-    return {
-        "total_cases": total_cases,
-        "active_cases": max(total_cases - terminated, 0),
-        "criminal_cases": counts_by_type.get("Criminal", 0),
-        "civil_cases": counts_by_type.get("Civil", 0),
-        "cases_this_month": monthly_count,
-        "busiest_day": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][weekday_counts.index(max(weekday_counts))] if total_cases else None,
-        "busiest_hour": f"{busiest_hour:02d}:00" if busiest_hour is not None else None,
-        "top_barangay": top_barangay,
-        "leading_category": max(counts_by_category, key=counts_by_category.get) if counts_by_category else None,
-        "pending_reviews": pending_reviews,
-    }
-
-
 @app.get("/api/dashboard/monthly-trends")
 def dashboard_monthly_trends(
     user: models.User = Depends(current_user),
@@ -2286,25 +1782,10 @@ def dashboard_intake_load(
         .group_by("weekday")
         .all()
     )
-    actual_intake_time = models.IntakeRecord.form_date
-    hour_query = scoped_case_query(db, user).filter(actual_intake_time.isnot(None))
-    from_date = parse_date(date_from)
-    to_date = parse_date(date_to)
-    if from_date:
-        hour_query = hour_query.filter(actual_intake_time >= from_date)
-    if to_date:
-        hour_query = hour_query.filter(actual_intake_time < to_date + timedelta(days=1))
     hour_rows = (
-        hour_query
-        .filter(
-            or_(
-                func.extract("hour", actual_intake_time) != 0,
-                func.extract("minute", actual_intake_time) != 0,
-                func.extract("second", actual_intake_time) != 0,
-            ),
-        )
+        apply_case_date_filters(scoped_case_query(db, user), date_from, date_to)
         .with_entities(
-            func.extract("hour", actual_intake_time).label("hour"),
+            func.extract("hour", case_date_column()).label("hour"),
             func.count(models.Case.case_id).label("total_cases"),
         )
         .group_by("hour")
@@ -2389,26 +1870,6 @@ def dashboard_heatmap(user: models.User = Depends(current_user), db: Session = D
     return {"center": PANABO_CENTER, "points": points, "barangays": build_barangay_stats(records)}
 
 
-@app.get("/api/dashboard/office-hotspots")
-def dashboard_office_hotspots(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    ensure_staff_analytics_access(user)
-    records = db.query(models.Case).outerjoin(models.IntakeRecord).all()
-    barangays = [
-        {
-            "barangay": row["barangay"],
-            "city": row["city"],
-            "total_cases": row["total_cases"],
-            "active_cases": row["active_cases"],
-            "terminated_cases": row["terminated_cases"],
-            "latitude": row["latitude"],
-            "longitude": row["longitude"],
-        }
-        for row in build_barangay_stats(records)
-        if row["latitude"] is not None and row["longitude"] is not None
-    ]
-    return {"center": PANABO_CENTER, "points": [], "barangays": barangays}
-
-
 @app.get("/api/dashboard/terminated-cases")
 def dashboard_terminated_cases(
     user: models.User = Depends(current_user),
@@ -2452,76 +1913,18 @@ def dashboard_recent_activities(user: models.User = Depends(current_user), db: S
     if not is_admin(user):
         query = query.filter(models.AuditLog.user_id == user.user_id)
     rows = query.order_by(models.AuditLog.timestamp.desc()).limit(12).all()
-    activities = []
-    transfer_titles = {
-        "Create Transfer Draft": "Transfer Report Created",
-        "Submit Case Transfer": "Transfer Report Submitted",
-        "Resubmit Case Transfer": "Transfer Report Resubmitted",
-        "Return Case Transfer": "Transfer Returned for Correction",
-        "Confirm Case Transfer": "Transfer Receipt Confirmed",
-        "Transfer Assignments Updated": "Case Assignments Updated",
-    }
-    for row in rows:
-        actor = row.user.full_name or row.user.email or row.user.username if row.user else "System"
-        role_name = row.user.role.role_name if row.user and row.user.role else "Attorney/Staff"
-        role = "Administrator" if row.user and is_admin(row.user) else role_name.replace("_", " ").title()
-        action_title = row.action.replace("_", " ").strip().title() or "Record Updated"
-        description = row.description or "Activity recorded."
-        href = None
-        status = None
-        transfer_report = None
-        if row.target_entity == "case_transfer" and row.entity_id:
-            try:
-                transfer_report = db.get(models.CaseTransferReport, int(row.entity_id))
-            except (TypeError, ValueError):
-                transfer_report = None
-        if transfer_report:
-            report_title = transfer_report.title or f"Transfer report #{transfer_report.report_id}"
-            from_name = transfer_report.from_user.full_name or transfer_report.from_user.email or transfer_report.from_user.username
-            to_name = transfer_report.to_user.full_name or transfer_report.to_user.email or transfer_report.to_user.username
-            action_title = transfer_titles.get(row.action, action_title)
-            status = {
-                "Create Transfer Draft": "Draft",
-                "Submit Case Transfer": "Awaiting Receipt",
-                "Resubmit Case Transfer": "Awaiting Receipt",
-                "Return Case Transfer": "Returned for Correction",
-                "Confirm Case Transfer": "Completed",
-                "Transfer Assignments Updated": "Completed",
-            }.get(row.action)
-            if row.action == "Create Transfer Draft":
-                description = f"{actor} created '{report_title}' for {from_name} to transfer cases to {to_name}."
-            elif row.action == "Submit Case Transfer":
-                description = f"{from_name} submitted '{report_title}' for receipt review by {to_name}."
-            elif row.action == "Resubmit Case Transfer":
-                description = f"{from_name} resubmitted '{report_title}' to {to_name} after correction."
-            elif row.action == "Return Case Transfer":
-                reason = (row.description or "Correction requested.").strip()
-                description = f"{to_name} returned '{report_title}' to {from_name} for correction: {reason}"
-            elif row.action == "Confirm Case Transfer":
-                description = f"{to_name} confirmed receipt of '{report_title}' from {from_name}; case assignments were updated."
-            elif row.action == "Transfer Assignments Updated":
-                description = f"{len(transfer_report.items)} case assignment(s) moved from {from_name} to {to_name} after receipt of '{report_title}' was confirmed."
-            href = f"/case-transfers?report={transfer_report.report_id}"
-        elif description.lstrip().startswith(("{", "[")):
-            try:
-                json.loads(description)
-                description = f"{action_title} activity was recorded."
-            except (TypeError, ValueError):
-                pass
-        activities.append({
+    return [
+        {
             "id": str(row.log_id),
             "timestamp": row.timestamp.isoformat() if row.timestamp else "",
-            "user": actor,
-            "role": role,
+            "user": row.user.full_name or row.user.email or row.user.username if row.user else "System",
             "action": row.action,
-            "title": action_title,
-            "description": description,
-            "status": status,
+            "description": row.description or "",
             "entity_type": row.target_entity,
             "entity_id": row.entity_id,
-            "href": href,
-        })
-    return activities
+        }
+        for row in rows
+    ]
 
 
 @app.get("/api/dashboard/ocr-analytics")
@@ -2534,13 +1937,10 @@ def dashboard_ocr_analytics(user: models.User = Depends(current_user), db: Sessi
     successful = len([row for row in rows if row.ocr_status == "COMPLETED"])
     failed = len([row for row in rows if row.ocr_status == "FAILED"])
     type_counts: dict[str, int] = {}
-    status_counts: dict[str, int] = {}
     trend_counts: dict[str, int] = {}
     for row in rows:
         doc_type = row.document_type or "Unknown"
         type_counts[doc_type] = type_counts.get(doc_type, 0) + 1
-        status = row.ocr_status or "Unknown"
-        status_counts[status] = status_counts.get(status, 0) + 1
         month = row.uploaded_at.strftime("%Y-%m") if row.uploaded_at else "Unscheduled"
         trend_counts[month] = trend_counts.get(month, 0) + 1
     return {
@@ -2550,10 +1950,6 @@ def dashboard_ocr_analytics(user: models.User = Depends(current_user), db: Sessi
         "document_types": [
             {"document_type": key, "total_scans": value}
             for key, value in sorted(type_counts.items(), key=lambda item: item[1], reverse=True)
-        ],
-        "status_breakdown": [
-            {"status": key, "total_scans": value}
-            for key, value in sorted(status_counts.items(), key=lambda item: item[1], reverse=True)
         ],
         "trends": [
             {"month": key, "total_scans": value}
@@ -2760,13 +2156,11 @@ def logout_access_token(
     # Store only the token digest, not a reusable bearer credential.
     payload_segment = token.split(".", 1)[0]
     expiry = int(json.loads(b64url_decode(payload_segment))["exp"])
-    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     db.add(models.RevokedAccessToken(
-        token_hash=token_hash,
+        token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
         user_id=user.user_id,
         expires_at=datetime.fromtimestamp(expiry, timezone.utc).replace(tzinfo=None),
     ))
-    db.query(models.UserPresence).filter(models.UserPresence.token_hash == token_hash).delete()
     write_audit(db, user.user_id, "Logout", "user", "Session revoked", str(user.user_id), request)
     db.commit()
     return {"message": "Signed out"}
@@ -2830,19 +2224,7 @@ def get_profile_image(
     owner = db.query(models.User).filter(models.User.profile_image_path == path).first()
     if not owner or not owner.is_active or owner.approval_status != "approved":
         raise HTTPException(status_code=404, detail="Profile image not found")
-    owner_designation = personnel_designation(
-        owner.role.role_name if owner.role else None,
-        is_admin_role(owner.role),
-    )
-    viewer_is_attorney = personnel_designation(
-        viewer.role.role_name if viewer.role else None,
-        is_admin_role(viewer.role),
-    ) == "Attorney"
-    if (
-        viewer.user_id != owner.user_id
-        and not is_admin(viewer)
-        and not (viewer_is_attorney and owner_designation in {"Administrator", "Attorney"})
-    ):
+    if viewer.user_id != owner.user_id and not is_admin(viewer):
         raise HTTPException(status_code=403, detail="Profile image access denied")
     location = PROFILE_UPLOAD_DIR / filename
     if not location.is_file():
@@ -2973,263 +2355,6 @@ def list_applicants(
     if approval_status:
         query = query.filter(models.User.approval_status == approval_status)
     return [user_to_admin(user) for user in query.all()]
-
-
-@app.get("/api/admin/personnel-overview")
-def get_personnel_overview(_: models.User = Depends(admin_user), db: Session = Depends(get_db)):
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    users = (
-        db.query(models.User)
-        .join(models.Role, models.User.role_id == models.Role.role_id)
-        .filter(
-            models.User.is_active.is_(True),
-            models.User.approval_status == "approved",
-        )
-        .order_by(models.User.full_name, models.User.user_id)
-        .all()
-    )
-    personnel = []
-    users_by_id = {}
-    for person in users:
-        designation = personnel_designation(
-            person.role.role_name if person.role else None,
-            is_admin_role(person.role),
-        )
-        if designation is None:
-            continue
-        users_by_id[person.user_id] = person
-        personnel.append({
-            "user_id": person.user_id,
-            "full_name": person.full_name or person.username,
-            "profile_image_path": person.profile_image_path or person.profile_picture_path,
-            "designation": designation,
-            "presence": "Offline",
-        })
-
-    presence_by_user: dict[int, str] = {}
-    if users_by_id:
-        active_presence = (
-            db.query(models.UserPresence)
-            .outerjoin(
-                models.RevokedAccessToken,
-                models.RevokedAccessToken.token_hash == models.UserPresence.token_hash,
-            )
-            .filter(
-                models.UserPresence.user_id.in_(users_by_id),
-                models.UserPresence.expires_at > now,
-                models.UserPresence.last_seen_at >= now - timedelta(seconds=PRESENCE_HEARTBEAT_STALE_SECONDS),
-                models.RevokedAccessToken.token_hash.is_(None),
-            )
-            .all()
-        )
-        priority = {"Offline": 0, "Away": 1, "Online": 2}
-        for session in active_presence:
-            status = calculate_presence_status(
-                session.last_seen_at,
-                session.last_interaction_at,
-                session.expires_at,
-                now,
-                stale_after_seconds=PRESENCE_HEARTBEAT_STALE_SECONDS,
-                away_after_seconds=PRESENCE_AWAY_SECONDS,
-            )
-            if priority[status] > priority.get(presence_by_user.get(session.user_id, "Offline"), 0):
-                presence_by_user[session.user_id] = status
-
-    for row in personnel:
-        row["presence"] = presence_by_user.get(row["user_id"], "Offline")
-
-    def role_counts(designation: str):
-        matching = [person for person in personnel if person["designation"] == designation]
-        return {"active": len(matching), "online": sum(person["presence"] == "Online" for person in matching)}
-
-    summary = {
-        "attorneys": role_counts("Attorney"),
-        "administrators": role_counts("Administrator"),
-    }
-    admin_staff_counts = role_counts("Admin Staff")
-    if admin_staff_counts["active"]:
-        summary["admin_staff"] = admin_staff_counts
-
-    return {
-        "summary": summary,
-        "personnel": personnel,
-    }
-
-
-def messaging_designation(user: models.User) -> str | None:
-    return personnel_designation(user.role.role_name if user.role else None, is_admin_role(user.role))
-
-
-def require_messaging_user(user: models.User) -> str:
-    designation = messaging_designation(user)
-    if designation not in {"Administrator", "Attorney"}:
-        raise HTTPException(status_code=403, detail="Office messaging is available to administrators and attorneys")
-    return designation
-
-
-def messaging_person_payload(person: models.User, unread_count: int, include_presence: bool, presence: str | None = None):
-    result = {
-        "user_id": person.user_id,
-        "full_name": person.full_name or person.username,
-        # profile_picture_path stores the registration ID photo; only expose the dedicated avatar.
-        "profile_image_path": person.profile_image_path,
-        "designation": messaging_designation(person),
-        "is_self": False,
-        "unread_count": unread_count,
-    }
-    if include_presence:
-        result["presence"] = presence or "Offline"
-    return result
-
-
-@app.get("/api/messages/personnel")
-def list_messaging_personnel(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    designation = require_messaging_user(user)
-    is_administrator = designation == "Administrator"
-    candidates = (
-        db.query(models.User)
-        .join(models.Role, models.User.role_id == models.Role.role_id)
-        .filter(models.User.is_active.is_(True), models.User.approval_status == "approved")
-        .order_by(models.User.full_name, models.User.user_id)
-        .all()
-    )
-    eligible = [
-        person for person in candidates
-        if person.user_id == user.user_id
-        or messaging_designation(person) == "Attorney"
-        or (not is_administrator and messaging_designation(person) == "Administrator")
-    ]
-    unread_rows = (
-        db.query(models.PrivateMessage.sender_user_id, func.count(models.PrivateMessage.message_id))
-        .filter(models.PrivateMessage.recipient_user_id == user.user_id, models.PrivateMessage.read_at.is_(None))
-        .group_by(models.PrivateMessage.sender_user_id)
-        .all()
-    )
-    unread_by_sender = {sender_id: count for sender_id, count in unread_rows}
-    presence_by_id: dict[int, str] = {}
-    summary = None
-    if is_administrator:
-        # Presence and role totals are never included in an attorney's response.
-        admin_overview = get_personnel_overview(user, db)
-        presence_by_id = {row["user_id"]: row["presence"] for row in admin_overview["personnel"]}
-        summary = admin_overview["summary"]
-    people = []
-    for person in eligible:
-        item = messaging_person_payload(
-            person,
-            unread_by_sender.get(person.user_id, 0),
-            is_administrator,
-            presence_by_id.get(person.user_id),
-        )
-        item["is_self"] = person.user_id == user.user_id
-        people.append(item)
-    return {"personnel": people, "summary": summary}
-
-
-def get_messaging_peer(peer_id: int, user: models.User, db: Session) -> models.User:
-    if peer_id == user.user_id:
-        raise HTTPException(status_code=400, detail="You cannot message yourself")
-    peer = db.get(models.User, peer_id)
-    if (
-        not peer
-        or not peer.is_active
-        or peer.approval_status != "approved"
-        or messaging_designation(peer) not in {"Administrator", "Attorney"}
-    ):
-        raise HTTPException(status_code=404, detail="Personnel member not found")
-    current_designation = require_messaging_user(user)
-    peer_designation = messaging_designation(peer)
-    if not can_message_designations(current_designation, peer_designation):
-        raise HTTPException(status_code=403, detail="Messages are only available between attorneys and administrators")
-    return peer
-
-
-def private_message_payload(message: models.PrivateMessage, user_id: int):
-    return {
-        "message_id": message.message_id,
-        "sender_user_id": message.sender_user_id,
-        "recipient_user_id": message.recipient_user_id,
-        "content": message.content,
-        "created_at": message.created_at.isoformat() if message.created_at else "",
-        "read_at": message.read_at.isoformat() if message.read_at else None,
-        "is_mine": message.sender_user_id == user_id,
-    }
-
-
-@app.get("/api/messages/{peer_id}")
-def get_private_messages(
-    peer_id: int,
-    limit: int = Query(default=50, ge=1, le=100),
-    before_message_id: int | None = Query(default=None, ge=1),
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    get_messaging_peer(peer_id, user, db)
-    query = db.query(models.PrivateMessage).filter(
-        or_(
-            (models.PrivateMessage.sender_user_id == user.user_id) & (models.PrivateMessage.recipient_user_id == peer_id),
-            (models.PrivateMessage.sender_user_id == peer_id) & (models.PrivateMessage.recipient_user_id == user.user_id),
-        )
-    )
-    if before_message_id is not None:
-        query = query.filter(models.PrivateMessage.message_id < before_message_id)
-    rows = query.order_by(models.PrivateMessage.message_id.desc()).limit(limit + 1).all()
-    has_more = len(rows) > limit
-    rows = list(reversed(rows[:limit]))
-    return {"messages": [private_message_payload(row, user.user_id) for row in rows], "has_more": has_more}
-
-
-@app.post("/api/messages/{peer_id}")
-def send_private_message(
-    peer_id: int,
-    payload: PrivateMessagePayload,
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    peer = get_messaging_peer(peer_id, user, db)
-    try:
-        content = normalize_message_content(payload.content)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    message = models.PrivateMessage(sender_user_id=user.user_id, recipient_user_id=peer.user_id, content=content)
-    db.add(message)
-    db.flush()
-    create_user_notification(
-        db,
-        peer.user_id,
-        f"private-message:{message.message_id}",
-        f"New message from {user.full_name or user.username}",
-        "You have a new private message.",
-        f"/dashboard?messageFrom={user.user_id}",
-        "private_message",
-        str(user.user_id),
-    )
-    db.commit()
-    db.refresh(message)
-    return private_message_payload(message, user.user_id)
-
-
-@app.post("/api/messages/{peer_id}/read")
-def mark_private_messages_read(
-    peer_id: int,
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    get_messaging_peer(peer_id, user, db)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    db.query(models.PrivateMessage).filter(
-        models.PrivateMessage.sender_user_id == peer_id,
-        models.PrivateMessage.recipient_user_id == user.user_id,
-        models.PrivateMessage.read_at.is_(None),
-    ).update({models.PrivateMessage.read_at: now}, synchronize_session=False)
-    db.query(models.Notification).filter(
-        models.Notification.user_id == user.user_id,
-        models.Notification.entity_type == "private_message",
-        models.Notification.entity_id == str(peer_id),
-        models.Notification.is_read.is_(False),
-    ).update({models.Notification.is_read: True}, synchronize_session=False)
-    db.commit()
-    return {"ok": True}
 
 
 @app.get("/api/admin/users/{user_id}")
@@ -3555,783 +2680,6 @@ def resubmit_case_submission(
     return submission_to_payload(submission)
 
 
-def create_user_notification(
-    db: Session,
-    user_id: int,
-    event_key: str,
-    title: str,
-    message: str,
-    redirect_to: str,
-    entity_type: str,
-    entity_id: str,
-) -> None:
-    statement = pg_insert(models.Notification).values(
-        user_id=user_id,
-        event_key=event_key,
-        notification_type="workflow",
-        title=title,
-        message=message,
-        redirect_to=redirect_to,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        is_read=False,
-    ).on_conflict_do_nothing(constraint="uq_notification_user_event")
-    db.execute(statement)
-
-
-REMINDER_TIMEZONE = PHILIPPINE_TIMEZONE
-REMINDER_NOTIFICATION_LEADS = {0, 5, 15, 30, 60, 1440}
-
-
-def reminder_status_at(reminder: models.Reminder, now: datetime) -> str:
-    return calculate_reminder_status(reminder.reminder_date, reminder.start_time, reminder.status, now)
-
-
-def refresh_reminder_status(reminder: models.Reminder, now: datetime | None = None) -> bool:
-    calculated = reminder_status_at(reminder, now or datetime.now(REMINDER_TIMEZONE))
-    if reminder.status != calculated:
-        reminder.status = calculated
-        reminder.updated_at = datetime.now(REMINDER_TIMEZONE).replace(tzinfo=None)
-        return True
-    return False
-
-
-def reconcile_reminder_statuses(db: Session, reminders: list[models.Reminder] | None = None) -> None:
-    candidates = reminders if reminders is not None else db.query(models.Reminder).filter(
-        models.Reminder.status != "Done",
-    ).all()
-    now = datetime.now(REMINDER_TIMEZONE)
-    changed = False
-    for reminder in candidates:
-        changed = refresh_reminder_status(reminder, now) or changed
-    if changed:
-        db.flush()
-
-
-def can_manage_shared_reminders(user: models.User) -> bool:
-    return role_can_manage_shared_reminders(user, is_admin(user))
-
-
-def ensure_reminder_access(
-    reminder_id: int,
-    user: models.User,
-    db: Session,
-    *,
-    lock: bool = False,
-) -> models.Reminder:
-    reminder = (
-        db.query(models.Reminder)
-        .filter(models.Reminder.reminder_id == reminder_id)
-        .with_for_update()
-        .first()
-        if lock
-        else db.get(models.Reminder, reminder_id)
-    )
-    if not reminder or not can_access_reminder(reminder, user):
-        raise HTTPException(status_code=404, detail="Reminder not found")
-    return reminder
-
-
-def ensure_reminder_edit_access(reminder: models.Reminder, user: models.User) -> None:
-    if not can_edit_reminder(reminder, user, can_manage_shared_reminders(user)):
-        if reminder.visibility == "personal":
-            raise HTTPException(status_code=404, detail="Reminder not found")
-        raise HTTPException(status_code=403, detail="You cannot manage shared office reminders")
-
-
-def validate_reminder_payload(payload: ReminderPayload) -> None:
-    if not payload.title.strip():
-        raise HTTPException(status_code=422, detail="Reminder title is required")
-    if len(payload.title.strip()) > 200:
-        raise HTTPException(status_code=422, detail="Reminder title must be 200 characters or fewer")
-    if len(payload.description) > 4000:
-        raise HTTPException(status_code=422, detail="Reminder notes must be 4,000 characters or fewer")
-    if any(value and value.tzinfo is not None for value in (payload.start_time, payload.end_time)):
-        raise HTTPException(status_code=422, detail="Reminder times must use local office time without a timezone offset")
-    if payload.end_time and not payload.start_time:
-        raise HTTPException(status_code=422, detail="An end time requires a start time")
-    if payload.start_time and payload.end_time and payload.end_time <= payload.start_time:
-        raise HTTPException(status_code=422, detail="End time must be later than start time")
-    if payload.notification_minutes_before not in REMINDER_NOTIFICATION_LEADS | {None}:
-        raise HTTPException(status_code=422, detail="Choose a supported notification time")
-
-
-def reminder_payload(reminder: models.Reminder) -> dict[str, Any]:
-    return {
-        "reminder_id": reminder.reminder_id,
-        "created_by_user_id": reminder.created_by_user_id,
-        "title": reminder.title,
-        "description": reminder.description or "",
-        "date": reminder.reminder_date.isoformat(),
-        "start_time": reminder.start_time.isoformat(timespec="minutes") if reminder.start_time else None,
-        "end_time": reminder.end_time.isoformat(timespec="minutes") if reminder.end_time else None,
-        "category": reminder.category,
-        "priority": reminder.priority,
-        "visibility": reminder.visibility,
-        "notification_minutes_before": reminder.notification_minutes_before,
-        "status": reminder.status,
-        "created_at": reminder.created_at.isoformat() if reminder.created_at else None,
-        "updated_at": reminder.updated_at.isoformat() if reminder.updated_at else None,
-    }
-
-
-def apply_reminder_payload(reminder: models.Reminder, payload: ReminderPayload) -> None:
-    validate_reminder_payload(payload)
-    reminder.title = payload.title.strip()
-    reminder.description = payload.description.strip()
-    reminder.reminder_date = payload.date
-    reminder.start_time = payload.start_time
-    reminder.end_time = payload.end_time
-    reminder.category = payload.category
-    reminder.priority = payload.priority
-    reminder.visibility = payload.visibility
-    reminder.notification_minutes_before = payload.notification_minutes_before
-    if reminder.status not in {"Done", "Completed"}:
-        refresh_reminder_status(reminder)
-    else:
-        reminder.status = "Done"
-    reminder.updated_at = datetime.now(REMINDER_TIMEZONE).replace(tzinfo=None)
-
-
-def dispatch_due_reminder_notifications() -> None:
-    now = datetime.now(REMINDER_TIMEZONE)
-    with SessionLocal() as db:
-        reconcile_reminder_statuses(db)
-        db.commit()
-        reminders = db.query(models.Reminder).filter(
-            models.Reminder.status.in_(("Upcoming", "Overdue", "Scheduled")),
-            models.Reminder.notification_minutes_before.isnot(None),
-            models.Reminder.reminder_date <= now.date() + timedelta(days=2),
-        ).all()
-        if not reminders:
-            return
-        office_users: list[models.User] | None = None
-        for reminder in reminders:
-            event_time = datetime.combine(
-                reminder.reminder_date,
-                reminder.start_time or time(9, 0),
-                tzinfo=REMINDER_TIMEZONE,
-            )
-            notify_at = event_time - timedelta(minutes=reminder.notification_minutes_before or 0)
-            if notify_at > now:
-                continue
-            if reminder.visibility == "personal":
-                recipients = [reminder.created_by_user_id]
-            else:
-                if office_users is None:
-                    office_users = db.query(models.User).filter(
-                        models.User.is_active.is_(True),
-                        models.User.approval_status == "approved",
-                    ).all()
-                recipients = [person.user_id for person in office_users]
-            time_label = reminder.start_time.strftime("%I:%M %p").lstrip("0") if reminder.start_time else "All day"
-            message = f"{reminder.title} is scheduled for {reminder.reminder_date.strftime('%B %d, %Y')} at {time_label}."
-            for recipient_id in recipients:
-                create_user_notification(
-                    db,
-                    recipient_id,
-                    f"reminder:{reminder.reminder_id}:due",
-                    "Reminder",
-                    message,
-                    f"/dashboard?reminder={reminder.reminder_id}",
-                    "reminder",
-                    str(reminder.reminder_id),
-                )
-        db.commit()
-
-
-async def reminder_notification_scheduler() -> None:
-    while True:
-        try:
-            await asyncio.to_thread(dispatch_due_reminder_notifications)
-        except Exception:
-            logging.getLogger("jurisguard.reminders").exception("Reminder notification dispatch failed")
-        await asyncio.sleep(30)
-
-
-@app.on_event("startup")
-async def start_reminder_notification_scheduler() -> None:
-    app.state.reminder_scheduler_task = asyncio.create_task(reminder_notification_scheduler())
-
-
-@app.on_event("shutdown")
-async def stop_reminder_notification_scheduler() -> None:
-    task = getattr(app.state, "reminder_scheduler_task", None)
-    if task:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-
-
-def notification_payload(notification: models.Notification) -> dict[str, Any]:
-    return {
-        "notification_id": notification.notification_id,
-        "user_id": notification.user_id,
-        "type": notification.notification_type,
-        "title": notification.title,
-        "message": notification.message,
-        "redirect_to": notification.redirect_to,
-        "is_read": notification.is_read,
-        "created_at": notification.created_at.isoformat() if notification.created_at else "",
-        "entity_type": notification.entity_type,
-        "entity_id": notification.entity_id,
-    }
-
-
-@app.get("/api/notifications")
-def list_notifications(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    notifications = (
-        db.query(models.Notification)
-        .filter(models.Notification.user_id == user.user_id)
-        .order_by(models.Notification.created_at.desc(), models.Notification.notification_id.desc())
-        .limit(100)
-        .all()
-    )
-    return [notification_payload(notification) for notification in notifications]
-
-
-@app.post("/api/notifications/read-all")
-def mark_all_notifications_read(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    db.query(models.Notification).filter(
-        models.Notification.user_id == user.user_id,
-        models.Notification.is_read.is_(False),
-    ).update({models.Notification.is_read: True}, synchronize_session=False)
-    db.commit()
-    return {"ok": True}
-
-
-@app.post("/api/notifications/{notification_id}/read")
-def mark_notification_read(
-    notification_id: int,
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    notification = db.query(models.Notification).filter(
-        models.Notification.notification_id == notification_id,
-        models.Notification.user_id == user.user_id,
-    ).first()
-    if not notification:
-        raise HTTPException(status_code=404, detail="Notification not found")
-    notification.is_read = True
-    db.commit()
-    return notification_payload(notification)
-
-
-@app.delete("/api/notifications/read")
-def clear_read_notifications(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    db.query(models.Notification).filter(
-        models.Notification.user_id == user.user_id,
-        models.Notification.is_read.is_(True),
-    ).delete(synchronize_session=False)
-    db.commit()
-    return {"ok": True}
-
-
-@app.delete("/api/notifications/{notification_id}")
-def delete_notification(
-    notification_id: int,
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    deleted = db.query(models.Notification).filter(
-        models.Notification.notification_id == notification_id,
-        models.Notification.user_id == user.user_id,
-        models.Notification.is_read.is_(True),
-    ).delete(synchronize_session=False)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Read notification not found")
-    db.commit()
-    return {"ok": True}
-
-
-@app.get("/api/reminders")
-def list_reminders(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    reminders = db.query(models.Reminder).filter(
-        or_(
-            models.Reminder.visibility == "shared",
-            models.Reminder.created_by_user_id == user.user_id,
-        )
-    ).order_by(models.Reminder.reminder_date, models.Reminder.start_time, models.Reminder.reminder_id).all()
-    reconcile_reminder_statuses(db, reminders)
-    db.commit()
-    return {
-        "items": [reminder_payload(reminder) for reminder in reminders],
-        "can_manage_shared": can_manage_shared_reminders(user),
-    }
-
-
-@app.get("/api/reminders/{reminder_id}")
-def get_reminder(reminder_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    reminder = ensure_reminder_access(reminder_id, user, db)
-    reconcile_reminder_statuses(db, [reminder])
-    db.commit()
-    return reminder_payload(reminder)
-
-
-@app.post("/api/reminders")
-def create_reminder(
-    payload: ReminderPayload,
-    request: Request,
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    validate_reminder_payload(payload)
-    if payload.visibility == "shared" and not can_manage_shared_reminders(user):
-        raise HTTPException(status_code=403, detail="You cannot create shared office reminders")
-    reminder = models.Reminder(created_by_user_id=user.user_id)
-    apply_reminder_payload(reminder, payload)
-    db.add(reminder)
-    db.flush()
-    write_audit(db, user.user_id, "Created Reminder", "reminder", reminder.title, str(reminder.reminder_id), request)
-    db.commit()
-    db.refresh(reminder)
-    return reminder_payload(reminder)
-
-
-@app.put("/api/reminders/{reminder_id}")
-def update_reminder(
-    reminder_id: int,
-    payload: ReminderPayload,
-    request: Request,
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    reminder = ensure_reminder_access(reminder_id, user, db)
-    ensure_reminder_edit_access(reminder, user)
-    if payload.visibility == "shared" and not can_manage_shared_reminders(user):
-        raise HTTPException(status_code=403, detail="You cannot create shared office reminders")
-    prior_visibility = reminder.visibility
-    apply_reminder_payload(reminder, payload)
-    if prior_visibility == "shared" and reminder.visibility == "personal":
-        db.query(models.Notification).filter(
-            models.Notification.entity_type == "reminder",
-            models.Notification.entity_id == str(reminder.reminder_id),
-            models.Notification.user_id != reminder.created_by_user_id,
-        ).delete(synchronize_session=False)
-    write_audit(db, user.user_id, "Updated Reminder", "reminder", reminder.title, str(reminder.reminder_id), request)
-    db.commit()
-    db.refresh(reminder)
-    return reminder_payload(reminder)
-
-
-@app.patch("/api/reminders/{reminder_id}/complete")
-def complete_reminder(
-    reminder_id: int,
-    request: Request,
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    reminder = ensure_reminder_access(reminder_id, user, db, lock=True)
-    ensure_reminder_edit_access(reminder, user)
-    if reminder.status in {"Done", "Completed"}:
-        raise HTTPException(status_code=409, detail="This reminder is already completed")
-    if not can_complete_reminder(
-        reminder.reminder_date,
-        reminder.start_time,
-        reminder.status,
-        datetime.now(REMINDER_TIMEZONE),
-    ):
-        raise HTTPException(status_code=400, detail="The reminder's scheduled time has not yet arrived")
-    reminder.status = "Done"
-    reminder.updated_at = datetime.now(REMINDER_TIMEZONE).replace(tzinfo=None)
-    write_audit(db, user.user_id, "Completed Reminder", "reminder", reminder.title, str(reminder.reminder_id), request)
-    db.commit()
-    db.refresh(reminder)
-    return reminder_payload(reminder)
-
-
-@app.delete("/api/reminders/{reminder_id}")
-def delete_reminder(
-    reminder_id: int,
-    request: Request,
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    reminder = ensure_reminder_access(reminder_id, user, db)
-    ensure_reminder_edit_access(reminder, user)
-    write_audit(db, user.user_id, "Deleted Reminder", "reminder", reminder.title, str(reminder.reminder_id), request)
-    db.query(models.Notification).filter(
-        models.Notification.entity_type == "reminder",
-        models.Notification.entity_id == str(reminder.reminder_id),
-    ).delete(synchronize_session=False)
-    db.delete(reminder)
-    db.commit()
-    return {"ok": True}
-
-
-def calendar_holiday_payload(holiday: models.CalendarHoliday) -> dict[str, Any]:
-    return {
-        "holiday_id": holiday.holiday_id,
-        "source_key": holiday.source_key,
-        "name": holiday.name,
-        "date": holiday.holiday_date.isoformat(),
-        "classification": holiday.classification,
-        "coverage": holiday.coverage,
-        "geographic_scope": holiday.geographic_scope,
-        "reference": holiday.reference,
-        "source_url": holiday.source_url,
-        "year": holiday.year,
-        "updated_at": holiday.updated_at.isoformat() if holiday.updated_at else None,
-    }
-
-
-@app.get("/api/holidays")
-def list_calendar_holidays(
-    year: int = Query(ge=1900, le=2200),
-    _: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    holidays = db.query(models.CalendarHoliday).filter(
-        models.CalendarHoliday.year == year,
-    ).order_by(
-        models.CalendarHoliday.holiday_date,
-        models.CalendarHoliday.coverage,
-        models.CalendarHoliday.name,
-    ).all()
-    return [calendar_holiday_payload(holiday) for holiday in holidays]
-
-
-@app.put("/api/holidays/{source_key}")
-def upsert_calendar_holiday(
-    source_key: str,
-    payload: CalendarHolidayPayload,
-    request: Request,
-    user: models.User = Depends(admin_user),
-    db: Session = Depends(get_db),
-):
-    if source_key != payload.source_key or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,119}", source_key):
-        raise HTTPException(status_code=422, detail="Holiday source key is invalid")
-    fields = {
-        "name": payload.name.strip(),
-        "holiday_date": payload.date,
-        "classification": payload.classification.strip(),
-        "coverage": payload.coverage,
-        "geographic_scope": payload.geographic_scope.strip(),
-        "reference": payload.reference.strip(),
-        "source_url": payload.source_url.strip(),
-        "year": payload.date.year,
-        "updated_at": datetime.now(REMINDER_TIMEZONE).replace(tzinfo=None),
-    }
-    if not fields["name"] or len(fields["name"]) > 200 or not fields["classification"] or len(fields["classification"]) > 80:
-        raise HTTPException(status_code=422, detail="Holiday name and classification are required and must fit their limits")
-    if not fields["geographic_scope"] or len(fields["geographic_scope"]) > 160 or not fields["reference"] or len(fields["reference"]) > 255:
-        raise HTTPException(status_code=422, detail="Holiday scope and official reference are required")
-    if not fields["source_url"].startswith("https://"):
-        raise HTTPException(status_code=422, detail="Holiday source URL must use HTTPS")
-    statement = pg_insert(models.CalendarHoliday).values(source_key=source_key, **fields).on_conflict_do_update(
-        index_elements=[models.CalendarHoliday.source_key],
-        set_=fields,
-    )
-    db.execute(statement)
-    write_audit(db, user.user_id, "Upserted Calendar Holiday", "calendar_holiday", fields["name"], source_key, request)
-    db.commit()
-    holiday = db.query(models.CalendarHoliday).filter_by(source_key=source_key).one()
-    return calendar_holiday_payload(holiday)
-
-
-@app.get("/api/case-transfers/attorneys")
-def list_transfer_attorneys(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    people = db.query(models.User).join(models.Role).filter(
-        models.User.is_active.is_(True),
-        models.User.approval_status == "approved",
-    ).order_by(models.User.full_name, models.User.user_id).all()
-    return [
-        {"user_id": person.user_id, "full_name": person.full_name or person.email or person.username}
-        for person in people if not is_admin(person)
-    ]
-
-
-@app.get("/api/case-transfers/cases")
-def list_transfer_cases(
-    case_type: Literal["Criminal", "Civil"],
-    search: str | None = None,
-    source_user_id: int | None = None,
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    if is_admin(user):
-        if source_user_id is None:
-            raise HTTPException(status_code=422, detail="Select a transferring attorney before loading cases")
-        source = transfer_user(db, source_user_id)
-        query = db.query(models.Case).outerjoin(models.IntakeRecord).filter(models.IntakeRecord.interviewer_id == source.user_id)
-    else:
-        if source_user_id is not None and source_user_id != user.user_id:
-            raise HTTPException(status_code=403, detail="Staff may only list their own assigned cases")
-        query = scoped_case_query(db, user)
-    query = query.filter(
-        models.Case.case_type == case_type,
-        or_(models.Case.is_terminated.is_(False), models.Case.is_terminated.is_(None)),
-    )
-    if search and search.strip():
-        pattern = f"%{search.strip()}%"
-        query = query.filter(or_(
-            models.Case.title_of_case.ilike(pattern),
-            models.Case.case_no.ilike(pattern),
-            models.IntakeRecord.control_no.ilike(pattern),
-        ))
-    return [transfer_case_snapshot(record) for record in query.order_by(models.Case.last_updated.desc()).limit(250).all()]
-
-
-@app.get("/api/case-transfers")
-def list_case_transfers(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    query = db.query(models.CaseTransferReport)
-    if not is_admin(user):
-        query = query.filter(or_(models.CaseTransferReport.from_user_id == user.user_id, models.CaseTransferReport.to_user_id == user.user_id))
-    reports = query.order_by(models.CaseTransferReport.updated_at.desc(), models.CaseTransferReport.report_id.desc()).all()
-    return [build_transfer_payload(report, include_items=False) for report in reports]
-
-
-@app.post("/api/case-transfers")
-def create_case_transfer(
-    payload: TransferReportPayload,
-    request: Request,
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    source = transfer_user(db, payload.from_user_id) if is_admin(user) and payload.from_user_id else user
-    if is_admin(user) and payload.from_user_id is None:
-        raise HTTPException(status_code=422, detail="Select a transferring attorney")
-    recipient = transfer_user(db, payload.to_user_id)
-    if source.user_id == recipient.user_id:
-        raise HTTPException(status_code=422, detail="The transferring and receiving attorneys must be different")
-    report_date = parse_date(payload.report_date)
-    if not report_date:
-        raise HTTPException(status_code=422, detail="A valid report date is required")
-    records = validate_transfer_case_ids(db, user, payload.case_ids, source.user_id)
-    report = models.CaseTransferReport(
-        from_user_id=source.user_id,
-        to_user_id=recipient.user_id,
-        initiated_by_user_id=user.user_id if is_admin(user) else None,
-        title=payload.title.strip() or "Transfer of Cases",
-        report_date=report_date,
-        status="Draft",
-        remarks=payload.remarks,
-    )
-    db.add(report)
-    db.flush()
-    for record in records:
-        db.add(models.CaseTransferItem(
-            report_id=report.report_id,
-            case_id=record.case_id,
-            section="Criminal" if record.case_type == "Criminal" else "Civil",
-            snapshot_json=transfer_case_snapshot(record),
-        ))
-    for raw in payload.administrative_entries:
-        section = str(raw.get("section") or "").upper()
-        if section not in {"ADMIN 1", "ADMIN 2", "ADMIN 3"}:
-            raise HTTPException(status_code=422, detail="Administrative section must be ADMIN 1, ADMIN 2, or ADMIN 3")
-        db.add(models.CaseTransferAdministrativeEntry(
-            report_id=report.report_id,
-            section=section,
-            row_number=int(raw.get("row_number") or 1),
-            control_no=raw.get("control_no"),
-            title_of_case=raw.get("title_of_case"),
-            docket_no=raw.get("docket_no"),
-            date_received=parse_date(raw.get("date_received")),
-            status_of_case=raw.get("status_of_case"),
-            cause_of_action=raw.get("cause_of_action"),
-        ))
-    if report.initiated_by_user_id is not None:
-        recipient_name = report.to_user.full_name or report.to_user.email or report.to_user.username
-        create_user_notification(
-            db,
-            report.from_user_id,
-            f"case-transfer:{report.report_id}:draft-created",
-            "Transfer Draft Ready for Review",
-            f"An administrator prepared '{report.title}' for your review and submission. Receiving attorney: {recipient_name}.",
-            f"/case-transfers?report={report.report_id}",
-            "case_transfer",
-            str(report.report_id),
-        )
-    write_audit(db, user.user_id, "Create Transfer Draft", "case_transfer", f"Created transfer report {report.title}", str(report.report_id), request)
-    db.commit()
-    db.refresh(report)
-    return build_transfer_payload(report)
-
-
-@app.get("/api/case-transfers/{report_id}")
-def get_case_transfer(report_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    return build_transfer_payload(ensure_transfer_access(report_id, user, db))
-
-
-@app.patch("/api/case-transfers/{report_id}")
-def update_case_transfer(
-    report_id: int,
-    payload: TransferReportPayload,
-    request: Request,
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    report = ensure_transfer_access(report_id, user, db)
-    if not transfer_report_editor(report, user) or report.status not in {"Draft", "Returned for Correction"}:
-        raise HTTPException(status_code=403, detail="Only editable transfer reports may be changed")
-    source = transfer_user(db, payload.from_user_id) if is_admin(user) and payload.from_user_id else db.get(models.User, report.from_user_id)
-    if not source or is_admin(source):
-        raise HTTPException(status_code=422, detail="Select a valid transferring attorney")
-    recipient = transfer_user(db, payload.to_user_id)
-    if source.user_id == recipient.user_id:
-        raise HTTPException(status_code=422, detail="The transferring and receiving attorneys must be different")
-    report_date = parse_date(payload.report_date)
-    if not report_date:
-        raise HTTPException(status_code=422, detail="A valid report date is required")
-    records = validate_transfer_case_ids(db, user, payload.case_ids, source.user_id, report.report_id)
-    report.from_user_id = source.user_id
-    report.to_user_id = recipient.user_id
-    report.title = payload.title.strip() or "Transfer of Cases"
-    report.report_date = report_date
-    report.remarks = payload.remarks
-    report.items.clear()
-    report.administrative_entries.clear()
-    db.flush()
-    for record in records:
-        report.items.append(models.CaseTransferItem(case_id=record.case_id, section=record.case_type, snapshot_json=transfer_case_snapshot(record)))
-    for raw in payload.administrative_entries:
-        report.administrative_entries.append(models.CaseTransferAdministrativeEntry(
-            section=str(raw.get("section") or "").upper(), row_number=int(raw.get("row_number") or 1),
-            control_no=raw.get("control_no"), title_of_case=raw.get("title_of_case"), docket_no=raw.get("docket_no"),
-            date_received=parse_date(raw.get("date_received")), status_of_case=raw.get("status_of_case"), cause_of_action=raw.get("cause_of_action"),
-        ))
-    report.status = "Draft"
-    report.updated_at = datetime.now()
-    write_audit(db, user.user_id, "Update Transfer Draft", "case_transfer", f"Updated transfer report {report.title}", str(report.report_id), request)
-    db.commit()
-    db.refresh(report)
-    return build_transfer_payload(report)
-
-
-@app.post("/api/case-transfers/{report_id}/submit")
-def submit_case_transfer(report_id: int, request: Request, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    report = ensure_transfer_access(report_id, user, db)
-    if not can_submit_transfer_report(report, user, is_admin(user)) or report.status not in {"Draft", "Returned for Correction"}:
-        raise HTTPException(status_code=403, detail="Only editable transfer reports may be submitted")
-    is_resubmission = report.status == "Returned for Correction"
-    if not report.items:
-        raise HTTPException(status_code=422, detail="Select at least one case before submission")
-    validate_transfer_case_ids(db, user, [item.case_id for item in report.items], report.from_user_id, report.report_id)
-    report.status = "Pending Receipt"
-    report.submitted_at = datetime.now()
-    report.updated_at = datetime.now()
-    source_name = report.from_user.full_name or report.from_user.email or report.from_user.username
-    create_user_notification(
-        db,
-        report.to_user_id,
-        f"case-transfer:{report.report_id}:submitted:{report.returned_at.isoformat() if report.returned_at else 'initial'}",
-        "Case Transfer Awaiting Receipt",
-        f"{source_name} submitted '{report.title}'. Review the report and confirm receipt.",
-        f"/case-transfers?report={report.report_id}",
-        "case_transfer",
-        str(report.report_id),
-    )
-    write_audit(
-        db, user.user_id,
-        "Resubmit Case Transfer" if is_resubmission else "Submit Case Transfer",
-        "case_transfer", f"Submitted transfer report {report.title}", str(report.report_id), request,
-    )
-    db.commit()
-    db.refresh(report)
-    return build_transfer_payload(report)
-
-
-@app.post("/api/case-transfers/{report_id}/return")
-def return_case_transfer(report_id: int, payload: TransferReturnPayload, request: Request, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    report = ensure_transfer_access(report_id, user, db)
-    remarks = payload.remarks.strip()
-    if report.to_user_id != user.user_id or report.status != "Pending Receipt":
-        raise HTTPException(status_code=403, detail="Only the receiving attorney may return a pending transfer")
-    if len(remarks) < 5:
-        raise HTTPException(status_code=422, detail="Meaningful correction remarks are required")
-    report.status = "Returned for Correction"
-    report.remarks = remarks
-    report.returned_at = datetime.now()
-    report.updated_at = datetime.now()
-    recipient_name = report.to_user.full_name or report.to_user.email or report.to_user.username
-    create_user_notification(
-        db,
-        report.from_user_id,
-        f"case-transfer:{report.report_id}:returned:{report.returned_at.isoformat()}",
-        "Case Transfer Returned for Correction",
-        f"{recipient_name} returned '{report.title}' for correction: {remarks}",
-        f"/case-transfers?report={report.report_id}",
-        "case_transfer",
-        str(report.report_id),
-    )
-    write_audit(db, user.user_id, "Return Case Transfer", "case_transfer", remarks, str(report.report_id), request)
-    db.commit()
-    db.refresh(report)
-    return build_transfer_payload(report)
-
-
-@app.post("/api/case-transfers/{report_id}/confirm")
-def confirm_case_transfer(report_id: int, request: Request, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    report = db.query(models.CaseTransferReport).filter(models.CaseTransferReport.report_id == report_id).with_for_update().first()
-    if not report or report.to_user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="Transfer report not found")
-    if report.status != "Pending Receipt":
-        raise HTTPException(status_code=409, detail="Transfer is no longer pending receipt")
-    case_ids = [item.case_id for item in report.items]
-    if len(case_ids) != len(set(case_ids)):
-        raise HTTPException(status_code=409, detail="Transfer contains duplicate case references")
-    records = [db.query(models.Case).filter(models.Case.case_id == case_id).with_for_update().first() for case_id in case_ids]
-    if any(
-        record is None or record.is_terminated or not record.intake
-        or record.intake.interviewer_id != report.from_user_id
-        or record.case_type != item.section
-        for record, item in zip(records, report.items)
-    ):
-        raise HTTPException(status_code=409, detail="One or more cases are no longer eligible for transfer")
-    previous_names = []
-    for record in records:
-        previous_names.append(record.assigned_pao or (record.intake.interviewer.full_name if record.intake and getattr(record.intake, "interviewer", None) else ""))
-        record.assigned_pao = user.full_name or user.email or user.username
-        if record.intake:
-            record.intake.interviewer_id = user.user_id
-        db.add(models.CaseHistory(case_id=record.case_id, updated_by=user.user_id, previous_status=record.status_of_case, new_status=record.status_of_case or "Pending", action_taken="Case transferred", remarks=f"Transfer report #{report.report_id}; previous assignment: {previous_names[-1]}"))
-    report.status = "Completed"
-    report.date_received = datetime.now()
-    report.confirmed_at = datetime.now()
-    report.updated_at = datetime.now()
-    source_name = report.from_user.full_name or report.from_user.email or report.from_user.username
-    notification_event_key = f"case-transfer:{report.report_id}:confirmed"
-    notification_message = f"'{report.title}' was received and confirmed by {user.full_name or user.email or user.username}. The transfer is complete."
-    notification_link = f"/case-transfers?report={report.report_id}"
-    create_user_notification(
-        db,
-        report.from_user_id,
-        notification_event_key,
-        "Case Transfer Completed",
-        notification_message,
-        notification_link,
-        "case_transfer",
-        str(report.report_id),
-    )
-    if report.initiated_by_user_id is not None and report.initiated_by_user_id != report.from_user_id:
-        create_user_notification(
-            db,
-            report.initiated_by_user_id,
-            notification_event_key,
-            "Case Transfer Completed",
-            f"'{report.title}' from {source_name} was received and confirmed. The transfer is complete.",
-            notification_link,
-            "case_transfer",
-            str(report.report_id),
-        )
-    write_audit(
-        db, user.user_id, "Confirm Case Transfer", "case_transfer",
-        f"{user.full_name or user.email or user.username} confirmed receipt of transfer report {report.title} from {source_name}.",
-        str(report.report_id), request,
-    )
-    write_audit(
-        db, user.user_id, "Transfer Assignments Updated", "case_transfer",
-        f"{len(case_ids)} case assignment(s) updated to {user.full_name or user.email or user.username} after receipt confirmation.",
-        str(report.report_id), request,
-    )
-    db.commit()
-    db.refresh(report)
-    return build_transfer_payload(report)
-
-
 @app.get("/api/clients/")
 def list_clients(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     clients = scoped_client_query(db, user).order_by(models.Client.created_at.desc()).all()
@@ -4373,7 +2721,6 @@ def create_client(
     try:
         client_data = payload.client
         details_data = normalize_representative_details(normalize_spouse_details(payload.client_details))
-        validate_client_contact_number(details_data.get("contact_no"), required=True)
         class_data = payload.client_classification
         client = models.Client(
             created_by_user_id=user.user_id,
@@ -4472,562 +2819,6 @@ def update_client(
     return get_client_payload(client)
 
 
-@app.post("/api/case-imports/preview")
-async def preview_case_import(
-    file: UploadFile = File(...),
-    case_type: Literal["Criminal", "Civil"] = Form(...),
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin access required")
-    filename = Path(file.filename or "").name
-    if Path(filename).suffix.lower() not in {".xlsx", ".xls"}:
-        raise HTTPException(status_code=422, detail="Choose an .xlsx or .xls file.")
-    content = await file.read(MAX_WORKBOOK_BYTES + 1)
-    try:
-        source_rows, rows_processed, workbook_format = await run_in_threadpool(read_workbook, content, filename)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    finally:
-        await file.close()
-
-    control_numbers = [str(row.get("control_no") or "").strip() for row in source_rows]
-    duplicate_types: dict[str, set[str]] = {}
-    if control_numbers:
-        duplicate_rows = (
-            db.query(models.IntakeRecord.control_no, models.Case.case_type)
-            .join(models.Case, models.Case.intake_id == models.IntakeRecord.intake_id)
-            .filter(models.IntakeRecord.control_no.in_(set(filter(None, control_numbers))))
-            .all()
-        )
-        for control_no, existing_type in duplicate_rows:
-            duplicate_types.setdefault(str(control_no), set()).add(existing_type or "Criminal")
-
-    grouped: OrderedDict[str, dict[str, Any]] = OrderedDict()
-    for row in source_rows:
-        control_no = str(row.get("control_no") or "").strip()
-        group_key = control_no or f"__missing_control_{row['_row_number']}"
-        group = grouped.setdefault(
-            group_key,
-            {
-                "control_no": control_no, "source_rows": [], "clients": [], "conflicts": [],
-                "conflict_values": {}, "fields": {}, "location_indicator_rows": [],
-                "has_client_name_column": bool(row.get("_client_name_column_present")),
-            },
-        )
-        group["source_rows"].append(row["_row_number"])
-        shared_fields = (
-            "title", "court", "case_no", "cause_of_action", "nature_of_case", "status", "last_action",
-            "cause_of_termination", "date_of_termination", "date_of_confinement",
-            "place_of_detention", "case_received", "location_type", "incident_barangay",
-        )
-        for field in shared_fields:
-            value = row.get(field)
-            if value in (None, ""):
-                continue
-            if field not in {"date_of_termination", "date_of_confinement", "case_received"}:
-                value = str(value).strip()
-            existing = group["fields"].get(field)
-            if existing in (None, ""):
-                group["fields"][field] = value
-            elif str(existing).strip() != str(value).strip():
-                if field not in group["conflicts"]:
-                    group["conflicts"].append(field)
-                values = group["conflict_values"].setdefault(field, [existing])
-                if all(str(candidate).strip() != str(value).strip() for candidate in values):
-                    values.append(value)
-        client_values = {
-            field: row.get(field)
-            for field in (
-                "client_name", "age", "sex", "civil_status", "religion", "educational_attainment",
-                "citizenship", "language_dialect", "address", "contact_no", "relationship",
-                "party_represented", "urban", "rural", "drugs", "female", "senior", "cicl",
-            )
-        }
-        for field in (
-            "client_name", "sex", "civil_status", "religion", "educational_attainment",
-            "citizenship", "language_dialect", "address", "contact_no", "relationship", "party_represented",
-        ):
-            if client_values[field] not in (None, ""):
-                client_values[field] = str(client_values[field]).strip()
-
-        for flag in ("urban", "rural"):
-            client_values[flag] = normalize_binary_indicator(client_values[flag])
-        grouped[group_key]["location_indicator_rows"].append((client_values["urban"], client_values["rural"]))
-        for flag in ("drugs", "female", "senior", "cicl"):
-            client_values[flag] = normalize_binary_indicator(client_values[flag])
-        client_values["location_indicators_present"] = bool(
-            row.get("_urban_column_present") or row.get("_rural_column_present")
-        )
-        client_values["source_row"] = row["_row_number"]
-        client_values["flags_reviewed"] = True
-        client_values["possible_matches"] = []
-        grouped[group_key]["clients"].append(client_values)
-
-    # Only use title-derived names when there is no explicit Client Name column and
-    # every source client row has a positional name match. This keeps personal data
-    # attached to its original row and avoids shifting names on ambiguous titles.
-    names_to_match = set()
-    for group in grouped.values():
-        clients = group["clients"]
-        if not group["has_client_name_column"] and "title" not in group["conflicts"]:
-            title_names = extract_case_title_client_names(group["fields"].get("title"))
-            if title_names and len(title_names) == len(clients):
-                for client, name in zip(clients, title_names):
-                    client["client_name"] = name
-        names_to_match.update(
-            str(client.get("client_name") or "").strip().casefold()
-            for client in clients if str(client.get("client_name") or "").strip()
-        )
-
-    clients_by_name: dict[str, list[models.Client]] = {}
-    if names_to_match:
-        existing_clients = (
-            db.query(models.Client)
-            .options(joinedload(models.Client.details))
-            .filter(models.Client.deleted_at.is_(None), func.lower(models.Client.name).in_(names_to_match))
-            .order_by(models.Client.client_id)
-            .all()
-        )
-        for existing_client in existing_clients:
-            clients_by_name.setdefault(existing_client.name.strip().casefold(), []).append(existing_client)
-    for group in grouped.values():
-        for client in group["clients"]:
-            name = str(client.get("client_name") or "").strip().casefold()
-            client["possible_matches"] = [
-                {
-                    "client_id": candidate.client_id,
-                    "name": candidate.name,
-                    "age": candidate.age,
-                    "sex": candidate.sex,
-                    "address": candidate.details.address if candidate.details else None,
-                }
-                for candidate in clients_by_name.get(name, [])[:5]
-            ]
-
-    results = []
-    for index, (key, group) in enumerate(grouped.items()):
-        fields = dict(group["fields"])
-        mapped_location, location_conflict = resolve_incident_location(group["location_indicator_rows"])
-        for conflict in group["conflicts"]:
-            fields[conflict] = ""
-        fields["location_type"] = mapped_location or ""
-        fields["incident_barangay"] = ""
-        errors: list[str] = []
-        if location_conflict:
-            errors.append("Conflicting Urban/Rural indicators require Incident Location review.")
-            group["conflict_values"]["incident_location_indicators"] = [
-                f"Urban={urban or '(blank)'}, Rural={rural or '(blank)'}"
-                for urban, rural in group["location_indicator_rows"]
-            ]
-        control_no = group["control_no"]
-        if not control_no:
-            errors.append("Control Number is missing.")
-        elif len(control_no) > 20:
-            errors.append("Control Number exceeds the 20-character database limit.")
-        if not fields.get("title"):
-            errors.append("Title of the Case is required.")
-        elif len(str(fields.get("title"))) > 255:
-            errors.append("Title of the Case exceeds the 255-character database limit.")
-        if len(str(fields.get("case_no") or "")) > 20:
-            errors.append("Case Number exceeds the 20-character database limit.")
-        if len(str(fields.get("court") or "")) > 255:
-            errors.append("Court / Body exceeds the 255-character database limit.")
-        if str(fields.get("status") or "").strip().lower() not in {"pending", "terminated"}:
-            errors.append("Status must be Pending or Terminated.")
-        received = fields.get("case_received")
-        if received in (None, ""):
-            errors.append("Case Received date is required.")
-        elif parse_date(received) is None:
-            errors.append("Case Received date is invalid.")
-        for date_field in ("date_of_termination", "date_of_confinement"):
-            date_value = fields.get(date_field)
-            if date_value not in (None, "") and parse_date(date_value) is None:
-                errors.append(f"{date_field.replace('_', ' ').title()} is invalid.")
-        for conflict in group["conflicts"]:
-            errors.append(f"Conflicting {conflict.replace('_', ' ')} values share this Control Number.")
-        if not group["clients"]:
-            errors.append("At least one client row is required.")
-        for client_index, client in enumerate(group["clients"]):
-            if not str(client.get("client_name") or "").strip():
-                errors.append(f"Client {client_index + 1}: Client Name is missing; enter it before import.")
-            elif len(str(client.get("client_name"))) > 255:
-                errors.append(f"Client {client_index + 1}: Client Name exceeds the 255-character database limit.")
-            age = client.get("age")
-            if age in (None, ""):
-                errors.append(f"Client {client_index + 1}: Age is required for a new client.")
-            else:
-                try:
-                    numeric_age = float(age)
-                    if not numeric_age.is_integer() or numeric_age < 0 or numeric_age > 150:
-                        raise ValueError
-                except (TypeError, ValueError):
-                    errors.append(f"Client {client_index + 1}: Age must be a whole number from 0 to 150.")
-            sex = str(client.get("sex") or "").strip().lower()
-            if sex not in {"m", "male", "f", "female"}:
-                errors.append(f"Client {client_index + 1}: Gender / Sex is required and must be Male or Female.")
-            for field, label in (
-                ("civil_status", "Civil Status"),
-                ("religion", "Religion"),
-                ("educational_attainment", "Educational Attainment"),
-                ("citizenship", "Citizenship"),
-                ("language_dialect", "Language / Dialect"),
-                ("address", "Address"),
-            ):
-                if not str(client.get(field) or "").strip():
-                    errors.append(f"Client {client_index + 1}: {label} is required for a new client.")
-            for field, label, max_length in (
-                ("civil_status", "Civil Status", 50),
-                ("religion", "Religion", 100),
-                ("educational_attainment", "Educational Attainment", 150),
-                ("citizenship", "Citizenship", 100),
-                ("language_dialect", "Language / Dialect", 100),
-                ("relationship", "Relationship to Applicant", 100),
-            ):
-                if len(str(client.get(field) or "")) > max_length:
-                    errors.append(f"Client {client_index + 1}: {label} exceeds the {max_length}-character limit.")
-            contact = str(client.get("contact_no") or "").strip()
-            if not contact or re.fullmatch(r"[0-9]{1,11}", contact) is None:
-                errors.append(f"Client {client_index + 1}: Contact Number is required and must contain up to 11 digits.")
-            for flag in ("drugs", "female", "senior", "cicl"):
-                flag_value = str(client.get(flag) or "").strip().lower()
-                if flag_value and flag_value not in {"1", "0", "yes", "no", "true", "false", "y", "n"}:
-                    errors.append(f"Client {client_index + 1}: {flag.title()} must be a yes/no value.")
-            if any(client.get(flag) not in (None, "") for flag in ("female", "senior", "cicl")) and not client.get("flags_reviewed"):
-                # The administrator confirms these tri-state classifications in the review UI.
-                errors.append(f"Client {client_index + 1}: review the Female, Senior, and CICL indicators before import.")
-        found_types = duplicate_types.get(control_no, set()) if control_no else set()
-        duplicate = bool(found_types)
-        duplicate_message = None
-        if duplicate:
-            duplicate_message = (
-                "Control Number already exists in this case category."
-                if case_type in found_types
-                else "Control Number already exists under a different case category."
-            )
-        results.append(
-            {
-                "import_key": f"case-{index + 1}",
-                "control_no": control_no,
-                "title": fields.get("title") or "",
-                "court": fields.get("court") or "",
-                "case_no": fields.get("case_no") or "",
-                "cause_of_action": fields.get("cause_of_action") or "",
-                "nature_of_case": fields.get("nature_of_case") or "",
-                "status": fields.get("status") or "",
-                "last_action": fields.get("last_action") or "",
-                "cause_of_termination": fields.get("cause_of_termination") or "",
-                "date_of_termination": fields.get("date_of_termination") or "",
-                "date_of_confinement": fields.get("date_of_confinement") or "",
-                "place_of_detention": fields.get("place_of_detention") or "",
-                "case_received": received or "",
-                "location_type": fields.get("location_type") or "",
-                "incident_barangay": fields.get("incident_barangay") or "",
-                "incident_city": "Panabo City" if fields.get("location_type") or fields.get("incident_barangay") else "",
-                "clients": group["clients"],
-                "source_rows": group["source_rows"],
-                "errors": errors,
-                "conflicting_values": {
-                    field: [value.isoformat() if isinstance(value, (date, datetime)) else str(value) for value in values]
-                    for field, values in group["conflict_values"].items()
-                },
-                "duplicate": duplicate,
-                "duplicate_message": duplicate_message,
-                "ready": not errors and not duplicate,
-            }
-        )
-    return {
-        "source_filename": filename,
-        "workbook_format": workbook_format,
-        "case_type": case_type,
-        "rows_processed": rows_processed,
-        "cases": results,
-        "summary": {
-            "unique_cases": len(results),
-            "client_records": sum(len(item["clients"]) for item in results),
-            "ready_cases": sum(bool(item["ready"]) for item in results),
-            "correction_cases": sum(bool(item["errors"]) for item in results),
-            "duplicate_cases": sum(bool(item["duplicate"]) for item in results),
-            "client_matches": sum(bool(client["possible_matches"]) for item in results for client in item["clients"]),
-        },
-    }
-
-
-@app.post("/api/case-imports")
-def import_case_records(
-    payload: CaseImportPayload,
-    request: Request,
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-):
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin access required")
-    imported = created_clients = linked_clients = failed = 0
-    held = max(0, payload.held_case_count)
-    failures: list[dict[str, str]] = []
-    urban_barangays = {
-        "Cagangohan", "Datu Abdul Dadia", "Gredu (Poblacion)", "J.P. Laurel",
-        "New Pandan (Poblacion)", "New Visayas", "Quezon", "San Francisco (Poblacion)",
-        "San Vicente", "Salvacion", "Santo Nino (Poblacion)",
-    }
-    rural_barangays = {
-        "A. O. Floirendo", "Buenavista", "Cacao", "Consolacion", "Dapco", "Kasilak",
-        "Katipunan", "Katualan", "Kauswagan", "Kiotoy", "Little Panay",
-        "Lower Panaga (Roxas)", "Mabunao", "Maduao", "Malativas", "Manay", "Nanyo",
-        "New Malaga (Dalisay)", "New Malitbog", "San Nicolas", "San Pedro", "San Roque",
-        "Santa Cruz", "Sindaton", "Southern Davao", "Tagpore", "Tibungol", "Upper Licanan", "Waterfall",
-    }
-    for entry in payload.cases:
-        entry_case_type = entry.get("case_type")
-        if entry_case_type not in (None, "", payload.case_type):
-            failed += 1
-            failures.append({
-                "control_no": str(entry.get("control_no") or "(missing)"),
-                "reason": "Case classification must match the selected import destination.",
-            })
-            continue
-        control_no = str(entry.get("control_no") or "").strip()
-        title = str(entry.get("title") or "").strip()
-        status_raw = str(entry.get("status") or "").strip()
-        clients = entry.get("clients") or []
-        received_raw = entry.get("case_received")
-        if (
-            not control_no or len(control_no) > 20 or not title or len(title) > 255
-            or str(entry.get("nature_of_case") or "").strip() not in {"Criminal", "Administrative", "Civil", "Labor", "Appeal"}
-            or status_raw.lower() not in {"pending", "terminated"}
-            or not clients or parse_date(received_raw) is None
-            or len(str(entry.get("case_no") or "")) > 20
-            or len(str(entry.get("court") or "")) > 255
-            or any(
-                entry.get(field) not in (None, "") and parse_date(entry.get(field)) is None
-                for field in ("date_of_termination", "date_of_confinement")
-            )
-            or (entry.get("has_conflicts") and not entry.get("conflict_reviewed"))
-        ):
-            held += 1
-            continue
-        location_type = str(entry.get("location_type") or "").strip()
-        incident_barangay = str(entry.get("incident_barangay") or "").strip()
-        allowed_barangays = urban_barangays if location_type == "Urban" else rural_barangays if location_type == "Rural" else set()
-        if location_type not in {"Urban", "Rural"} or not incident_barangay or incident_barangay not in allowed_barangays:
-            held += 1
-            failures.append({"control_no": control_no or "(missing)", "reason": "Review and select a valid Incident Location type and matching Panabo Barangay."})
-            continue
-        if (
-            db.query(models.Case.case_id)
-            .join(models.IntakeRecord, models.Case.intake_id == models.IntakeRecord.intake_id)
-            .filter(models.IntakeRecord.control_no == control_no)
-            .first()
-        ):
-            held += 1
-            failures.append({"control_no": control_no, "reason": "Duplicate Control Number; existing record was not changed."})
-            continue
-        savepoint = db.begin_nested()
-        case_created_clients = case_linked_clients = 0
-        try:
-            resolved_clients = []
-            for client_data in clients:
-                if len(str(client_data.get("party_represented") or "")) > 100:
-                    raise ValueError("Party Represented exceeds the 100-character limit.")
-                for indicator in ("drugs", "female", "senior", "cicl"):
-                    raw_value = str(client_data.get(indicator) or "").strip().lower()
-                    if raw_value and raw_value not in {"1", "0", "yes", "no", "true", "false", "y", "n"}:
-                        raise ValueError(f"{indicator.title()} must be a yes/no value.")
-                if any(client_data.get(flag) not in (None, "") for flag in ("female", "senior", "cicl")) and not client_data.get("flags_reviewed"):
-                    raise ValueError("Review the Female, Senior, and CICL indicators before import.")
-                client_id = client_data.get("existing_client_id")
-                if client_id:
-                    existing_client = db.query(models.Client).filter(
-                        models.Client.client_id == int(client_id), models.Client.deleted_at.is_(None)
-                    ).first()
-                    if not existing_client:
-                        raise ValueError("A selected existing client is no longer available.")
-                    selected_name = str(client_data.get("client_name") or "").strip()
-                    if selected_name and existing_client.name.strip().casefold() != selected_name.casefold():
-                        raise ValueError("The selected client name no longer matches the extracted client.")
-                    resolved_clients.append((existing_client, client_data))
-                    case_linked_clients += 1
-                    continue
-                client_name = str(client_data.get("client_name") or "").strip()
-                if not client_name or len(client_name) > 255:
-                    raise ValueError("Client Name is required and must be 255 characters or fewer.")
-                for field, label, max_length in (
-                    ("civil_status", "Civil Status", 50),
-                    ("religion", "Religion", 100),
-                    ("educational_attainment", "Educational Attainment", 150),
-                    ("citizenship", "Citizenship", 100),
-                    ("language_dialect", "Language / Dialect", 100),
-                    ("relationship", "Relationship to Applicant", 100),
-                ):
-                    if len(str(client_data.get(field) or "")) > max_length:
-                        raise ValueError(f"{label} exceeds the {max_length}-character limit.")
-                age_value = client_data.get("age")
-                if age_value in (None, ""):
-                    raise ValueError("Age is required for a new client.")
-                numeric_age = float(age_value)
-                age = int(numeric_age)
-                if not numeric_age.is_integer():
-                    raise ValueError(f"Age for {client_name} must be a whole number.")
-                if age is not None and (age < 0 or age > 150):
-                    raise ValueError(f"Invalid age for {client_name}.")
-                sex_value = str(client_data.get("sex") or "").strip().lower()
-                if sex_value and sex_value not in {"m", "male", "f", "female"}:
-                    raise ValueError(f"Invalid Gender / Sex for {client_name}.")
-                if not sex_value:
-                    raise ValueError("Gender / Sex is required for a new client.")
-                for field, label in (
-                    ("civil_status", "Civil Status"),
-                    ("religion", "Religion"),
-                    ("educational_attainment", "Educational Attainment"),
-                    ("citizenship", "Citizenship"),
-                    ("language_dialect", "Language / Dialect"),
-                    ("address", "Address"),
-                ):
-                    if not str(client_data.get(field) or "").strip():
-                        raise ValueError(f"{label} is required for a new client.")
-                client = models.Client(
-                    name=client_name,
-                    age=age,
-                    sex=normalize_sex(client_data.get("sex")),
-                    civil_status=limit_text(client_data.get("civil_status"), 50),
-                    religion=limit_text(client_data.get("religion"), 100),
-                    educational_attainment=limit_text(client_data.get("educational_attainment"), 150),
-                    citizenship=limit_text(client_data.get("citizenship"), 100),
-                    language_dialect=limit_text(client_data.get("language_dialect"), 100),
-                    created_by_user_id=user.user_id,
-                )
-                validate_client_contact_number(str(client_data.get("contact_no") or ""), required=True)
-                client.details = models.ClientDetails(
-                    address=limit_text(client_data.get("address"), 500),
-                    contact_no=limit_text(client_data.get("contact_no"), 100),
-                    representative_relationship=limit_text(client_data.get("relationship"), 100),
-                )
-                classification_flags = {
-                    "drugs": "class_drug_related",
-                    "female": "class_female",
-                    "senior": "class_senior_citizen",
-                    "cicl": "class_cicl",
-                }
-                classification_values = {}
-                for input_name, model_name in classification_flags.items():
-                    raw_flag = str(client_data.get(input_name) or "").strip().lower()
-                    if raw_flag:
-                        if input_name in {"female", "senior", "cicl"} and not client_data.get("flags_reviewed"):
-                            raise ValueError("Review the Female, Senior, and CICL indicators before import.")
-                        classification_values[model_name] = raw_flag in {"1", "yes", "true", "y"}
-                if classification_values:
-                    client.classification = models.ClientClassification(
-                        **classification_values,
-                        flags_reviewed=bool(client_data.get("flags_reviewed")),
-                    )
-                db.add(client)
-                db.flush()
-                resolved_clients.append((client, client_data))
-                case_created_clients += 1
-            primary_client = resolved_clients[0][0]
-            party = limit_text(resolved_clients[0][1].get("party_represented"), 100)
-            form_date = parse_date(received_raw)
-            intake = models.IntakeRecord(
-                client_id=primary_client.client_id,
-                interviewer_id=user.user_id,
-                control_no=control_no,
-                form_date=form_date,
-                party_represented=party,
-                applicant_role=party,
-                nature_of_case=limit_text(entry.get("nature_of_case"), 50),
-            )
-            db.add(intake)
-            db.flush()
-            db.add(
-                models.Representative(
-                    intake_id=intake.intake_id,
-                    rep_name="Not applicable",
-                    relationship_to_applicant=limit_text(resolved_clients[0][1].get("relationship"), 50),
-                )
-            )
-            normalized_status = normalize_case_status(status_raw)
-            record = models.Case(
-                intake_id=intake.intake_id,
-                client_id=primary_client.client_id,
-                case_type=payload.case_type,
-                title_of_case=title,
-                case_no=limit_text(entry.get("case_no"), 20),
-                court_body=limit_text(entry.get("court"), 255),
-                cause_of_action=entry.get("cause_of_action"),
-                status_of_case=normalized_status,
-                case_status=normalized_status,
-                last_action_taken=entry.get("last_action"),
-                cause_of_termination=entry.get("cause_of_termination"),
-                date_of_termination=parse_date(entry.get("date_of_termination")),
-                date_of_confinement=parse_date(entry.get("date_of_confinement")),
-                place_of_detention=limit_text(entry.get("place_of_detention"), 255),
-                incident_barangay=incident_barangay or None,
-                incident_city="Panabo City" if location_type or incident_barangay else None,
-                location_type=location_type or None,
-                detained=bool(entry.get("date_of_confinement") or entry.get("place_of_detention")),
-                pending_in_court=normalized_status == "Pending",
-                is_terminated=normalized_status == "Terminated",
-            )
-            db.add(record)
-            db.flush()
-            attach_case_participants(
-                record,
-                [
-                    (
-                        participant,
-                        limit_text(participant_data.get("party_represented"), 100) or party,
-                        limit_text(participant_data.get("party_represented"), 100) or party,
-                        None,
-                    )
-                    for participant, participant_data in resolved_clients
-                ],
-            )
-            db.add(
-                models.CaseHistory(
-                    case_id=record.case_id,
-                    updated_by=user.user_id,
-                    previous_status=None,
-                    new_status=normalized_status,
-                    action_taken=record.last_action_taken or "Case imported from Excel",
-                    remarks="Initial case record imported by administrator",
-                )
-            )
-            db.flush()
-            savepoint.commit()
-            imported += 1
-            created_clients += case_created_clients
-            linked_clients += case_linked_clients
-        except Exception as exc:
-            savepoint.rollback()
-            held += 1
-            failed += 1
-            reason = str(exc) if isinstance(exc, ValueError) else "Database error; the case and its new clients were rolled back."
-            failures.append({"control_no": control_no or "(missing)", "reason": reason[:240]})
-
-    source_filename = Path(payload.source_filename or "").name[:255]
-    write_audit(
-        db,
-        user.user_id,
-        "Import Excel Cases",
-        "case_import",
-        f"Imported {imported} {payload.case_type} cases from {source_filename}; created {created_clients} client records, linked {linked_clients}, held {held}, skipped {max(0, payload.duplicate_case_count)} possible duplicates.",
-        source_filename,
-        request,
-    )
-    db.commit()
-    return {
-        "case_type": payload.case_type,
-        "cases_imported": imported,
-        "clients_created": created_clients,
-        "existing_clients_linked": linked_clients,
-        "cases_held": held,
-        "duplicate_cases_skipped": max(0, payload.duplicate_case_count),
-        "failed_records": failed,
-        "failures": failures,
-    }
-
-
 @app.get("/api/cases/")
 def list_cases(
     case_type: Literal["Criminal", "Civil", "All"] = Query(default="Criminal"),
@@ -5059,7 +2850,6 @@ def list_terminated_cases(
 
 @app.get("/api/printable-intake/{case_id}")
 def get_printable_intake(
-    response: Response,
     case_id: int,
     client_id: int | None = Query(default=None),
     user: models.User = Depends(current_user),
@@ -5131,23 +2921,8 @@ def get_printable_intake(
             if involvement == "Others"
             else ""
         )
-    selected_client_payload = get_client_payload(selected_client)
-    case_representative = selected_case.get("representative") or {}
-    selected_client_payload["client_details"].update(
-        {
-            "representative_name": case_representative.get("rep_name") or "",
-            "representative_age": case_representative.get("rep_age") or 0,
-            "representative_sex": case_representative.get("rep_sex") or "",
-            "representative_civil_status": case_representative.get("civil_status") or "",
-            "representative_address": case_representative.get("rep_address") or "",
-            "representative_contact_no": case_representative.get("rep_contact_no") or "",
-            "representative_relationship": case_representative.get("relationship_to_applicant") or "",
-        }
-    )
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
     return {
-        "client": selected_client_payload,
+        "client": get_client_payload(selected_client),
         "selected_case": selected_case,
         "cases": [get_case_payload(case) for case in cases],
         "templates": {
@@ -5278,13 +3053,15 @@ def create_case(
         )
         db.add(record)
         db.flush()
-        attach_case_participants(
-            record,
-            [
-                (participant_client, represented_party, intake.applicant_role, intake.applicant_role_other)
-                for participant_client in participant_clients
-            ],
-        )
+        for participant_client in participant_clients:
+            record.participants.append(
+                models.CaseClient(
+                    client=participant_client,
+                    party_represented=limit_text(represented_party, 100),
+                    applicant_role=intake.applicant_role,
+                    applicant_role_other=intake.applicant_role_other,
+                )
+            )
         # Keep the latest representative preference on the primary client
         # while the Representative row remains case-specific and historical.
         update_latest_client_representative(
@@ -5579,16 +3356,14 @@ async def upload_document(
     user: models.User = Depends(current_user),
     user_id: int | None = None,
     file: UploadFile = File(...),
-    crop_plan: str | None = Form(default=None),
     case_id: int | None = None,
     intake_id: int | None = None,
     extraction_mode: Literal["auto", "offline", "cloud"] = Query(default="auto"),
-    extraction_target: Literal["full", "client", "paper_intake"] = Query(default="full"),
+    extraction_target: Literal["full", "client"] = Query(default="full"),
     db: Session = Depends(get_db),
 ):
     new_document = None
     file_location = None
-    ocr_location = None
     try:
         # Keep the legacy query parameter for client compatibility, but never
         # trust it as an ownership or attribution source.
@@ -5606,10 +3381,8 @@ async def upload_document(
         extension = Path(original_name).suffix.lower()
         if extension not in DOCUMENT_CONTENT_TYPES or file.content_type not in DOCUMENT_CONTENT_TYPES[extension]:
             raise HTTPException(status_code=400, detail="Unsupported file type. Upload a JPG, PNG, WEBP, or PDF document.")
-        if extension == ".pdf" and extraction_mode == "cloud" and not crop_plan:
+        if extension == ".pdf" and extraction_mode == "cloud":
             raise HTTPException(status_code=400, detail="Cloud mode does not support PDFs. Select offline or auto mode.")
-        if crop_plan and extraction_target != 'paper_intake':
-            raise HTTPException(status_code=400, detail='Crop review is available for PAO sheets only.')
 
         safe_filename = f"{uuid.uuid4()}{extension}"
         file_location = UPLOAD_DIR / safe_filename
@@ -5621,16 +3394,6 @@ async def upload_document(
             except HTTPException:
                 file_location.unlink(missing_ok=True)
                 raise
-
-        processing = None
-        if crop_plan:
-            from paper_capture import PaperCropError, build_ocr_image
-            try:
-                parsed = json.loads(crop_plan)
-                ocr_location = UPLOAD_DIR / f'{uuid.uuid4()}-paper-ocr.jpg'
-                processing = await asyncio.to_thread(build_ocr_image, file_location, parsed, ocr_location)
-            except (json.JSONDecodeError, PaperCropError) as exc:
-                raise HTTPException(422, str(exc)) from exc
 
         new_document = models.Document(
             case_id=case_id,
@@ -5645,13 +3408,8 @@ async def upload_document(
         db.refresh(new_document)
 
         extracted_json = await extract_document(
-            str(ocr_location or file_location), extraction_mode, extraction_target, is_disconnected=request.is_disconnected
+            str(file_location), extraction_mode, extraction_target, is_disconnected=request.is_disconnected
         )
-        if processing:
-            from paper_capture import remap_field_evidence
-            remap_field_evidence(extracted_json, processing)
-        if extraction_target == 'paper_intake':
-            extracted_json.setdefault('diagnostics', {})['processing_mode'] = 'section_crops' if processing else 'whole_page'
         public_extracted_json = public_extraction_payload(extracted_json)
 
         db.add(
@@ -5662,7 +3420,6 @@ async def upload_document(
             )
         )
 
-        draft_id = store_paper_draft(db, new_document.document_id, public_extracted_json) if extraction_target == 'paper_intake' else None
         new_document.ocr_status = ocr_status_for_result(extracted_json)
         write_audit(
             db,
@@ -5678,7 +3435,6 @@ async def upload_document(
         return {
             "message": "Document uploaded; OCR needs review." if new_document.ocr_status == "FAILED" else "Document processed successfully!",
             "document_id": new_document.document_id,
-            "source_draft_id": draft_id,
             "extracted_data": public_extracted_json,
         }
 
@@ -5704,297 +3460,3 @@ async def upload_document(
         if isinstance(exc, ExtractionWorkerError):
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         raise HTTPException(status_code=500, detail="Document extraction failed. Review server diagnostics.") from exc
-    finally:
-        if ocr_location is not None:
-            ocr_location.unlink(missing_ok=True)
-
-
-def store_paper_draft(db, document_id, extracted):
-    from paper_provenance import canonical_digest
-    draft_id = canonical_digest({'document_id': document_id, 'extraction': extracted})
-    if db.get(models.PaperExtractionDraft, draft_id) is None:
-        db.add(models.PaperExtractionDraft(draft_id=draft_id, document_id=document_id, extraction_json=extracted))
-    return draft_id
-
-
-def reviewed_candidate_source(db, payload, fallback=None):
-    if payload.source_draft_id is None:
-        return fallback
-    draft = db.get(models.PaperExtractionDraft, payload.source_draft_id)
-    if draft is None or draft.document_id != payload.document_id:
-        raise HTTPException(422, 'The extraction draft does not match this original scan. Re-extract and review again.')
-    return draft.extraction_json
-
-
-@app.post('/api/pao-intakes/capture-analyze')
-async def analyze_paper_capture(request: Request, file: UploadFile = File(...),
-                                corners_json: str | None = Form(default=None), rotation: int = Form(default=0),
-                                user: models.User = Depends(current_user)):
-    """Return local crop suggestions; the uploaded image is not a saved record."""
-    from paper_capture import (PaperCropError, detect_document, load_capture, preview_data_url,
-                               rectify, suggest_sections, validate_plan)
-    original_name = Path(file.filename or 'camera.jpg').name
-    extension = Path(original_name).suffix.lower()
-    if extension not in DOCUMENT_CONTENT_TYPES or file.content_type not in DOCUMENT_CONTENT_TYPES[extension]:
-        raise HTTPException(400, 'Crop review requires a JPG, PNG, WEBP, or single-page PDF scan.')
-    if rotation not in (0, 90, 180, 270):
-        raise HTTPException(422, 'Choose a quarter-turn rotation.')
-    source = UPLOAD_DIR / f'{uuid.uuid4()}{extension}'
-    page_file = UPLOAD_DIR / f'{uuid.uuid4()}-crop-preview.jpg'
-    try:
-        save_bounded_upload(file.file, source, MAX_DOCUMENT_BYTES)
-        if extension != '.pdf':
-            verify_image(source, extension)
-        image = await asyncio.to_thread(load_capture, source)
-        detected = await asyncio.to_thread(detect_document, image)
-        corners = detected['corners']
-        if corners_json:
-            try:
-                raw_corners = json.loads(corners_json)
-                corners = validate_plan({'corners': raw_corners, 'rotation': rotation,
-                                         'sections': {'part_ii': [.2, .6], 'part_iia': [.6, .9]},
-                                         'document_reviewed': True, 'sections_reviewed': True})['corners']
-            except (json.JSONDecodeError, PaperCropError) as exc:
-                raise HTTPException(422, str(exc)) from exc
-        page, _ = await asyncio.to_thread(rectify, image, corners, rotation)
-        import cv2
-        if not cv2.imwrite(str(page_file), page, [cv2.IMWRITE_JPEG_QUALITY, 93]):
-            raise PaperCropError('Could not prepare the preview.')
-        warnings = []
-        try:
-            headings = await extract_document(str(page_file), 'offline', 'paper_boundaries', is_disconnected=request.is_disconnected)
-            positions = headings.get('headings', {})
-            warnings.extend(headings.get('warnings') or [])
-        except (ExtractionBusy, ExtractionTimeout, ExtractionWorkerError, ExtractionCancelled):
-            positions = {}
-            warnings.append('Automatic heading detection was unavailable. Set both section boundaries manually.')
-        sections = suggest_sections(positions, page.shape[0])
-        if detected['confidence'] == 'uncertain' and not corners_json:
-            warnings.append(detected['warning'])
-        if sections['confidence'] == 'uncertain':
-            warnings.append(sections['warning'])
-        return {'document': {'corners': corners, 'confidence': 'manual' if corners_json else detected['confidence'],
-                             'warning': detected['warning'] if not corners_json else 'Check the adjusted page before OCR.'},
-                'rotation': rotation, 'original_size': [image.shape[1], image.shape[0]],
-                'page': {'width': page.shape[1], 'height': page.shape[0], 'preview': preview_data_url(page)},
-                'original_preview': preview_data_url(image) if extension == '.pdf' else None,
-                'sections': sections, 'headings_found': {key: key in positions for key in ('applicant_personal_circumstances', 'representative_personal_circumstances', 'end')},
-                'warnings': warnings}
-    except HTTPException:
-        raise
-    except PaperCropError as exc:
-        raise HTTPException(422, str(exc)) from exc
-    finally:
-        source.unlink(missing_ok=True)
-        page_file.unlink(missing_ok=True)
-
-
-@app.get('/api/pao-intakes/schema')
-def paper_intake_schema(user: models.User = Depends(current_user)):
-    from paper_intake import SCHEMA
-    return SCHEMA
-
-
-@app.get('/api/pao-intakes/documents/{document_id}')
-def paper_intake_scan(document_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    document = db.get(models.Document, document_id)
-    if not document:
-        raise HTTPException(404, 'Document not found')
-    saved = db.query(models.ReviewedPaperIntake).filter_by(document_id=document_id).first()
-    if saved:
-        ensure_client_access(db.get(models.Client, saved.client_id), user, db)
-    elif not is_admin(user) and document.uploaded_by != user.user_id:
-        raise HTTPException(403, 'Record access denied')
-    location = Path(document.encrypted_file_path).resolve()
-    if not location.is_relative_to(UPLOAD_DIR.resolve()) or not location.is_file():
-        raise HTTPException(404, 'Document not found')
-    return FileResponse(location, media_type=document.document_type,
-                        headers={'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'})
-
-
-@app.get('/api/pao-intakes/documents/{document_id}/pages/{page_number}')
-def paper_intake_page(document_id: int, page_number: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    """Render at the same scale as local OCR so evidence boxes share coordinates."""
-    source = paper_intake_scan(document_id, user, db)
-    if page_number < 1:
-        raise HTTPException(404, 'Page not found')
-    import io
-    import pypdfium2 as pdfium
-    from fastapi.responses import Response
-    if source.media_type != 'application/pdf':
-        raise HTTPException(400, 'Page preview requires a PDF')
-    with pdfium.PdfDocument(str(source.path)) as document:
-        page_count = len(document)
-        if page_number > len(document):
-            raise HTTPException(404, 'Page not found')
-        page = document[page_number - 1]
-        try:
-            if page.get_width() * page.get_height() * 4 > 40_000_000:
-                raise HTTPException(413, 'Page is too large to preview. Open the original scan.')
-            bitmap = page.render(scale=2)
-            try:
-                image = bitmap.to_pil()
-                output = io.BytesIO()
-                image.save(output, format='PNG')
-            finally:
-                bitmap.close()
-        finally:
-            page.close()
-    return Response(output.getvalue(), media_type='image/png', headers={'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'X-Page-Count': str(page_count), 'Access-Control-Expose-Headers': 'X-Page-Count'})
-
-
-@app.post('/api/pao-intakes/')
-def save_paper_intake(payload: PaperIntakePayload, request: Request,
-                      user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    from paper_intake import APPLICANT, REPRESENTATIVE, validate_review
-    try:
-        validate_review(payload.sections, payload.unreadable_fields or [], payload.field_reviews)
-        from paper_checkboxes import validate_boxes, reviewed_detained
-        validate_boxes(payload.checkbox_states, payload.sections)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
-    # Lock the source to serialize double clicks and concurrent save attempts.
-    document = db.query(models.Document).filter_by(document_id=payload.document_id).with_for_update().first()
-    if not document:
-        raise HTTPException(404, 'Document not found')
-    if not is_admin(user) and document.uploaded_by != user.user_id:
-        raise HTTPException(403, 'Record access denied')
-    metadata = db.query(models.ExtractedMetadata).filter_by(document_id=payload.document_id).first()
-    if not metadata or metadata.extracted_json.get('intake_scope') != 'pao_parts_ii_iia':
-        raise HTTPException(422, 'Scan the PAO sheet in the intake workflow first.')
-    if db.query(models.ReviewedPaperIntake).filter_by(document_id=payload.document_id).first():
-        raise HTTPException(409, 'This reviewed sheet is already saved.')
-    candidate_snapshot = reviewed_candidate_source(db, payload, metadata.extracted_json)
-    applicant, representative = payload.sections[APPLICANT], payload.sections[REPRESENTATIVE]
-    # The JSON text above is the canonical reviewed record. Typed compatibility
-    # fields only receive directly representable values, never inferred ones.
-    def age(value):
-        return int(value) if value.isascii() and value.isdigit() and len(value) <= 3 else None
-    client = models.Client(created_by_user_id=user.user_id,
-        **{key: paper_compat_text(models.Client, key, applicant[key]) for key in ('name', 'sex', 'civil_status', 'religion',
-           'educational_attainment', 'citizenship', 'language_dialect')}, age=age(applicant['age']))
-    db.add(client)
-    db.flush()
-    db.add(models.ClientDetails(client_id=client.client_id,
-        address=applicant['address'], contact_no=applicant['contact_no'], email=applicant['email'],
-        individual_monthly_income=applicant['individual_monthly_income'],
-        spouse=applicant['spouse_name'], address_of_spouse=applicant['spouse_address'],
-        contact_no_of_spouse=applicant['spouse_contact_no'],
-        representative_name=representative['name'], representative_age=age(representative['age']),
-        representative_sex=paper_compat_text(models.ClientDetails, 'representative_sex', representative['sex']),
-        representative_civil_status=paper_compat_text(models.ClientDetails, 'representative_civil_status', representative['civil_status']),
-        representative_address=representative['address'], representative_contact_no=representative['contact_no'],
-        representative_relationship=paper_compat_text(models.ClientDetails, 'representative_relationship', representative['relationship_to_applicant']), representative_email=representative['email'],
-        detained=reviewed_detained(payload.checkbox_states) if reviewed_detained(payload.checkbox_states) is not None else null(), detained_since=None, place_of_detention=paper_compat_text(models.ClientDetails, 'place_of_detention', applicant['place_of_detention'])))
-    db.add(models.ReviewedPaperIntake(client_id=client.client_id, document_id=document.document_id,
-        reviewed_by=user.user_id, sections=payload.sections, unreadable_fields=payload.unreadable_fields or [], field_reviews=payload.field_reviews, checkbox_states=payload.checkbox_states, source_draft_id=payload.source_draft_id, candidate_snapshot=candidate_snapshot))
-    metadata.verified_by = user.user_id
-    metadata.verified_at = datetime.now(timezone.utc)
-    metadata.verification_status = 'REVIEWED'
-    write_audit(db, user.user_id, 'Review Intake', 'client', 'Reviewed PAO Parts II and II-A', str(client.client_id), request)
-    commit_or_client_error(db, 'create')
-    db.refresh(client)
-    return get_client_payload(client)
-
-
-@app.post('/api/pao-intakes/documents/{document_id}/extract')
-async def reread_paper_intake(document_id: int, request: Request,
-                              extraction_mode: Literal['auto', 'offline', 'cloud'] = Query(default='auto'),
-                              user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    source = paper_intake_scan(document_id, user, db)
-    metadata = db.query(models.ExtractedMetadata).filter_by(document_id=document_id).first()
-    if not metadata or metadata.extracted_json.get('intake_scope') != 'pao_parts_ii_iia':
-        raise HTTPException(422, 'This document is not a PAO paper intake.')
-    crop_plan = (metadata.extracted_json.get('diagnostics') or {}).get('capture_processing', {}).get('plan')
-    if Path(source.path).suffix.lower() == '.pdf' and extraction_mode == 'cloud' and not crop_plan:
-        raise HTTPException(400, 'Cloud mode does not support PDFs. Select offline or auto mode.')
-    ocr_location = None
-    try:
-        processing = None
-        if crop_plan:
-            from paper_capture import build_ocr_image
-            ocr_location = UPLOAD_DIR / f'{uuid.uuid4()}-paper-reread.jpg'
-            processing = await asyncio.to_thread(build_ocr_image, source.path, crop_plan, ocr_location)
-        extracted = await extract_document(str(ocr_location or source.path), extraction_mode, 'paper_intake', is_disconnected=request.is_disconnected)
-        if processing:
-            from paper_capture import remap_field_evidence
-            remap_field_evidence(extracted, processing)
-        extracted.setdefault('diagnostics', {})['processing_mode'] = 'section_crops' if processing else 'whole_page'
-    except ExtractionBusy as exc:
-        raise HTTPException(503, 'OCR is busy. Retry after the current scan finishes.', headers={'Retry-After': '5'}) from exc
-    except ExtractionTimeout as exc:
-        raise HTTPException(504, 'OCR timed out. Review the source or retry.') from exc
-    except ExtractionCancelled as exc:
-        raise HTTPException(499, 'Document extraction cancelled.') from exc
-    except ExtractionWorkerError as exc:
-        raise HTTPException(503, 'OCR worker failed. Retry or review the scan manually.') from exc
-    finally:
-        if ocr_location is not None:
-            ocr_location.unlink(missing_ok=True)
-    # Re-reading produces a fresh draft. It must not rewrite either the original
-    # OCR evidence or any attorney-reviewed record until an explicit save.
-    public = public_extraction_payload(extracted)
-    draft_id = store_paper_draft(db, document_id, public)
-    db.commit()
-    return {'document_id': document_id, 'source_draft_id': draft_id, 'extracted_data': public}
-
-
-@app.patch('/api/pao-intakes/{client_id}')
-def update_paper_intake(client_id: int, payload: PaperIntakePayload, request: Request,
-                        user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    from paper_intake import APPLICANT, REPRESENTATIVE, validate_review
-    client = ensure_client_access(db.get(models.Client, client_id), user, db)
-    saved = db.query(models.ReviewedPaperIntake).filter_by(client_id=client_id).with_for_update().first()
-    if not saved or saved.document_id != payload.document_id:
-        raise HTTPException(422, 'Reviewed intake source does not match.')
-    try:
-        validate_review(payload.sections, payload.unreadable_fields or [], payload.field_reviews)
-        from paper_checkboxes import validate_boxes, reviewed_detained
-        validate_boxes(payload.checkbox_states, payload.sections)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
-    if payload.checkbox_states is None and saved.checkbox_states is not None:
-        try:
-            validate_boxes(saved.checkbox_states, payload.sections)
-        except ValueError as exc:
-            raise HTTPException(422, 'Review the stored checkbox states before changing Nakakulong.') from exc
-    if payload.source_draft_id is not None:
-        saved.candidate_snapshot = reviewed_candidate_source(db, payload)
-        saved.source_draft_id = payload.source_draft_id
-    saved.sections = payload.sections
-    if payload.checkbox_states is not None:
-        saved.checkbox_states = payload.checkbox_states
-    # Simplified intake edits omit status metadata. Preserve existing values;
-    # never infer a new field status from a correction or an empty text box.
-    if payload.unreadable_fields is not None:
-        saved.unreadable_fields = payload.unreadable_fields
-    if payload.field_reviews is not None:
-        saved.field_reviews = payload.field_reviews
-    saved.reviewed_by, saved.reviewed_at = user.user_id, datetime.now(timezone.utc)
-    applicant, representative = payload.sections[APPLICANT], payload.sections[REPRESENTATIVE]
-    for key in ('name', 'sex', 'civil_status', 'religion', 'educational_attainment', 'citizenship', 'language_dialect'):
-        setattr(client, key, paper_compat_text(models.Client, key, applicant[key]))
-    def age(value):
-        return int(value) if value.isascii() and value.isdigit() and len(value) <= 3 else None
-    client.age = age(applicant['age'])
-    details = client.details
-    if details is None:
-        details = models.ClientDetails(client_id=client_id, detained=null())
-        db.add(details)
-    for source, target in [('address', 'address'), ('contact_no', 'contact_no'), ('email', 'email'),
-                           ('individual_monthly_income', 'individual_monthly_income'), ('spouse_name', 'spouse'),
-                           ('spouse_address', 'address_of_spouse'), ('spouse_contact_no', 'contact_no_of_spouse'),
-                           ('place_of_detention', 'place_of_detention')]:
-        setattr(details, target, paper_compat_text(models.ClientDetails, target, applicant[source]))
-    for source, target in [('name', 'name'), ('sex', 'sex'), ('civil_status', 'civil_status'),
-                           ('address', 'address'), ('contact_no', 'contact_no'), ('email', 'email'),
-                           ('relationship_to_applicant', 'relationship')]:
-        setattr(details, f'representative_{target}', paper_compat_text(models.ClientDetails, f'representative_{target}', representative[source]))
-    if payload.checkbox_states is not None:
-        projected = reviewed_detained(payload.checkbox_states)
-        details.detained = projected if projected is not None else null()
-    details.representative_age = age(representative['age'])
-    write_audit(db, user.user_id, 'Review Intake', 'client', 'Corrected reviewed PAO Parts II and II-A', str(client_id), request)
-    commit_or_client_error(db, 'update')
-    db.refresh(client)
-    return get_client_payload(client)

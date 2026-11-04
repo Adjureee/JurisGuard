@@ -1,13 +1,10 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { ClientRecord } from "../../types";
-import { useConfirmation } from "../ConfirmationProvider";
 import ModalPortal from "./ModalPortal";
-import { PaperIntakeReview } from '../../features/documentExtraction/PaperIntakeReview';
 
 interface ClientInformationModalProps {
   client: ClientRecord | null;
   onClose: () => void;
-  onSaved?: (client: ClientRecord) => void;
 }
 
 const classificationLabels: Array<[keyof ClientRecord["client_classification"], string]> = [
@@ -33,14 +30,14 @@ const classificationLabels: Array<[keyof ClientRecord["client_classification"], 
   ["flag_voluntary_rehab_petitioner", "Petitioner for Voluntary Rehab"],
 ];
 
-function InfoTile({ label, value }: { label: string; value: string | number | boolean | null }) {
+function InfoTile({ label, value }: { label: string; value: string | number | boolean }) {
   return (
     <div className="rounded-md border border-[#E5E7EB] bg-white p-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
         {label}
       </p>
       <p className="mt-1 text-sm font-semibold text-[#2B3642]">
-        {value === null ? 'Unknown' : typeof value === "boolean" ? (value ? "Yes" : "No") : value || "-"}
+        {typeof value === "boolean" ? (value ? "Yes" : "No") : value || "-"}
       </p>
     </div>
   );
@@ -66,51 +63,8 @@ function Section({
 export default function ClientInformationModal({
   client,
   onClose,
-  onSaved,
 }: ClientInformationModalProps) {
-  const confirm = useConfirmation();
-  const [dirty, setDirty] = useState(false);
-
   if (!client) return null;
-
-  async function closePaperReview() {
-    if (
-      onSaved &&
-      dirty &&
-      !await confirm({
-        title: "Discard unsaved corrections?",
-        message: "Cancel to keep reviewing your corrections against the original scan.",
-        confirmLabel: "Discard corrections",
-      })
-    ) return;
-    setDirty(false);
-    onClose();
-  }
-
-  if (client.paper_intake) return <ModalPortal>
-    <div className="jurisguard-modal-overlay bg-black/60 p-4" role="dialog" aria-modal="true" aria-label={onSaved ? "Edit scanned PAO intake" : "Reviewed PAO intake"}>
-      <div className="flex h-[95dvh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white">
-        <div className="flex shrink-0 items-center justify-between gap-4 border-b p-4">
-          <div className="min-w-0">
-            <h2 className="font-semibold">{onSaved ? "Edit scanned Parts II and II-A" : "Reviewed PAO intake"}</h2>
-            {onSaved && <p className="mt-1 text-sm text-slate-600">Compare corrections with the original scan before saving.</p>}
-          </div>
-          <button type="button" className="min-h-11 shrink-0 rounded border px-3 py-2" onClick={() => void closePaperReview()}>Close</button>
-        </div>
-        <PaperIntakeReview
-          key={client.client_id}
-          saved={client.paper_intake}
-          clientId={onSaved ? client.client_id : undefined}
-          onDirtyChange={onSaved ? setDirty : undefined}
-          onSaved={onSaved ? updated => {
-            setDirty(false);
-            onSaved(updated);
-            onClose();
-          } : undefined}
-        />
-      </div>
-    </div>
-  </ModalPortal>;
 
   const selectedClassifications = classificationLabels
     .filter(([field]) => Boolean(client.client_classification[field]))

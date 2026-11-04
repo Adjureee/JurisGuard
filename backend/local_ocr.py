@@ -234,7 +234,7 @@ class LocalOCR:
         started = time.perf_counter()
         path = Path(file_path)
         target = target.strip().lower()
-        if target not in {"full", "client", "boundaries"}:
+        if target not in {"full", "client"}:
             raise OfflineOCRError("Unsupported OCR extraction target.")
         layout: list[dict] = []
         warnings: list[str] = []

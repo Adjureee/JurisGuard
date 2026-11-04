@@ -22,7 +22,6 @@ export default function AddCaseModal({
   const { user } = useAuth();
   const clients = useCriminalCasesStore((state) => state.clients);
   const setClients = useCriminalCasesStore((state) => state.setClients);
-  const upsertClient = useCriminalCasesStore((state) => state.upsertClient);
   const upsertCase = useCriminalCasesStore((state) => state.upsertCase);
   const addLog = useAuditLogStore((state) => state.addLog);
   const addNotification = useNotificationStore((state) => state.addNotification);
@@ -59,7 +58,6 @@ export default function AddCaseModal({
             caseType={caseType}
             requireReviewBeforeSubmit={caseType === "Civil"}
             submitLabel={`Save ${caseLabel}`}
-            onClientUpdated={upsertClient}
             onSubmit={async (values) => {
               const record = await createCaseRecord(values, caseType);
               upsertCase(record);

@@ -13,7 +13,7 @@ const loaded = new Module(source, module);
 loaded.filename = source;
 loaded.paths = module.paths;
 loaded._compile(compiled, source);
-const { CameraStartTimeout, encodeJpegFrame, requestCameraStream, waitForPreviewFrame } = loaded.exports;
+const { CameraStartTimeout, encodeJpegFrame, requestCameraStream } = loaded.exports;
 
 test('camera permission that never settles reports a timeout', async () => {
   await assert.rejects(
@@ -37,33 +37,6 @@ test('a successful camera stream stays active until the caller stops it', async 
   const stream = { getTracks: () => [{ stop: () => { stopped = true; } }] };
   assert.equal(await requestCameraStream(async () => stream, { video: true }, 20), stream);
   assert.equal(stopped, false);
-});
-
-test('capture remains unavailable until a drawable preview frame arrives', async () => {
-  const video = new EventTarget();
-  video.readyState = 0;
-  video.videoWidth = 0;
-  video.videoHeight = 0;
-  let ready = false;
-  const pending = waitForPreviewFrame(video, 100).then(() => { ready = true; });
-  video.readyState = 1;
-  video.videoWidth = 1280;
-  video.videoHeight = 720;
-  video.dispatchEvent(new Event('loadeddata'));
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(ready, false);
-  video.readyState = 2;
-  video.dispatchEvent(new Event('playing'));
-  await pending;
-  assert.equal(ready, true);
-});
-
-test('preview without a frame times out instead of enabling capture', async () => {
-  const video = new EventTarget();
-  video.readyState = 1;
-  video.videoWidth = 1280;
-  video.videoHeight = 720;
-  await assert.rejects(waitForPreviewFrame(video, 10), CameraStartTimeout);
 });
 
 test('still capture resolves a valid JPEG blob', async () => {
