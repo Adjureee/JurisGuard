@@ -1,3 +1,4 @@
+import { useConfirmation } from "../ConfirmationProvider";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -75,6 +76,7 @@ function relativeTime(value: string) {
 }
 
 export default function Topbar({ onToggleSidebar }: TopbarProps) {
+  const confirm = useConfirmation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const addLog = useAuditLogStore((state) => state.addLog);
@@ -237,6 +239,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   }, [replaceServerNotifications, user]);
 
   const handleLogout = async () => {
+    if (!await confirm({ title: "Sign out?", message: "You will need to sign in again to access JurisGuard. Save any unfinished work before continuing.", confirmLabel: "Sign out" })) return;
     addLog({
       userId: user?.user_id,
       user: user?.full_name || user?.email,
@@ -447,7 +450,9 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                             {notification.isRead && (
                               <button
                                 type="button"
-                                onClick={() => handleRemoveNotification(notification.id)}
+                                onClick={async () => {
+                                  if (await confirm({ title: "Remove notification?", message: "This notification will be removed from your list.", confirmLabel: "Remove" })) removeNotification(notification.id);
+                                }}
                                 className="text-xs font-semibold text-[#DC2626] hover:text-[#B91C1C]"
                               >
                                 Remove

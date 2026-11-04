@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { Toaster } from "react-hot-toast";
 import App from "./App";
+import { ConfirmationProvider } from "./components/ConfirmationProvider";
 import { AuthProvider } from "./contexts/AuthContext";
 import "./index.css";
 
@@ -20,6 +21,7 @@ try {
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <AuthProvider>
+      <ConfirmationProvider>
       <App />
       <Toaster
         position="bottom-right"
@@ -27,6 +29,7 @@ ReactDOM.createRoot(root).render(
         containerStyle={{ zIndex: 11000 }}
         toastOptions={{ style: { zIndex: 11000 } }}
       />
+      </ConfirmationProvider>
     </AuthProvider>
   </React.StrictMode>
 );

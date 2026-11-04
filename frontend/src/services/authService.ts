@@ -37,6 +37,12 @@ export function getTrustedDeviceToken(email: string): string | null {
   return readTrustedDeviceMap()[normalizeEmail(email)] ?? null;
 }
 
+export function forgetTrustedDevice(email: string): void {
+  const trustedDevices = readTrustedDeviceMap();
+  delete trustedDevices[normalizeEmail(email)];
+  localStorage.setItem(MFA_TRUSTED_DEVICES_KEY, JSON.stringify(trustedDevices));
+}
+
 export function saveTrustedDeviceToken(email: string, token: string | null | undefined) {
   if (!token) return;
   const trustedDevices = readTrustedDeviceMap();

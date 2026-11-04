@@ -11,6 +11,16 @@ _FAILED_MODES = {"OFFLINE_OCR_FAILED", "OFFLINE_OCR_EMPTY", "ONLINE_MISTRAL_FAIL
 
 
 def public_extraction_payload(extracted: dict[str, Any]) -> dict[str, Any]:
+    if extracted.get('intake_scope') == 'pao_parts_ii_iia':
+        from paper_intake import validate_review
+        validate_review(extracted['sections'], [])
+        result = {key: extracted[key] for key in ('intake_scope', 'sections', 'raw_text',
+                'extraction_mode', 'document_type', 'needs_review', 'diagnostics')}
+        if 'checkbox_states' in extracted:
+            from paper_checkboxes import validate_boxes
+            validate_boxes(extracted['checkbox_states'], extracted['sections'])
+            result['checkbox_states'] = extracted['checkbox_states']
+        return result
     inventory = extracted.get("inventory")
     warnings: list[str] = []
     try:

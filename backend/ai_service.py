@@ -1487,6 +1487,7 @@ class JurisGuardExtractionEngine:
         self.mistral_connect_timeout = get_int_env("MISTRAL_CONNECT_TIMEOUT_SECONDS", 10)
         self.mistral_read_timeout = get_int_env("MISTRAL_READ_TIMEOUT_SECONDS", 60)
         self.mistral_model = os.getenv("MISTRAL_MODEL", "pixtral-12b-2409")
+        self.mistral_random_seed = get_int_env("MISTRAL_RANDOM_SEED", 0)
 
     def _get_empty_schema(self) -> dict:
         return {
@@ -1772,6 +1773,14 @@ class JurisGuardExtractionEngine:
             "title_of_case_and_docket_no": flat.get("case_docket_title"),
             "court_body_tribunal_where_pending": flat.get("court_body"),
         })
+        if flat.get("_checkboxes_unverified"):
+            # Text recognition cannot establish whether a printed box is ticked.
+            # Null means unverified, rather than silently reporting unchecked.
+            for section in sectioned.values():
+                if isinstance(section, dict):
+                    for key, value in section.items():
+                        if isinstance(value, bool):
+                            section[key] = None
         return sectioned
 
     def _flat_from_sectioned(self, sectioned: dict) -> dict:
@@ -1880,92 +1889,22 @@ class JurisGuardExtractionEngine:
             flat["adversary_role"] = "Defendant/Respondent/Accused"
         return flat
 
-    def _run_online_pipeline(self, base64_image: str) -> dict:
+    def _run_online_pipeline(self, base64_image: str, paper_intake: bool = False) -> dict:
         """Primary Mode: Mistral Vision AI (Cloud)"""
         if not self.mistral_api_key:
             raise RuntimeError("MISTRAL_API_KEY is not configured")
 
         print("[System] Network Healthy. Routing to Cloud Pipeline (Mistral)...")
-        system_prompt = f"""
-    You are JurisGuard's legal-document vision extraction engine for Philippine Public Attorney's Office
-    interview sheets. Your behavior must be STRICTLY LITERAL, EVIDENCE-ONLY, and NON-INFERENTIAL.
+        from cloud_intake import vision_content, validate_sections
+        schema = self._get_sectioned_schema()
+        if paper_intake:
+            from paper_intake import empty_sections, SCHEMA
+            schema = empty_sections()
+        if paper_intake:
+            from paper_checkboxes import unknown_boxes
+            schema = {**schema, 'checkbox_states': unknown_boxes()}
+        content = vision_content(base64_image, schema, paper_only=True) if paper_intake else vision_content(base64_image, schema)
 
-        TASK:
-        Extract only visible user-entered marks/text from the image. Return one minified JSON object matching
-        this standardized English section-based schema exactly:
-        {json.dumps(self._get_sectioned_schema())}
-
-        LEGAL EVIDENCE STANDARD:
-        - This is legal document extraction, not form interpretation.
-        - Do not reason about what the user probably meant.
-        - Do not complete missing fields.
-        - Do not correct user mistakes.
-        - Do not infer facts from related fields.
-        - Do not use surrounding fields to fill a blank field.
-        - Do not copy a value from one labeled line into a different labeled line.
-        - Do not infer a checkbox state from nearby handwriting, typed text, labels, or context.
-        - If visual evidence is absent, ambiguous, cropped, hidden, blank, or uncertain, output null for strings
-        and false for booleans.
-
-        STRICT CHECKBOX RULES:
-        - A checkbox field may be true ONLY if there is a distinct physical mark inside the specific box,
-        touching the specific box, or directly drawn over that specific box.
-        - Valid checkbox marks include visible ink checkmarks, X marks, filled boxes, dots, scribbles, or other
-        unmistakable marks physically located in/on the target box.
-        - If the box is empty, output false.
-        - If text is written on a related line but the checkbox is empty, output false.
-        - If "Lugar ng Detention" has text but "Nakakulong: Oo" is unmarked, output "is_detained": false.
-        - If only the printed words "Oo", "Hindi", "Criminal", "Civil", "PWD", etc. are visible, output false.
-        - Never choose a checkbox based on semantic consistency, surrounding text, field labels, or common sense.
-        - For paired choices such as Oo/Hindi, return true only for the option whose own box is visibly marked.
-
-        FIGURE/GROUND SEPARATION:
-        - Printed form template text is background, not data.
-        - Extract handwriting, typed overlays, stamps, or marks only when they are visibly user-entered.
-        - Blank underlines, empty boxes, and unfilled spaces must remain null or false.
-
-        FIELD EXTRACTION RULES:
-        - Extract exactly what the client wrote, preserving spelling, capitalization, abbreviations, and apparent errors.
-        - Do not translate, summarize, normalize, repair, or autocorrect handwritten values.
-        - If a field area contains no visible user-entered text, output null.
-        - If multiple possible values exist and the correct one is unclear, output null.
-        - For each text field, first locate its printed label, then read only the answer area/underline/box belonging
-          to that label. Stop at the next printed label, column boundary, or section divider.
-        - Treat left-column and right-column fields as separate zones even when they share the same horizontal row.
-        - For dense two-column rows, never read across the page from one label into another label's answer area.
-        - If the answer line beside a label is visually blank, output null even if another line nearby has handwriting.
-        - If a candidate value appears closer to another label than to the target label, do not use it for the target field.
-        - Educational attainment must come only from the "Naabot na pag-aaral" / "Educational Attainment" answer line.
-          Never copy religion, citizenship, name, or any neighboring value into educational attainment.
-        - Address fields must contain visible handwriting in the address answer line. Do not invent an address from faint
-          background bleed-through, printed text, noise, or unrelated representative/case sections.
-        - Single unclear OCR-like tokens without address evidence must be null for address fields.
-        - Email must contain a visible @ and domain dot; otherwise null.
-        - Age must be a visible 1-3 digit number in the age answer area; otherwise null.
-        - Sex must be a visible value or mark in the sex answer area only; otherwise null.
-
-        FILIPINO/ENGLISH LABEL MAPPING:
-        - "Petsa" -> "petsa"; "Control No." -> "control_no"; "Rehiyon" -> "rehiyon";
-          "District Office" -> "district_office"; "Mananayam" -> "mananayam".
-        - "Pangalan" / "Name" in applicant section -> "applicant_name".
-        - "Relihiyon" / "Religion" -> "applicant_religion".
-        - "Naabot na pag-aaral" / "Educational Attainment" -> "applicant_educational_attainment".
-        - "Pagkamamamayan" / "Citizenship" -> "applicant_citizenship".
-        - "Salita/Dialekto" / "Language/Dialect" -> "applicant_language_dialect".
-        - "Tirahan" / "Address" in applicant section -> "applicant_address".
-        - "Asawa" / "Spouse" -> "spouse_name".
-        - "Tirahan ng asawa" / "Address of Spouse" -> "spouse_address".
-        - "Contact No. ng asawa" / "Contact No. of Spouse" -> "spouse_contact".
-        - "Petsa ng pagakakulong" / "Detained Since" -> "detained_since".
-        - "Lugar ng Detention" / "Place of Detention" -> "place_of_detention".
-
-        OUTPUT RULES:
-        - Output only valid minified JSON.
-        - Use exactly the section names, field keys, and JSON types shown above.
-        - Keep Filipino source labels normalized to the English JSON keys.
-        - Do not include markdown, explanations, confidence scores, or extra keys.
-        """
-        
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.mistral_api_key}"
@@ -1973,15 +1912,14 @@ class JurisGuardExtractionEngine:
         payload = {
             "model": self.mistral_model,
             "messages": [
-                {"role": "user", "content": [
-                    {"type": "text", "text": system_prompt},
-                    {"type": "image_url", "image_url": f"data:image/jpeg;base64,{base64_image}"}
-                ]}
+                {"role": "user", "content": content}
             ],
             "temperature": 0.0,
             "response_format": {"type": "json_object"}
         }
 
+        if paper_intake:
+            payload.update(random_seed=getattr(self, 'mistral_random_seed', 0), max_tokens=4096)
         response = requests.post(
             "https://api.mistral.ai/v1/chat/completions",
             headers=headers,
@@ -1991,16 +1929,42 @@ class JurisGuardExtractionEngine:
         response.raise_for_status()
         
         clean_json_text = response.json()['choices'][0]['message']['content'].strip().replace("```json", "").replace("```", "").strip()
-        extracted_data = json.loads(clean_json_text)
-        if isinstance(extracted_data, dict) and "header" in extracted_data:
-            sectioned_data = extracted_data
-            extracted_data = self._flat_from_sectioned(sectioned_data)
-            extracted_data = apply_quality_filters(remove_printed_template_leaks(extracted_data))
-            extracted_data["sections"] = self._sectioned_from_flat(extracted_data)
-        else:
-            extracted_data = apply_quality_filters(remove_printed_template_leaks(extracted_data))
-            extracted_data["sections"] = self._sectioned_from_flat(extracted_data)
+        cloud_response = json.loads(clean_json_text)
+        cloud_warnings = ["Cloud vision candidates require human review."]
+        if paper_intake:
+            import hashlib
+            from cloud_intake import validate_paper_response
+            from paper_intake import extract_paper_intake
+            from paper_checkboxes import checkbox_review_warnings
+            sections, boxes, field_states, issues = validate_paper_response(cloud_response)
+            result = extract_paper_intake('')
+            result['sections'], result['checkbox_states'] = sections, boxes
+            result['diagnostics'].update({
+                'field_states': field_states, 'cloud_response_text': clean_json_text,
+                'source_text_kind': 'cloud_json_candidates_not_ocr_transcript',
+                'cloud_model_requested': self.mistral_model,
+                'cloud_model_returned': response.json().get('model'),
+                'cloud_random_seed': payload['random_seed'], 'cloud_temperature': payload['temperature'],
+                'cloud_prompt_sha256': hashlib.sha256(json.dumps(content[0], sort_keys=True).encode()).hexdigest(),
+            })
+            returned_model = response.json().get('model')
+            result['diagnostics']['cloud_model_mismatch'] = bool(returned_model and returned_model != self.mistral_model)
+            if result['diagnostics']['cloud_model_mismatch']:
+                issues.append('Cloud provider returned a different model identifier; model version is not pinned by the requested name.')
+            result['extraction_mode'] = 'ONLINE_MISTRAL'
+            result['diagnostics']['warnings'] = cloud_warnings + issues + checkbox_review_warnings(boxes) + ['Verify every field against the scan. Blank or unclear entries remain empty.']
+            return result
+        sections = validate_sections(cloud_response, schema, cloud_warnings)
+        extracted_data = self._flat_from_sectioned(sections)
+        extracted_data["sections"] = sections
         extracted_data["extraction_mode"] = "ONLINE_MISTRAL"
+        extracted_data["document_type"] = "intake_form"
+        extracted_data["needs_review"] = True
+        extracted_data["diagnostics"] = {
+            "warnings": cloud_warnings,
+            "cloud_model": self.mistral_model,
+            "cloud_response_sections": cloud_response,
+        }
         extracted_data["raw_text"] = "Processed via Mistral Cloud Vision"
         return extracted_data
 
@@ -2033,6 +1997,25 @@ class JurisGuardExtractionEngine:
             extracted_data["extraction_mode"] = "OFFLINE_ROUTER_ONLY" if raw_text else "OFFLINE_OCR_EMPTY"
         routed["diagnostics"]["warnings"].extend(ocr.warnings)
         routed["diagnostics"].update({"ocr_engine": ocr.engine, "ocr_layout": ocr.layout, "page_count": ocr.page_count, "ocr_timings": ocr.timings})
+        if routed["document_type"] == "intake_form" and ocr.layout:
+            from intake_layout import applicant_bounds, read_applicant, INVENTORY
+            entries = [dict(box, text=text) for box, text in zip(ocr.layout, raw_text.splitlines())]
+            bounds = applicant_bounds(entries)
+            if bounds:
+                candidates = ocr.refinements or entries
+                values, evidence = read_applicant(candidates, bounds)
+                first_values, _ = read_applicant(entries, bounds)
+                for field, item in evidence.items():
+                    item["first_pass_value"] = first_values[field]
+                    item["passes_disagree"] = bool(first_values[field] and first_values[field] != values[field])
+                extracted_data.update(values)
+                for field, column in INVENTORY.items():
+                    routed["inventory"][column] = values[field]
+                routed["diagnostics"]["applicant_field_evidence"] = evidence
+            routed["diagnostics"]["ocr_refinements"] = ocr.refinements
+            extracted_data["_checkboxes_unverified"] = True
+            routed["diagnostics"]["warnings"].append("Image intake OCR requires human review, including handwriting and checkbox states.")
+            routed["needs_review"] = True
         if ocr.warnings:
             routed["needs_review"] = True
         extracted_data.update(routed)
@@ -2069,6 +2052,49 @@ class JurisGuardExtractionEngine:
                 return fallback_data
 
     def execute_extraction(self, file_path: str, extraction_mode: str = "auto", extraction_target: str = "full") -> dict:
+        if extraction_target == "paper_boundaries":
+            from paper_capture import heading_positions
+            ocr = self.local_ocr.extract(file_path, target="boundaries")
+            return {"headings": heading_positions(ocr.raw_text, ocr.layout), "warnings": ocr.warnings}
+        if extraction_target == "paper_intake":
+            from paper_intake import extract_paper_intake
+            cloud_failed = False
+            if extraction_mode == 'cloud':
+                compressed = compress_image_for_vlm(file_path)
+                try:
+                    result = self._run_online_pipeline(encode_image_to_base64(compressed), paper_intake=True)
+                    from paper_provenance import attach_provenance
+                    return attach_provenance(result, file_path, 'cloud', {'model': self.mistral_model, 'temperature': 0, 'random_seed': self.mistral_random_seed, 'max_tokens': 4096})
+                except Exception:
+                    cloud_failed = True
+                finally:
+                    if compressed != file_path and os.path.exists(compressed):
+                        os.remove(compressed)
+            try:
+                ocr = self.local_ocr.extract(file_path)
+                result = extract_paper_intake(ocr.raw_text, ocr.layout, getattr(ocr, 'refinements', None))
+                from paper_checkboxes import extract_visual_boxes, answer_from_boxes, checkbox_review_warnings
+                checkbox_diagnostics = {}
+                boxes, evidence = extract_visual_boxes(file_path, ocr.raw_text, ocr.layout, checkbox_diagnostics)
+                result['diagnostics']['checkbox_detection'] = checkbox_diagnostics
+                result['diagnostics']['warnings'].extend(checkbox_review_warnings(boxes))
+                result['checkbox_states'] = boxes
+                result['sections']['applicant_personal_circumstances']['detained'] = answer_from_boxes(boxes)
+                result['diagnostics'].setdefault('field_evidence', {}).update(evidence)
+                from paper_provenance import attach_provenance, local_settings
+                attach_provenance(result, file_path, 'local', local_settings(self.local_ocr))
+                result['diagnostics']['recognized_text_sha256'] = __import__('hashlib').sha256(ocr.raw_text.encode()).hexdigest()
+                result['diagnostics']['page_count'] = ocr.page_count
+                result['extraction_mode'] = 'OFFLINE_PAPER_INTAKE' if ocr.raw_text.strip() else 'OFFLINE_OCR_EMPTY'
+                result['diagnostics']['warnings'].extend(ocr.warnings)
+                if cloud_failed:
+                    result['diagnostics']['cloud_fallback'] = True
+                    result['diagnostics']['warnings'].append('Cloud extraction unavailable; local OCR was used. This is not a successful cloud result. Compare with the scan.')
+                return result
+            except OfflineOCRError:
+                result = extract_paper_intake('')
+                result['extraction_mode'] = 'OFFLINE_OCR_FAILED'
+                return result
         final_data = self._get_empty_schema()
         mode = (extraction_mode or "auto").strip().lower()
 
@@ -2086,7 +2112,8 @@ class JurisGuardExtractionEngine:
             offline = self._run_offline_pipeline(file_path) if extraction_target == "full" else self._run_offline_pipeline(file_path, extraction_target)
             final_data.update(offline)
 
-        final_data["sections"] = self._sectioned_from_flat(final_data) if final_data.get("document_type") in (None, "intake_form") else {}
+        if final_data.get("extraction_mode") != "ONLINE_MISTRAL":
+            final_data["sections"] = self._sectioned_from_flat(final_data) if final_data.get("document_type") in (None, "intake_form") else {}
         return final_data
 
 # ==========================================

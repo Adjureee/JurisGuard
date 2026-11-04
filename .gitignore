@@ -24,6 +24,7 @@ dist-ssr/
 gcp_credentials.json
 
 # Runtime uploads and generated files
+.local/
 uploads/
 backend/uploads/
 test_images/

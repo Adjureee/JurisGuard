@@ -1,44 +1,24 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Camera, Keyboard, Upload } from "lucide-react";
 import { useForm } from "react-hook-form";
-import type { ChangeEvent, KeyboardEvent } from "react";
+import type { KeyboardEvent } from "react";
 import type {
-  FieldPath,
   Resolver,
   UseFormRegisterReturn,
 } from "react-hook-form";
-import { useAuth } from "../../contexts/AuthContext";
 import { natureOfCaseOptions } from "../../features/criminalCases/locationOptions";
-import { FieldStatus } from "../../features/criminalCases/components/FieldStatus";
+import { applicantRoleOptions } from "../../features/criminalCases/clientFieldOptions";
 import { StepIndicator } from "../../features/criminalCases/components/StepIndicator";
 import {
   caseFormSchema,
   type CaseFormValues,
 } from "../../features/criminalCases/schemas";
-import { applicantRoleOptions } from "../../features/criminalCases/clientFieldOptions";
-import { useNotificationStore } from "../../features/notifications/notificationStore";
-import { extractCaseFromDocument, type CaseExtractionResult, type ExtractionEngineMode } from "../../services/documentExtractionService";
 import type {
   CaseType,
   ClientRecord,
-  ExtractionMap,
-  ExtractionStatus,
-  IntakeMethod,
 } from "../../types";
 import ClientInformationModal from "./ClientInformationModal";
-import { useExtractionRequest } from "../../features/documentExtraction/useExtractionRequest";
-import { ExtractionProgress } from "../../features/documentExtraction/ExtractionProgress";
-import { CameraCapture } from "../../features/documentExtraction/CameraCapture";
-
-type CaseOcrPayload = CaseExtractionResult["extracted"];
-
-const extractionEngineLabels: Record<ExtractionEngineMode, string> = {
-  auto: "Auto",
-  offline: "Offline PaddleOCR",
-  cloud: "Cloud Vision",
-};
 
 interface CaseWorkflowProps {
   clients: ClientRecord[];
@@ -47,7 +27,13 @@ interface CaseWorkflowProps {
   caseType?: CaseType;
   requireReviewBeforeSubmit?: boolean;
   submitLabel?: string;
+  onClientUpdated?: (client: ClientRecord) => void;
   onSubmit: (values: CaseFormValues) => void | Promise<void>;
+}
+
+function localDateInputValue(date = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 const createDefaultValues = (
@@ -59,13 +45,9 @@ const createDefaultValues = (
   case_type: caseType,
   intake_record: {
     control_no: "",
-    form_date: new Date().toLocaleDateString("en-US", {
-      month: "2-digit",
-      day: "2-digit",
-      year: "numeric",
-    }),
-    region: "",
-    district_office: "",
+    form_date: localDateInputValue(),
+    region: "Regional Office No. XI",
+    district_office: "Panabo City District Office",
     party_represented: "",
     applicant_role: "",
     applicant_role_other: "",
@@ -137,54 +119,6 @@ const createDefaultValues = (
   },
 });
 
-const caseOcrFields = [
-  "intake_record.control_no",
-  "intake_record.form_date",
-  "intake_record.district_office",
-  "intake_record.applicant_role",
-  "intake_record.nature_of_request",
-  "intake_record.nature_of_case",
-  "intake_record.proof_submission_satisfied",
-  "intake_record.proof_submission_deadline",
-  "intake_record.proof_itr_satisfied",
-  "intake_record.proof_itr_date",
-  "intake_record.proof_brgy_satisfied",
-  "intake_record.proof_brgy_date",
-  "intake_record.proof_dswd_satisfied",
-  "intake_record.proof_dswd_date",
-  "intake_record.proof_others_satisfied",
-  "intake_record.proof_others_details",
-  "intake_record.proof_others_date",
-  "intake_record.inv_plaintiff",
-  "intake_record.inv_defendant",
-  "intake_record.inv_oppositor",
-  "intake_record.inv_petitioner",
-  "intake_record.inv_respondent",
-  "intake_record.inv_complainant",
-  "intake_record.inv_accused",
-  "intake_record.inv_others",
-  "representative.rep_name",
-  "representative.rep_age",
-  "representative.rep_sex",
-  "representative.civil_status",
-  "representative.rep_address",
-  "representative.rep_contact_no",
-  "representative.relationship_to_applicant",
-  "cases.case_no",
-  "cases.court_body",
-  "cases.facts_of_case",
-  "cases.cause_of_action",
-  "cases.status_of_case",
-  "cases.last_action_taken",
-  "cases.detained",
-  "cases.cause_of_termination",
-  "cases.date_of_termination",
-] as Array<FieldPath<CaseFormValues>>;
-
-const overwriteDefaultOcrFields = new Set<FieldPath<CaseFormValues>>([
-  "intake_record.form_date",
-]);
-
 const urbanBarangays = [
   "Cagangohan",
   "Datu Abdul Dadia",
@@ -232,13 +166,6 @@ const ruralBarangays = [
 ];
 
 const panaboBarangays = [...urbanBarangays, ...ruralBarangays];
-
-const courtBodyOptions = [
-  "RTC Branch 4",
-  "RTC Branch 34",
-  "Family Court - Panabo District",
-  "MTCC - Panabo District",
-];
 
 const civilStatusOptions = [
   "Single",
@@ -316,21 +243,18 @@ function TextInput({
   registration,
   error,
   type = "text",
-  status,
   disabled = false,
 }: {
   label: string;
   registration: UseFormRegisterReturn;
   error?: string;
   type?: string;
-  status?: ExtractionStatus;
   disabled?: boolean;
 }) {
   return (
     <label className="block">
       <span className="text-sm font-medium text-[#4B5563]">
         {label}
-        <FieldStatus status={status} />
       </span>
       <input
         type={type}
@@ -347,18 +271,15 @@ function TextArea({
   label,
   registration,
   error,
-  status,
 }: {
   label: string;
   registration: UseFormRegisterReturn;
   error?: string;
-  status?: ExtractionStatus;
 }) {
   return (
     <label className="block">
       <span className="text-sm font-medium text-[#4B5563]">
         {label}
-        <FieldStatus status={status} />
       </span>
       <textarea
         {...registration}
@@ -370,6 +291,26 @@ function TextArea({
   );
 }
 
+function InventorySourceField({
+  label,
+  value,
+  source,
+}: {
+  label: string;
+  value: string;
+  source: string;
+}) {
+  return (
+    <div className="rounded-md border border-[#D1D5DB] bg-[#F8FAFC] px-3 py-2.5">
+      <p className="text-sm font-medium text-[#4B5563]">{label}</p>
+      <p className="mt-1 min-h-5 break-words text-sm font-semibold text-[#2B3642]">
+        {value || "Not provided"}
+      </p>
+      <p className="mt-1 text-xs text-[#6B7280]">{source}</p>
+    </div>
+  );
+}
+
 function initials(name: string) {
   return name
     .split(" ")
@@ -378,16 +319,6 @@ function initials(name: string) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
-}
-
-function getPayloadValue(
-  source: CaseOcrPayload,
-  path: FieldPath<CaseFormValues>,
-) {
-  return path.split(".").reduce<unknown>((current, key) => {
-    if (!current || typeof current !== "object") return undefined;
-    return (current as Record<string, unknown>)[key];
-  }, source);
 }
 
 function getFirstValidationMessage(errors: unknown): string | null {
@@ -403,40 +334,6 @@ function getFirstValidationMessage(errors: unknown): string | null {
   }
 
   return null;
-}
-
-function MethodCard({
-  value,
-  title,
-  description,
-  icon,
-  selected,
-  onSelect,
-}: {
-  value: IntakeMethod;
-  title: string;
-  description: string;
-  icon: string;
-  selected: boolean;
-  onSelect: (value: IntakeMethod) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(value)}
-      className={`rounded-lg border bg-white p-5 text-left shadow-sm  transition duration-200 hover:-translate-y-px hover:shadow-md ${
-        selected
-          ? "border-[#704389] shadow-[#704389]/20"
-          : "border-[#E5E7EB] hover:border-[#704389]"
-      }`}
-    >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#704389]/10 text-[#704389]">
-        {icon === "fa-camera" ? <Camera aria-hidden="true" /> : icon === "fa-upload" ? <Upload aria-hidden="true" /> : <Keyboard aria-hidden="true" />}
-      </div>
-      <p className="mt-4 text-base font-semibold text-[#2B3642]">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-[#4B5563]">{description}</p>
-    </button>
-  );
 }
 
 function SelectedClientCard({
@@ -544,12 +441,9 @@ export function CaseWorkflow({
   caseType = "Criminal",
   requireReviewBeforeSubmit = false,
   submitLabel = "Save Case",
+  onClientUpdated,
   onSubmit,
 }: CaseWorkflowProps) {
-  const addNotification = useNotificationStore(
-    (state) => state.addNotification,
-  );
-  const { user } = useAuth();
   const lockedSelectionClients = useMemo(
     () =>
       lockedClients?.length
@@ -561,33 +455,25 @@ export function CaseWorkflow({
   );
   const hasLockedSelection = lockedSelectionClients.length > 0;
   const [step, setStep] = useState(0);
-  const [method, setMethod] = useState<IntakeMethod | null>(null);
   const [query, setQuery] = useState("");
   const [viewingClient, setViewingClient] = useState<ClientRecord | null>(null);
+  const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>(
     lockedSelectionClients.map((client) => client.client_id),
   );
   const [activeClientIndex, setActiveClientIndex] = useState(0);
-  const [documentPreview, setDocumentPreview] = useState<string | null>(null);
-  const [documentLabel, setDocumentLabel] = useState("");
-  const [indicators, setIndicators] = useState<ExtractionMap>({});
-  const { isExtracting, elapsedSeconds, startExtraction, finishExtraction, isCurrentExtraction, cancelExtraction } = useExtractionRequest();
-  const [extractionEngine, setExtractionEngine] =
-    useState<ExtractionEngineMode>("auto");
-  const [replaceExistingWithOcr, setReplaceExistingWithOcr] = useState(false);
   const [useClientRepresentative, setUseClientRepresentative] = useState(false);
   const standaloneSteps = requireReviewBeforeSubmit
     ? [
         "Select Client",
-        "Encoding Method",
-        "Case Details",
+        caseType === "Criminal" ? "Inventory Details" : "Case Details",
         "Classification",
         "Review",
       ]
-    : ["Select Client", "Encoding Method", "Case Details"];
+    : ["Select Client", caseType === "Criminal" ? "Inventory Details" : "Case Details"];
   const lockedSteps = requireReviewBeforeSubmit
-    ? ["Encoding Method", "Case Details", "Classification", "Review"]
-    : ["Encoding Method", "Case Details"];
+    ? [caseType === "Criminal" ? "Inventory Details" : "Case Details", "Classification", "Review"]
+    : [caseType === "Criminal" ? "Inventory Details" : "Case Details"];
   const steps = hasLockedSelection ? lockedSteps : standaloneSteps;
   const {
     register,
@@ -595,7 +481,6 @@ export function CaseWorkflow({
     setValue,
     watch,
     trigger,
-    getValues,
     formState: { errors },
   } = useForm<CaseFormValues>({
     resolver: zodResolver(caseFormSchema) as Resolver<CaseFormValues>,
@@ -623,14 +508,29 @@ export function CaseWorkflow({
     [clients, hasLockedSelection, lockedSelectionClients, selectedClientIds],
   );
   const selectedClient = selectedClients[0];
+  const scannedSelectedClients = selectedClients.filter((client) => client.paper_intake);
   const canReuseClientRepresentative = hasSavedRepresentative(selectedClient);
   const applicantRole = watch("intake_record.applicant_role");
   const natureOfRequest = watch("intake_record.nature_of_request");
   const representativeCivilStatus = watch("representative.civil_status");
   const caseStatus = watch("cases.status_of_case");
   const caseDetained = Boolean(watch("cases.detained"));
+  const confinementDate = watch("cases.date_of_confinement");
+  const detentionPlace = watch("cases.place_of_detention");
   const locationType = watch("cases.location_type");
   const incidentBarangay = watch("cases.incident_barangay");
+  const clientSex = selectedClients
+    .map((client) => client.client.sex)
+    .filter(Boolean)
+    .join("; ");
+  const clientAddress = selectedClients
+    .map((client) => client.client_details.address)
+    .filter(Boolean)
+    .join("; ");
+  const clientContactNumber = selectedClients
+    .map((client) => client.client_details.contact_no)
+    .filter(Boolean)
+    .join("; ");
   const hasSearch = query.trim().length > 0;
   const filteredClients = useMemo(() => {
     if (!hasSearch) return [];
@@ -642,14 +542,12 @@ export function CaseWorkflow({
     );
   }, [clients, hasSearch, query]);
   const visibleClients = filteredClients.slice(0, 8);
-  const hasOcrResult = Object.keys(indicators).length > 0;
-  const isCaseFormStep = hasLockedSelection ? step === 1 : step === 2;
-  const classificationStep = hasLockedSelection ? 2 : 3;
-  const reviewStep = hasLockedSelection ? 3 : 4;
+  const isCaseFormStep = hasLockedSelection ? step === 0 : step === 1;
+  const classificationStep = hasLockedSelection ? 1 : 2;
+  const reviewStep = hasLockedSelection ? 2 : 3;
   const isClassificationStep =
     requireReviewBeforeSubmit && step === classificationStep;
   const isReviewStep = requireReviewBeforeSubmit && step === reviewStep;
-  const isMethodStep = hasLockedSelection ? step === 0 : step === 1;
   const reviewValues = watch();
   const selectedClientIsDetained = Boolean(
     selectedClient?.client_details.detained,
@@ -792,10 +690,6 @@ export function CaseWorkflow({
     setValue("cases.incident_barangay", "", { shouldDirty: true, shouldValidate: true });
   }, [filteredBarangays, incidentBarangay, setValue]);
 
-  useEffect(() => () => {
-    if (documentPreview?.startsWith("blob:")) URL.revokeObjectURL(documentPreview);
-  }, [documentPreview]);
-
   const selectClient = (client: ClientRecord) => {
     setSelectedClientIds((current) => {
       if (current.includes(client.client_id)) {
@@ -852,14 +746,6 @@ export function CaseWorkflow({
     setStep(1);
   };
 
-  const continueFromMethod = () => {
-    if (!method) {
-      toast.error("Select an encoding method before continuing.");
-      return;
-    }
-    setStep(hasLockedSelection ? 1 : 2);
-  };
-
   const continueFromDetails = async () => {
     const valid = await trigger();
     if (!valid) {
@@ -873,91 +759,6 @@ export function CaseWorkflow({
   };
 
   const continueToReview = () => setStep(reviewStep);
-
-  const applyExtractedPayload = (payload: CaseOcrPayload) => {
-    caseOcrFields.forEach((path) => {
-      const current = getValues(path);
-      const extracted = getPayloadValue(payload, path);
-      const isEmpty =
-        current === "" ||
-        current === false ||
-        current === undefined ||
-        current === null;
-      const canOverwriteDefault = overwriteDefaultOcrFields.has(path);
-
-      if (
-        (isEmpty || canOverwriteDefault || replaceExistingWithOcr) &&
-        extracted !== undefined &&
-        extracted !== null &&
-        extracted !== ""
-      ) {
-        setValue(path, extracted as never, {
-          shouldDirty: true,
-          shouldValidate: true,
-        });
-      }
-    });
-  };
-
-  const runOcr = async (file: File, preview: string, label: string) => {
-    const request = startExtraction("Extracting case fields...");
-    if (!request) {
-      if (preview.startsWith("blob:")) URL.revokeObjectURL(preview);
-      return;
-    }
-    setDocumentPreview(preview);
-    setDocumentLabel(label);
-    const { toastId } = request;
-
-    try {
-      const result = await extractCaseFromDocument(file, {
-        extractionMode: extractionEngine,
-        signal: request.controller.signal,
-      });
-      if (!isCurrentExtraction(request)) return;
-      setIndicators(result.indicators);
-      applyExtractedPayload(result.extracted);
-      addNotification({
-        type: "ocr_completed",
-        userId: user?.user_id,
-        message: result.needsReview ? "OCR extraction needs review" : "OCR extraction completed",
-        entityType: "ocr",
-        entityId: label,
-      });
-      if (result.needsReview) {
-        const message = result.documentType === "unknown" || result.documentType === "ambiguous"
-          ? "Identify the document type and verify fields before saving."
-          : "OCR extraction needs review. Verify fields before saving.";
-        toast(message, { id: toastId });
-      } else {
-        toast.success("OCR extraction completed", { id: toastId });
-      }
-    } catch (error) {
-      if (!isCurrentExtraction(request)) return;
-      toast.error(error instanceof Error ? error.message : "OCR failed", {
-        id: toastId,
-      });
-    } finally {
-      finishExtraction(request);
-    }
-  };
-
-  const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    try {
-      const file = event.target.files?.[0];
-      event.target.value = "";
-      if (!file || isExtracting) return;
-
-      if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type)) {
-        toast.error("Please upload a JPG, PNG, WEBP, or PDF document.");
-        return;
-      }
-
-      await runOcr(file, file.type === "application/pdf" ? "" : URL.createObjectURL(file), file.name);
-    } catch {
-      toast.error("Upload error");
-    }
-  };
 
   const updateOtherOption = (
     text: string,
@@ -974,6 +775,12 @@ export function CaseWorkflow({
       const normalizedStatus = values.cases.status_of_case === "Terminated"
         ? "Terminated"
         : "Pending";
+      const normalizedDetained = caseType === "Criminal"
+        ? Boolean(
+            values.cases.date_of_confinement.trim() ||
+            values.cases.place_of_detention.trim(),
+          )
+        : Boolean(values.cases.detained);
       const representedParty =
         values.intake_record.applicant_role === "Others"
           ? values.intake_record.applicant_role_other
@@ -1011,11 +818,11 @@ export function CaseWorkflow({
           case_status: normalizedStatus,
           pending_in_court: normalizedStatus === "Pending",
           incident_city: values.cases.incident_city,
-          detained: caseDetained,
-          date_of_confinement: caseDetained
+          detained: normalizedDetained,
+          date_of_confinement: normalizedDetained
             ? values.cases.date_of_confinement
             : "",
-          place_of_detention: caseDetained
+          place_of_detention: normalizedDetained
             ? values.cases.place_of_detention
             : "",
         },
@@ -1147,59 +954,6 @@ export function CaseWorkflow({
           </div>
         )}
 
-        {isMethodStep && (
-          <div className="space-y-5">
-            {selectedClients.length > 0 && (
-              <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
-                <div className="border-b border-[#E5E7EB] px-4 py-3 text-sm font-semibold text-[#2B3642]">
-                  Selected Clients
-                </div>
-                <div className="flex h-44 flex-wrap content-start gap-2 overflow-y-auto p-3">
-                  {selectedClients.map((client) => (
-                    <SelectedClientCard
-                      key={client.client_id}
-                      client={client}
-                      locked={hasLockedSelection}
-                      onView={() => setViewingClient(client)}
-                      onRemove={() => {
-                        removeSelectedClient(client.client_id);
-                        setStep(0);
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <MethodCard
-                value="manual"
-                title="Manual Entry"
-                description="Enter case data manually."
-                icon="fa-keyboard"
-                selected={method === "manual"}
-                onSelect={setMethod}
-              />
-              <MethodCard
-                value="camera"
-                title="Document Camera"
-                description="Capture a page with a connected document camera, then review it before OCR."
-                icon="fa-camera"
-                selected={method === "camera"}
-                onSelect={setMethod}
-              />
-              <MethodCard
-                value="upload"
-                title="Upload Document"
-                description="Upload a case document image."
-                icon="fa-upload"
-                selected={method === "upload"}
-                onSelect={setMethod}
-              />
-            </div>
-          </div>
-        )}
-
         {isCaseFormStep && (
           <div className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 shadow-sm">
@@ -1220,117 +974,231 @@ export function CaseWorkflow({
                       .join(", ")}
                   </p>
                 )}
-                <p className="text-xs text-[#4B5563]">
-                  Method:{" "}
-                  {method === "manual"
-                    ? "Manual Entry"
-                    : method === "camera"
-                      ? "Document Camera"
-                      : "Upload Document"}
-                </p>
+                {caseType === "Criminal" && (
+                  <p className="mt-1 max-w-3xl text-xs leading-5 text-[#4B5563]">
+                    Gender/sex, address, and contact number come from the reviewed Part II client record.
+                  </p>
+                )}
               </div>
             </div>
 
-            {method !== "manual" && (
-              <div className="grid gap-3 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3 text-sm text-[#1E3A8A] md:grid-cols-[minmax(0,1fr)_220px]">
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={replaceExistingWithOcr}
-                    onChange={(event) =>
-                      setReplaceExistingWithOcr(event.target.checked)
-                    }
-                    className="mt-0.5 h-4 w-4 rounded border-[#2F80ED] text-[#2F80ED] focus:ring-[#2F80ED]"
-                  />
-                  <span>
-                    <span className="block font-semibold">
-                      Replace existing fields with scanned values
-                    </span>
-                    <span className="mt-1 block text-[#1E40AF]">
-                      Leave this off to fill only blank fields. Form Date is
-                      always updated from Petsa when the scan finds it.
-                    </span>
-                  </span>
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase text-[#1E3A8A]">
-                    OCR Engine
-                  </span>
-                  <select
-                    value={extractionEngine}
-                    onChange={(event) =>
-                      setExtractionEngine(
-                        event.target.value as ExtractionEngineMode,
-                      )
-                    }
-                    className="mt-1 h-10 w-full rounded-md border border-[#93C5FD] bg-white px-3 text-sm font-semibold text-[#111827] outline-none focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20"
-                  >
-                    {Object.entries(extractionEngineLabels).map(
-                      ([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </label>
-              </div>
-            )}
-
-            {method === "camera" && (
-              <CameraCapture
-                isExtracting={isExtracting}
-                onUsePhoto={(file) => void runOcr(file, URL.createObjectURL(file), file.name)}
-              />
-            )}
-
-            {method === "upload" && (
-              <div className="rounded-lg border border-dashed border-[#E5E7EB] bg-[#F9FAFB] p-4">
-                <label className="block">
-                  <span className="text-sm font-semibold text-[#4B5563]">
-                    Upload case image or PDF
-                  </span>
-                  <input
-                    type="file"
-                    accept=".jpg,.jpeg,.jfif,.png,.webp,.pdf"
-                    disabled={isExtracting}
-                    onChange={handleUpload}
-                    className="mt-3 block w-full text-sm text-[#4B5563] file:mr-4 file:rounded-md file:border-0 file:bg-[#704389] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
-                  />
-                </label>
-              </div>
-            )}
-
-            {isExtracting && <ExtractionProgress elapsedSeconds={elapsedSeconds} onCancel={cancelExtraction} />}
-
-            {hasOcrResult && (
-              <div className="grid gap-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 lg:grid-cols-[220px_1fr]">
-                <div>
-                  {documentPreview ? (
-                    <img
-                      src={documentPreview}
-                      alt="Document preview"
-                      className="max-h-40 w-full rounded-md border border-emerald-200 object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-32 items-center justify-center rounded-md border border-emerald-200 bg-white text-sm font-medium text-emerald-700">
-                      {documentLabel || "PDF document"}
+            {caseType === "Criminal" && (
+              <>
+                <section
+                  data-testid="criminal-inventory-fields"
+                  className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold text-[#1F2937]">
+                        Inventory report fields
+                      </h3>
+                      <p className="mt-1 max-w-3xl text-sm leading-6 text-[#4B5563]">
+                        Fields follow the same order as the Excel inventory report. Values from Part II are shown as read-only until you open the scanned intake editor.
+                      </p>
                     </div>
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-emerald-800">
-                    Review extracted case fields before saving.
-                  </p>
-                  <p className="mt-1 text-sm text-emerald-700">
-                    OCR maps Filipino PAO labels like Petsa, Control No.,
-                    Rehiyon, and request details into the case fields.
-                  </p>
-                </div>
-              </div>
+                    {onClientUpdated && scannedSelectedClients.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {scannedSelectedClients.map((client) => (
+                          <button
+                            key={client.client_id}
+                            type="button"
+                            onClick={() => setEditingClient(client)}
+                            className="min-h-11 rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition hover:bg-[#F7F0FA] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
+                          >
+                            {scannedSelectedClients.length === 1
+                              ? "Edit scanned Parts II and II-A"
+                              : `Edit scan: ${client.client.name}`}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 grid gap-5 md:grid-cols-2">
+                    <TextInput
+                      label="Control Number"
+                      registration={register("intake_record.control_no")}
+                      error={errors.intake_record?.control_no?.message}
+                    />
+
+                    <fieldset className="md:col-span-2">
+                      <legend className="text-sm font-medium text-[#4B5563]">
+                        Party Represented
+                      </legend>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        {applicantRoleOptions.map((role) => (
+                          <label
+                            key={role}
+                            className="flex min-h-11 items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563] focus-within:border-[#704389] focus-within:ring-2 focus-within:ring-[#704389]/20"
+                          >
+                            <input
+                              type="radio"
+                              value={role}
+                              {...register("intake_record.applicant_role")}
+                              className="h-4 w-4 border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                            />
+                            {role}
+                          </label>
+                        ))}
+                      </div>
+                      <FieldError message={errors.intake_record?.applicant_role?.message} />
+                      {applicantRole === "Others" && (
+                        <div className="mt-3 max-w-md">
+                          <TextInput
+                            label="Specify Party Represented"
+                            registration={register("intake_record.applicant_role_other")}
+                            error={errors.intake_record?.applicant_role_other?.message}
+                          />
+                        </div>
+                      )}
+                    </fieldset>
+
+                    <InventorySourceField
+                      label="Gender / Sex"
+                      value={clientSex}
+                      source="From reviewed Part II"
+                    />
+                    <InventorySourceField
+                      label="Title of the Case"
+                      value={generatedCaseTitle(selectedClients, caseType)}
+                      source="Generated from the selected client record"
+                    />
+
+                    <TextInput
+                      label="Court / Body"
+                      registration={register("cases.court_body")}
+                      error={errors.cases?.court_body?.message}
+                    />
+                    <TextInput
+                      label="Case No."
+                      registration={register("cases.case_no")}
+                      error={errors.cases?.case_no?.message}
+                    />
+
+                    <div className="md:col-span-2">
+                      <TextArea
+                        label="Cause of Action"
+                        registration={register("cases.cause_of_action")}
+                        error={errors.cases?.cause_of_action?.message}
+                      />
+                    </div>
+
+                    <label className="block">
+                      <span className="text-sm font-medium text-[#4B5563]">
+                        Status of Case
+                      </span>
+                      <select
+                        {...register("cases.status_of_case")}
+                        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                      >
+                        <option>Pending</option>
+                        <option>Terminated</option>
+                      </select>
+                    </label>
+                    <TextInput
+                      label="Last Action Taken"
+                      registration={register("cases.last_action_taken")}
+                      error={errors.cases?.last_action_taken?.message}
+                    />
+
+                    <TextInput
+                      label="Cause of Termination"
+                      registration={register("cases.cause_of_termination")}
+                    />
+                    <TextInput
+                      label="Date of Termination"
+                      type="date"
+                      registration={register("cases.date_of_termination")}
+                    />
+
+                    <fieldset className="md:col-span-2">
+                      <legend className="text-sm font-medium text-[#4B5563]">
+                        Urban / Rural
+                      </legend>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        {(["Urban", "Rural"] as const).map((option) => (
+                          <label
+                            key={option}
+                            className="flex min-h-11 items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563] focus-within:border-[#704389] focus-within:ring-2 focus-within:ring-[#704389]/20"
+                          >
+                            <input
+                              type="radio"
+                              value={option}
+                              {...register("cases.location_type")}
+                              className="h-4 w-4 border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
+                            />
+                            {option}
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+
+                    <TextInput
+                      label="Date of Confinement"
+                      type="date"
+                      registration={register("cases.date_of_confinement", {
+                        onChange: (event) =>
+                          setValue(
+                            "cases.detained",
+                            Boolean(event.target.value || detentionPlace.trim()),
+                            { shouldDirty: true },
+                          ),
+                      })}
+                      error={errors.cases?.date_of_confinement?.message}
+                    />
+                    <TextInput
+                      label="Place of Detention"
+                      registration={register("cases.place_of_detention", {
+                        onChange: (event) =>
+                          setValue(
+                            "cases.detained",
+                            Boolean(event.target.value.trim() || confinementDate),
+                            { shouldDirty: true },
+                          ),
+                      })}
+                      error={errors.cases?.place_of_detention?.message}
+                    />
+
+                    <TextInput
+                      label="Case Received"
+                      type="date"
+                      registration={register("intake_record.form_date")}
+                      error={errors.intake_record?.form_date?.message}
+                    />
+                    <InventorySourceField
+                      label="Address"
+                      value={clientAddress}
+                      source="From reviewed Part II"
+                    />
+                    <InventorySourceField
+                      label="Contact Number"
+                      value={clientContactNumber}
+                      source="From reviewed Part II"
+                    />
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+                  <h3 className="text-base font-semibold text-[#1F2937]">
+                    Report heading
+                  </h3>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    <TextInput
+                      label="Regional Office"
+                      registration={register("intake_record.region")}
+                    />
+                    <TextInput
+                      label="District Office"
+                      registration={register("intake_record.district_office")}
+                      error={errors.intake_record?.district_office?.message}
+                    />
+                  </div>
+                </section>
+              </>
             )}
 
-            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+            {caseType === "Civil" && <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
               <h3 className="text-base font-semibold text-[#1F2937]">
                 Case Identification
               </h3>
@@ -1339,49 +1207,40 @@ export function CaseWorkflow({
                   label="Control No."
                   registration={register("intake_record.control_no")}
                   error={errors.intake_record?.control_no?.message}
-                  status={indicators["intake_record.control_no"]}
                 />
-                <label className="block">
-                  <span className="text-sm font-medium text-[#4B5563]">
-                    Court/Body
-                    <FieldStatus status={indicators["cases.court_body"]} />
-                  </span>
-                  <select
-                    {...register("cases.court_body")}
-                    className="mt-1 w-full rounded-md border border-[#D1D5DB] px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-                  >
-                    <option value="">Select court/body</option>
-                    {courtBodyOptions.map((option) => (
-                      <option key={option}>{option}</option>
-                    ))}
-                  </select>
-                  <FieldError message={errors.cases?.court_body?.message} />
-                </label>
+                <TextInput
+                  label="Court / Body"
+                  registration={register("cases.court_body")}
+                  error={errors.cases?.court_body?.message}
+                />
                 <TextInput
                   label="Case No."
                   registration={register("cases.case_no")}
                   error={errors.cases?.case_no?.message}
-                  status={indicators["cases.case_no"]}
+                />
+                <TextInput
+                  label="Regional Office"
+                  registration={register("intake_record.region")}
                 />
                 <TextInput
                   label="District Office"
                   registration={register("intake_record.district_office")}
                   error={errors.intake_record?.district_office?.message}
-                  status={indicators["intake_record.district_office"]}
                 />
                 <TextInput
                   label="Form Date"
+                  type="date"
                   registration={register("intake_record.form_date")}
                   error={errors.intake_record?.form_date?.message}
-                  status={indicators["intake_record.form_date"]}
                 />
               </div>
               <div className="mt-3 rounded-md border border-[#E7D7EE] bg-[#F7F0FA] px-3 py-2 text-sm font-semibold text-[#5F3675]">
                 Case title will be generated automatically as{" "}
                 {generatedCaseTitle(selectedClients, caseType)}.
               </div>
-            </section>
+            </section>}
 
+            {caseType === "Civil" && <>
             <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
               <h3 className="text-base font-semibold text-[#1F2937]">
                 Nature of Request
@@ -1460,7 +1319,9 @@ export function CaseWorkflow({
               </div>
               <FieldError message={errors.intake_record?.nature_of_case?.message} />
             </section>
+            </>}
 
+            {caseType === "Civil" && (
             <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
               <h3 className="text-base font-semibold text-[#1F2937]">
                 Applicant Case Involvement (Party Represented)
@@ -1496,7 +1357,9 @@ export function CaseWorkflow({
                 </div>
               )}
             </section>
+            )}
 
+            {caseType === "Civil" && (
             <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
               <h3 className="text-base font-semibold text-[#1F2937]">
                 Case Status
@@ -1505,7 +1368,6 @@ export function CaseWorkflow({
                 <label className="block">
                   <span className="text-sm font-medium text-[#4B5563]">
                     Status of Case
-                    <FieldStatus status={indicators["cases.status_of_case"]} />
                   </span>
                   <select
                     {...register("cases.status_of_case")}
@@ -1526,13 +1388,12 @@ export function CaseWorkflow({
                     {...register("cases.detained")}
                     className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
                   />
-                  Detained
-                  <FieldStatus status={indicators["cases.detained"]} />
+                  Detained / arrested
                 </label>
                 {caseDetained && (
                   <>
                     <TextInput
-                      label="Date of Detention"
+                      label="Date of Confinement / Arrest"
                       type="date"
                       registration={register("cases.date_of_confinement")}
                       error={errors.cases?.date_of_confinement?.message}
@@ -1549,19 +1410,19 @@ export function CaseWorkflow({
                     <TextInput
                       label="Cause of Termination"
                       registration={register("cases.cause_of_termination")}
-                      status={indicators["cases.cause_of_termination"]}
                     />
                     <TextInput
                       label="Date of Termination"
                       type="date"
                       registration={register("cases.date_of_termination")}
-                      status={indicators["cases.date_of_termination"]}
                     />
                   </>
                 )}
               </div>
             </section>
+            )}
 
+            {caseType === "Civil" && <>
             <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -1703,14 +1564,12 @@ export function CaseWorkflow({
                     className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
                   />
                   Will submit proof later
-                  <FieldStatus status={indicators["intake_record.proof_submission_satisfied"]} />
                 </label>
                 <TextInput
                   label="Submission Deadline (optional)"
                   type="date"
                   registration={register("intake_record.proof_submission_deadline")}
                   error={errors.intake_record?.proof_submission_deadline?.message}
-                  status={indicators["intake_record.proof_submission_deadline"]}
                 />
                 <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
                   <input
@@ -1719,14 +1578,12 @@ export function CaseWorkflow({
                     className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
                   />
                   Income Tax Return / proof of income satisfied
-                  <FieldStatus status={indicators["intake_record.proof_itr_satisfied"]} />
                 </label>
                 <TextInput
                   label="ITR Date (optional)"
                   type="date"
                   registration={register("intake_record.proof_itr_date")}
                   error={errors.intake_record?.proof_itr_date?.message}
-                  status={indicators["intake_record.proof_itr_date"]}
                 />
                 <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
                   <input
@@ -1735,14 +1592,12 @@ export function CaseWorkflow({
                     className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
                   />
                   Barangay certification / indigency satisfied
-                  <FieldStatus status={indicators["intake_record.proof_brgy_satisfied"]} />
                 </label>
                 <TextInput
                   label="Barangay Certification Date (optional)"
                   type="date"
                   registration={register("intake_record.proof_brgy_date")}
                   error={errors.intake_record?.proof_brgy_date?.message}
-                  status={indicators["intake_record.proof_brgy_date"]}
                 />
                 <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
                   <input
@@ -1751,14 +1606,12 @@ export function CaseWorkflow({
                     className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
                   />
                   DSWD certification satisfied
-                  <FieldStatus status={indicators["intake_record.proof_dswd_satisfied"]} />
                 </label>
                 <TextInput
                   label="DSWD Certification Date (optional)"
                   type="date"
                   registration={register("intake_record.proof_dswd_date")}
                   error={errors.intake_record?.proof_dswd_date?.message}
-                  status={indicators["intake_record.proof_dswd_date"]}
                 />
                 <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
                   <input
@@ -1767,26 +1620,25 @@ export function CaseWorkflow({
                     className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
                   />
                   Other accepted proof satisfied
-                  <FieldStatus status={indicators["intake_record.proof_others_satisfied"]} />
                 </label>
                 <TextInput
                   label="Other Proof Date (optional)"
                   type="date"
                   registration={register("intake_record.proof_others_date")}
                   error={errors.intake_record?.proof_others_date?.message}
-                  status={indicators["intake_record.proof_others_date"]}
                 />
                 <div className="md:col-span-2">
                   <TextInput
                     label="Other Proof Details"
                     registration={register("intake_record.proof_others_details")}
                     error={errors.intake_record?.proof_others_details?.message}
-                    status={indicators["intake_record.proof_others_details"]}
                   />
                 </div>
               </div>
             </section>
+            </>}
 
+            {caseType === "Civil" && (
             <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
               <h3 className="text-base font-semibold text-[#1F2937]">
                 Case Facts and Cause
@@ -1796,17 +1648,17 @@ export function CaseWorkflow({
                   label="Fact of the Case"
                   registration={register("cases.facts_of_case")}
                   error={errors.cases?.facts_of_case?.message}
-                  status={indicators["cases.facts_of_case"]}
                 />
                 <TextArea
                   label="Cause of Action"
                   registration={register("cases.cause_of_action")}
                   error={errors.cases?.cause_of_action?.message}
-                  status={indicators["cases.cause_of_action"]}
                 />
               </div>
             </section>
+            )}
 
+            {caseType === "Civil" && (
             <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
               <h3 className="text-base font-semibold text-[#1F2937]">
                 Incident Location
@@ -1862,6 +1714,7 @@ export function CaseWorkflow({
                 />
               </div>
             </section>
+            )}
           </div>
         )}
 
@@ -2035,7 +1888,6 @@ export function CaseWorkflow({
         <button
           type="button"
           onClick={() => {
-            if (isCaseFormStep) cancelExtraction();
             setStep((current) => Math.max(current - 1, 0));
           }}
           disabled={step === 0}
@@ -2045,33 +1897,11 @@ export function CaseWorkflow({
         </button>
 
         <div className="flex flex-wrap justify-end gap-2">
-          {isCaseFormStep && (
-            <button
-              type="button"
-              onClick={() => {
-                cancelExtraction();
-                setStep(hasLockedSelection ? 0 : 1);
-              }}
-              className="rounded-md border border-[#704389] bg-white px-4 py-2 text-sm font-semibold text-[#704389] transition duration-200 hover:bg-[#704389] hover:text-white"
-            >
-              Change Method
-            </button>
-          )}
           {!lockedClient && step === 0 && (
             <button
               type="button"
               onClick={continueFromClient}
               className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675]"
-            >
-              Continue
-            </button>
-          )}
-          {isMethodStep && (
-            <button
-              type="button"
-              onClick={continueFromMethod}
-              disabled={!method}
-              className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white shadow-md  transition duration-200 hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Continue
             </button>
@@ -2115,6 +1945,11 @@ export function CaseWorkflow({
       <ClientInformationModal
         client={viewingClient}
         onClose={() => setViewingClient(null)}
+      />
+      <ClientInformationModal
+        client={editingClient}
+        onClose={() => setEditingClient(null)}
+        onSaved={onClientUpdated}
       />
     </form>
   );
