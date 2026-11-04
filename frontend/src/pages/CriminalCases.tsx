@@ -15,7 +15,6 @@ import { StatusBadge } from "../features/criminalCases/components/StatusBadge";
 import { useCriminalCasesStore } from "../features/criminalCases/criminalCasesStore";
 import {
   filterCriminalCaseRows,
-  type CaseTableFilter,
   type CriminalCaseRow,
 } from "../services/exportService";
 import {
@@ -52,14 +51,6 @@ const accordionBorderClass: Record<CaseStatus, string> = {
   Pending: "border-amber-200",
   Terminated: "border-red-200",
 };
-
-const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
-  { value: "all", label: "All Locations" },
-  { value: "urban", label: "Urban" },
-  { value: "rural", label: "Rural" },
-  { value: "male", label: "Male" },
-  { value: "female", label: "Female" },
-];
 
 const religionOptions = [
   "Roman Catholic",
@@ -160,17 +151,6 @@ function UserPlusIcon() {
       <path
         fill="currentColor"
         d="M8 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0 2c3.3 0 6 1.6 6 3.5V17H2v-1.5C2 13.6 4.7 12 8 12Zm7-6h2v3h3v2h-3v3h-2v-3h-3V9h3V6Z"
-      />
-    </svg>
-  );
-}
-
-function SlidersIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path
-        fill="currentColor"
-        d="M3 5h8v2H3V5Zm10-1h2v1h2v2h-2v1h-2V4ZM3 13h2v-1h2v4H5v-1H3v-2Zm6 0h8v2H9v-2Z"
       />
     </svg>
   );
@@ -347,32 +327,6 @@ function TextAreaField({
         className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
       />
     </label>
-  );
-}
-
-function CaseFilterSelect({
-  value,
-  onChange,
-}: {
-  value: CaseTableFilter;
-  onChange: (value: CaseTableFilter) => void;
-}) {
-  return (
-    <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-3 text-[#2B3642]">
-      <SlidersIcon />
-      <select
-        className="h-8 min-w-32 bg-white text-sm font-medium text-[#2B3642] outline-none"
-        value={value}
-        onChange={(event) => onChange(event.target.value as CaseTableFilter)}
-        aria-label="Filter criminal cases"
-      >
-        {filterOptions.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
   );
 }
 
@@ -1676,7 +1630,8 @@ export default function CriminalCasesPage({
   const upsertClient = useCriminalCasesStore((state) => state.upsertClient);
   const upsertCase = useCriminalCasesStore((state) => state.upsertCase);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<CaseTableFilter>("all");
+  const [genderFilter, setGenderFilter] = useState<"All" | "Male" | "Female">("All");
+  const [locationFilter, setLocationFilter] = useState<"All" | "Urban" | "Rural">("All");
   const [courtFilter, setCourtFilter] = useState("All Courts");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
   const [showCaseModal, setShowCaseModal] = useState(false);
@@ -1774,7 +1729,8 @@ export default function CriminalCasesPage({
   const filteredRows = useMemo(() => {
     const baseRows = filterCriminalCaseRows(rows, {
       search,
-      table_filter: filter,
+      gender: genderFilter,
+      location_type: locationFilter,
     });
     return baseRows.filter(({ record }) => {
       const courtMatches =
@@ -1787,7 +1743,7 @@ export default function CriminalCasesPage({
         dateFilter,
       );
     });
-  }, [courtFilter, dateFilter, filter, rows, search]);
+  }, [courtFilter, dateFilter, genderFilter, locationFilter, rows, search]);
 
   const activeClient =
     visibleClients.find((client) => client.client_id === activeClientId) ??
@@ -1847,7 +1803,7 @@ export default function CriminalCasesPage({
         <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#CBD5E1] bg-white p-4 shadow-sm">
           
           {/* 4. Filters Area: shrink-0 preserves its height */}
-          <div className="mb-3 grid min-w-0 shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_170px_165px_165px_auto_auto_auto] xl:items-end">
+          <div className="mb-3 grid min-w-0 shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_170px_165px_165px_165px_auto_auto_auto] xl:items-end">
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
                 Search
@@ -1875,9 +1831,32 @@ export default function CriminalCasesPage({
                 ))}
               </select>
             </label>
-            <div className="pt-5 xl:pt-4">
-              <CaseFilterSelect value={filter} onChange={setFilter} />
-            </div>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Gender</span>
+              <select
+                value={genderFilter}
+                onChange={(event) => setGenderFilter(event.target.value as "All" | "Male" | "Female")}
+                aria-label="Filter by gender"
+                className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              >
+                <option value="All">All Genders</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Location</span>
+              <select
+                value={locationFilter}
+                onChange={(event) => setLocationFilter(event.target.value as "All" | "Urban" | "Rural")}
+                aria-label="Filter by location"
+                className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              >
+                <option value="All">All Locations</option>
+                <option value="Urban">Urban</option>
+                <option value="Rural">Rural</option>
+              </select>
+            </label>
             <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-[#F8FAFC] px-3">
               <span className="font-semibold text-[#4B5563]">Total:</span>
               <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">

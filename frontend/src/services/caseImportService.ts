@@ -85,6 +85,7 @@ export interface CaseImportPreview {
 }
 
 export interface CaseImportResult {
+  case_type: CaseType | null;
   cases_imported: number;
   clients_created: number;
   existing_clients_linked: number;
@@ -305,6 +306,7 @@ export async function importCaseRecords(
     throw new Error("The server returned an unexpected import response. Review the records and retry.");
   }
   return {
+    case_type: result.case_type === "Criminal" || result.case_type === "Civil" ? result.case_type : null,
     cases_imported: asNumber(result.cases_imported),
     clients_created: asNumber(result.clients_created),
     existing_clients_linked: asNumber(result.existing_clients_linked),

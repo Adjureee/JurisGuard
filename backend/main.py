@@ -4697,6 +4697,14 @@ def import_case_records(
     held = max(0, payload.held_case_count)
     failures: list[dict[str, str]] = []
     for entry in payload.cases:
+        entry_case_type = entry.get("case_type")
+        if entry_case_type not in (None, "", payload.case_type):
+            failed += 1
+            failures.append({
+                "control_no": str(entry.get("control_no") or "(missing)"),
+                "reason": "Case classification must match the selected import destination.",
+            })
+            continue
         control_no = str(entry.get("control_no") or "").strip()
         title = str(entry.get("title") or "").strip()
         status_raw = str(entry.get("status") or "").strip()
@@ -4923,6 +4931,7 @@ def import_case_records(
     )
     db.commit()
     return {
+        "case_type": payload.case_type,
         "cases_imported": imported,
         "clients_created": created_clients,
         "existing_clients_linked": linked_clients,

@@ -210,7 +210,6 @@ export default function CaseTransferPage() {
           <div className="flex shrink-0 items-start justify-between gap-4 bg-[#604477] px-5 py-4 text-white sm:px-6">
             <div className="min-w-0">
               <h2 className="text-lg font-bold sm:text-xl">Case Transfer Report</h2>
-              <p className="mt-0.5 text-sm font-semibold text-white/90">Transfer of Cases</p>
               <p className="mt-1 break-words text-sm text-white/85">{selected.title} · {selected.from_user_name} → {selected.to_user_name} · As of {dateText(selected.report_date)}</p>
             </div>
             <button type="button" onClick={() => setModal(null)} aria-label="Close case transfer report" className="shrink-0 text-2xl leading-none text-white/80 hover:text-white">×</button>

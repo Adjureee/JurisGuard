@@ -67,6 +67,13 @@ function recordDate(record: CriminalCaseRecord) {
   return record.intake_record.form_date || record.last_updated;
 }
 
+function normalizeSex(value: string | null | undefined): "Male" | "Female" | null {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "m" || normalized === "male") return "Male";
+  if (normalized === "f" || normalized === "female") return "Female";
+  return null;
+}
+
 export function filterCriminalCaseRows(
   rows: CriminalCaseRow[],
   filters: CriminalCaseRowFilterDto
@@ -76,11 +83,11 @@ export function filterCriminalCaseRows(
   const locationType = filters.location_type ?? "All";
 
   return rows.filter(({ record, clientName, client }) => {
-    const participantSexValues = record.participants?.length
-      ? record.participants.map((participant) => participant.sex)
-      : client
-        ? [client.client.sex]
-        : [];
+    const participantSexValues = new Set(
+      [...(record.participants ?? []).map((participant) => participant.sex), client?.client.sex]
+        .map(normalizeSex)
+        .filter((sex): sex is "Male" | "Female" => sex !== null),
+    );
     const matchesSearch =
       !normalized ||
       [
@@ -99,8 +106,8 @@ export function filterCriminalCaseRows(
       tableFilter === "all" ||
       (tableFilter === "urban" && record.cases.location_type === "Urban") ||
       (tableFilter === "rural" && record.cases.location_type === "Rural") ||
-      (tableFilter === "male" && participantSexValues.includes("Male")) ||
-      (tableFilter === "female" && participantSexValues.includes("Female")) ||
+      (tableFilter === "male" && participantSexValues.has("Male")) ||
+      (tableFilter === "female" && participantSexValues.has("Female")) ||
       (tableFilter === "terminated" && record.cases.status_of_case === "Terminated");
 
     const matchesStatus = status === "All" || record.cases.status_of_case === status;
@@ -114,7 +121,7 @@ export function filterCriminalCaseRows(
     const matchesBarangay = barangay === "All" || (record.cases.incident_barangay ?? "") === barangay;
     const rowCategory = record.cases.cause_of_action || record.intake_record.nature_of_case;
     const matchesCategory = category === "All" || rowCategory === category;
-    const matchesGender = gender === "All" || participantSexValues.includes(gender);
+    const matchesGender = gender === "All" || participantSexValues.has(gender);
     const rowStaff = record.created_by_user_id === null ? "Unassigned" : `User #${record.created_by_user_id}`;
     const matchesStaff = staff === "All" || rowStaff === staff;
     const rowTerminationStatus =

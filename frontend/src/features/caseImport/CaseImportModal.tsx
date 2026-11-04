@@ -28,7 +28,7 @@ interface CaseImportModalProps {
   onImported: () => Promise<void>;
 }
 
-type ModalPhase = "upload" | "extracting" | "review" | "importing" | "complete";
+type ModalPhase = "upload" | "extracting" | "review" | "importing" | "complete" | "failed";
 const REVIEW_PAGE_SIZE = 20;
 
 function formatBytes(bytes: number) {
@@ -212,6 +212,15 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
   const [openCases, setOpenCases] = useState<Set<string>>(() => new Set());
   const [result, setResult] = useState<CaseImportResult | null>(null);
 
+  const importOutcome = result
+    ? result.cases_imported === 0
+      ? "failed"
+      : result.cases_held > 0 || result.duplicate_cases_skipped > 0 || result.failed_records > 0 || result.cases_imported < entries.length
+        ? "partial"
+        : "success"
+    : "failed";
+  const skippedRecords = result ? result.cases_held + result.duplicate_cases_skipped : 0;
+
   const readyEntries = useMemo(
     () => entries.filter((entry) => caseIssues(entry).length === 0),
     [entries],
@@ -324,7 +333,7 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
   };
 
   const importReady = async () => {
-    if (!preview || phase !== "review") return;
+    if (!preview || phase !== "review" || readyEntries.length === 0) return;
     setPhase("importing");
     setError("");
     try {
@@ -332,8 +341,12 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
       const heldCaseCount = entries.filter((entry) => !entry.duplicate && caseIssues(entry).length > 0).length;
       const imported = await importCaseRecords(caseType, preview.source_filename, readyEntries, heldCaseCount, duplicateCaseCount);
       setResult(imported);
+      try {
+        await onImported();
+      } catch {
+        toast.error("Records were imported, but the case list could not be refreshed.");
+      }
       setPhase("complete");
-      void onImported().catch(() => toast.error("Records imported, but the case list could not be refreshed."));
     } catch (cause) {
       const details = cause !== null && typeof cause === "object" ? cause as Record<string, unknown> : {};
       const response = details.response !== null && typeof details.response === "object"
@@ -346,8 +359,8 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
         errorType: cause instanceof Error ? cause.name : typeof cause,
       });
       setError(caseImportErrorMessage(cause, "The import could not be completed. Review the records and retry."));
-      setPhase("review");
-      toast.error("Import failed. No existing records were overwritten.");
+      setPhase("failed");
+      toast.error("Import could not be confirmed. Review the file before trying again.");
     }
   };
 
@@ -359,8 +372,8 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
             <div className="flex min-w-0 items-center gap-3">
               <FileSpreadsheet className="h-6 w-6 shrink-0" aria-hidden="true" />
               <div className="min-w-0">
-                <h2 id="case-import-title" className="text-lg font-bold">{phase === "complete" ? "Import Complete" : "Import Excel Records"}</h2>
-                <p className="mt-0.5 text-sm text-white/85">Destination: {caseType} Cases</p>
+                <h2 id="case-import-title" className="text-lg font-bold">{phase === "complete" ? importOutcome === "success" ? "Import Successful!" : importOutcome === "partial" ? "Import Partially Completed" : "Import Failed" : phase === "failed" ? "Import Failed" : "Import Excel Records"}</h2>
+                <p className="mt-0.5 text-sm text-white/85">Destination: {result ? result.case_type ? `${result.case_type} Cases` : "Unavailable" : `${caseType} Cases`}</p>
               </div>
             </div>
             <button type="button" onClick={onClose} disabled={phase === "importing"} className="rounded-md px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10 disabled:opacity-50">Close</button>
@@ -410,7 +423,7 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
             <>
               <div className="shrink-0 border-b border-[#E5E7EB] px-5 py-4 sm:px-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div><p className="font-semibold text-[#2B3642]">Review extracted records</p><p className="mt-1 text-xs text-[#6B7280]">{preview.source_filename} · {preview.workbook_format} · {preview.rows_processed} populated rows processed</p></div>
+                  <div><p className="font-semibold text-[#2B3642]">Review extracted {caseType.toLowerCase()} cases</p><p className="mt-1 text-xs text-[#6B7280]">Destination: {caseType} Cases · {preview.source_filename} · {preview.workbook_format} · {preview.rows_processed} populated rows processed</p></div>
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[#4B5563]">
                     <span>{entries.length} cases</span>
                     <span>{reviewStats.clientRows} client rows</span>
@@ -433,7 +446,7 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
                 {visibleEntries.map((entry) => {
                   const issues = caseIssues(entry);
                   const casePatch = (patch: Partial<CaseImportReviewCase>) => updateEntry(entry.import_key, patch);
-                  return <details key={entry.import_key} className="overflow-hidden rounded-lg border border-[#D1D5DB] bg-white" open={openCases.has(entry.import_key)} onToggle={(event) => {
+                  return <details key={entry.import_key} className="overflow-hidden rounded-lg border border-[#9CA3AF] bg-white shadow-sm open:border-[#704389]" open={openCases.has(entry.import_key)} onToggle={(event) => {
                     const isOpen = event.currentTarget.open;
                     setOpenCases((current) => {
                       const next = new Set(current);
@@ -506,18 +519,41 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
               </div>
               <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#E5E7EB] px-5 py-4 sm:px-6">
                 <button type="button" onClick={() => { setPhase("upload"); setPreview(null); setEntries([]); setError(""); }} className="h-9 rounded-md border border-[#D1D5DB] px-4 text-sm font-semibold text-[#4B5563]">Back to Upload</button>
-                <div className="flex gap-2"><button type="button" onClick={onClose} className="h-9 rounded-md border border-[#D1D5DB] px-4 text-sm font-semibold text-[#4B5563]">Cancel Import</button><button type="button" disabled={!entries.length} onClick={() => void importReady()} className="inline-flex h-9 items-center gap-2 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="h-4 w-4" />Import {readyEntries.length} Valid Case(s)</button></div>
+                <div className="flex gap-2"><button type="button" onClick={onClose} className="h-9 rounded-md border border-[#D1D5DB] px-4 text-sm font-semibold text-[#4B5563]">Cancel Import</button><button type="button" disabled={!readyEntries.length} onClick={() => void importReady()} className="inline-flex h-9 items-center gap-2 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="h-4 w-4" />Import {readyEntries.length} Valid Case(s)</button></div>
               </footer>
             </>
           )}
 
           {phase === "importing" && <div className="m-auto space-y-3 px-6 py-12 text-center"><LoaderCircle className="mx-auto h-10 w-10 animate-spin text-[#704389]" /><p className="font-semibold text-[#2B3642]">Saving reviewed records…</p><p className="text-sm text-[#6B7280]">Each case and its client links are saved together.</p></div>}
 
-          {phase === "complete" && result && <div className="min-h-0 space-y-5 overflow-y-auto px-5 py-6 sm:px-6">
-            <p className="flex items-center gap-2 text-sm font-semibold text-green-800"><CheckCircle2 className="h-5 w-5" />Import finished for {caseType} Cases.</p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[["Cases imported", result.cases_imported], ["New clients created", result.clients_created], ["Existing clients linked", result.existing_clients_linked], ["Cases held for correction", result.cases_held], ["Possible duplicates skipped", result.duplicate_cases_skipped], ["Failed records", result.failed_records]].map(([label, value]) => <div key={label} className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4"><p className="text-xs font-semibold text-[#6B7280]">{label}</p><p className="mt-1 text-2xl font-bold text-[#2B3642]">{value}</p></div>)}</div>
-            {result.failures.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-900">Held records</p><ul className="mt-2 space-y-1 text-xs text-amber-900">{result.failures.map((failure, index) => <li key={`${failure.control_no}-${index}`}>{failure.control_no}: {failure.reason}</li>)}</ul></div>}
-            <div className="flex justify-end border-t border-[#E5E7EB] pt-4"><button type="button" onClick={onClose} className="h-9 rounded-md bg-[#704389] px-5 text-sm font-semibold text-white hover:bg-[#5F3675]">Close</button></div>
+          {(phase === "complete" || phase === "failed") && <div className="min-h-0 space-y-5 overflow-y-auto px-5 py-6 sm:px-6">
+            <div className={`rounded-xl border p-5 ${importOutcome === "success" ? "border-green-200 bg-green-50" : importOutcome === "partial" ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50"}`}>
+              <div className="flex items-start gap-4">
+                {importOutcome === "success"
+                  ? <CheckCircle2 className="h-12 w-12 shrink-0 text-green-700" aria-hidden="true" />
+                  : <AlertCircle className={`h-12 w-12 shrink-0 ${importOutcome === "partial" ? "text-amber-700" : "text-red-700"}`} aria-hidden="true" />}
+                <div className="min-w-0">
+                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${importOutcome === "success" ? "bg-green-100 text-green-800" : importOutcome === "partial" ? "bg-amber-100 text-amber-900" : "bg-red-100 text-red-800"}`}>
+                    {importOutcome === "success" ? "Completed" : importOutcome === "partial" ? "Partial success" : "Not completed"}
+                  </span>
+                  <h3 className="mt-2 text-xl font-bold text-[#2B3642]">{importOutcome === "success" ? "Import Successful!" : importOutcome === "partial" ? "Import Partially Completed" : "Import Failed"}</h3>
+                  <p className="mt-1 text-sm text-[#4B5563]">{importOutcome === "success" ? "Your records have been successfully imported." : importOutcome === "partial" ? "Some records were imported; others need attention." : error || "No cases were imported. Review the records and try again."}</p>
+                  <p className="mt-2 text-sm font-semibold text-[#2B3642]">Destination: {result?.case_type ? `${result.case_type} Cases` : "Unavailable"}</p>
+                </div>
+              </div>
+            </div>
+            {result && <>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {[["Cases imported", result.cases_imported], ["New clients created", result.clients_created], ["Existing clients linked", result.existing_clients_linked], ["Skipped records", skippedRecords], ["Failed records", result.failed_records]].map(([label, value]) => <div key={label} className="rounded-lg border border-[#E5E7EB] bg-white p-4"><p className="text-xs font-semibold text-[#6B7280]">{label}</p><p className="mt-1 text-2xl font-bold text-[#2B3642]">{value}</p>{label === "Failed records" && result.failed_records > 0 && <p className="mt-1 text-[11px] text-[#6B7280]">Failures may also be included in held records.</p>}</div>)}
+              </div>
+              {result.failures.length > 0 && <div className={`rounded-lg p-4 ${importOutcome === "failed" ? "border border-red-200 bg-red-50" : "border border-amber-200 bg-amber-50"}`}><p className="text-sm font-bold text-[#2B3642]">Records needing attention</p><ul className="mt-2 space-y-1 text-xs text-[#4B5563]">{result.failures.map((failure, index) => <li key={`${failure.control_no}-${index}`}>{failure.control_no}: {failure.reason}</li>)}</ul></div>}
+            </>}
+            <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] pt-4">
+              {importOutcome === "failed"
+                ? <button type="button" onClick={() => { setPhase("upload"); setPreview(null); setEntries([]); setResult(null); setError(""); }} className="h-9 rounded-md border border-[#D1D5DB] px-4 text-sm font-semibold text-[#4B5563]">Review File Again</button>
+                : <button type="button" onClick={onClose} className="h-9 rounded-md bg-[#704389] px-5 text-sm font-semibold text-white hover:bg-[#5F3675]">Done</button>}
+              {importOutcome === "failed" && <button type="button" onClick={onClose} className="h-9 rounded-md bg-[#704389] px-5 text-sm font-semibold text-white hover:bg-[#5F3675]">Close</button>}
+            </div>
           </div>}
         </div>
       </div>
