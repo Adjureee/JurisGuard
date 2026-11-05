@@ -214,7 +214,7 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
       className={sections ? 'max-h-[36dvh] shrink-0 overflow-y-auto border-b px-4 py-2' : 'min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8'}>
       <summary className={sections ? 'cursor-pointer py-2 text-sm font-semibold' : 'hidden'} tabIndex={sections ? 0 : -1} aria-hidden={!sections}>Replace scan or change OCR settings</summary>
       <div className={`space-y-5 ${sections ? 'pb-3' : 'mx-auto w-full max-w-5xl pb-8'}`}>
-      <PaperDocumentSetup disabled={busy || !schema} mode={mode} onModeChange={setMode} onExtract={(file,plan)=>void scan(file,plan)} onPending={setDirty} onStageChange={setSetupStage}/>
+      <PaperDocumentSetup disabled={busy} schemaReady={!!schema} mode={mode} onModeChange={setMode} onExtract={(file,plan)=>void scan(file,plan)} onPending={setDirty} onStageChange={setSetupStage}/>
     </div></details>}
     {extraction.isExtracting && <div role="status" className="flex flex-wrap items-center gap-4 rounded bg-blue-50 p-4 text-sm">Reading the scan… {extraction.elapsedSeconds}s<button type="button" onClick={() => { extraction.cancelExtraction(); setDirty(true); setScanError('OCR stopped. Retry the same scan or choose another.'); }} className="rounded border border-blue-300 bg-white px-4 py-2 font-semibold">Cancel extraction</button></div>}
     {schemaError && <p role="alert" className="text-rose-700">{schemaError}</p>}

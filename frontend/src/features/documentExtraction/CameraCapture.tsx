@@ -4,6 +4,7 @@ import { CameraStartTimeout, encodeJpegFrame, requestCameraStream } from "./came
 type Props = {
   isExtracting: boolean;
   onUsePhoto: (file: File) => void;
+  nextStepLabel?: string;
 };
 type DraftPhoto = { file: File; url: string };
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
@@ -20,7 +21,7 @@ function cameraError(error: unknown): string {
 }
 
 /** Preview a connected camera and submit only a reviewed still image for OCR. */
-export function CameraCapture({ isExtracting, onUsePhoto }: Props) {
+export function CameraCapture({ isExtracting, onUsePhoto, nextStepLabel = "Use photo for OCR" }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const requestRef = useRef(0);
@@ -297,7 +298,7 @@ export function CameraCapture({ isExtracting, onUsePhoto }: Props) {
             </button>
             <button type="button" disabled={!imageReady || isExtracting} onClick={() => onUsePhoto(draft.file)}
               className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-              {isExtracting ? "Extracting..." : "Use photo for OCR"}
+              {isExtracting ? "Extracting..." : nextStepLabel}
             </button>
           </div>
           <p className="text-xs text-[#4B5563]">If any line looks blurred, retake the photo before OCR.</p>

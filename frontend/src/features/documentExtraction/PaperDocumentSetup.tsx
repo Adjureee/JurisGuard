@@ -5,8 +5,8 @@ import { useConfirmation } from '../../components/ConfirmationProvider';
 import { analyzePaperCapture, type PaperCropPlan, type PaperCaptureAnalysis } from '../../services/paperIntakeService';
 
 export type IntakeStage = 'select' | 'crop' | 'extract' | 'review' | 'save';
-export function PaperDocumentSetup({ disabled, mode, onModeChange, onExtract, onPending, onStageChange }: {
-  disabled: boolean; mode: 'auto'|'offline'|'cloud'; onModeChange: (mode:'auto'|'offline'|'cloud')=>void;
+export function PaperDocumentSetup({ disabled, schemaReady, mode, onModeChange, onExtract, onPending, onStageChange }: {
+  disabled: boolean; schemaReady: boolean; mode: 'auto'|'offline'|'cloud'; onModeChange: (mode:'auto'|'offline'|'cloud')=>void;
   onExtract: (file:File, plan?:PaperCropPlan)=>void; onPending: (dirty:boolean)=>void; onStageChange?: (stage:IntakeStage)=>void;
 }) {
   const confirm = useConfirmation();
@@ -56,6 +56,6 @@ export function PaperDocumentSetup({ disabled, mode, onModeChange, onExtract, on
       <label className="flex items-start gap-3 py-3 text-sm leading-6"><input type="checkbox" disabled={geometryDirty} checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} className="mt-1 h-5 w-5 accent-[#704389]"/>I checked the page and both sections, including all fields and checkbox marks. Blank Part II-A is included.</label>
     </section>}
     {error&&<p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4"><p className="text-sm text-slate-600">Review and correct the extracted text before saving.</p><button type="button" disabled={!file||disabled||working||(processing==='section_crops'&&!!analysis&&(!confirmed||!valid||geometryDirty))} className="intake-primary" onClick={()=>{if(!file)return;if(processing==='section_crops'&&!analysis){void analyze();return;}onExtract(file,processing==='section_crops'?{corners,rotation,sections:bounds,document_reviewed:true,sections_reviewed:true}:undefined);}}>{processing==='section_crops'&&!analysis?'Review section crops':'Extract Parts II and II-A'}<ArrowRight size={18} aria-hidden="true"/></button></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4"><p className="text-sm text-slate-600">Review and correct the extracted text before saving.</p><button type="button" disabled={!file||disabled||!schemaReady||working||(processing==='section_crops'&&!!analysis&&(!confirmed||!valid||geometryDirty))} className="intake-primary" onClick={()=>{if(!file)return;if(processing==='section_crops'&&!analysis){void analyze();return;}onExtract(file,processing==='section_crops'?{corners,rotation,sections:bounds,document_reviewed:true,sections_reviewed:true}:undefined);}}>{processing==='section_crops'&&!analysis?'Review section crops':'Extract Parts II and II-A'}<ArrowRight size={18} aria-hidden="true"/></button></div>
   </div>;
 }
