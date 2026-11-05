@@ -3,6 +3,21 @@ import { z } from "zod";
 const requiredText = (label: string) =>
   z.string().trim().min(1, `${label} is required`);
 const optionalText = z.string().trim();
+const isValidIsoDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day;
+};
+const optionalDate = z.string().trim().refine(
+  (value) => value === "" || isValidIsoDate(value),
+  "Enter a valid date",
+);
+const requiredDate = (label: string) => z.string().trim()
+  .min(1, `${label} is required`)
+  .refine(isValidIsoDate, "Enter a valid date");
 const optionalNumber = (label: string) =>
   z.preprocess(
     (value) => {
@@ -97,7 +112,7 @@ export const caseFormSchema = z
     case_type: z.enum(["Criminal", "Civil"]).optional(),
     intake_record: z.object({
       control_no: requiredText("Control number"),
-      form_date: requiredText("Form date"),
+      form_date: requiredDate("Form date"),
       region: optionalText,
       district_office: requiredText("District office"),
       party_represented: optionalText,
@@ -156,14 +171,14 @@ export const caseFormSchema = z
       longitude: optionalText,
       last_action_taken: requiredText("Last action taken"),
       detained: z.boolean().optional(),
-      date_of_confinement: optionalText,
+      date_of_confinement: optionalDate,
       place_of_detention: optionalText,
       location_type: z.enum(["Urban", "Rural", ""]),
       cause_of_action: requiredText("Cause of action"),
       facts_of_case: requiredText("Facts of case"),
       pending_in_court: z.boolean(),
       cause_of_termination: optionalText,
-      date_of_termination: optionalText,
+      date_of_termination: optionalDate,
       assigned_pao: optionalText,
       filing_date: optionalText,
       hearing_schedule: optionalText,

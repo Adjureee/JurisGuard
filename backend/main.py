@@ -3052,12 +3052,15 @@ def create_client(
 ):
     try:
         client_data = payload.client
-        details_data = normalize_representative_details(normalize_spouse_details(payload.client_details))
+        # Keep partially entered representative details intact on creation. The
+        # representative normalizer is still used by the legacy update flow, but
+        # a Civil Status value of "None" must not erase other submitted fields.
+        details_data = normalize_spouse_details(dict(payload.client_details))
         class_data = payload.client_classification
         client = models.Client(
             created_by_user_id=user.user_id,
             name=client_data.get("name") or "Unnamed Client",
-            age=client_data.get("age") or None,
+            age=client_data.get("age"),
             sex=client_data.get("sex") or "",
             civil_status=client_data.get("civil_status") or "",
             religion=client_data.get("religion") or "",
@@ -3079,7 +3082,11 @@ def create_client(
                 address_of_spouse=none_if_not_applicable(details_data.get("address_of_spouse")),
                 contact_no_of_spouse=none_if_not_applicable(details_data.get("contact_no_of_spouse")),
                 representative_name=none_if_not_applicable(details_data.get("representative_name")),
-                representative_age=details_data.get("representative_age") or None,
+                representative_age=(
+                    details_data.get("representative_age")
+                    if details_data.get("representative_age") not in (None, "")
+                    else None
+                ),
                 representative_sex=none_if_not_applicable(details_data.get("representative_sex")),
                 representative_civil_status=none_if_not_applicable(details_data.get("representative_civil_status")),
                 representative_address=none_if_not_applicable(details_data.get("representative_address")),

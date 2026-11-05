@@ -27,10 +27,12 @@ function IntakeSession({ onClose, initialMode }: { onClose: () => void; initialM
   const [phase, setPhase] = useState<'method' | 'manual' | 'scan' | 'saved' | 'case'>(initialMode ?? 'method');
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [viewing, setViewing] = useState<ClientRecord | null>(null);
+  const [successKind, setSuccessKind] = useState<'manual' | 'paper'>('manual');
   const [session, setSession] = useState(0);
   const upsertClient = useCriminalCasesStore(state => state.upsertClient);
   const upsertCase = useCriminalCasesStore(state => state.upsertCase);
   const setStoreClients = useCriminalCasesStore(state => state.setClients);
+  const latestClient = clients.at(-1);
   useEffect(()=>{
     function keyboard(event:KeyboardEvent){
       const overlays=document.querySelectorAll('.jurisguard-modal-overlay');
@@ -54,16 +56,21 @@ function IntakeSession({ onClose, initialMode }: { onClose: () => void; initialM
       {phase==='scan'&&<ol aria-label="Document intake stages" className="flex shrink-0 flex-wrap gap-x-4 gap-y-2 border-b bg-slate-50 px-5 py-3 text-xs sm:text-sm">{(['Select document','Review crop (optional)','Extract','Review details','Save'] as const).map((label,i)=>{const active=['select','crop','extract','review','save'].indexOf(stage)===i;return <li key={label} aria-current={active?'step':undefined} className={`flex items-center gap-2 ${active?'font-semibold text-[#704389]':'text-slate-600'}`}><span>{label}</span>{i<4&&<ArrowRight size={12} aria-hidden="true"/>}</li>;})}</ol>}
       <div className={`min-h-0 flex-1 ${phase === 'scan' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
         {phase === 'method' && <div className="space-y-5 p-6"><h3 className="text-lg font-semibold">Choose an intake method</h3><button type="button" onClick={() => setPhase('scan')} className="flex min-h-24 w-full items-center gap-4 rounded-xl border border-[#704389] bg-[#FAF7FC] p-5 text-left hover:bg-[#F2E9F7]"><FileScan className="shrink-0 text-[#704389]" size={26} aria-hidden="true"/><span className="flex-1"><span className="block font-semibold text-slate-900">Use a PAO interview sheet</span><span className="mt-1 block text-sm leading-6 text-slate-600">Upload or scan the paper, then review Parts II and II-A.</span></span><ArrowRight size={18} aria-hidden="true"/></button><button type="button" onClick={() => setPhase('manual')} className="flex min-h-24 w-full items-center gap-4 rounded-xl border border-slate-300 p-5 text-left hover:bg-slate-50"><Keyboard size={26} aria-hidden="true" className="shrink-0 text-slate-600"/><span className="flex-1"><span className="block font-semibold text-slate-900">Manual entry</span><span className="mt-1 block text-sm leading-6 text-slate-600">Create a client record without a scanned document.</span></span><ArrowRight size={18} aria-hidden="true"/></button></div>}
-        {phase === 'manual' && <ManualClientCreation key={session} onDirtyChange={setDirty} onSaved={client => { setDirty(false); upsertClient(client); setClients(current => [...current, client]); setPhase('saved'); }} />}
+        {phase === 'manual' && <ManualClientCreation key={session} onDirtyChange={setDirty} onSaved={client => { setDirty(false); upsertClient(client); setClients(current => [...current, client]); setSuccessKind('manual'); setPhase('saved'); }} />}
         {phase === 'scan' && <PaperIntakeReview key={session} onStageChange={setStage} onDirtyChange={setDirty} onSaved={client => {
-          setDirty(false); upsertClient(client); setClients(current => [...current, client]); setPhase('saved');
+          setDirty(false); upsertClient(client); setClients(current => [...current, client]); setSuccessKind('paper'); setPhase('saved');
         }} />}
-        {phase === 'saved' && <div className="space-y-4 p-5"><p role="status" className="font-semibold text-emerald-800">{clients.at(-1)?.paper_intake ? 'Reviewed intake saved with its original scan.' : 'Client created manually.'}</p>
-          {clients.map(client => <button type="button" key={client.client_id} onClick={() => setViewing(client)} className="block w-full rounded border p-3 text-left">{client.client.name || 'Applicant name left blank'} — {client.paper_intake ? 'View reviewed record' : 'View client record'}</button>)}
-          <div className="flex flex-wrap gap-3"><button type="button" onClick={() => { setSession(current => current + 1); setPhase('method'); }} className="rounded border px-4 py-2">Add another client</button>
-            <button type="button" onClick={() => setPhase('case')} className="rounded bg-[#704389] px-4 py-2 text-white">Continue to Case Details</button>
-            <button type="button" onClick={onClose} className="rounded border px-4 py-2">Done</button></div></div>}
-        {phase === 'case' && clients.length > 0 && <CaseWorkflow clients={[]} lockedClient={clients[0]} lockedClients={clients} submitLabel="Save Case" onClientUpdated={updated => {
+        {phase === 'saved' && <div className="flex h-full flex-col p-5"><div className="flex-1 space-y-4">
+          <p role="status" className="font-semibold text-emerald-800">{successKind === 'manual' ? 'Client created manually.' : 'Reviewed intake saved with its original scan.'}</p>
+          {latestClient && <button type="button" onClick={() => setViewing(latestClient)} className="block w-full rounded border p-3 text-left font-semibold text-[#704389] underline underline-offset-2">
+            {latestClient.client.name} — View client record
+          </button>}
+        </div><div className="grid gap-2 border-t border-[#E5E7EB] pt-4 sm:grid-cols-[1fr_auto_1fr]">
+          <button type="button" onClick={() => { setDirty(false); setSession(current => current + 1); setStage('select'); setPhase(successKind === 'manual' ? 'manual' : 'method'); }} className="intake-secondary sm:justify-self-start">Add another client</button>
+          <button type="button" onClick={() => setPhase('case')} className="intake-primary sm:col-start-2 sm:row-start-1">Continue to Case Details</button>
+          <button type="button" onClick={onClose} className="intake-secondary sm:col-start-3 sm:row-start-1 sm:justify-self-end">Done</button>
+        </div></div>}
+        {phase === 'case' && latestClient && <CaseWorkflow clients={[]} lockedClient={latestClient} lockedClients={[latestClient]} submitLabel="Save Case" onClientUpdated={updated => {
           upsertClient(updated);
           setClients(current => current.map(client => client.client_id === updated.client_id ? updated : client));
         }} onSubmit={async values => {
