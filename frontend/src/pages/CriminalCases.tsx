@@ -1,21 +1,21 @@
 import { useConfirmation } from "../components/ConfirmationProvider";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { FileUp } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import MainLayout from "../layouts/MainLayout";
 import DateFilterSelect from "../components/DateFilterSelect";
 import PageHeader from "../components/PageHeader";
 import AddCaseModal from "../components/modals/AddCaseModal";
 import AddClientModal from "../components/modals/AddClientModal";
+import { PaperIntakeReview } from '../features/documentExtraction/PaperIntakeReview';
 import ExportCsvModal from "../components/modals/ExportCsvModal";
-import CaseImportModal from "../features/caseImport/CaseImportModal";
 import ModalPortal from "../components/modals/ModalPortal";
 import { StatusBadge } from "../features/criminalCases/components/StatusBadge";
 import { useCriminalCasesStore } from "../features/criminalCases/criminalCasesStore";
 import {
   filterCriminalCaseRows,
+  type CaseTableFilter,
   type CriminalCaseRow,
 } from "../services/exportService";
 import {
@@ -43,16 +43,19 @@ import {
   matchesDateFilter,
   type DateFilterValue,
 } from "../utils/dateFilters";
-import {
-  isContactNumberPasteAllowed,
-  sanitizeContactNumberInput,
-} from "../utils/contactNumber";
-import { panaboBarangays, ruralBarangays, urbanBarangays } from "../features/criminalCases/locationOptions";
 
 const accordionBorderClass: Record<CaseStatus, string> = {
   Pending: "border-amber-200",
   Terminated: "border-red-200",
 };
+
+const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
+  { value: "all", label: "All Locations" },
+  { value: "urban", label: "Urban" },
+  { value: "rural", label: "Rural" },
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+];
 
 const religionOptions = [
   "Roman Catholic",
@@ -63,6 +66,54 @@ const religionOptions = [
   "Indigenous Belief",
   "None",
 ];
+
+const urbanBarangays = [
+  "Cagangohan",
+  "Datu Abdul Dadia",
+  "Gredu (Poblacion)",
+  "J.P. Laurel",
+  "New Pandan (Poblacion)",
+  "New Visayas",
+  "Quezon",
+  "San Francisco (Poblacion)",
+  "San Vicente",
+  "Salvacion",
+  "Santo Nino (Poblacion)",
+];
+
+const ruralBarangays = [
+  "A. O. Floirendo",
+  "Buenavista",
+  "Cacao",
+  "Consolacion",
+  "Dapco",
+  "Kasilak",
+  "Katipunan",
+  "Katualan",
+  "Kauswagan",
+  "Kiotoy",
+  "Little Panay",
+  "Lower Panaga (Roxas)",
+  "Mabunao",
+  "Maduao",
+  "Malativas",
+  "Manay",
+  "Nanyo",
+  "New Malaga (Dalisay)",
+  "New Malitbog",
+  "San Nicolas",
+  "San Pedro",
+  "San Roque",
+  "Santa Cruz",
+  "Sindaton",
+  "Southern Davao",
+  "Tagpore",
+  "Tibungol",
+  "Upper Licanan",
+  "Waterfall",
+];
+
+const panaboBarangays = [...urbanBarangays, ...ruralBarangays];
 
 const courtBodyOptions = [
   "RTC Branch 4",
@@ -110,6 +161,17 @@ function UserPlusIcon() {
   );
 }
 
+function SlidersIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
+      <path
+        fill="currentColor"
+        d="M3 5h8v2H3V5Zm10-1h2v1h2v2h-2v1h-2V4ZM3 13h2v-1h2v4H5v-1H3v-2Zm6 0h8v2H9v-2Z"
+      />
+    </svg>
+  );
+}
+
 function EyeIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
@@ -137,7 +199,7 @@ function InfoTile({ label, value }: { label: string; value: string | number }) {
 function toClientFormValues(client: ClientRecord): ClientFormValues {
   return {
     client: { ...client.client },
-    client_details: { ...client.client_details },
+    client_details: { ...client.client_details, detained: client.client_details.detained ?? undefined },
     client_classification: { ...client.client_classification },
   };
 }
@@ -200,13 +262,6 @@ function participantNames(record: CriminalCaseRecord, fallbackClient?: ClientRec
     .filter(Boolean);
 }
 
-function participantPartyRole(participant: CaseParticipant) {
-  if (participant.applicant_role === "Others") {
-    return participant.applicant_role_other || participant.party_represented;
-  }
-  return participant.applicant_role || participant.party_represented;
-}
-
 function participantSexes(record: CriminalCaseRecord, fallbackClient?: ClientRecord) {
   return caseParticipants(record, fallbackClient)
     .map((participant) => participant.sex)
@@ -225,20 +280,12 @@ function TextField({
   onChange,
   type = "text",
   list,
-  maxLength,
-  inputMode,
-  onInput,
-  onPaste,
 }: {
   label: string;
   value: string | number;
   onChange: (value: string) => void;
   type?: string;
   list?: string;
-  maxLength?: number;
-  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
-  onInput?: React.FormEventHandler<HTMLInputElement>;
-  onPaste?: React.ClipboardEventHandler<HTMLInputElement>;
 }) {
   return (
     <label className="block">
@@ -248,10 +295,6 @@ function TextField({
       <input
         type={type}
         list={list}
-        maxLength={maxLength}
-        inputMode={inputMode}
-        onInput={onInput}
-        onPaste={onPaste}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
@@ -284,6 +327,32 @@ function TextAreaField({
   );
 }
 
+function CaseFilterSelect({
+  value,
+  onChange,
+}: {
+  value: CaseTableFilter;
+  onChange: (value: CaseTableFilter) => void;
+}) {
+  return (
+    <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-3 text-[#2B3642]">
+      <SlidersIcon />
+      <select
+        className="h-8 min-w-32 bg-white text-sm font-medium text-[#2B3642] outline-none"
+        value={value}
+        onChange={(event) => onChange(event.target.value as CaseTableFilter)}
+        aria-label="Filter criminal cases"
+      >
+        {filterOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function CaseAccordion({
   record,
   fallbackClient,
@@ -300,7 +369,7 @@ function CaseAccordion({
 }) {
   const participants = caseParticipants(record, fallbackClient);
   const isMultiParty = participants.length > 1;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(isMultiParty);
 
   return (
     <div
@@ -511,6 +580,23 @@ function CaseAccordion({
 }
 
 function UpdateClientInfoModal({
+  client, onClose, onSaved,
+}: { client: ClientRecord; onClose: () => void; onSaved: (client: ClientRecord) => void }) {
+  const confirm = useConfirmation();
+  const [dirty, setDirty] = useState(false);
+  async function closeReview() {
+    if (dirty && !await confirm({ title: 'Discard unsaved corrections?', message: 'Cancel to keep reviewing your corrections.', confirmLabel: 'Discard corrections' })) return;
+    onClose();
+  }
+  if (!client.paper_intake) return <LegacyUpdateClientInfoModal client={client} onClose={onClose} onSaved={onSaved} />;
+  return <ModalPortal><div className="jurisguard-modal-overlay bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Review PAO intake">
+    <div className="flex h-[95dvh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white"><div className="flex shrink-0 items-center justify-between border-b p-4">
+      <h2 className="font-semibold">Review PAO Parts II and II-A</h2><button type="button" onClick={() => void closeReview()} className="min-h-11 rounded border px-3 py-2">Close</button></div>
+      <PaperIntakeReview key={client.client_id} onDirtyChange={setDirty} saved={client.paper_intake} clientId={client.client_id} onSaved={updated => { onSaved(updated); onClose(); }} />
+    </div></div></ModalPortal>;
+}
+
+function LegacyUpdateClientInfoModal({
   client,
   onClose,
   onSaved,
@@ -629,32 +715,8 @@ function UpdateClientInfoModal({
             </datalist>
             <TextField
               label="Contact"
-              type="tel"
-              inputMode="numeric"
-              maxLength={11}
               value={values.client_details.contact_no}
-              onChange={(value) =>
-                updateDetails("contact_no", sanitizeContactNumberInput(value))
-              }
-              onInput={(event) => {
-                const input = event.currentTarget;
-                const sanitized = sanitizeContactNumberInput(input.value);
-                if (input.value !== sanitized) {
-                  input.value = sanitized;
-                  updateDetails("contact_no", sanitized);
-                }
-              }}
-              onPaste={(event) => {
-                if (
-                  !isContactNumberPasteAllowed(
-                    event.currentTarget,
-                    event.clipboardData.getData("text"),
-                  )
-                ) {
-                  event.preventDefault();
-                  toast.error("Enter up to 11 digits using numbers only.");
-                }
-              }}
+              onChange={(value) => updateDetails("contact_no", value)}
             />
             <TextField
               label="Email"
@@ -1586,15 +1648,36 @@ export default function CriminalCasesPage({
   const upsertClient = useCriminalCasesStore((state) => state.upsertClient);
   const upsertCase = useCriminalCasesStore((state) => state.upsertCase);
   const [search, setSearch] = useState("");
-  const [genderFilter, setGenderFilter] = useState<"All" | "Male" | "Female">("All");
-  const [locationFilter, setLocationFilter] = useState<"All" | "Urban" | "Rural">("All");
+  const [filter, setFilter] = useState<CaseTableFilter>("all");
   const [courtFilter, setCourtFilter] = useState("All Courts");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
   const [showCaseModal, setShowCaseModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
+  const [dashboardIntakeMode, setDashboardIntakeMode] = useState<'manual' | 'scan' | undefined>();
   const [showExportModal, setShowExportModal] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
+  const [dashboardParams, setDashboardParams] = useSearchParams();
+  useEffect(() => {
+    const action = dashboardParams.get('action');
+    if (action === 'intake' || action === 'client') {
+      setDashboardIntakeMode(action === 'intake' ? 'scan' : 'manual');
+      setShowClientModal(true);
+    }
+    if (action === 'case') setShowCaseModal(true);
+    const clientId = dashboardParams.get('client');
+    const caseId = dashboardParams.get('case');
+    if (clientId && clients.some(client => client.client_id === clientId)) setActiveClientId(clientId);
+    if (caseId) {
+      const record = cases.find(record => record.case_id === caseId);
+      if (record) setActiveClientId(record.client_id); else return;
+    }
+    if (clientId && !clients.some(client => client.client_id === clientId)) return;
+    if (action || clientId || caseId) {
+      const next = new URLSearchParams(dashboardParams);
+      next.delete('action'); next.delete('client'); next.delete('case');
+      setDashboardParams(next, { replace: true });
+    }
+  }, [dashboardParams, setDashboardParams, clients, cases]);
   const [actionMode, setActionMode] = useState<"view" | "update">("view");
 
   useEffect(() => {
@@ -1685,8 +1768,7 @@ export default function CriminalCasesPage({
   const filteredRows = useMemo(() => {
     const baseRows = filterCriminalCaseRows(rows, {
       search,
-      gender: genderFilter,
-      location_type: locationFilter,
+      table_filter: filter,
     });
     return baseRows.filter(({ record }) => {
       const courtMatches =
@@ -1699,7 +1781,7 @@ export default function CriminalCasesPage({
         dateFilter,
       );
     });
-  }, [courtFilter, dateFilter, genderFilter, locationFilter, rows, search]);
+  }, [courtFilter, dateFilter, filter, rows, search]);
 
   const activeClient =
     visibleClients.find((client) => client.client_id === activeClientId) ??
@@ -1759,7 +1841,7 @@ export default function CriminalCasesPage({
         <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#CBD5E1] bg-white p-4 shadow-sm">
           
           {/* 4. Filters Area: shrink-0 preserves its height */}
-          <div className="mb-3 grid min-w-0 shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_170px_165px_165px_165px_auto_auto_auto] xl:items-end">
+          <div className="mb-3 grid min-w-0 shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_170px_165px_165px_auto_auto] xl:items-end">
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
                 Search
@@ -1787,46 +1869,15 @@ export default function CriminalCasesPage({
                 ))}
               </select>
             </label>
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Gender</span>
-              <select
-                value={genderFilter}
-                onChange={(event) => setGenderFilter(event.target.value as "All" | "Male" | "Female")}
-                aria-label="Filter by gender"
-                className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-              >
-                <option value="All">All Genders</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Location</span>
-              <select
-                value={locationFilter}
-                onChange={(event) => setLocationFilter(event.target.value as "All" | "Urban" | "Rural")}
-                aria-label="Filter by location"
-                className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-              >
-                <option value="All">All Locations</option>
-                <option value="Urban">Urban</option>
-                <option value="Rural">Rural</option>
-              </select>
-            </label>
+            <div className="pt-5 xl:pt-4">
+              <CaseFilterSelect value={filter} onChange={setFilter} />
+            </div>
             <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-[#F8FAFC] px-3">
               <span className="font-semibold text-[#4B5563]">Total:</span>
               <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
                 {filteredRows.length}
               </span>
             </div>
-            {user?.role === "admin" && <button
-              type="button"
-              onClick={() => setShowImportModal(true)}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
-            >
-              <FileUp className="h-4 w-4" aria-hidden="true" />
-              Import Excel
-            </button>}
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
@@ -1862,9 +1913,7 @@ export default function CriminalCasesPage({
                   </tr>
                 ) : (
                   filteredRows.map(({ record, client }) => {
-                    const partyRoles = caseParticipants(record, client)
-                      .map(participantPartyRole)
-                      .filter(Boolean);
+                    const names = participantNames(record, client);
                     const sexes = participantSexes(record, client);
                     return (
                     <tr
@@ -1876,7 +1925,7 @@ export default function CriminalCasesPage({
                       </td>
                       <td className="px-3 py-4 text-[#4B5563]">
                         <div className="space-y-1">
-                          {partyRoles.length ? partyRoles.map((role, index) => <div key={`${role}-${index}`}>{role}</div>) : "-"}
+                          {names.length ? names.map((name) => <div key={name}>{name}</div>) : "-"}
                         </div>
                       </td>
                       <td className="px-3 py-4 text-[#4B5563]">
@@ -1925,7 +1974,8 @@ export default function CriminalCasesPage({
       {/* Modals */}
       <AddClientModal
         isOpen={showClientModal}
-        onClose={() => setShowClientModal(false)}
+        initialMode={dashboardIntakeMode}
+        onClose={() => { setShowClientModal(false); setDashboardIntakeMode(undefined); }}
       />
       <AddCaseModal
         isOpen={showCaseModal}
@@ -1938,19 +1988,6 @@ export default function CriminalCasesPage({
         caseType={caseType}
         onClose={() => setShowExportModal(false)}
       />
-      {user?.role === "admin" && showImportModal && <CaseImportModal
-        caseType={caseType}
-        existingClients={visibleClients}
-        onClose={() => setShowImportModal(false)}
-        onImported={async () => {
-          const [clientRows, caseRows] = await Promise.all([
-            listClientRecords(),
-            listCaseRecords(caseType),
-          ]);
-          setClients(clientRows);
-          setCases(caseRows);
-        }}
-      />}
       <ClientRecordModal
         mode={actionMode}
         caseType={caseType}

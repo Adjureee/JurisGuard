@@ -1,0 +1,9 @@
+.dashboard-workspace :is(a, button, input, select):focus-visible {
+  outline: 3px solid #704389;
+  outline-offset: 3px;
+}
+.dashboard-workspace { accent-color: #704389; caret-color: #704389; }
+.dashboard-workspace ::selection { background: #e7d7ee; color: #172534; }
+.dashboard-text-link { display: inline-flex; min-height: 44px; align-items: center; gap: 8px; color: #704389; font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
+.dashboard-text-link:hover { color: #522b68; }
+.dashboard-workspace button:disabled { opacity: .65; cursor: wait; }

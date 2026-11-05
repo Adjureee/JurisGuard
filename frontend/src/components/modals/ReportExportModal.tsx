@@ -32,6 +32,7 @@ interface ReportExportModalProps {
   rows: ReportExportRow[];
   scope: "admin" | "staff";
   redirectTo?: string;
+  periodLocked?: boolean;
   onClose: () => void;
 }
 
@@ -133,6 +134,7 @@ export default function ReportExportModal({
   rows,
   scope,
   redirectTo = "/analytics",
+  periodLocked = false,
   onClose,
 }: ReportExportModalProps) {
   const { user } = useAuth();
@@ -145,7 +147,9 @@ export default function ReportExportModal({
     []
   );
 
-  const filteredRows = useMemo(() => rows.filter((row) => matchesFilter(row, filters)), [filters, rows]);
+  const filteredRows = useMemo(() => rows.filter((row) => matchesFilter(row, periodLocked
+    ? { ...filters, dateFrom: "", dateTo: "", month: "All", year: "All" }
+    : filters)), [filters, rows, periodLocked]);
   const options = useMemo(() => {
     const dates = dateOptionValues(rows);
     return {
@@ -287,6 +291,7 @@ export default function ReportExportModal({
               <p className="mt-1 text-xs font-medium text-[#6B7280]">Filter first, then export the matching report rows.</p>
             </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {!periodLocked && <>
             <label className="block">
               <span className={labelClass}>Date From</span>
               <input type="date" value={filters.dateFrom} onChange={(event) => updateFilter("dateFrom", event.target.value)} className={selectClass} />
@@ -295,6 +300,7 @@ export default function ReportExportModal({
               <span className={labelClass}>Date To</span>
               <input type="date" value={filters.dateTo} onChange={(event) => updateFilter("dateTo", event.target.value)} className={selectClass} />
             </label>
+            </>}
             <label className="block">
               <span className={labelClass}>Case Status</span>
               <select value={filters.caseStatus} onChange={(event) => updateFilter("caseStatus", event.target.value)} className={selectClass}>
@@ -316,6 +322,7 @@ export default function ReportExportModal({
                 {options.categories.map((option) => <option key={option}>{option}</option>)}
               </select>
             </label>
+            {!periodLocked && <>
             <label className="block">
               <span className={labelClass}>Month</span>
               <select value={filters.month} onChange={(event) => updateFilter("month", event.target.value)} className={selectClass}>
@@ -330,6 +337,7 @@ export default function ReportExportModal({
                 {options.years.map((option) => <option key={option}>{option}</option>)}
               </select>
             </label>
+            </>}
             <label className="block">
               <span className={labelClass}>Staff</span>
               <select value={filters.staff} onChange={(event) => updateFilter("staff", event.target.value)} className={selectClass}>

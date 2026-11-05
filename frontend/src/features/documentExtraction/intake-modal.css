@@ -1,0 +1,12 @@
+.intake-modal { color:#172534; }
+.intake-modal :is(button,input,select,textarea,a):focus-visible { outline:3px solid #704389; outline-offset:3px; }
+.intake-modal ::selection { background:#e7d7ee; color:#172534; }
+.intake-modal :is(button,input,select) { caret-color:#704389; }
+.intake-primary,.intake-secondary { display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600; }
+.intake-primary { background:#704389;color:white; }
+.intake-primary:hover { background:#5f3675; }
+.intake-secondary { border:1px solid #cbd5e1;background:white;color:#334155; }
+.intake-secondary:hover { background:#f8fafc; }
+.intake-link { min-height:44px;padding:8px 0;font-size:14px;text-decoration:underline;text-underline-offset:4px;color:#704389; }
+.intake-modal button:disabled { opacity:.5;cursor:not-allowed; }
+.paper-setup input[type=range] { min-height:44px; }

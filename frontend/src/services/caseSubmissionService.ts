@@ -74,7 +74,7 @@ export async function previewCaseSubmission(payload: Pick<CaseSubmissionPayload,
 }
 
 export async function listCaseSubmissions() {
-  const response = await apiClient.get<CaseSubmission[]>("/case-submissions");
+  const response = await apiClient.get<CaseSubmission[]>("/case-submissions", { timeout: 20000 });
   return response.data;
 }
 

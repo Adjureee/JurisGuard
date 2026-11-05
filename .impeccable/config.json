@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "createdAt": "2026-11-04T12:36:38.599Z",
+        "reason": "Agent decided: Arial is intentional for the PAO inventory spreadsheet export and conventional office-report compatibility."
+      }
+    ]
+  }
+}

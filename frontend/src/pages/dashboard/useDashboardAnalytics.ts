@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   getBarangayStats,
   getCaseCategories,
   getDashboardOverview,
   getHeatmap,
-  getOfficeHotspots,
   getIntakeLoadAnalytics,
   getMonthlyTrends,
   getOcrAnalytics,
@@ -68,7 +68,6 @@ export const emptyOcrAnalytics: OcrAnalytics = {
   successful_extractions: 0,
   failed_scans: 0,
   document_types: [],
-    status_breakdown: [],
   trends: [],
   recent: [],
 };
@@ -152,16 +151,14 @@ function safeOcrAnalytics(value: unknown): OcrAnalytics {
         : 0,
     failed_scans: typeof candidate.failed_scans === "number" && Number.isFinite(candidate.failed_scans) ? candidate.failed_scans : 0,
     document_types: safeArray<OcrAnalytics["document_types"][number]>(candidate.document_types),
-    status_breakdown: safeArray<OcrAnalytics["status_breakdown"][number]>(candidate.status_breakdown),
     trends: safeArray<OcrAnalytics["trends"][number]>(candidate.trends),
     recent: safeArray<OcrAnalytics["recent"][number]>(candidate.recent),
   };
 }
 
-function analyticsCacheKey(deep: boolean, dateRange?: DashboardDateRange, heatmapScope: "personal" | "office" | "none" = "personal") {
+function analyticsCacheKey(deep: boolean, dateRange?: DashboardDateRange) {
   return JSON.stringify({
     deep,
-    heatmapScope,
     dateFrom: dateRange?.dateFrom ?? "",
     dateTo: dateRange?.dateTo ?? "",
   });
@@ -181,8 +178,11 @@ function emptySnapshot(): DashboardAnalyticsSnapshot {
   };
 }
 
-export function useDashboardAnalytics({ deep = true, dateRange, heatmapScope = "personal" }: { deep?: boolean; dateRange?: DashboardDateRange; heatmapScope?: "personal" | "office" | "none" } = {}) {
-  const cacheKey = analyticsCacheKey(deep, dateRange, heatmapScope);
+export function useDashboardAnalytics({ deep = true, dateRange }: { deep?: boolean; dateRange?: DashboardDateRange } = {}) {
+  const { user } = useAuth();
+  const cacheKey = `${user?.user_id ?? "anonymous"}:${analyticsCacheKey(deep, dateRange)}`;
+  const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
   const initialSnapshot = analyticsCache.get(cacheKey) ?? emptySnapshot();
   const [overview, setOverview] = useState<DashboardOverview | null>(initialSnapshot.overview);
   const [monthlyTrends, setMonthlyTrends] = useState<MonthlyTrend[]>(initialSnapshot.monthlyTrends);
@@ -210,7 +210,8 @@ export function useDashboardAnalytics({ deep = true, dateRange, heatmapScope = "
         setIntakeLoad(cachedSnapshot.intakeLoad);
         setOcrAnalytics(cachedSnapshot.ocrAnalytics);
       }
-      setIsLoading(!cachedSnapshot);
+      setIsLoading(true);
+      setError(null);
       if (!deep) {
         const results = await Promise.allSettled([
           getDashboardOverview(),
@@ -250,15 +251,18 @@ export function useDashboardAnalytics({ deep = true, dateRange, heatmapScope = "
       const results = await Promise.allSettled([
         getDashboardOverview(dateRange),
         getMonthlyTrends(dateRange),
-        getCaseCategories(),
-        getBarangayStats(),
-        heatmapScope === "office" ? getOfficeHotspots() : heatmapScope === "none" ? Promise.resolve(null) : getHeatmap(),
+        getCaseCategories(dateRange),
+        getBarangayStats(dateRange),
+        getHeatmap(dateRange),
         getTerminatedCaseStats(dateRange),
         getRecentActivities(),
         getIntakeLoadAnalytics(dateRange),
-        getOcrAnalytics(),
+        getOcrAnalytics(dateRange),
       ]);
       if (cancelled) return;
+      if (results.some((result) => result.status === "rejected")) {
+        setError("Some analytics could not be loaded. Retry to retrieve the complete report.");
+      }
       const [
         overviewResult,
         monthlyResult,
@@ -297,10 +301,12 @@ export function useDashboardAnalytics({ deep = true, dateRange, heatmapScope = "
     return () => {
       cancelled = true;
     };
-  }, [cacheKey, dateRange, deep, heatmapScope]);
+  }, [cacheKey, dateRange, deep, revision]);
 
   return {
     activities,
+    error,
+    retry: () => setRevision((value) => value + 1),
     barangays,
     caseCategories,
     heatmap,

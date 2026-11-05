@@ -4,12 +4,13 @@ import {
   MapContainer,
   Marker,
   Popup,
-  Rectangle,
   TileLayer,
   Tooltip,
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
+import OfflineBoundaries from "./OfflineBoundaries";
+import ClientAddressMap from "./ClientAddressMap";
 import "leaflet/dist/leaflet.css";
 import "leaflet.heat";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
@@ -51,7 +52,7 @@ interface CaseMapPoint {
   weight: number;
 }
 
-interface GeoAnalyticsMapProps {
+export interface GeoAnalyticsMapProps {
   cases?: RawGeoCase[];
   center?: { lat: number; lng: number };
   points?: HeatmapPoint[];
@@ -59,7 +60,6 @@ interface GeoAnalyticsMapProps {
   selectedBarangay?: string | null;
   onSelectBarangay?: (barangay: string) => void;
   tileLayerUrl?: string;
-  aggregateOnly?: boolean;
 }
 
 const PANABO_REFERENCE_POINTS = Object.entries(PANABO_COORDINATES).map(
@@ -87,6 +87,10 @@ const STATUS_STYLE: Record<
   },
 };
 
+export default function GeoAnalyticsMap(props: GeoAnalyticsMapProps) {
+  return props.cases?.length ? <LegacyGeoAnalyticsMap {...props} /> : <ClientAddressMap {...props} />;
+}
+
 function statusStyle(status: CaseStatus) {
   return STATUS_STYLE[String(status).trim().toLowerCase()] ?? STATUS_STYLE.pending;
 }
@@ -95,7 +99,7 @@ function getTileLayerConfig(explicitUrl?: string) {
   const configuredUrl = explicitUrl || import.meta.env.VITE_LEAFLET_TILE_URL;
   // Tiles are optional: case markers and heatmap still work without a basemap.
   // Never contact a remote tile server unless an operator explicitly configures it.
-  if (!configuredUrl) return null;
+  if (!configuredUrl || !configuredUrl.startsWith("/") || configuredUrl.startsWith("//")) return null;
   const attribution = import.meta.env.VITE_LEAFLET_TILE_ATTRIBUTION || "Configured map tiles";
   return { attribution, url: configuredUrl };
 }
@@ -206,7 +210,7 @@ function FitMapToContent({
         ...barangays.map((barangay) => [barangay.latitude, barangay.longitude] as [number, number]),
       ];
       map.fitBounds(
-        coordinates.length > 0 ? L.latLngBounds(coordinates).pad(0.2) : PANABO_REFERENCE_BOUNDS,
+        coordinates.length > 0 ? L.latLngBounds(coordinates).pad(0.2) : L.latLngBounds([[4.5, 116.8], [21.2, 126.8]]),
         { padding: [24, 24], maxZoom: coordinates.length > 0 ? 13 : 11 },
       );
     });
@@ -264,7 +268,7 @@ function heatmapPointToCaseMapPoint(point: HeatmapPoint): CaseMapPoint | null {
   };
 }
 
-export default function GeoAnalyticsMap({
+function LegacyGeoAnalyticsMap({
   cases,
   center,
   points = [],
@@ -272,7 +276,6 @@ export default function GeoAnalyticsMap({
   selectedBarangay = null,
   onSelectBarangay,
   tileLayerUrl,
-  aggregateOnly = false,
 }: GeoAnalyticsMapProps) {
   const [tileLoadFailed, setTileLoadFailed] = useState(false);
   const enrichedCases = useMemo(
@@ -328,42 +331,40 @@ export default function GeoAnalyticsMap({
     [mappedPoints, selectedBarangay],
   );
 
-  const tileLayer = getTileLayerConfig(tileLayerUrl);
+  const tileLayer = getTileLayerConfig(tileLayerUrl?.startsWith("/") ? tileLayerUrl : undefined);
   const hasMappedCases = visiblePoints.length > 0 || mappedBarangays.length > 0;
 
   return (
     <div className="relative z-0 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E7EB] bg-[#604477] px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3">
         <div>
-          <p className="text-sm font-semibold text-white">
-            PAO Case Distribution
+          <p className="text-sm font-semibold text-[#2B3642]">
+            Client Address Hotspots
           </p>
-          <p className="text-xs text-[#F0EAF4]">
-            Local barangay geocoding, no external geocoding API required
+          <p className="text-xs text-[#6B7280]">
+            Unique client profiles grouped by recorded address; approximate barangay reference locations
           </p>
         </div>
-        {!aggregateOnly && (
-          <div className="flex gap-2 text-xs font-semibold">
-            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 ring-1 ring-amber-200">
-              Pending
-            </span>
-            <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700 ring-1 ring-red-200">
-              Terminated
-            </span>
-          </div>
-        )}
+        <div className="flex gap-2 text-xs font-semibold">
+          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 ring-1 ring-amber-200">
+            Clients
+          </span>
+          <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700 ring-1 ring-red-200">
+            Address density
+          </span>
+        </div>
       </div>
 
       {(!tileLayer || tileLoadFailed) && (
         <p className="border-b border-[#E5E7EB] bg-amber-50 px-4 py-2 text-xs text-amber-800">
           {tileLoadFailed
-            ? "The configured map tiles could not be loaded. The local Panabo reference layer remains available."
-            : "Offline map: the local Panabo barangay reference layer is active. Configure local tiles for road and boundary detail."}
+            ? "Local map tiles could not be loaded. Recorded client address groups remain available."
+            : "Offline city/municipality boundaries: geoBoundaries / OCHA (CC BY 3.0 IGO). Select an address to inspect its city; boundaries do not locate individual homes."}
         </p>
       )}
       {!hasMappedCases && (
         <p className="border-b border-[#DBEAFE] bg-blue-50 px-4 py-2 text-xs text-blue-800">
-          No mapped case records yet. Showing barangay reference locations without case counts.
+          These client addresses have no verified offline coordinates yet. Their recorded addresses remain listed; no map location has been guessed.
         </p>
       )}
       <div className="relative z-0 h-[460px] min-h-[360px] bg-slate-100">
@@ -374,6 +375,7 @@ export default function GeoAnalyticsMap({
           className="z-0 h-full w-full"
         >
           <ResizeMapWhenReady />
+          <OfflineBoundaries address={selectedBarangay} />
           <FitMapToContent points={visiblePoints} barangays={mappedBarangays} />
           {tileLayer && (
             <TileLayer
@@ -387,35 +389,10 @@ export default function GeoAnalyticsMap({
               }}
             />
           )}
-          {!tileLayer || tileLoadFailed ? (
-            <Rectangle
-              bounds={PANABO_REFERENCE_BOUNDS}
-              pathOptions={{ color: "#94A3B8", weight: 1, dashArray: "5 6", fillColor: "#F8FAFC", fillOpacity: 0.55 }}
-            />
-          ) : null}
-          <HeatLayer points={visiblePoints} />
+<HeatLayer points={visiblePoints} />
           <FocusBarangay barangay={selectedBarangay} stats={mappedBarangays} />
 
-          {!hasMappedCases && PANABO_REFERENCE_POINTS.map((point) => (
-            <CircleMarker
-              key={`reference-${point.barangay}`}
-              center={[point.lat, point.lng]}
-              radius={3}
-              pathOptions={{ color: "#64748B", fillColor: "#CBD5E1", fillOpacity: 0.9, weight: 1 }}
-            >
-              <Tooltip direction="top" opacity={0.95}>{point.barangay}</Tooltip>
-            </CircleMarker>
-          ))}
 
-          {!hasMappedCases && (
-            <CircleMarker
-              center={[PANABO_CITY_HALL_COORDINATES.lat, PANABO_CITY_HALL_COORDINATES.lng]}
-              radius={6}
-              pathOptions={{ color: "#1D4ED8", fillColor: "#60A5FA", fillOpacity: 1, weight: 2 }}
-            >
-              <Tooltip direction="top" permanent opacity={0.95}>Panabo City reference center</Tooltip>
-            </CircleMarker>
-          )}
 
           {mappedBarangays.map((barangay) => (
             <Marker
@@ -449,7 +426,7 @@ export default function GeoAnalyticsMap({
                         {barangay.active_cases}
                       </p>
                       <p className="text-[10px] uppercase text-[#2563EB]">
-                        Pending
+                        Clients
                       </p>
                     </div>
                     <div className="rounded-md bg-[#FEE2E2] p-2">
@@ -457,24 +434,22 @@ export default function GeoAnalyticsMap({
                         {barangay.terminated_cases}
                       </p>
                       <p className="text-[10px] uppercase text-[#991B1B]">
-                        Closed
+                        Not classified
                       </p>
                     </div>
                   </div>
-                  {!aggregateOnly && (
-                    <p className="mt-3 text-xs text-[#4B5563]">
-                      Common type:{" "}
-                      <span className="font-semibold">
-                        {barangay.most_common_category}
-                      </span>
-                    </p>
-                  )}
+                  <p className="mt-3 text-xs text-[#4B5563]">
+                    Common type:{" "}
+                    <span className="font-semibold">
+                      {barangay.most_common_category}
+                    </span>
+                  </p>
                 </div>
               </Popup>
             </Marker>
           ))}
 
-          {!aggregateOnly && visiblePoints.slice(0, 250).map((point) => {
+          {visiblePoints.slice(0, 250).map((point) => {
             const style = statusStyle(point.caseStatus);
 
             return (
