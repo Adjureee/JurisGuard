@@ -112,6 +112,18 @@ export interface Representative {
   rep_address: string;
   rep_contact_no: string;
   relationship_to_applicant: string;
+  rep_email?: string;
+}
+
+export interface CaseParticipantRepresentative {
+  rep_name: string;
+  rep_age: number;
+  rep_sex: string;
+  civil_status: string;
+  rep_address: string;
+  rep_contact_no: string;
+  relationship_to_applicant: string;
+  rep_email: string;
 }
 
 export interface AdverseParty {
@@ -130,6 +142,7 @@ export interface CaseParticipant {
   applicant_role: string;
   applicant_role_other: string;
   relationship_to_applicant?: string;
+  representative?: CaseParticipantRepresentative;
   address: string;
   contact_no: string;
   classification?: Partial<ClientClassification>;

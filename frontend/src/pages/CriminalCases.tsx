@@ -204,11 +204,58 @@ function toClientFormValues(client: ClientRecord): ClientFormValues {
   };
 }
 
+const caseRepresentativeCivilStatuses = [
+  "Single", "Married", "Widowed", "Separated", "Annulled", "Divorced", "None",
+] as const;
+
+function caseRepresentativeSex(value?: string): "" | "Male" | "Female" {
+  return value === "Male" || value === "Female" ? value : "";
+}
+
+function caseRepresentativeCivilStatus(
+  value?: string,
+): (typeof caseRepresentativeCivilStatuses)[number] | "" {
+  return caseRepresentativeCivilStatuses.includes(value as (typeof caseRepresentativeCivilStatuses)[number])
+    ? value as (typeof caseRepresentativeCivilStatuses)[number]
+    : "";
+}
+
 function toCaseFormValues(record: CriminalCaseRecord): CaseFormValues {
+  const clientRepresentatives = record.participants?.length
+    ? record.participants.map((participant) => ({
+        client_id: participant.client_id,
+        representative: {
+          rep_name: participant.representative?.rep_name ?? "",
+          rep_age: participant.representative?.rep_age ?? 0,
+          rep_sex: caseRepresentativeSex(participant.representative?.rep_sex),
+          civil_status: caseRepresentativeCivilStatus(participant.representative?.civil_status),
+          rep_address: participant.representative?.rep_address ?? "",
+          rep_contact_no: participant.representative?.rep_contact_no ?? "",
+          relationship_to_applicant: participant.representative?.relationship_to_applicant ?? "",
+          rep_email: participant.representative?.rep_email ?? "",
+        },
+      }))
+    : [{
+        client_id: record.client_id,
+        representative: {
+          rep_name: record.representative.rep_name,
+          rep_age: record.representative.rep_age,
+          rep_sex: caseRepresentativeSex(record.representative.rep_sex),
+          civil_status: caseRepresentativeCivilStatus(record.representative.civil_status),
+          rep_address: record.representative.rep_address,
+          rep_contact_no: record.representative.rep_contact_no,
+          relationship_to_applicant: record.representative.relationship_to_applicant,
+          rep_email: record.representative.rep_email ?? "",
+        },
+      }];
   return {
     client_id: record.client_id,
+    client_representatives: clientRepresentatives,
     intake_record: { ...record.intake_record },
-    representative: { ...record.representative },
+    representative: {
+      ...record.representative,
+      rep_email: record.representative.rep_email ?? "",
+    },
     adverse_party: { ...record.adverse_party },
     cases: {
       ...record.cases,

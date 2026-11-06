@@ -1,5 +1,4 @@
 import { z } from "zod";
-import paoLogo from "../assets/pao-logo.jpg?inline";
 import type {
   CaseParticipant,
   ClientClassification,
@@ -205,16 +204,6 @@ function classificationForExport(
   };
 }
 
-interface ExportParticipantRow {
-  partyRepresented: string;
-  sex: string | undefined;
-  age: number | undefined;
-  address: string | undefined;
-  contactNo: string | undefined;
-  relationshipToApplicant: string | undefined;
-  classification: Partial<ClientClassification> | undefined;
-}
-
 function partyRole(applicantRole: string, applicantRoleOther: string, fallback: string) {
   return applicantRole === "Others"
     ? applicantRoleOther || fallback
@@ -237,66 +226,9 @@ function intakeInvolvement(record: CriminalCaseRecord) {
   );
 }
 
-function exportParticipantRows(
-  record: CriminalCaseRecord,
-  client?: ClientRecord,
-): ExportParticipantRow[] {
-  if ((record.participants?.length ?? 0) > 1) {
-    return (record.participants ?? []).map((participant) => ({
-      partyRepresented: participantInvolvement(participant),
-      sex: participant.sex,
-      age: participant.age,
-      address: participant.address,
-      contactNo: participant.contact_no,
-      relationshipToApplicant: participant.relationship_to_applicant,
-      classification: classificationForExport(
-        record.cases.location_type,
-        participant.classification,
-      ),
-    }));
-  }
-
-  return [
-    {
-      partyRepresented: record.participants?.[0]
-        ? participantInvolvement(record.participants[0])
-        : intakeInvolvement(record),
-      sex: client?.client.sex,
-      age: client?.client.age,
-      address: client?.client_details.address,
-      contactNo: client?.client_details.contact_no,
-      relationshipToApplicant:
-        client?.client_details.representative_relationship ||
-        record.representative.relationship_to_applicant,
-      classification: classificationForExport(
-        record.cases.location_type,
-        client?.client_classification,
-      ),
-    },
-  ];
-}
-
-function participantValues(
-  record: CriminalCaseRecord,
-  participant: ExportParticipantRow,
-) {
-  return [
-    participant.partyRepresented,
-    participant.sex,
-    participant.age,
-    boolFlag(participant.classification?.flag_urban),
-    boolFlag(participant.classification?.flag_rural),
-    boolFlag(participant.classification?.flag_drugs),
-    reviewedFlagCell(participant.classification?.flag_female),
-    reviewedFlagCell(participant.classification?.flag_senior),
-    reviewedFlagCell(participant.classification?.flag_cicl),
-    participant.address,
-    participant.contactNo,
-    participant.relationshipToApplicant ||
-      ((record.participants?.length ?? 0) > 1
-        ? ""
-        : record.representative.relationship_to_applicant),
-  ];
+function primaryParticipant(record: CriminalCaseRecord) {
+  return record.participants?.find((participant) => participant.client_id === record.client_id)
+    ?? record.participants?.[0];
 }
 
 export function buildCriminalCasesCsv(
@@ -365,137 +297,74 @@ function htmlCell(value: string | number | undefined | null) {
 export function buildCriminalCasesExcelHtml(
   rows: CriminalCaseRow[],
   filters: CriminalCaseExportFilterDto,
-  includeAdditionalFields = true,
 ) {
   const parsedFilters = criminalCaseExportFilterSchema.parse(filters);
   const filteredRows = filterCriminalCaseRows(rows, parsedFilters);
-  // Match the supplied inventory report, including its item-number column.
-  const inventoryColumns = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-    ...(includeAdditionalFields ? [11, 12, 13, 18, 19, 20, 21, 22, 23] : [])];
-  const headers = ["Item No.", ...inventoryColumns.map((index) => PAO_INVENTORY_HEADERS[index])];
-  const widths = [48, 150, 130, 85, 230, 110, 130, 220, 130, 200, 190, 130,
-    ...(includeAdditionalFields ? [65, 65, 65, 140, 200, 140, 250, 150, 180] : [])];
-  let itemNumber = 0;
-  const participantRows = filteredRows.flatMap(({ record, client }) =>
-    exportParticipantRows(record, client).map((participant) => ({
-      record,
-      participant,
-    })),
-  );
-  const totalCases = new Set(
-    filteredRows.map(
-      ({ record }) => record.intake_record.control_no || record.case_id,
-    ),
-  ).size;
-  const totals = participantRows.reduce(
-    (current, { participant }) => ({
-      urban:
-        current.urban + boolFlag(participant.classification?.flag_urban),
-      rural:
-        current.rural + boolFlag(participant.classification?.flag_rural),
-      drugs:
-        current.drugs + boolFlag(participant.classification?.flag_drugs),
-      female:
-        current.female + boolFlag(participant.classification?.flag_female),
-      senior:
-        current.senior + boolFlag(participant.classification?.flag_senior),
-      cicl:
-        current.cicl + boolFlag(participant.classification?.flag_cicl),
-    }),
-    { urban: 0, rural: 0, drugs: 0, female: 0, senior: 0, cicl: 0 },
-  );
-  const body = filteredRows
-    .map(({ record, client }) => {
-      const participants = exportParticipantRows(record, client);
-      const rowSpan = participants.length > 1 ? ` rowspan="${participants.length}"` : "";
-      const sharedValues = [
-        record.intake_record.control_no,
-        record.cases.title_of_case,
-        record.cases.court_body,
-        record.cases.case_no,
-        record.cases.cause_of_action,
-        record.cases.status_of_case,
-        record.cases.last_action_taken,
-        record.cases.cause_of_termination,
-        record.cases.date_of_termination,
-        record.cases.date_of_confinement,
-        record.cases.place_of_detention,
-        record.intake_record.form_date,
-      ];
-      return participants
-        .map((participant, index) => {
-          const participantData = participantValues(record, participant);
-          const cells = [
-            index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[0])}</td>` : "",
-            `<td>${htmlCell(participantData[0])}</td>`,
-            `<td>${htmlCell(participantData[1])}</td>`,
-            index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[1])}</td>` : "",
-            index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[2])}</td>` : "",
-            index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[3])}</td>` : "",
-            index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[4])}</td>` : "",
-            index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[5])}</td>` : "",
-            index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[6])}</td>` : "",
-            index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[7])}</td>` : "",
-            index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[8])}</td>` : "",
-            `<td>${htmlCell(participantData[2])}</td>`,
-            `<td>${htmlCell(participantData[3])}</td>`,
-            `<td>${htmlCell(participantData[4])}</td>`,
-            `<td>${htmlCell(participantData[5])}</td>`,
-            `<td>${htmlCell(participantData[6])}</td>`,
-            `<td>${htmlCell(participantData[7])}</td>`,
-            `<td>${htmlCell(participantData[8])}</td>`,
-            index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[9])}</td>` : "",
-            index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[10])}</td>` : "",
-            index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[11])}</td>` : "",
-            `<td>${htmlCell(participantData[9])}</td>`,
-            `<td>${htmlCell(participantData[10])}</td>`,
-            `<td>${htmlCell(participantData[11])}</td>`,
-          ];
-          return `<tr>${index === 0 ? `<td${rowSpan}>${++itemNumber}</td>` : ""}${inventoryColumns.map((column) => cells[column]).join("")}</tr>`;
-        })
-        .join("");
-    })
-    .join("");
-  const totalValues = [
-    `TOTAL CASES: ${totalCases}`,
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    totals.urban,
-    totals.rural,
-    totals.drugs,
-    totals.female,
-    totals.senior,
-    totals.cicl,
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-  ];
-  const totalRow = `<tr class="total"><td></td>${inventoryColumns.map((column) => `<td>${htmlCell(totalValues[column])}</td>`).join("")}</tr>`;
-
-  const titles = [
-    "Republika ng Pilipinas", "Kagawaran ng Katarungan",
-    "TANGGAPAN NG MANANANGGOL PAMBAYAN", "(PUBLIC ATTORNEY'S OFFICE)",
-    officeHeading(filteredRows, "region"), officeHeading(filteredRows, "district_office"),
-    "", "YEAR-END INVENTORY OF CASES", `As of ${formatAsOfDate()}`,
-  ].map((title, index) => {
-    const logoCell = index === 0
-      ? `<td colspan="3" rowspan="6" style="border:0;text-align:center;vertical-align:middle"><img src="${paoLogo}" alt="Public Attorney's Office seal" width="110" height="110" /></td>`
-      : "";
-    const span = index < 6 ? headers.length - 3 : headers.length;
-    return `<tr>${logoCell}<td colspan="${span}" class="title${index === 7 ? " report-title" : ""}">${htmlCell(title)}</td></tr>`;
+  const widths = [150, 150, 100, 240, 140, 120, 200, 140, 220, 200, 130, 70,
+    70, 70, 70, 70, 70, 70, 140, 200, 130, 260, 150, 200];
+  const classificationTotals = { urban: 0, rural: 0, drugs: 0, female: 0, senior: 0, cicl: 0 };
+  const body = filteredRows.map(({ record, client }) => {
+    const participant = primaryParticipant(record);
+    const classification = classificationForExport(
+      record.cases.location_type,
+      participant?.classification ?? client?.client_classification,
+    );
+    const values = [
+      record.intake_record.control_no,
+      participant ? participantInvolvement(participant) : intakeInvolvement(record),
+      participant?.sex || client?.client.sex,
+      record.cases.title_of_case,
+      record.cases.court_body,
+      record.cases.case_no,
+      record.cases.cause_of_action,
+      record.cases.status_of_case,
+      record.cases.last_action_taken,
+      record.cases.cause_of_termination,
+      record.cases.date_of_termination,
+      participant?.age ?? client?.client.age,
+      boolFlag(classification.flag_urban),
+      boolFlag(classification.flag_rural),
+      boolFlag(classification.flag_drugs),
+      reviewedFlagCell(classification.flag_female),
+      reviewedFlagCell(classification.flag_senior),
+      reviewedFlagCell(classification.flag_cicl),
+      record.cases.date_of_confinement,
+      record.cases.place_of_detention,
+      record.intake_record.form_date,
+      participant?.address || client?.client_details.address,
+      participant?.contact_no || client?.client_details.contact_no,
+      participant?.relationship_to_applicant ||
+        participant?.representative?.relationship_to_applicant ||
+        client?.client_details.representative_relationship ||
+        record.representative.relationship_to_applicant,
+    ];
+    classificationTotals.urban += boolFlag(classification.flag_urban);
+    classificationTotals.rural += boolFlag(classification.flag_rural);
+    classificationTotals.drugs += boolFlag(classification.flag_drugs);
+    classificationTotals.female += classification.flag_female === true ? 1 : 0;
+    classificationTotals.senior += classification.flag_senior === true ? 1 : 0;
+    classificationTotals.cicl += classification.flag_cicl === true ? 1 : 0;
+    return `<tr>${values.map((value) => `<td>${htmlCell(value)}</td>`).join("")}</tr>`;
   }).join("");
+  const totalValues = [
+    `TOTAL CASES: ${filteredRows.length}`, "", "", "", "", "", "", "", "", "", "", "",
+    classificationTotals.urban, classificationTotals.rural, classificationTotals.drugs,
+    classificationTotals.female, classificationTotals.senior, classificationTotals.cicl,
+    "", "", "", "", "", "",
+  ];
+  const titles = [
+    "REPUBLIKA NG PILIPINAS",
+    "KAGAWARAN NG KATARUNGAN",
+    "TANGGAPAN NG MANANANGGOL PAMBAYAN",
+    "(PUBLIC ATTORNEY'S OFFICE)",
+    "Panabo City Public Attorney's Office",
+    "YEAR-END INVENTORY OF CASES",
+    `As of ${formatAsOfDate()}`,
+  ].map((title, index) =>
+    `<tr><td colspan="${PAO_INVENTORY_HEADERS.length}" class="title${index === 5 ? " report-title" : ""}">${htmlCell(title)}</td></tr>`,
+  ).join("");
+  const header = `<tr>${PAO_INVENTORY_HEADERS.map((name) => `<th>${htmlCell(name)}</th>`).join("")}</tr>`;
+  const totalRow = `<tr class="total">${totalValues.map((value) => `<td>${htmlCell(value)}</td>`).join("")}</tr>`;
 
   return `<!doctype html><html><head><meta charset="utf-8" /><style>
     @page{size:landscape}body{font-family:Arial,sans-serif;color:#000}
@@ -505,7 +374,7 @@ export function buildCriminalCasesExcelHtml(
     .title{text-align:center;font-weight:bold;border:0;height:22px}
     .report-title{background:#D9E8FC;border:1px solid #8AAFE0}
     .total td{font-weight:bold}td{mso-number-format:"\\@"}
-</style></head><body><table><colgroup>${widths.map((width) => `<col width="${width}" style="width:${width}px" />`).join("")}</colgroup><tbody>${titles}<tr><td colspan="${headers.length}" style="border:0;height:28px">${filteredRows[0]?.record.case_type === "Civil" ? "B. CIVIL" : "A. CRIMINAL"}</td></tr><tr>${headers.map((header, index) => `<th width="${widths[index]}" style="width:${widths[index]}px">${htmlCell(header)}</th>`).join("")}</tr>${body}${totalRow}</tbody></table></body></html>`;
+</style></head><body><table><colgroup>${widths.map((width) => `<col width="${width}" style="width:${width}px" />`).join("")}</colgroup><tbody>${titles}<tr class="spacer"><td colspan="${PAO_INVENTORY_HEADERS.length}"></td></tr>${header}${body}${totalRow}</tbody></table></body></html>`;
 }
 
 export async function downloadInventoryWorkbook(filename: string, html: string) {
@@ -517,19 +386,22 @@ export async function downloadInventoryWorkbook(filename: string, html: string) 
   const reportDocument = new DOMParser().parseFromString(html, "text/html");
   const columnWidths = Array.from(reportDocument.querySelectorAll("colgroup col"));
   const columnCount = columnWidths.length;
+  const headers = Array.from(reportDocument.querySelectorAll("tr th")).map((cell) => cell.textContent?.trim() ?? "");
+  const dateColumns = new Set(["DATE OF TERMINATION", "DATE OF CONFINEMENT", "CASE RECEIVED"]);
+  const classificationColumns = new Set(["URBAN", "RURAL", "DRUGS", "FEMALE", "SENIOR", "CICL"]);
   sheet.columns = columnWidths.map((col) => ({ width: Math.max(7, Number(col.getAttribute("width")) / 7) }));
   const rows = Array.from(reportDocument.querySelectorAll("table > tbody > tr"));
   const occupied = new Set<string>();
   rows.forEach((row, rowIndex) => {
     const r = rowIndex + 1;
     // Full-width headings keep the report centered independently of the seal.
-    if (rowIndex < 9) {
+    if (rowIndex < 7) {
       sheet.mergeCells(r, 1, r, columnCount);
       const cell = sheet.getCell(r, 1);
       cell.value = row.querySelector(".title")?.textContent ?? "";
-      cell.font = { name: "Arial", size: 11, bold: rowIndex === 3 || rowIndex === 7 };
+      cell.font = { name: "Arial", size: rowIndex === 5 ? 12 : 11, bold: true };
       cell.alignment = { horizontal: "center", vertical: "middle" };
-      sheet.getRow(r).height = 20;
+      sheet.getRow(r).height = rowIndex === 5 ? 24 : 20;
       return;
     }
     let column = 1;
@@ -538,21 +410,34 @@ export async function downloadInventoryWorkbook(filename: string, html: string) 
       const colspan = Number(element.getAttribute("colspan") || 1);
       const rowspan = Number(element.getAttribute("rowspan") || 1);
       const cell = sheet.getCell(r, column);
-      cell.value = element.textContent ?? "";
-      cell.numFmt = "@";
+      const value = element.textContent?.trim() ?? "";
+      const header = headers[column - 1];
+      if (dateColumns.has(header) && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const [, year, month, day] = value.match(/^(\d{4})-(\d{2})-(\d{2})$/) ?? [];
+        cell.value = new Date(Number(year), Number(month) - 1, Number(day));
+        cell.numFmt = "dd-mmm-yyyy";
+      } else if ((header === "AGE" || classificationColumns.has(header)) && value !== "" && /^\d+$/.test(value)) {
+        cell.value = Number(value);
+        cell.numFmt = "0";
+      } else {
+        cell.value = value;
+        cell.numFmt = "@";
+      }
       cell.font = { name: "Arial", size: 11, bold: element.tagName === "TH" || row.classList.contains("total") };
-      cell.alignment = { vertical: "middle", horizontal: element.tagName === "TH" ? "center" : "left", wrapText: true };
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: element.tagName === "TH" || classificationColumns.has(header) || header === "AGE" || dateColumns.has(header) ? "center" : "left",
+        wrapText: true,
+      };
       if (colspan === 1) cell.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
       if (colspan > 1 || rowspan > 1) sheet.mergeCells(r, column, r + rowspan - 1, column + colspan - 1);
       for (let rr = r; rr < r + rowspan; rr++) for (let cc = column; cc < column + colspan; cc++) occupied.add(`${rr}:${cc}`);
       column += colspan;
     }
-    sheet.getRow(r).height = row.querySelector("th") ? 44 : 56;
+    sheet.getRow(r).height = row.classList.contains("spacer") ? 10 : row.querySelector("th") ? 44 : 56;
   });
-  const logo = workbook.addImage({ base64: paoLogo, extension: "jpeg" });
-  sheet.addImage(logo, { tl: { col: 3, row: 1 }, ext: { width: 104, height: 104 } });
-  sheet.views = [{ state: "frozen", ySplit: 11 }];
-  sheet.pageSetup.printTitlesRow = "1:11";
+  sheet.views = [{ state: "frozen", ySplit: 9 }];
+  sheet.pageSetup.printTitlesRow = "1:9";
   sheet.pageSetup.printArea = `A1:${sheet.getColumn(columnCount).letter}${rows.length}`;
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([new Uint8Array(buffer)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });

@@ -198,6 +198,7 @@ class CasePayload(BaseModel):
     case_type: Literal["Criminal", "Civil"] | None = None
     intake_record: dict[str, Any]
     representative: dict[str, Any]
+    client_representatives: list[dict[str, Any]] | None = None
     adverse_party: dict[str, Any]
     cases: dict[str, Any]
 
@@ -439,10 +440,26 @@ def ensure_schema_compatibility() -> None:
             party_represented VARCHAR(100),
             applicant_role VARCHAR(100),
             applicant_role_other VARCHAR(255),
+            representative_name TEXT,
+            representative_age INTEGER,
+            representative_sex VARCHAR(20),
+            representative_civil_status VARCHAR(50),
+            representative_address TEXT,
+            representative_contact_no VARCHAR(30),
+            representative_relationship VARCHAR(100),
+            representative_email TEXT,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             CONSTRAINT uq_case_client_case_client UNIQUE (case_id, client_id)
         )
         """,
+        "ALTER TABLE case_client ADD COLUMN IF NOT EXISTS representative_name TEXT",
+        "ALTER TABLE case_client ADD COLUMN IF NOT EXISTS representative_age INTEGER",
+        "ALTER TABLE case_client ADD COLUMN IF NOT EXISTS representative_sex VARCHAR(20)",
+        "ALTER TABLE case_client ADD COLUMN IF NOT EXISTS representative_civil_status VARCHAR(50)",
+        "ALTER TABLE case_client ADD COLUMN IF NOT EXISTS representative_address TEXT",
+        "ALTER TABLE case_client ADD COLUMN IF NOT EXISTS representative_contact_no VARCHAR(30)",
+        "ALTER TABLE case_client ADD COLUMN IF NOT EXISTS representative_relationship VARCHAR(100)",
+        "ALTER TABLE case_client ADD COLUMN IF NOT EXISTS representative_email TEXT",
         "CREATE INDEX IF NOT EXISTS ix_case_client_case_client_id ON case_client (case_client_id)",
         "CREATE INDEX IF NOT EXISTS ix_case_client_case_id ON case_client (case_id)",
         "CREATE INDEX IF NOT EXISTS ix_case_client_client_id ON case_client (client_id)",
@@ -925,6 +942,9 @@ def update_latest_client_representative(
         if representative_none
         else limit_text(representative_data.get("relationship_to_applicant"), 100)
     )
+    details.representative_email = (
+        "None" if representative_none else representative_data.get("rep_email") or None
+    )
 
 
 def generated_case_title(client: models.Client | None, case_type: str = "Criminal") -> str:
@@ -991,6 +1011,43 @@ def case_participant_payload(
     case_representative = None
     if participant.case and participant.case.intake and participant.case.intake.representatives:
         case_representative = participant.case.intake.representatives[0]
+    case_is_primary_client = bool(
+        participant.case
+        and (
+            participant.client_id == participant.case.client_id
+            or len(case_participants(participant.case)) == 1
+        )
+    )
+    case_representative_available = bool(
+        case_representative
+        and not is_none_value(case_representative.rep_name)
+        and not is_none_value(case_representative.civil_status)
+        and case_representative.rep_name != "Not applicable"
+    )
+    representative = {
+        "rep_name": participant.representative_name or (
+            case_representative.rep_name if case_is_primary_client and case_representative_available else ""
+        ),
+        "rep_age": participant.representative_age or (
+            case_representative.rep_age if case_is_primary_client and case_representative_available else 0
+        ) or 0,
+        "rep_sex": participant.representative_sex or (
+            case_representative.rep_sex if case_is_primary_client and case_representative_available else ""
+        ),
+        "civil_status": participant.representative_civil_status or (
+            case_representative.civil_status if case_is_primary_client and case_representative_available else ""
+        ),
+        "rep_address": participant.representative_address or (
+            case_representative.rep_address if case_is_primary_client and case_representative_available else ""
+        ),
+        "rep_contact_no": participant.representative_contact_no or (
+            case_representative.rep_contact_no if case_is_primary_client and case_representative_available else ""
+        ),
+        "relationship_to_applicant": participant.representative_relationship or (
+            case_representative.relationship_to_applicant if case_is_primary_client and case_representative_available else ""
+        ),
+        "rep_email": participant.representative_email or "",
+    }
     return {
         "case_client_id": str(participant.case_client_id or ""),
         "client_id": str(participant.client_id or (client.client_id if client else "")),
@@ -1002,11 +1059,8 @@ def case_participant_payload(
         or "",
         "applicant_role": participant.applicant_role or "",
         "applicant_role_other": participant.applicant_role_other or "",
-        "relationship_to_applicant": (
-            case_representative.relationship_to_applicant
-            if case_representative
-            else ""
-        ),
+        "relationship_to_applicant": representative["relationship_to_applicant"],
+        "representative": representative,
         "address": details.address if details else "",
         "contact_no": details.contact_no if details else "",
         "classification": {
@@ -3883,6 +3937,18 @@ def create_case(
                 ensure_client_access(db.get(models.Client, participant_id), user, db)
             )
 
+        client_representatives: dict[str, dict[str, Any]] = {}
+        for entry in payload.client_representatives or []:
+            participant_id = str(entry.get("client_id") or "")
+            if participant_id not in {str(value) for value in participant_ids}:
+                raise HTTPException(status_code=422, detail="Representative data references an unselected client.")
+            if participant_id in client_representatives:
+                raise HTTPException(status_code=422, detail="Representative data contains a duplicate client.")
+            representative_data = entry.get("representative")
+            client_representatives[participant_id] = (
+                representative_data if isinstance(representative_data, dict) else {}
+            )
+
         intake_data = payload.intake_record
         rep_data = payload.representative
         case_data = payload.cases
@@ -3984,21 +4050,56 @@ def create_case(
         db.add(record)
         db.flush()
         for participant_client in participant_clients:
+            participant_rep = client_representatives.get(str(participant_client.client_id), {})
+            participant_rep_none = is_none_value(participant_rep.get("civil_status"))
             record.participants.append(
                 models.CaseClient(
                     client=participant_client,
                     party_represented=limit_text(represented_party, 100),
                     applicant_role=intake.applicant_role,
                     applicant_role_other=intake.applicant_role_other,
+                    representative_name=(
+                        "None" if participant_rep_none else participant_rep.get("rep_name") or None
+                    ),
+                    representative_age=participant_rep.get("rep_age") or None,
+                    representative_sex=(
+                        "None" if participant_rep_none else normalize_sex(participant_rep.get("rep_sex"))
+                    ),
+                    representative_civil_status=(
+                        "None" if participant_rep_none else participant_rep.get("civil_status") or None
+                    ),
+                    representative_address=(
+                        "None" if participant_rep_none else participant_rep.get("rep_address") or None
+                    ),
+                    representative_contact_no=(
+                        "None" if participant_rep_none else participant_rep.get("rep_contact_no") or None
+                    ),
+                    representative_relationship=(
+                        "None" if participant_rep_none
+                        else limit_text(participant_rep.get("relationship_to_applicant"), 100)
+                    ),
+                    representative_email=(
+                        "None" if participant_rep_none else participant_rep.get("rep_email") or None
+                    ),
                 )
             )
-        # Keep the latest representative preference on the primary client
-        # while the Representative row remains case-specific and historical.
-        update_latest_client_representative(
-            client,
-            rep_data,
-            representative_none,
-        )
+            participant_has_representative = any(
+                str(participant_rep.get(field) or "").strip()
+                for field in (
+                    "rep_name", "rep_sex", "civil_status", "rep_address",
+                    "rep_contact_no", "relationship_to_applicant", "rep_email",
+                )
+            ) or bool(participant_rep.get("rep_age"))
+            if payload.client_representatives is None and participant_client.client_id == client.client_id:
+                participant_rep = rep_data
+                participant_has_representative = True
+                participant_rep_none = representative_none
+            if participant_has_representative:
+                update_latest_client_representative(
+                    participant_client,
+                    participant_rep,
+                    participant_rep_none,
+                )
         db.flush()
         record.title_of_case = generated_case_title_for_case(record)
         db.add(

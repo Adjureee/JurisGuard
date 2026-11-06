@@ -28,6 +28,32 @@ const optionalNumber = (label: string) =>
     },
     z.number().int().min(0, `${label} must be 0 or higher`),
   );
+const representativeDetailsSchema = z.object({
+  rep_name: optionalText,
+  rep_age: optionalNumber("Representative age"),
+  rep_sex: z.enum(["", "Male", "Female"]),
+  civil_status: z.enum([
+    "", "Single", "Married", "Widowed", "Separated", "Annulled", "Divorced", "None",
+  ]),
+  rep_address: optionalText,
+  rep_contact_no: z.string().trim().regex(/^\d{0,11}$/, "Enter up to 11 digits, or leave it empty."),
+  relationship_to_applicant: optionalText,
+  rep_email: z.string().trim().email("Enter a valid email").or(z.literal("")),
+}).superRefine((representative, ctx) => {
+  const provided = Boolean(
+    representative.rep_name.trim() || representative.rep_age > 0 ||
+    representative.rep_sex || representative.civil_status || representative.rep_address.trim() ||
+    representative.rep_contact_no.trim() ||
+    representative.relationship_to_applicant.trim() || representative.rep_email.trim(),
+  );
+  if (!provided || representative.civil_status === "None") return;
+  if (!representative.rep_name.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["rep_name"], message: "Representative name is required" });
+  }
+  if (!representative.civil_status) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["civil_status"], message: "Civil status is required" });
+  }
+});
 const monthlyIncome = z
   .string()
   .trim()
@@ -105,8 +131,7 @@ export const clientFormSchema = z.object({
   }),
 });
 
-export const caseFormSchema = z
-  .object({
+const caseFormShape = {
     client_id: requiredText("Client"),
     client_ids: z.array(optionalText).optional(),
     case_type: z.enum(["Criminal", "Civil"]).optional(),
@@ -152,7 +177,12 @@ export const caseFormSchema = z
       rep_address: optionalText,
       rep_contact_no: optionalText,
       relationship_to_applicant: optionalText,
+      rep_email: z.string().trim().email("Enter a valid email").or(z.literal("")),
     }),
+    client_representatives: z.array(z.object({
+      client_id: requiredText("Client"),
+      representative: representativeDetailsSchema,
+    })),
     adverse_party: z.object({
       role: optionalText,
       name: optionalText,
@@ -178,14 +208,70 @@ export const caseFormSchema = z
       facts_of_case: requiredText("Facts of case"),
       pending_in_court: z.boolean(),
       cause_of_termination: optionalText,
-      date_of_termination: optionalDate,
+      date_of_termination: optionalText,
       assigned_pao: optionalText,
       filing_date: optionalText,
       hearing_schedule: optionalText,
       remarks: optionalText,
     }),
-  })
-  .superRefine((data, ctx) => {
+  };
+
+const addCaseFormShape = {
+  ...caseFormShape,
+  intake_record: caseFormShape.intake_record
+    .omit({ nature_of_request: true })
+    .extend({ nature_of_case: optionalText }),
+};
+
+const criminalAddCaseFormShape = {
+  ...addCaseFormShape,
+  intake_record: addCaseFormShape.intake_record.omit({
+    nature_of_case: true,
+    party_represented: true,
+    coi_agree_different_office: true,
+    coi_agree_same_dept_appeal: true,
+    coi_waive_right_to_complain: true,
+    coi_trust_assigned_counsel: true,
+    proof_submission_deadline: true,
+    proof_submission_satisfied: true,
+    proof_itr_satisfied: true,
+    proof_itr_date: true,
+    proof_brgy_satisfied: true,
+    proof_brgy_date: true,
+    proof_dswd_satisfied: true,
+    proof_dswd_date: true,
+    proof_others_satisfied: true,
+    proof_others_details: true,
+    proof_others_date: true,
+    inv_plaintiff: true,
+    inv_defendant: true,
+    inv_oppositor: true,
+    inv_petitioner: true,
+    inv_respondent: true,
+    inv_complainant: true,
+    inv_accused: true,
+    inv_others: true,
+  }),
+  cases: addCaseFormShape.cases.omit({
+    case_status: true,
+    incident_address: true,
+    latitude: true,
+    longitude: true,
+    facts_of_case: true,
+    pending_in_court: true,
+    cause_of_termination: true,
+    date_of_termination: true,
+    assigned_pao: true,
+    filing_date: true,
+    hearing_schedule: true,
+    remarks: true,
+  }),
+};
+
+const refineCaseForm = (data: {
+  intake_record: { applicant_role: string; applicant_role_other: string };
+  cases: { detained?: boolean; date_of_confinement: string; place_of_detention: string };
+}, ctx: z.RefinementCtx) => {
     if (
       data.intake_record.applicant_role === "Others" &&
       !data.intake_record.applicant_role_other.trim()
@@ -194,28 +280,6 @@ export const caseFormSchema = z
         code: z.ZodIssueCode.custom,
         path: ["intake_record", "applicant_role_other"],
         message: "Specify role is required",
-      });
-    }
-    const representativeNotApplicable =
-      data.representative.civil_status.trim().toLowerCase() === "none";
-    if (!representativeNotApplicable) {
-      (
-        [
-          ["rep_name", "Representative name is required"],
-          ["rep_sex", "Representative sex is required"],
-          ["civil_status", "Civil status is required"],
-          ["rep_address", "Representative address is required"],
-          ["rep_contact_no", "Representative contact number is required"],
-          ["relationship_to_applicant", "Relationship to applicant is required"],
-        ] as const
-      ).forEach(([field, message]) => {
-        if (!data.representative[field].trim()) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["representative", field],
-            message,
-          });
-        }
       });
     }
     if (data.cases.detained) {
@@ -234,7 +298,24 @@ export const caseFormSchema = z
         });
       }
     }
-  });
+  };
+
+export const caseFormSchema = z.object(caseFormShape).superRefine(refineCaseForm);
+export const addCaseFormSchema = z.object(addCaseFormShape).superRefine((data, ctx) => {
+  refineCaseForm(data, ctx);
+  if (data.case_type === "Civil" && !data.intake_record.nature_of_case.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["intake_record", "nature_of_case"],
+      message: "Nature of case is required",
+    });
+  }
+});
+export const criminalAddCaseFormSchema = z
+  .object(criminalAddCaseFormShape)
+  .superRefine(refineCaseForm);
 
 export type ClientFormValues = z.infer<typeof clientFormSchema>;
 export type CaseFormValues = z.infer<typeof caseFormSchema>;
+export type AddCaseFormValues = z.infer<typeof addCaseFormSchema>;
+export type CriminalAddCaseFormValues = z.infer<typeof criminalAddCaseFormSchema>;

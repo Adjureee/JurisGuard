@@ -1,7 +1,7 @@
 import { apiClient } from "../api/client";
 import { AxiosError } from "axios";
 import type { CaseType, ClientRecord, CriminalCaseRecord } from "../types";
-import type { CaseFormValues, ClientFormValues } from "../features/criminalCases/schemas";
+import type { AddCaseFormValues, CaseFormValues, ClientFormValues } from "../features/criminalCases/schemas";
 
 function getRecordErrorMessage(error: unknown, fallback: string) {
   if (error instanceof AxiosError) {
@@ -74,7 +74,7 @@ export async function listCaseRecords(
 }
 
 export async function createCaseRecord(
-  values: CaseFormValues,
+  values: AddCaseFormValues,
   caseType: CaseType = "Criminal",
 ): Promise<CriminalCaseRecord> {
   try {

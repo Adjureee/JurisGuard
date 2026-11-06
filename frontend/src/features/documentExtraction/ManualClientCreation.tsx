@@ -59,14 +59,14 @@ function validEmail(value: string) {
 }
 
 /** Manual client entry only; this path never uploads a document or invokes OCR. */
-export function ManualClientCreation({ onSaved, onDirtyChange }: {
+export function ManualClientCreation({ onSaved, onDirtyChange, onReviewChange }: {
   onSaved: (client: ClientRecord) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  onReviewChange?: (review: boolean) => void;
 }) {
   const [fields, setFields] = useState<Record<string, string>>(() => ({ ...initialFields }));
   const [spouseNone, setSpouseNone] = useState(false);
   const [flags, setFlags] = useState<Record<string, boolean>>(() => Object.fromEntries(otherFlags.map(([key]) => [key, false])));
-  const [cicl, setCicl] = useState<'unknown' | 'yes' | 'no'>('unknown');
   const [flagsReviewed, setFlagsReviewed] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [review, setReview] = useState(false);
@@ -80,6 +80,7 @@ export function ManualClientCreation({ onSaved, onDirtyChange }: {
 
   function updateField(key: string, value: string) {
     setFields(current => ({ ...current, [key]: value }));
+    if (key === 'age' || key === 'sex') setFlagsReviewed(false);
     setErrors(current => current[key] ? { ...current, [key]: '' } : current);
     setDirty(true);
   }
@@ -110,6 +111,22 @@ export function ManualClientCreation({ onSaved, onDirtyChange }: {
           const value = numeric ? raw.slice(0, maxLength) : raw;
           updateField(key, value);
         }} />
+      {errors[key] && <span id={`manual-${key}-error`} role="alert" className="mt-1 block text-xs text-rose-700">{errors[key]}</span>}
+    </label>;
+  }
+
+  function languageDialectField() {
+    const key = 'language_dialect';
+    const listId = 'manual-language-dialect-options';
+    return <label className={labelClass} htmlFor="manual-language_dialect">
+      Language / dialect<span aria-hidden="true"> *</span>
+      <input id="manual-language_dialect" className={inputClass} type="text" list={listId}
+        value={fields[key]} required disabled={saving} autoComplete="off"
+        aria-invalid={!!errors[key]} aria-describedby={errors[key] ? `manual-${key}-error` : undefined}
+        onChange={event => updateField(key, event.target.value)} />
+      <datalist id={listId}>
+        {languageDialectOptions.map(option => <option key={option} value={option} />)}
+      </datalist>
       {errors[key] && <span id={`manual-${key}-error`} role="alert" className="mt-1 block text-xs text-rose-700">{errors[key]}</span>}
     </label>;
   }
@@ -161,6 +178,7 @@ export function ManualClientCreation({ onSaved, onDirtyChange }: {
       formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
       return;
     }
+    onReviewChange?.(true);
     setReview(true);
   }
 
@@ -196,7 +214,7 @@ export function ManualClientCreation({ onSaved, onDirtyChange }: {
       client_classification: {
         flag_female: flagsReviewed ? fields.sex === 'Female' : null,
         flag_senior: flagsReviewed ? age >= 60 : null,
-        flag_cicl: flagsReviewed ? (cicl === 'unknown' ? null : cicl === 'yes') : null,
+        flag_cicl: flagsReviewed ? age < 18 : null,
         flags_reviewed: flagsReviewed,
         flag_urban: false,
         flag_rural: false,
@@ -233,6 +251,7 @@ export function ManualClientCreation({ onSaved, onDirtyChange }: {
   const age = fields.age && /^\d+$/.test(fields.age) ? Number(fields.age) : undefined;
   const womanValue = fields.sex ? (fields.sex === 'Female' ? 'Yes' : 'No') : 'Unresolved';
   const seniorValue = age === undefined ? 'Unresolved' : age >= 60 ? 'Yes' : 'No';
+  const ciclValue = age === undefined ? 'Enter age to determine' : age < 18 ? 'Yes — under 18' : 'No — age 18 or above';
   const selectedFlags = otherFlags.filter(([key]) => flags[key]).map(([, label]) => label);
   const representativeValues = [
     ['Representative name', 'representative_name'], ['Representative age', 'representative_age'],
@@ -256,7 +275,7 @@ export function ManualClientCreation({ onSaved, onDirtyChange }: {
           {selectField('religion', 'Religion', religionOptions, true)}
           {selectField('educational_attainment', 'Educational attainment', educationalAttainmentOptions, true)}
           {textField('citizenship', 'Citizenship', { required: true })}
-          {selectField('language_dialect', 'Language / dialect', languageDialectOptions, true)}
+          {languageDialectField()}
           {textField('address', 'Address', { required: true })}
           {textField('contact_no', 'Contact number', { required: true, numeric: 'phone' })}
           {textField('email', 'Email', { required: true, email: true })}
@@ -296,15 +315,21 @@ export function ManualClientCreation({ onSaved, onDirtyChange }: {
         </Section>
 
         <Section title="Client Classification">
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
-            <p><span className="font-semibold">Woman:</span> {womanValue}{fields.sex === 'Female' ? ' (based on recorded sex)' : ''}</p>
-            <p className="mt-2"><span className="font-semibold">Senior citizen:</span> {seniorValue}{age !== undefined && age >= 60 ? ' (age 60 or above)' : ''}</p>
+          <div className="sm:col-span-2 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+              <p className="font-semibold">Woman</p>
+              <p className="mt-1">{womanValue}{fields.sex === 'Female' ? ' (based on recorded sex)' : ''}</p>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+              <p className="font-semibold">Senior citizen</p>
+              <p className="mt-1">{seniorValue}{age !== undefined && age >= 60 ? ' (age 60 or above)' : ''}</p>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm" aria-live="polite">
+              <p className="font-semibold">CICL (based on age)</p>
+              <p className="mt-1">{ciclValue}</p>
+              <p className="mt-1 text-xs text-slate-600">Automatically determined from the entered age. Confirm the classification before saving.</p>
+            </div>
           </div>
-          <label className={labelClass} htmlFor="manual-cicl">CICL — source evidence review
-            <select id="manual-cicl" className={inputClass} value={cicl} disabled={saving} onChange={event => { setCicl(event.target.value as typeof cicl); setDirty(true); }}>
-              <option value="unknown">Unresolved — review evidence</option><option value="yes">Yes — explicitly supported</option><option value="no">No — explicitly negated</option>
-            </select>
-          </label>
           <div className="sm:col-span-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {otherFlags.map(([key, label]) => <label key={key} className="flex min-h-11 items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]">
               <input type="checkbox" checked={flags[key]} disabled={saving} onChange={event => { setFlags(current => ({ ...current, [key]: event.target.checked })); setDirty(true); }} className="h-4 w-4 accent-[#704389]" />{label}
@@ -339,7 +364,7 @@ export function ManualClientCreation({ onSaved, onDirtyChange }: {
         <ReviewGroup title="Client Classification">
           <ReviewItem label="Woman (based on recorded sex)" value={womanValue} />
           <ReviewItem label="Senior citizen (based on age)" value={seniorValue} />
-          <ReviewItem label="CICL (evidence reviewed)" value={cicl === 'unknown' ? 'Unresolved' : cicl === 'yes' ? 'Yes' : 'No'} />
+          <ReviewItem label="CICL (based on age)" value={ciclValue} />
           <div className="sm:col-span-2 lg:col-span-3"><p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Additional classifications</p><p className="mt-1 text-sm font-medium text-[#2B3642]">{selectedFlags.join(', ') || 'None selected'}</p></div>
           <ReviewItem label="Classification verification" value={flagsReviewed ? 'Verified' : 'Not verified'} />
           <div className="sm:col-span-2 lg:col-span-3"><p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Classification notes</p><p className="mt-1 whitespace-pre-wrap text-sm text-[#2B3642]">{fields.classification_notes.trim() || 'No classification notes entered.'}</p></div>
@@ -348,7 +373,7 @@ export function ManualClientCreation({ onSaved, onDirtyChange }: {
     </div>
     <footer className="sticky bottom-0 flex shrink-0 justify-between gap-3 border-t border-[#E5E7EB] bg-white px-5 py-4 sm:px-6">
       {review ? <>
-        <button type="button" disabled={saving} onClick={() => { setReview(false); setError(''); }} className="intake-secondary">Back to edit</button>
+        <button type="button" disabled={saving} onClick={() => { onReviewChange?.(false); setReview(false); setError(''); }} className="intake-secondary">Back to edit</button>
         <button type="button" disabled={saving} onClick={() => void saveClient()} className="intake-primary disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'Saving client…' : 'Save client'}</button>
       </> : <>
         <span aria-hidden="true" />
