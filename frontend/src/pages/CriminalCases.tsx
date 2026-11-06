@@ -1,6 +1,7 @@
 import { useConfirmation } from "../components/ConfirmationProvider";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { Camera, FileScan, FileUp, Keyboard, Upload } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import MainLayout from "../layouts/MainLayout";
@@ -8,14 +9,15 @@ import DateFilterSelect from "../components/DateFilterSelect";
 import PageHeader from "../components/PageHeader";
 import AddCaseModal from "../components/modals/AddCaseModal";
 import AddClientModal from "../components/modals/AddClientModal";
+import { ScanIntakeModal, UploadIntakeModal } from "../components/modals/DedicatedPaperIntakeModals";
 import { PaperIntakeReview } from '../features/documentExtraction/PaperIntakeReview';
 import ExportCsvModal from "../components/modals/ExportCsvModal";
+import CaseImportModal from "../features/caseImport/CaseImportModal";
 import ModalPortal from "../components/modals/ModalPortal";
 import { StatusBadge } from "../features/criminalCases/components/StatusBadge";
 import { useCriminalCasesStore } from "../features/criminalCases/criminalCasesStore";
 import {
   filterCriminalCaseRows,
-  type CaseTableFilter,
   type CriminalCaseRow,
 } from "../services/exportService";
 import {
@@ -48,14 +50,6 @@ const accordionBorderClass: Record<CaseStatus, string> = {
   Pending: "border-amber-200",
   Terminated: "border-red-200",
 };
-
-const filterOptions: Array<{ value: CaseTableFilter; label: string }> = [
-  { value: "all", label: "All Locations" },
-  { value: "urban", label: "Urban" },
-  { value: "rural", label: "Rural" },
-  { value: "male", label: "Male" },
-  { value: "female", label: "Female" },
-];
 
 const religionOptions = [
   "Roman Catholic",
@@ -161,17 +155,6 @@ function UserPlusIcon() {
   );
 }
 
-function SlidersIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path
-        fill="currentColor"
-        d="M3 5h8v2H3V5Zm10-1h2v1h2v2h-2v1h-2V4ZM3 13h2v-1h2v4H5v-1H3v-2Zm6 0h8v2H9v-2Z"
-      />
-    </svg>
-  );
-}
-
 function EyeIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
@@ -193,6 +176,130 @@ function InfoTile({ label, value }: { label: string; value: string | number }) {
         {value || "-"}
       </p>
     </div>
+  );
+}
+
+function ManualInputSelectionModal({
+  caseType,
+  onClose,
+  onSelectCase,
+  onSelectClient,
+}: {
+  caseType: CaseType;
+  onClose: () => void;
+  onSelectCase: () => void;
+  onSelectClient: () => void;
+}) {
+  return (
+    <ModalPortal>
+      <div
+        className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="manual-input-title"
+        onKeyDown={(event) => { if (event.key === "Escape") onClose(); }}
+      >
+        <div className="jurisguard-modal-surface w-full max-w-xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
+          <header className="flex items-center justify-between gap-4 border-b border-[#5F3675] bg-[#704389] px-5 py-4 text-white">
+            <div className="flex items-center gap-3">
+              <Keyboard className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <div>
+                <h2 id="manual-input-title" className="text-lg font-bold">Manual Input</h2>
+                <p className="mt-1 text-sm text-white/85">Select what you want to add.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-white/70 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              Close
+            </button>
+          </header>
+          <div className="space-y-3 p-5">
+            <button
+              type="button"
+              onClick={onSelectCase}
+              className="flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#704389] bg-[#FAF7FC] p-4 text-left transition hover:bg-[#F2E9F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white text-[#704389] shadow-sm">
+                <PlusIcon />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold text-[#2B3642]">Add {caseType} Case</span>
+                <span className="mt-1 block text-sm leading-5 text-[#6B7280]">Manually enter a new {caseType.toLowerCase()} case and its associated client information.</span>
+              </span>
+              <span aria-hidden="true" className="text-lg text-[#704389]">›</span>
+            </button>
+            <button
+              type="button"
+              onClick={onSelectClient}
+              className="flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#D1D5DB] bg-white p-4 text-left transition hover:bg-[#F8FAFC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#15803D] shadow-sm">
+                <UserPlusIcon />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold text-[#2B3642]">Add Client</span>
+                <span className="mt-1 block text-sm leading-5 text-[#6B7280]">Create a new client record manually.</span>
+              </span>
+              <span aria-hidden="true" className="text-lg text-[#704389]">›</span>
+            </button>
+          </div>
+          <footer className="flex justify-end border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] transition hover:bg-[#F3F4F6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
+            >
+              Cancel
+            </button>
+          </footer>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
+function UploadScanSelectionModal({
+  onClose,
+  onSelectScan,
+  onSelectUpload,
+}: {
+  onClose: () => void;
+  onSelectScan: () => void;
+  onSelectUpload: () => void;
+}) {
+  return (
+    <ModalPortal>
+      <div
+        className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="upload-scan-title"
+        onKeyDown={(event) => { if (event.key === "Escape") onClose(); }}
+      >
+        <div className="jurisguard-modal-surface w-full max-w-xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
+          <header className="flex items-center justify-between gap-4 border-b border-[#5F3675] bg-[#704389] px-5 py-4 text-white">
+            <div className="flex items-center gap-3">
+              <FileScan className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <div>
+                <h2 id="upload-scan-title" className="text-lg font-bold">Upload / Scan Input</h2>
+                <p className="mt-1 text-sm text-white/85">Scan or upload the whole paper document.</p>
+              </div>
+            </div>
+            <button type="button" onClick={onClose} className="rounded-md border border-white/70 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">Close</button>
+          </header>
+          <div className="space-y-3 p-5">
+            <button type="button" onClick={onSelectScan} className="flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#704389] bg-[#FAF7FC] p-4 text-left transition hover:bg-[#F2E9F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"><Camera className="ml-1 h-6 w-6 shrink-0 text-[#704389]" aria-hidden="true" /><span className="flex-1"><span className="block font-semibold text-[#2B3642]">Scan</span><span className="mt-1 block text-sm text-[#6B7280]">Open the camera-only scanning workflow.</span></span><span aria-hidden="true" className="text-lg text-[#704389]">›</span></button>
+            <button type="button" onClick={onSelectUpload} className="flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#D1D5DB] bg-white p-4 text-left transition hover:border-[#704389] hover:bg-[#F8FAFC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"><Upload className="ml-1 h-6 w-6 shrink-0 text-[#704389]" aria-hidden="true" /><span className="flex-1"><span className="block font-semibold text-[#2B3642]">Upload</span><span className="mt-1 block text-sm text-[#6B7280]">Open the file-upload-only workflow.</span></span><span aria-hidden="true" className="text-lg text-[#704389]">›</span></button>
+          </div>
+          <footer className="flex justify-end border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+            <button type="button" onClick={onClose} className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] transition hover:bg-[#F3F4F6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]">Cancel</button>
+          </footer>
+        </div>
+      </div>
+    </ModalPortal>
   );
 }
 
@@ -309,6 +416,14 @@ function participantNames(record: CriminalCaseRecord, fallbackClient?: ClientRec
     .filter(Boolean);
 }
 
+function participantPartyRepresented(participant: CaseParticipant) {
+  if (participant.party_represented) return participant.party_represented;
+  if (participant.applicant_role === "Others") {
+    return participant.applicant_role_other || "";
+  }
+  return participant.applicant_role || "";
+}
+
 function participantSexes(record: CriminalCaseRecord, fallbackClient?: ClientRecord) {
   return caseParticipants(record, fallbackClient)
     .map((participant) => participant.sex)
@@ -374,32 +489,6 @@ function TextAreaField({
   );
 }
 
-function CaseFilterSelect({
-  value,
-  onChange,
-}: {
-  value: CaseTableFilter;
-  onChange: (value: CaseTableFilter) => void;
-}) {
-  return (
-    <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-3 text-[#2B3642]">
-      <SlidersIcon />
-      <select
-        className="h-8 min-w-32 bg-white text-sm font-medium text-[#2B3642] outline-none"
-        value={value}
-        onChange={(event) => onChange(event.target.value as CaseTableFilter)}
-        aria-label="Filter criminal cases"
-      >
-        {filterOptions.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
 function CaseAccordion({
   record,
   fallbackClient,
@@ -416,7 +505,7 @@ function CaseAccordion({
 }) {
   const participants = caseParticipants(record, fallbackClient);
   const isMultiParty = participants.length > 1;
-  const [open, setOpen] = useState(isMultiParty);
+  const [open, setOpen] = useState(false);
 
   return (
     <div
@@ -445,14 +534,20 @@ function CaseAccordion({
               Case Identification
             </h4>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <InfoTile
+              {!isMultiParty && <InfoTile
                 label="Applicant Role"
                 value={
-                  record.intake_record.applicant_role === "Others"
-                    ? record.intake_record.applicant_role_other
+                  participants[0]
+                    ? participants[0].applicant_role === "Others"
+                      ? participants[0].applicant_role_other
+                      : participants[0].applicant_role
                     : record.intake_record.applicant_role
                 }
-              />
+              />}
+              {!isMultiParty && <InfoTile
+                label="Party Represented"
+                value={participants[0] ? participantPartyRepresented(participants[0]) : ""}
+              />}
               <InfoTile label="Case No" value={record.cases.case_no} />
               <InfoTile label="Court" value={record.cases.court_body} />
               <InfoTile label="Title" value={record.cases.title_of_case} />
@@ -532,7 +627,7 @@ function CaseAccordion({
                           Party Represented
                         </p>
                         <p className="mt-1 text-sm font-medium text-[#111827]">
-                          {participant.party_represented || "Not set"}
+                          {participantPartyRepresented(participant) || "Not set"}
                         </p>
                       </div>
                       {participantClassificationLabels(participant).length > 0 && (
@@ -1695,13 +1790,21 @@ export default function CriminalCasesPage({
   const upsertClient = useCriminalCasesStore((state) => state.upsertClient);
   const upsertCase = useCriminalCasesStore((state) => state.upsertCase);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<CaseTableFilter>("all");
+  const [genderFilter, setGenderFilter] = useState<"All" | "Male" | "Female">("All");
+  const [locationFilter, setLocationFilter] = useState<"All" | "Urban" | "Rural">("All");
   const [courtFilter, setCourtFilter] = useState("All Courts");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
   const [showCaseModal, setShowCaseModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
+  const [showManualInputModal, setShowManualInputModal] = useState(false);
+  const [showUploadScanModal, setShowUploadScanModal] = useState(false);
+  const [showScanWorkflowModal, setShowScanWorkflowModal] = useState(false);
+  const [showUploadWorkflowModal, setShowUploadWorkflowModal] = useState(false);
   const [dashboardIntakeMode, setDashboardIntakeMode] = useState<'manual' | 'scan' | undefined>();
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
   const [dashboardParams, setDashboardParams] = useSearchParams();
   useEffect(() => {
@@ -1732,6 +1835,8 @@ export default function CriminalCasesPage({
 
     let cancelled = false;
     async function loadRecords() {
+      setIsLoading(true);
+      setLoadError("");
       try {
         const [clientRows, caseRows] = await Promise.all([
           listClientRecords(),
@@ -1743,10 +1848,14 @@ export default function CriminalCasesPage({
         }
       } catch (error) {
         if (!cancelled) {
+          const message = error instanceof Error ? error.message : "Unable to load records";
+          setLoadError(message);
           toast.error(
-            error instanceof Error ? error.message : "Unable to load records",
+            message,
           );
         }
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
     }
 
@@ -1815,7 +1924,8 @@ export default function CriminalCasesPage({
   const filteredRows = useMemo(() => {
     const baseRows = filterCriminalCaseRows(rows, {
       search,
-      table_filter: filter,
+      gender: genderFilter,
+      location_type: locationFilter,
     });
     return baseRows.filter(({ record }) => {
       const courtMatches =
@@ -1828,7 +1938,7 @@ export default function CriminalCasesPage({
         dateFilter,
       );
     });
-  }, [courtFilter, dateFilter, filter, rows, search]);
+  }, [courtFilter, dateFilter, genderFilter, locationFilter, rows, search]);
 
   const activeClient =
     visibleClients.find((client) => client.client_id === activeClientId) ??
@@ -1865,19 +1975,19 @@ export default function CriminalCasesPage({
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <button
                   type="button"
-                  onClick={() => setShowCaseModal(true)}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]"
+                  onClick={() => { setShowManualInputModal(false); setShowUploadScanModal(true); }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#704389] bg-white px-3.5 text-sm font-semibold text-[#704389] shadow-sm transition hover:bg-[#FAF7FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
                 >
-                  <PlusIcon />
-                  Add {caseType} Case
+                  <FileScan className="h-4 w-4" aria-hidden="true" />
+                  Upload / Scan Input
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowClientModal(true)}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#15803D] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#166534]"
+                  onClick={() => { setShowUploadScanModal(false); setShowManualInputModal(true); }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]"
                 >
-                  <UserPlusIcon />
-                  Add Client
+                  <PlusIcon />
+                  Manual Input
                 </button>
               </div>
             }
@@ -1888,7 +1998,7 @@ export default function CriminalCasesPage({
         <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#CBD5E1] bg-white p-4 shadow-sm">
           
           {/* 4. Filters Area: shrink-0 preserves its height */}
-          <div className="mb-3 grid min-w-0 shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_170px_165px_165px_auto_auto] xl:items-end">
+          <div className="mb-3 grid min-w-0 shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_170px_165px_165px_165px_auto_auto_auto] xl:items-end">
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
                 Search
@@ -1916,15 +2026,46 @@ export default function CriminalCasesPage({
                 ))}
               </select>
             </label>
-            <div className="pt-5 xl:pt-4">
-              <CaseFilterSelect value={filter} onChange={setFilter} />
-            </div>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Gender</span>
+              <select
+                value={genderFilter}
+                onChange={(event) => setGenderFilter(event.target.value as "All" | "Male" | "Female")}
+                aria-label="Filter by gender"
+                className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              >
+                <option value="All">All Genders</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Location</span>
+              <select
+                value={locationFilter}
+                onChange={(event) => setLocationFilter(event.target.value as "All" | "Urban" | "Rural")}
+                aria-label="Filter by location"
+                className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+              >
+                <option value="All">All Locations</option>
+                <option value="Urban">Urban</option>
+                <option value="Rural">Rural</option>
+              </select>
+            </label>
             <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-[#F8FAFC] px-3">
               <span className="font-semibold text-[#4B5563]">Total:</span>
               <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
                 {filteredRows.length}
               </span>
             </div>
+            {user?.role === "admin" && <button
+              type="button"
+              onClick={() => setShowImportModal(true)}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
+            >
+              <FileUp className="h-4 w-4" aria-hidden="true" />
+              Import Excel
+            </button>}
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
@@ -1955,12 +2096,18 @@ export default function CriminalCasesPage({
                       colSpan={7}
                       className="px-5 py-10 text-center text-[#2B3642]/50"
                     >
-                      No criminal cases found.
+                      {isLoading
+                        ? `Loading ${caseType.toLowerCase()} cases…`
+                        : loadError
+                          ? loadError
+                          : `No ${caseType.toLowerCase()} cases found.`}
                     </td>
                   </tr>
                 ) : (
                   filteredRows.map(({ record, client }) => {
-                    const names = participantNames(record, client);
+                    const representedParties = caseParticipants(record, client)
+                      .map(participantPartyRepresented)
+                      .filter(Boolean);
                     const sexes = participantSexes(record, client);
                     return (
                     <tr
@@ -1972,7 +2119,7 @@ export default function CriminalCasesPage({
                       </td>
                       <td className="px-3 py-4 text-[#4B5563]">
                         <div className="space-y-1">
-                          {names.length ? names.map((name) => <div key={name}>{name}</div>) : "-"}
+                          {representedParties.length ? representedParties.map((party, index) => <div key={`${party}-${index}`}>{party}</div>) : "-"}
                         </div>
                       </td>
                       <td className="px-3 py-4 text-[#4B5563]">
@@ -2019,6 +2166,34 @@ export default function CriminalCasesPage({
       </div>
 
       {/* Modals */}
+      {showManualInputModal && <ManualInputSelectionModal
+        caseType={caseType}
+        onClose={() => setShowManualInputModal(false)}
+        onSelectCase={() => {
+          setShowManualInputModal(false);
+          setShowCaseModal(true);
+        }}
+        onSelectClient={() => {
+          setShowManualInputModal(false);
+          setDashboardIntakeMode("manual");
+          setShowClientModal(true);
+        }}
+      />}
+      {showUploadScanModal && <UploadScanSelectionModal
+        onClose={() => setShowUploadScanModal(false)}
+        onSelectScan={() => {
+          setShowUploadScanModal(false);
+          setShowUploadWorkflowModal(false);
+          setShowScanWorkflowModal(true);
+        }}
+        onSelectUpload={() => {
+          setShowUploadScanModal(false);
+          setShowScanWorkflowModal(false);
+          setShowUploadWorkflowModal(true);
+        }}
+      />}
+      {showScanWorkflowModal && <ScanIntakeModal onClose={() => setShowScanWorkflowModal(false)} />}
+      {showUploadWorkflowModal && <UploadIntakeModal onClose={() => setShowUploadWorkflowModal(false)} />}
       <AddClientModal
         isOpen={showClientModal}
         initialMode={dashboardIntakeMode}
@@ -2035,6 +2210,19 @@ export default function CriminalCasesPage({
         caseType={caseType}
         onClose={() => setShowExportModal(false)}
       />
+      {user?.role === "admin" && showImportModal && <CaseImportModal
+        caseType={caseType}
+        existingClients={visibleClients}
+        onClose={() => setShowImportModal(false)}
+        onImported={async () => {
+          const [clientRows, caseRows] = await Promise.all([
+            listClientRecords(),
+            listCaseRecords(caseType),
+          ]);
+          setClients(clientRows);
+          setCases(caseRows);
+        }}
+      />}
       <ClientRecordModal
         mode={actionMode}
         caseType={caseType}

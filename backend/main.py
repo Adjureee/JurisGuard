@@ -3751,8 +3751,8 @@ def import_case_records(
                 [
                     (
                         participant,
-                        limit_text(participant_data.get("party_represented"), 100) or party,
-                        limit_text(participant_data.get("party_represented"), 100) or party,
+                        limit_text(participant_data.get("party_represented"), 100),
+                        limit_text(participant_data.get("party_represented"), 100),
                         None,
                     )
                     for participant, participant_data in resolved_clients
