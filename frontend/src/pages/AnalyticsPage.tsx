@@ -551,6 +551,61 @@ export default function AnalyticsPage() {
         }
       />
 
+      <div className="mb-6 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-sm font-bold text-[#111827]">Analytics Date Range</p>
+            <p className="mt-1 text-xs font-medium text-[#6B7280]">Trends, intake load, and closure analytics refresh from this range.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {([
+              ["all", "All Dates"],
+              ["last7", "Last 7 Days"],
+              ["last30", "Last 30 Days"],
+              ["month", "This Month"],
+              ["year", "This Year"],
+              ["custom", "Custom Range"],
+            ] as Array<[DatePreset, string]>).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => applyPreset(value)}
+                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                  datePreset === value
+                    ? "border-[#704389] bg-[#F7F0FA] text-[#704389]"
+                    : "border-[#D1D5DB] bg-white text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#111827]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Start Date</span>
+            <input
+              type="date"
+              value={dateInputs.dateFrom}
+              max={dateInputs.dateTo || undefined}
+              onChange={(event) => changeDate("dateFrom", event.target.value)}
+              className="mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">End Date</span>
+            <input
+              type="date"
+              value={dateInputs.dateTo}
+              min={dateInputs.dateFrom || undefined}
+              onChange={(event) => changeDate("dateTo", event.target.value)}
+              className="mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+            />
+          </label>
+        </div>
+        {invalidRange ? <p className="mt-2 text-sm font-medium text-red-700" role="alert">Choose a valid start and end date to apply a custom range.</p> : null}
+      </div>
+
       {isLoading ? (
         <div className="grid gap-6">
           <SkeletonBlock className="h-[520px]" />
@@ -602,61 +657,6 @@ export default function AnalyticsPage() {
                 </div>
               </AnalyticsPanel>
             </div>
-          </div>
-
-          <div className="mt-6 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <p className="text-sm font-bold text-[#111827]">Analytics Date Range</p>
-                <p className="mt-1 text-xs font-medium text-[#6B7280]">Trends, intake load, and closure analytics refresh from this range.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {([
-                  ["all", "All Dates"],
-                  ["last7", "Last 7 Days"],
-                  ["last30", "Last 30 Days"],
-                  ["month", "This Month"],
-                  ["year", "This Year"],
-                  ["custom", "Custom Range"],
-                ] as Array<[DatePreset, string]>).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => applyPreset(value)}
-                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                      datePreset === value
-                        ? "border-[#704389] bg-[#F7F0FA] text-[#704389]"
-                        : "border-[#D1D5DB] bg-white text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#111827]"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
-              <label className="block">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Start Date</span>
-                <input
-                  type="date"
-                  value={dateInputs.dateFrom}
-                  max={dateInputs.dateTo || undefined}
-                  onChange={(event) => changeDate("dateFrom", event.target.value)}
-                  className="mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-                />
-              </label>
-              <label className="block">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">End Date</span>
-                <input
-                  type="date"
-                  value={dateInputs.dateTo}
-                  min={dateInputs.dateFrom || undefined}
-                  onChange={(event) => changeDate("dateTo", event.target.value)}
-                  className="mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-                />
-              </label>
-            </div>
-            {invalidRange ? <p className="mt-2 text-sm font-medium text-red-700" role="alert">Choose a valid start and end date to apply a custom range.</p> : null}
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-2">

@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, ConfigDict, StrictStr
-from sqlalchemy import func, or_, text, null
+from sqlalchemy import and_, func, or_, text, null
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
@@ -43,6 +43,7 @@ from reminder_permissions import (
     can_manage_shared_reminders as role_can_manage_shared_reminders,
 )
 from reminder_status import PHILIPPINE_TIMEZONE, calculate_reminder_status, can_complete_reminder
+from presence_status import calculate_presence_status, personnel_designation
 from case_import import (
     MAX_WORKBOOK_BYTES,
     extract_case_title_client_names,
@@ -185,6 +186,14 @@ class MfaVerifyPayload(BaseModel):
 
 class ApprovalUpdatePayload(BaseModel):
     approval_status: Literal["pending", "under_review", "approved", "rejected", "suspended"]
+
+
+class PresenceHeartbeatPayload(BaseModel):
+    interacting: bool = False
+
+
+class PrivateMessagePayload(BaseModel):
+    content: StrictStr = Field(min_length=1, max_length=2000)
 
 
 class ClientPayload(BaseModel):
@@ -2839,6 +2848,208 @@ def resolve_client_owner(
         db.rollback()
         raise
     return {"client_id": client_id, "previous_owner_user_id": previous_owner, "owner_user_id": owner.user_id}
+
+
+def messaging_designation(user: models.User) -> str | None:
+    return personnel_designation(user.role.role_name if user.role else None, is_admin(user))
+
+
+def get_messaging_peer(db: Session, peer_id: int, current: models.User) -> models.User:
+    peer = (
+        db.query(models.User)
+        .options(joinedload(models.User.role))
+        .filter(
+            models.User.user_id == peer_id,
+            models.User.is_active.is_(True),
+            models.User.approval_status == "approved",
+        )
+        .first()
+    )
+    if peer_id == current.user_id or not peer or not messaging_designation(peer):
+        raise HTTPException(status_code=404, detail="Office personnel member not found")
+    return peer
+
+
+def private_message_payload(message: models.PrivateMessage, current_user_id: int) -> dict[str, Any]:
+    return {
+        "message_id": message.message_id,
+        "sender_user_id": message.sender_user_id,
+        "recipient_user_id": message.recipient_user_id,
+        "content": message.content,
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+        "read_at": message.read_at.isoformat() if message.read_at else None,
+        "is_mine": message.sender_user_id == current_user_id,
+    }
+
+
+@app.post("/api/presence/heartbeat")
+def presence_heartbeat(
+    payload: PresenceHeartbeatPayload,
+    token: str = Depends(oauth2_scheme),
+    current: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    token_payload = json.loads(b64url_decode(token.split(".", 1)[0]))
+    token_expires = datetime.fromtimestamp(int(token_payload["exp"]), timezone.utc).replace(tzinfo=None)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    presence = db.get(models.UserPresence, token_hash)
+    if presence is None:
+        presence = models.UserPresence(
+            token_hash=token_hash,
+            user_id=current.user_id,
+            last_seen_at=now,
+            last_interaction_at=now if payload.interacting else None,
+            expires_at=token_expires,
+        )
+        db.add(presence)
+    else:
+        presence.user_id = current.user_id
+        presence.last_seen_at = now
+        presence.expires_at = token_expires
+        if payload.interacting:
+            presence.last_interaction_at = now
+    db.commit()
+    return {"status": "ok"}
+
+
+@app.get("/api/messages/personnel")
+def list_messaging_personnel(
+    current: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    users = (
+        db.query(models.User)
+        .options(joinedload(models.User.role))
+        .filter(models.User.is_active.is_(True), models.User.approval_status == "approved")
+        .all()
+    )
+    eligible_users = [(user, messaging_designation(user)) for user in users]
+    eligible_users = [(user, designation) for user, designation in eligible_users if designation]
+    eligible_ids = [user.user_id for user, _ in eligible_users]
+    presence_rows = (
+        db.query(models.UserPresence)
+        .filter(models.UserPresence.user_id.in_(eligible_ids))
+        .all()
+        if eligible_ids else []
+    )
+    presence_by_user: dict[int, str] = {}
+    priority = {"Offline": 0, "Away": 1, "Online": 2}
+    for row in presence_rows:
+        status = calculate_presence_status(
+            row.last_seen_at,
+            row.last_interaction_at,
+            row.expires_at,
+            now,
+            stale_after_seconds=90,
+            away_after_seconds=300,
+        )
+        if priority[status] > priority.get(presence_by_user.get(row.user_id, "Offline"), 0):
+            presence_by_user[row.user_id] = status
+
+    unread_counts = dict(
+        db.query(models.PrivateMessage.sender_user_id, func.count(models.PrivateMessage.message_id))
+        .filter(
+            models.PrivateMessage.recipient_user_id == current.user_id,
+            models.PrivateMessage.read_at.is_(None),
+            models.PrivateMessage.sender_user_id.in_(eligible_ids),
+        )
+        .group_by(models.PrivateMessage.sender_user_id)
+        .all()
+    ) if eligible_ids else {}
+
+    personnel = []
+    summary: dict[str, dict[str, int]] = {
+        "attorneys": {"active": 0, "online": 0},
+        "administrators": {"active": 0, "online": 0},
+    }
+    for user, designation in sorted(eligible_users, key=lambda item: (item[0].full_name or item[0].username).casefold()):
+        presence = presence_by_user.get(user.user_id, "Offline")
+        summary_key = {
+            "Attorney": "attorneys",
+            "Administrator": "administrators",
+            "Admin Staff": "admin_staff",
+        }[designation]
+        summary.setdefault(summary_key, {"active": 0, "online": 0})
+        summary[summary_key]["active"] += 1
+        summary[summary_key]["online"] += int(presence == "Online")
+        personnel.append({
+            "user_id": user.user_id,
+            "full_name": user.full_name or user.username,
+            "profile_image_path": user.profile_image_path or user.profile_picture_path,
+            "designation": designation,
+            "is_self": user.user_id == current.user_id,
+            "unread_count": int(unread_counts.get(user.user_id, 0)),
+            "presence": presence,
+        })
+
+    return {"personnel": personnel, "summary": summary}
+
+
+@app.get("/api/messages/{peer_id}")
+def list_private_messages(
+    peer_id: int,
+    before_message_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
+    current: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    get_messaging_peer(db, peer_id, current)
+    conversation = db.query(models.PrivateMessage).filter(
+        or_(
+            and_(models.PrivateMessage.sender_user_id == current.user_id, models.PrivateMessage.recipient_user_id == peer_id),
+            and_(models.PrivateMessage.sender_user_id == peer_id, models.PrivateMessage.recipient_user_id == current.user_id),
+        )
+    )
+    if before_message_id is not None:
+        conversation = conversation.filter(models.PrivateMessage.message_id < before_message_id)
+    rows = conversation.order_by(models.PrivateMessage.message_id.desc()).limit(limit + 1).all()
+    has_more = len(rows) > limit
+    rows = list(reversed(rows[:limit]))
+    return {
+        "messages": [private_message_payload(message, current.user_id) for message in rows],
+        "has_more": has_more,
+    }
+
+
+@app.post("/api/messages/{peer_id}")
+def send_private_message(
+    peer_id: int,
+    payload: PrivateMessagePayload,
+    current: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    get_messaging_peer(db, peer_id, current)
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="Message cannot be empty")
+    message = models.PrivateMessage(
+        sender_user_id=current.user_id,
+        recipient_user_id=peer_id,
+        content=content,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    return private_message_payload(message, current.user_id)
+
+
+@app.post("/api/messages/{peer_id}/read")
+def mark_private_messages_read(
+    peer_id: int,
+    current: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    get_messaging_peer(db, peer_id, current)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    updated = db.query(models.PrivateMessage).filter(
+        models.PrivateMessage.sender_user_id == peer_id,
+        models.PrivateMessage.recipient_user_id == current.user_id,
+        models.PrivateMessage.read_at.is_(None),
+    ).update({models.PrivateMessage.read_at: now}, synchronize_session=False)
+    db.commit()
+    return {"updated": updated}
 
 
 @app.get("/api/admin/verification")

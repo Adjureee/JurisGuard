@@ -6,7 +6,7 @@ export interface MessagingPerson {
   user_id: number;
   full_name: string;
   profile_image_path: string | null;
-  designation: "Attorney" | "Administrator";
+  designation: "Attorney" | "Administrator" | "Admin Staff";
   is_self: boolean;
   unread_count: number;
   presence?: PersonnelPresence;
