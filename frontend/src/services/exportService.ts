@@ -226,9 +226,68 @@ function intakeInvolvement(record: CriminalCaseRecord) {
   );
 }
 
-function primaryParticipant(record: CriminalCaseRecord) {
-  return record.participants?.find((participant) => participant.client_id === record.client_id)
-    ?? record.participants?.[0];
+interface ExportParticipantRow {
+  partyRepresented: string;
+  sex: string | undefined;
+  age: number | undefined;
+  address: string | undefined;
+  contactNo: string | undefined;
+  relationshipToApplicant: string | undefined;
+  classification: Partial<ClientClassification> | undefined;
+}
+
+function exportParticipantRows(
+  record: CriminalCaseRecord,
+  client?: ClientRecord,
+): ExportParticipantRow[] {
+  if ((record.participants?.length ?? 0) > 1) {
+    return (record.participants ?? []).map((participant) => ({
+      partyRepresented: participantInvolvement(participant),
+      sex: participant.sex,
+      age: participant.age,
+      address: participant.address,
+      contactNo: participant.contact_no,
+      relationshipToApplicant: participant.relationship_to_applicant,
+      classification: classificationForExport(record.cases.location_type, participant.classification),
+    }));
+  }
+
+  return [{
+    partyRepresented: record.participants?.[0]
+      ? participantInvolvement(record.participants[0])
+      : intakeInvolvement(record),
+    sex: client?.client.sex,
+    age: client?.client.age,
+    address: client?.client_details.address,
+    contactNo: client?.client_details.contact_no,
+    relationshipToApplicant:
+      client?.client_details.representative_relationship ||
+      record.representative.relationship_to_applicant,
+    classification: classificationForExport(record.cases.location_type, client?.client_classification),
+  }];
+}
+
+function participantValues(
+  record: CriminalCaseRecord,
+  participant: ExportParticipantRow,
+) {
+  return [
+    participant.partyRepresented,
+    participant.sex,
+    participant.age,
+    boolFlag(participant.classification?.flag_urban),
+    boolFlag(participant.classification?.flag_rural),
+    boolFlag(participant.classification?.flag_drugs),
+    reviewedFlagCell(participant.classification?.flag_female),
+    reviewedFlagCell(participant.classification?.flag_senior),
+    reviewedFlagCell(participant.classification?.flag_cicl),
+    participant.address,
+    participant.contactNo,
+    participant.relationshipToApplicant ||
+      ((record.participants?.length ?? 0) > 1
+        ? ""
+        : record.representative.relationship_to_applicant),
+  ];
 }
 
 export function buildCriminalCasesCsv(
@@ -302,17 +361,28 @@ export function buildCriminalCasesExcelHtml(
   const filteredRows = filterCriminalCaseRows(rows, parsedFilters);
   const widths = [150, 150, 100, 240, 140, 120, 200, 140, 220, 200, 130, 70,
     70, 70, 70, 70, 70, 70, 140, 200, 130, 260, 150, 200];
-  const classificationTotals = { urban: 0, rural: 0, drugs: 0, female: 0, senior: 0, cicl: 0 };
+  const participantRows = filteredRows.flatMap(({ record, client }) =>
+    exportParticipantRows(record, client).map((participant) => ({ record, participant })),
+  );
+  const totalCases = new Set(
+    filteredRows.map(({ record }) => record.case_id),
+  ).size;
+  const totals = participantRows.reduce(
+    (current, { participant }) => ({
+      urban: current.urban + boolFlag(participant.classification?.flag_urban),
+      rural: current.rural + boolFlag(participant.classification?.flag_rural),
+      drugs: current.drugs + boolFlag(participant.classification?.flag_drugs),
+      female: current.female + boolFlag(participant.classification?.flag_female),
+      senior: current.senior + boolFlag(participant.classification?.flag_senior),
+      cicl: current.cicl + boolFlag(participant.classification?.flag_cicl),
+    }),
+    { urban: 0, rural: 0, drugs: 0, female: 0, senior: 0, cicl: 0 },
+  );
   const body = filteredRows.map(({ record, client }) => {
-    const participant = primaryParticipant(record);
-    const classification = classificationForExport(
-      record.cases.location_type,
-      participant?.classification ?? client?.client_classification,
-    );
-    const values = [
+    const participants = exportParticipantRows(record, client);
+    const rowSpan = participants.length > 1 ? ` rowspan="${participants.length}"` : "";
+    const sharedValues = [
       record.intake_record.control_no,
-      participant ? participantInvolvement(participant) : intakeInvolvement(record),
-      participant?.sex || client?.client.sex,
       record.cases.title_of_case,
       record.cases.court_body,
       record.cases.case_no,
@@ -321,37 +391,49 @@ export function buildCriminalCasesExcelHtml(
       record.cases.last_action_taken,
       record.cases.cause_of_termination,
       record.cases.date_of_termination,
-      participant?.age ?? client?.client.age,
-      boolFlag(classification.flag_urban),
-      boolFlag(classification.flag_rural),
-      boolFlag(classification.flag_drugs),
-      reviewedFlagCell(classification.flag_female),
-      reviewedFlagCell(classification.flag_senior),
-      reviewedFlagCell(classification.flag_cicl),
       record.cases.date_of_confinement,
       record.cases.place_of_detention,
       record.intake_record.form_date,
-      participant?.address || client?.client_details.address,
-      participant?.contact_no || client?.client_details.contact_no,
-      participant?.relationship_to_applicant ||
-        participant?.representative?.relationship_to_applicant ||
-        client?.client_details.representative_relationship ||
-        record.representative.relationship_to_applicant,
     ];
-    classificationTotals.urban += boolFlag(classification.flag_urban);
-    classificationTotals.rural += boolFlag(classification.flag_rural);
-    classificationTotals.drugs += boolFlag(classification.flag_drugs);
-    classificationTotals.female += classification.flag_female === true ? 1 : 0;
-    classificationTotals.senior += classification.flag_senior === true ? 1 : 0;
-    classificationTotals.cicl += classification.flag_cicl === true ? 1 : 0;
-    return `<tr>${values.map((value) => `<td>${htmlCell(value)}</td>`).join("")}</tr>`;
+    return participants.map((participant, index) => {
+      const participantData = participantValues(record, participant);
+      const cells = [
+        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[0])}</td>` : "",
+        `<td>${htmlCell(participantData[0])}</td>`,
+        `<td>${htmlCell(participantData[1])}</td>`,
+        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[1])}</td>` : "",
+        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[2])}</td>` : "",
+        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[3])}</td>` : "",
+        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[4])}</td>` : "",
+        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[5])}</td>` : "",
+        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[6])}</td>` : "",
+        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[7])}</td>` : "",
+        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[8])}</td>` : "",
+        `<td>${htmlCell(participantData[2])}</td>`,
+        `<td>${htmlCell(participantData[3])}</td>`,
+        `<td>${htmlCell(participantData[4])}</td>`,
+        `<td>${htmlCell(participantData[5])}</td>`,
+        `<td>${htmlCell(participantData[6])}</td>`,
+        `<td>${htmlCell(participantData[7])}</td>`,
+        `<td>${htmlCell(participantData[8])}</td>`,
+        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[9])}</td>` : "",
+        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[10])}</td>` : "",
+        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[11])}</td>` : "",
+        `<td>${htmlCell(participantData[9])}</td>`,
+        `<td>${htmlCell(participantData[10])}</td>`,
+        `<td>${htmlCell(participantData[11])}</td>`,
+      ];
+      return `<tr>${cells.join("")}</tr>`;
+    }).join("");
   }).join("");
-  const totalValues = [
-    `TOTAL CASES: ${filteredRows.length}`, "", "", "", "", "", "", "", "", "", "", "",
-    classificationTotals.urban, classificationTotals.rural, classificationTotals.drugs,
-    classificationTotals.female, classificationTotals.senior, classificationTotals.cicl,
-    "", "", "", "", "", "",
-  ];
+  const totalValues: Array<string | number> = Array(PAO_INVENTORY_HEADERS.length).fill("");
+  totalValues[0] = `TOTAL CASES: ${totalCases}`;
+  totalValues[12] = totals.urban;
+  totalValues[13] = totals.rural;
+  totalValues[14] = totals.drugs;
+  totalValues[15] = totals.female;
+  totalValues[16] = totals.senior;
+  totalValues[17] = totals.cicl;
   const titles = [
     "REPUBLIKA NG PILIPINAS",
     "KAGAWARAN NG KATARUNGAN",

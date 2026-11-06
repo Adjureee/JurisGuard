@@ -25,7 +25,10 @@ function row(flags) {
     record: {
       case_id: 'TEST-CASE', created_by_user_id: null, last_updated: '2026-01-01',
       client_id: 'PRIMARY',
-      intake_record: { control_no: 'TEST-CONTROL', form_date: '2026-01-01', party_represented: 'Synthetic party' },
+      intake_record: {
+        control_no: 'TEST-CONTROL', form_date: '2026-01-01', party_represented: 'Synthetic party',
+        applicant_role: 'Accused', applicant_role_other: '',
+      },
       cases: {
         title_of_case: 'Synthetic case', court_body: 'Branch 4', case_no: 'TEST-1',
         cause_of_action: 'Synthetic cause', status_of_case: 'Pending', last_action_taken: 'Synthetic action',
@@ -78,23 +81,12 @@ test('CSV retains its office headings while the Excel inventory uses the supplie
 test('Excel inventory has the fixed 24-column PAO format and one row per case', () => {
   const first = row({ flags_reviewed: true, flag_urban: false, flag_rural: false, flag_drugs: true, flag_female: true, flag_senior: false, flag_cicl: true });
   first.record.intake_record.control_no = '0007';
-  first.client.client_details = { address: 'Client address', contact_no: '0000123' };
-  first.client.client_classification = {
-    flags_reviewed: true, flag_drugs: true, flag_female: true, flag_senior: false, flag_cicl: true,
-  };
-  first.record.participants = [
-    {
-      client_id: 'PRIMARY', applicant_role: 'Accused', applicant_role_other: '', party_represented: '',
-      sex: 'Female', age: 67, address: 'Primary address', contact_no: '0000123',
-      relationship_to_applicant: 'Mother', representative: { relationship_to_applicant: 'Mother' },
-      classification: { flags_reviewed: true, flag_drugs: true, flag_female: true, flag_senior: false, flag_cicl: true },
-    },
-    {
-      client_id: 'SECONDARY', applicant_role: 'Witness', applicant_role_other: '', party_represented: '',
-      sex: 'Male', age: 40, address: 'Secondary address', contact_no: '9999999',
-      relationship_to_applicant: '', classification: { flag_drugs: false },
-    },
-  ];
+  first.client.client_details = { address: 'Primary address', contact_no: '0000123', representative_relationship: 'Mother' };
+  first.record.representative.relationship_to_applicant = 'Mother';
+  first.record.participants = [participant('PRIMARY', {
+    role: 'Accused', sex: 'Female', age: 67, address: 'Participant address', contact: '0000123',
+    relation: 'Mother', flags: { flags_reviewed: true, flag_drugs: true, flag_female: true, flag_senior: false, flag_cicl: true },
+  })];
   const html = loaded.exports.buildCriminalCasesExcelHtml([first], filters);
   const headings = [...html.matchAll(/<tr><td colspan="24" class="title(?: report-title)?">([^<]*)<\/td><\/tr>/g)].map((match) => match[1]);
   assert.deepEqual(headings.slice(0, 6), [
@@ -117,9 +109,102 @@ test('Excel inventory has the fixed 24-column PAO format and one row per case', 
   ]);
   assert.equal(headers.length, 24);
   assert.doesNotMatch(html, /Item No\.|A\. CRIMINAL|B\. CIVIL/);
-  assert.equal((html.match(/<tr><td>0007<\/td>/g) ?? []).length, 1);
-  assert.match(html, /<tr><td>0007<\/td><td>Accused<\/td><td>Female<\/td>/);
-  assert.match(html, /<td>Primary address<\/td><td>0000123<\/td><td>Mother<\/td>/);
+  const bodyRows = caseRows(html);
+  assert.equal(bodyRows.length, 1);
+  assert.match(bodyRows[0], /<td>Accused<\/td><td>Female<\/td>/);
+  assert.match(bodyRows[0], /<td>Primary address<\/td><td>0000123<\/td><td>Mother<\/td>/);
   assert.match(html, /TOTAL CASES: 1/);
-  assert.match(html, /<tr class="total"><td>TOTAL CASES: 1<\/td>(?:<td><\/td>){11}<td>1<\/td><td>0<\/td><td>1<\/td><td>1<\/td><td>0<\/td><td>1<\/td>/);
+  assert.match(html, /<tr class="total"><td>TOTAL CASES: 1<\/td>(?:<td><\/td>){11}<td>1<\/td><td>0<\/td><td>1<\/td><td>1<\/td><td>0<\/td><td>1<\/td>(?:<td><\/td>){6}<\/tr>/);
+});
+
+function participant(clientId, { role, sex, age, address, contact, relation, flags }) {
+  return {
+    client_id: clientId,
+    applicant_role: role,
+    applicant_role_other: role === 'Others' ? 'Others' : '',
+    party_represented: '',
+    sex,
+    age,
+    address,
+    contact_no: contact,
+    relationship_to_applicant: relation,
+    classification: flags,
+  };
+}
+
+function caseRows(html) {
+  const tbody = html.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] ?? '';
+  return [...tbody.matchAll(/<tr>([\s\S]*?)<\/tr>/g)]
+    .map((match) => match[1])
+    .filter((rowHtml) => rowHtml.includes('<td') && !rowHtml.includes('class='));
+}
+
+test('one case with three clients emits three grouped rows and counts one case', () => {
+  const record = row({});
+  record.record.intake_record.control_no = '0009';
+  record.record.participants = [
+    participant('PRIMARY', { role: 'Accused', sex: 'Female', age: 17, address: 'Address A', contact: '000111', relation: 'Mother', flags: { flags_reviewed: true, flag_drugs: true, flag_female: true, flag_senior: false, flag_cicl: true } }),
+    participant('CLIENT-2', { role: 'Petitioner', sex: 'Male', age: 45, address: 'Address B', contact: '000222', relation: 'Father', flags: { flags_reviewed: true, flag_drugs: false, flag_female: false, flag_senior: false, flag_cicl: false } }),
+    participant('CLIENT-3', { role: 'Others', sex: 'Female', age: 65, address: 'Address C', contact: '000333', relation: 'Guardian', flags: { flags_reviewed: false, flag_drugs: true, flag_female: true, flag_senior: true, flag_cicl: true } }),
+  ];
+
+  const html = loaded.exports.buildCriminalCasesExcelHtml([record], filters);
+  const rows = caseRows(html);
+  assert.equal(rows.length, 3);
+  assert.equal((rows[0].match(/rowspan="3"/g) ?? []).length, 12);
+  assert.match(rows[0], /<td rowspan="3">0009<\/td><td>Accused<\/td><td>Female<\/td>/);
+  assert.match(rows[0], /<td>Address A<\/td><td>000111<\/td><td>Mother<\/td>/);
+  assert.match(rows[1], /<td>Petitioner<\/td><td>Male<\/td>/);
+  assert.match(rows[1], /<td>Address B<\/td><td>000222<\/td><td>Father<\/td>/);
+  assert.match(rows[2], /<td>Others<\/td><td>Female<\/td>/);
+  assert.match(rows[2], /<td>Address C<\/td><td>000333<\/td><td>Guardian<\/td>/);
+
+  const total = html.match(/<tr class="total">([\s\S]*?)<\/tr>/)?.[1] ?? '';
+  const totalCells = [...total.matchAll(/<td>([\s\S]*?)<\/td>/g)].map((match) => match[1]);
+  assert.equal(totalCells.length, 24);
+  assert.equal(totalCells[0], 'TOTAL CASES: 1');
+  assert.equal(totalCells[11], '');
+  assert.deepEqual(totalCells.slice(12, 18), ['3', '0', '2', '1', '0', '1']);
+  assert.ok(totalCells.slice(18).every((value) => value === ''));
+});
+
+test('multiple cases keep participant groups and count unique cases', () => {
+  const first = row({ flags_reviewed: true, flag_female: true, flag_senior: false, flag_cicl: null });
+  first.record.participants = [
+    participant('PRIMARY', { role: 'Accused', sex: 'Female', age: 20, address: '', contact: '', relation: '', flags: { flags_reviewed: true, flag_drugs: false, flag_female: true, flag_senior: false, flag_cicl: null } }),
+    participant('CLIENT-2', { role: 'Accused', sex: 'Male', age: 30, address: '', contact: '', relation: '', flags: { flags_reviewed: false, flag_drugs: false, flag_female: true, flag_senior: false, flag_cicl: true } }),
+  ];
+  const second = row({ flags_reviewed: true, flag_female: false, flag_senior: true, flag_cicl: false });
+  second.record.case_id = 'TEST-CASE-2';
+  second.record.intake_record.control_no = 'TEST-CONTROL-2';
+  second.record.participants = [participant('SECONDARY-CASE-CLIENT', {
+    role: 'Respondent', sex: 'Female', age: 60, address: '', contact: '', relation: '',
+    flags: { flags_reviewed: true, flag_drugs: false, flag_female: false, flag_senior: true, flag_cicl: false },
+  })];
+
+  const html = loaded.exports.buildCriminalCasesExcelHtml([first, second], filters);
+  assert.equal(caseRows(html).length, 3);
+  assert.match(html, /TOTAL CASES: 2/);
+  const total = html.match(/<tr class="total">([\s\S]*?)<\/tr>/)?.[1] ?? '';
+  const cells = [...total.matchAll(/<td>([\s\S]*?)<\/td>/g)].map((match) => match[1]);
+  assert.equal(cells[11], '');
+  assert.deepEqual(cells.slice(12, 18), ['3', '0', '0', '1', '1', '0']);
+  assert.match(html, /<td><\/td><td><\/td><td><\/td>/);
+});
+
+test('missing optional values keep the case row and exported text is HTML escaped', () => {
+  const record = row({});
+  record.record.cases.title_of_case = '<Synthetic & reviewed>';
+  record.record.participants = [participant('PRIMARY', {
+    role: 'Accused', sex: 'Female', age: 25, address: '', contact: '', relation: '',
+    flags: { flags_reviewed: false, flag_drugs: false, flag_female: true, flag_senior: false, flag_cicl: false },
+  })];
+
+  const html = loaded.exports.buildCriminalCasesExcelHtml([record], filters);
+  assert.equal(caseRows(html).length, 1);
+  assert.match(html, /&lt;Synthetic &amp; reviewed&gt;/);
+  assert.match(html, /<td><\/td><td><\/td><td><\/td>/);
+  assert.match(html, /TOTAL CASES: 1/);
+  const cells = [...caseRows(html)[0].matchAll(/<td(?: [^>]*)?>([\s\S]*?)<\/td>/g)].map((match) => match[1]);
+  assert.deepEqual(cells.slice(15, 18), ['', '', '']);
 });
