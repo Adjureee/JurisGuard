@@ -10,3 +10,9 @@
 .intake-link { min-height:44px;padding:8px 0;font-size:14px;text-decoration:underline;text-underline-offset:4px;color:#704389; }
 .intake-modal button:disabled { opacity:.5;cursor:not-allowed; }
 .paper-setup input[type=range] { min-height:44px; }
+@keyframes pao-progress-indeterminate {
+  0% { transform:translateX(-110%); }
+  50% { transform:translateX(110%); }
+  100% { transform:translateX(330%); }
+}
+.pao-progress-indeterminate { animation:pao-progress-indeterminate 1.5s ease-in-out infinite; }

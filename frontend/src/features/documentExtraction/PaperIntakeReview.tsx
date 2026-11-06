@@ -216,7 +216,12 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
       <div className={`space-y-5 ${sections ? 'pb-3' : 'mx-auto w-full max-w-5xl pb-8'}`}>
       <PaperDocumentSetup disabled={busy} schemaReady={!!schema} mode={mode} onModeChange={setMode} onExtract={(file,plan)=>void scan(file,plan)} onPending={setDirty} onStageChange={setSetupStage} inputMethod={inputMethod}/>
     </div></details>}
-    {extraction.isExtracting && <div role="status" className="flex flex-wrap items-center gap-4 rounded bg-blue-50 p-4 text-sm">Reading the scan… {extraction.elapsedSeconds}s<button type="button" onClick={() => { extraction.cancelExtraction(); setDirty(true); setScanError('OCR stopped. Retry the same scan or choose another.'); }} className="rounded border border-blue-300 bg-white px-4 py-2 font-semibold">Cancel extraction</button></div>}
+    {extraction.isExtracting && <div role="status" className="shrink-0 space-y-3 border-b bg-[#FAF7FC] px-5 py-4 text-sm text-[#542F69]">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold">Processing captured document</p><p className="mt-1">Extracting Parts II and II-A and preparing the information for review… {extraction.elapsedSeconds}s</p></div>
+        <button type="button" onClick={() => { extraction.cancelExtraction(); setDirty(true); setScanError('OCR stopped. Retry the same scan or choose another.'); }} className="rounded border border-[#704389]/40 bg-white px-4 py-2 font-semibold text-[#704389]">Cancel extraction</button>
+      </div>
+      <div role="progressbar" aria-label="Document extraction progress" aria-valuetext="Processing document; progress is indeterminate" className="h-2 overflow-hidden rounded-full bg-[#E5D9EB]"><div className="pao-progress-indeterminate h-full w-1/3 rounded-full bg-[#704389]" /></div>
+    </div>}
     {schemaError && <p role="alert" className="text-rose-700">{schemaError}</p>}
     {scanError && <div role="alert" className="flex shrink-0 flex-wrap items-center gap-3 border-b bg-rose-50 px-4 py-2 text-sm text-rose-800"><span>{scanError}</span>{retryFile && !busy && <button type="button" onClick={() => void scan(retryFile, retryPlan)} className="rounded border border-rose-300 bg-white px-3 py-2 font-semibold">Retry OCR</button>}</div>}
     {ocrFailure && <p role="alert" className="shrink-0 border-b bg-rose-50 px-4 py-2 text-sm text-rose-800">{ocrFailure}</p>}
