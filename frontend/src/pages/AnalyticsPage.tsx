@@ -27,9 +27,10 @@ import { useDashboardAnalytics } from "./dashboard/useDashboardAnalytics";
 
 const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsMap"));
 
-type DatePreset = "last7" | "last30" | "month" | "year" | "custom";
+type DatePreset = "all" | "last7" | "last30" | "month" | "year" | "custom";
 
 const datePresetLabels: Record<Exclude<DatePreset, "custom">, string> = {
+  all: "All dates",
   last7: "Last 7 Days",
   last30: "Last 30 Days",
   month: "This Month",
@@ -53,6 +54,7 @@ function formatExportDate(value: string) {
 }
 
 function presetRange(preset: DatePreset) {
+  if (preset === 'all') return { dateFrom: '', dateTo: '' };
   const now = new Date();
   const start = new Date(now);
   if (preset === "last7") start.setDate(now.getDate() - 6);
@@ -291,7 +293,7 @@ export default function AnalyticsPage() {
   const [datePreset, setDatePreset] = useState<DatePreset>("last30");
   const [dateRange, setDateRange] = useState(() => presetRange("last30"));
   const [dateInputs, setDateInputs] = useState(dateRange);
-  const invalidRange = !dateInputs.dateFrom || !dateInputs.dateTo || dateInputs.dateFrom > dateInputs.dateTo;
+  const invalidRange = datePreset !== 'all' && (!dateInputs.dateFrom || !dateInputs.dateTo || dateInputs.dateFrom > dateInputs.dateTo);
   const {
     barangays,
     caseCategories,
@@ -449,6 +451,7 @@ export default function AnalyticsPage() {
   }, [barangays, caseCategories, intakeLoad, monthlyTrends, ocrAnalytics, terminatedStats]);
 
   const applyPreset = (preset: DatePreset) => {
+    setSelectedBarangay(null);
     setDatePreset(preset);
     if (preset !== "custom") {
       const range = presetRange(preset);
@@ -462,7 +465,7 @@ export default function AnalyticsPage() {
     setDateInputs(range);
     if (range.dateFrom && range.dateTo && range.dateFrom <= range.dateTo) setDateRange(range);
   };
-  const period = `${formatExportDate(dateRange.dateFrom)} – ${formatExportDate(dateRange.dateTo)}`;
+  const period = datePreset === 'all' ? 'All dates' : `${formatExportDate(dateRange.dateFrom)} – ${formatExportDate(dateRange.dateTo)}`;
   const download = (ref: HTMLDivElement | null, title: string, legend?: ChartExportContext["legend"]) =>
     void downloadChartPng(ref, `jurisguard-${title.toLowerCase().replaceAll(" ", "-")}.png`, {
       title, description: "Recorded data for the selected period.", coveragePeriod: period,
@@ -481,7 +484,7 @@ export default function AnalyticsPage() {
       <section aria-label="Analytics filters" className="mb-6 rounded-xl border border-[#CBD5E1] bg-white p-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-wrap gap-2" role="group" aria-label="Reporting period">
-            {(["last7", "last30", "month", "year"] as const).map((value) =>
+            {(["all", "last7", "last30", "month", "year"] as const).map((value) =>
               <button key={value} type="button" aria-pressed={datePreset === value} onClick={() => applyPreset(value)}
                 className={`min-h-11 rounded-md border px-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389] ${datePreset === value ? "border-[#704389] bg-[#F7F0FA] text-[#5F3675]" : "border-[#CBD5E1] text-[#4B5563] hover:bg-[#F8FAFC]"}`}>{datePresetLabels[value]}</button>)}
             <button type="button" aria-pressed={datePreset === "custom"} onClick={() => setDatePreset("custom")} className={`min-h-11 rounded-md border px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389] ${datePreset === "custom" ? "border-[#704389] bg-[#F7F0FA] text-[#5F3675]" : "border-[#CBD5E1] text-[#4B5563]"}`}>Custom range</button>
@@ -538,7 +541,7 @@ export default function AnalyticsPage() {
 
         <section className="mt-8" aria-labelledby="client-geography-title">
           <h2 id="client-geography-title" className="text-lg font-semibold">Where registered clients live</h2>
-          <p className="mb-4 mt-1 text-sm text-[#4B5563]">Clients registered in the selected period. Address selection changes map focus only; counts are unique clients, not crime incidents.</p>
+          <p className="mb-4 mt-1 text-sm text-[#4B5563]">Clients registered: {period}. Address selection changes map focus only; counts are unique clients, not crime incidents.</p>
           <div className="grid items-start gap-6 xl:grid-cols-[1.7fr_1fr]">
             <div className="min-w-0">{heatmap ? <ErrorBoundary fallback={<EmptyState message="The map could not render. Client address counts remain available." />}><Suspense fallback={<SkeletonBlock className="h-[520px]" />}><GeoAnalyticsMap center={heatmap.center} points={heatmap.points} barangays={heatmap.barangays} selectedBarangay={activeBarangay} onSelectBarangay={(value) => setSelectedBarangay(value || null)} /></Suspense></ErrorBoundary> : <EmptyState message="No client map data available." />}</div>
             <AnalyticsPanel title="Client address groups">
