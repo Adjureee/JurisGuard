@@ -38,9 +38,10 @@ import { useDashboardAnalytics } from "./dashboard/useDashboardAnalytics";
 
 const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsMap"));
 
-type DatePreset = "last7" | "last30" | "month" | "year" | "custom";
+type DatePreset = "all" | "last7" | "last30" | "month" | "year" | "custom";
 
 const datePresetLabels: Record<Exclude<DatePreset, "custom">, string> = {
+  all: "All dates",
   last7: "Last 7 Days",
   last30: "Last 30 Days",
   month: "This Month",
@@ -86,6 +87,7 @@ function coveragePeriodLabel(
 }
 
 function presetRange(preset: DatePreset) {
+  if (preset === 'all') return { dateFrom: '', dateTo: '' };
   const now = new Date();
   const start = new Date(now);
   if (preset === "last7") start.setDate(now.getDate() - 6);
@@ -321,8 +323,11 @@ function ChartDownloadButton({
 }
 
 export default function AnalyticsPage() {
-  const [datePreset, setDatePreset] = useState<DatePreset>("last30");
-  const [dateRange, setDateRange] = useState(() => presetRange("last30"));
+  const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [dateRange, setDateRange] = useState(() => presetRange("all"));
+  const [dateInputs, setDateInputs] = useState(dateRange);
+  const invalidRange = datePreset === "custom" &&
+    (!dateInputs.dateFrom || !dateInputs.dateTo || dateInputs.dateFrom > dateInputs.dateTo);
   const {
     barangays,
     caseCategories,
@@ -491,8 +496,22 @@ export default function AnalyticsPage() {
   }, [barangays, caseCategories, intakeLoad, monthlyTrends, ocrAnalytics, terminatedStats]);
 
   const applyPreset = (preset: DatePreset) => {
+    setSelectedBarangay(null);
     setDatePreset(preset);
-    if (preset !== "custom") setDateRange(presetRange(preset));
+    if (preset !== "custom") {
+      const range = presetRange(preset);
+      setDateRange(range);
+      setDateInputs(range);
+    }
+  };
+
+  const changeDate = (field: "dateFrom" | "dateTo", value: string) => {
+    setDatePreset("custom");
+    const range = { ...dateInputs, [field]: value };
+    setDateInputs(range);
+    if (range.dateFrom && range.dateTo && range.dateFrom <= range.dateTo) {
+      setDateRange(range);
+    }
   };
 
   useEffect(() => {
@@ -525,7 +544,7 @@ export default function AnalyticsPage() {
             type="button"
             onClick={() => setExportOpen(true)}
             className="inline-flex h-10 items-center justify-center rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={exportRows.length === 0}
+                    disabled={invalidRange || exportRows.length === 0}
           >
             Advanced Report Export
           </button>
@@ -593,6 +612,7 @@ export default function AnalyticsPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {([
+                  ["all", "All Dates"],
                   ["last7", "Last 7 Days"],
                   ["last30", "Last 30 Days"],
                   ["month", "This Month"],
@@ -619,11 +639,9 @@ export default function AnalyticsPage() {
                 <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Start Date</span>
                 <input
                   type="date"
-                  value={dateRange.dateFrom}
-                  onChange={(event) => {
-                    setDatePreset("custom");
-                    setDateRange((current) => ({ ...current, dateFrom: event.target.value }));
-                  }}
+                  value={dateInputs.dateFrom}
+                  max={dateInputs.dateTo || undefined}
+                  onChange={(event) => changeDate("dateFrom", event.target.value)}
                   className="mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
                 />
               </label>
@@ -631,15 +649,14 @@ export default function AnalyticsPage() {
                 <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">End Date</span>
                 <input
                   type="date"
-                  value={dateRange.dateTo}
-                  onChange={(event) => {
-                    setDatePreset("custom");
-                    setDateRange((current) => ({ ...current, dateTo: event.target.value }));
-                  }}
+                  value={dateInputs.dateTo}
+                  min={dateInputs.dateFrom || undefined}
+                  onChange={(event) => changeDate("dateTo", event.target.value)}
                   className="mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
                 />
               </label>
             </div>
+            {invalidRange ? <p className="mt-2 text-sm font-medium text-red-700" role="alert">Choose a valid start and end date to apply a custom range.</p> : null}
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-2">

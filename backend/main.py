@@ -19,8 +19,8 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, text
+from pydantic import BaseModel, Field, ConfigDict, StrictStr
+from sqlalchemy import func, or_, text, null
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
@@ -193,6 +193,22 @@ class ClientPayload(BaseModel):
     client_classification: dict[str, Any]
 
 
+class PaperIntakePayload(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    document_id: int
+    sections: dict[str, dict[str, StrictStr]]
+    unreadable_fields: list[str] | None = None
+    field_reviews: dict[str, StrictStr] | None = None
+    checkbox_states: dict[str, StrictStr] | None = None
+    source_draft_id: StrictStr | None = None
+    reviewed: Literal[True]
+
+def paper_compat_text(model, key, value):
+    # Lossless text stays in ReviewedPaperIntake. Legacy varchar projections
+    # cannot represent every paper entry and must never truncate it.
+    limit = getattr(model.__table__.c[key].type, 'length', None)
+    return value if limit is None or len(value) <= limit else None
+
 class CasePayload(BaseModel):
     client_id: int | str
     client_ids: list[int | str] | None = None
@@ -287,6 +303,10 @@ def read_form_template(language: str) -> str:
 
 def ensure_schema_compatibility() -> None:
     statements = [
+        'ALTER TABLE reviewed_paper_intake ADD COLUMN IF NOT EXISTS field_reviews JSONB',
+        'ALTER TABLE reviewed_paper_intake ADD COLUMN IF NOT EXISTS checkbox_states JSONB',
+        'ALTER TABLE reviewed_paper_intake ADD COLUMN IF NOT EXISTS source_draft_id VARCHAR(64)',
+        'ALTER TABLE reviewed_paper_intake ADD COLUMN IF NOT EXISTS candidate_snapshot JSONB',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS email VARCHAR(255)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS full_name VARCHAR(255) DEFAULT \'\'',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS approval_status VARCHAR(30) NOT NULL DEFAULT \'pending\'',
@@ -1143,6 +1163,14 @@ def get_client_payload(client: models.Client) -> dict[str, Any]:
     reviewed_flags = stored_reviewed_flags(classification)
     return {
         "client_id": str(client.client_id),
+        "paper_intake": ({'document_id': client.paper_intake.document_id,
+                          'sections': client.paper_intake.sections,
+                          'field_reviews': client.paper_intake.field_reviews,
+                          'checkbox_states': client.paper_intake.checkbox_states,
+                          'source_draft_id': client.paper_intake.source_draft_id,
+                          'candidate_snapshot': client.paper_intake.candidate_snapshot,
+                          'unreadable_fields': client.paper_intake.unreadable_fields}
+                         if client.paper_intake else None),
         "created_by_user_id": client.created_by_user_id,
         "client": {
             "client_id": str(client.client_id),
@@ -1171,7 +1199,7 @@ def get_client_payload(client: models.Client) -> dict[str, Any]:
             "representative_contact_no": details.representative_contact_no or "",
             "representative_relationship": details.representative_relationship or "",
             "representative_email": details.representative_email or "",
-            "detained": bool(details.detained),
+            "detained": details.detained if client.paper_intake else bool(details.detained),
             "detained_since": details.detained_since.date().isoformat() if details.detained_since else "",
             "place_of_detention": details.place_of_detention or "",
         },
@@ -4406,14 +4434,17 @@ async def upload_document(
     user: models.User = Depends(current_user),
     user_id: int | None = None,
     file: UploadFile = File(...),
+    ocr_image: UploadFile | None = File(None),
+    crop_plan: str | None = Form(None),
     case_id: int | None = None,
     intake_id: int | None = None,
     extraction_mode: Literal["auto", "offline", "cloud"] = Query(default="auto"),
-    extraction_target: Literal["full", "client"] = Query(default="full"),
+    extraction_target: Literal["full", "client", "paper_intake"] = Query(default="full"),
     db: Session = Depends(get_db),
 ):
     new_document = None
     file_location = None
+    processing_location = None
     try:
         # Keep the legacy query parameter for client compatibility, but never
         # trust it as an ownership or attribution source.
@@ -4445,6 +4476,25 @@ async def upload_document(
                 file_location.unlink(missing_ok=True)
                 raise
 
+        processing = None
+        if crop_plan:
+            if extraction_target != 'paper_intake' or ocr_image is not None:
+                raise HTTPException(400, 'Use one PAO image preparation method at a time.')
+            from paper_capture import build_ocr_image, PaperCropError
+            processing_location = UPLOAD_DIR / f'{uuid.uuid4()}-paper-crop.jpg'
+            try:
+                plan = json.loads(crop_plan)
+                processing = await asyncio.to_thread(build_ocr_image, file_location, plan, processing_location)
+            except (ValueError, PaperCropError) as exc:
+                raise HTTPException(422, str(exc)) from exc
+        if ocr_image is not None:
+            processing_extension = Path(ocr_image.filename or '').suffix.lower()
+            if processing_extension not in ('.jpg', '.jpeg', '.png', '.webp') or ocr_image.content_type not in DOCUMENT_CONTENT_TYPES.get(processing_extension, set()):
+                raise HTTPException(status_code=400, detail='The selected OCR image must be a JPG, PNG, or WEBP image.')
+            processing_location = UPLOAD_DIR / f'{uuid.uuid4()}-ocr{processing_extension}'
+            save_bounded_upload(ocr_image.file, processing_location, MAX_DOCUMENT_BYTES)
+            verify_image(processing_location, processing_extension)
+
         new_document = models.Document(
             case_id=case_id,
             intake_id=intake_id,
@@ -4458,9 +4508,15 @@ async def upload_document(
         db.refresh(new_document)
 
         extracted_json = await extract_document(
-            str(file_location), extraction_mode, extraction_target, is_disconnected=request.is_disconnected
+            str(processing_location or file_location), extraction_mode, extraction_target, is_disconnected=request.is_disconnected
         )
+        if processing:
+            from paper_capture import remap_field_evidence
+            remap_field_evidence(extracted_json, processing)
         public_extracted_json = public_extraction_payload(extracted_json)
+        public_extracted_json.setdefault('diagnostics', {})['image_preparation'] = {
+            'original_retained': True, 'selected_copy': processing_location is not None and processing is None,
+        }
 
         db.add(
             models.ExtractedMetadata(
@@ -4470,6 +4526,7 @@ async def upload_document(
             )
         )
 
+        draft_id = store_paper_draft(db, new_document.document_id, public_extracted_json) if extraction_target == "paper_intake" else None
         new_document.ocr_status = ocr_status_for_result(extracted_json)
         write_audit(
             db,
@@ -4486,6 +4543,7 @@ async def upload_document(
             "message": "Document uploaded; OCR needs review." if new_document.ocr_status == "FAILED" else "Document processed successfully!",
             "document_id": new_document.document_id,
             "extracted_data": public_extracted_json,
+            "source_draft_id": draft_id,
         }
 
     except (Exception, asyncio.CancelledError) as exc:
@@ -4510,3 +4568,300 @@ async def upload_document(
         if isinstance(exc, ExtractionWorkerError):
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         raise HTTPException(status_code=500, detail="Document extraction failed. Review server diagnostics.") from exc
+    finally:
+        if processing_location is not None:
+            processing_location.unlink(missing_ok=True)
+
+
+def store_paper_draft(db, document_id, extracted):
+    from paper_provenance import canonical_digest
+    draft_id = canonical_digest({'document_id': document_id, 'extraction': extracted})
+    if db.get(models.PaperExtractionDraft, draft_id) is None:
+        db.add(models.PaperExtractionDraft(draft_id=draft_id, document_id=document_id, extraction_json=extracted))
+    return draft_id
+
+
+def reviewed_candidate_source(db, payload, fallback=None):
+    if payload.source_draft_id is None:
+        return fallback
+    draft = db.get(models.PaperExtractionDraft, payload.source_draft_id)
+    if draft is None or draft.document_id != payload.document_id:
+        raise HTTPException(422, 'The extraction draft does not match this original scan. Re-extract and review again.')
+    return draft.extraction_json
+
+
+@app.get('/api/pao-intakes/schema')
+def paper_intake_schema(user: models.User = Depends(current_user)):
+    from paper_intake import SCHEMA
+    return SCHEMA
+
+
+@app.post('/api/pao-intakes/prepare-camera')
+async def prepare_camera_image(file: UploadFile = File(...), user: models.User = Depends(current_user)):
+    from camera_preparation import prepare_capture
+    extension = Path(file.filename or '').suffix.lower()
+    if extension not in ('.jpg', '.jpeg', '.png', '.webp') or file.content_type not in DOCUMENT_CONTENT_TYPES.get(extension, set()):
+        raise HTTPException(400, 'Camera review requires a JPG, PNG or WEBP capture.')
+    source = UPLOAD_DIR / f'{uuid.uuid4()}-camera{extension}'
+    try:
+        save_bounded_upload(file.file, source, MAX_DOCUMENT_BYTES)
+        verify_image(source, extension)
+        return await asyncio.to_thread(prepare_capture, source)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    finally:
+        source.unlink(missing_ok=True)
+
+
+@app.get('/api/pao-intakes/documents/{document_id}')
+def paper_intake_scan(document_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    document = db.get(models.Document, document_id)
+    if not document:
+        raise HTTPException(404, 'Document not found')
+    saved = db.query(models.ReviewedPaperIntake).filter_by(document_id=document_id).first()
+    if saved:
+        ensure_client_access(db.get(models.Client, saved.client_id), user, db)
+    elif not is_admin(user) and document.uploaded_by != user.user_id:
+        raise HTTPException(403, 'Record access denied')
+    location = Path(document.encrypted_file_path).resolve()
+    if not location.is_relative_to(UPLOAD_DIR.resolve()) or not location.is_file():
+        raise HTTPException(404, 'Document not found')
+    return FileResponse(location, media_type=document.document_type,
+                        headers={'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'})
+
+
+@app.get('/api/pao-intakes/documents/{document_id}/pages/{page_number}')
+def paper_intake_page(document_id: int, page_number: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    """Render at the same scale as local OCR so evidence boxes share coordinates."""
+    source = paper_intake_scan(document_id, user, db)
+    if page_number < 1:
+        raise HTTPException(404, 'Page not found')
+    import io
+    import pypdfium2 as pdfium
+    from fastapi.responses import Response
+    if source.media_type != 'application/pdf':
+        raise HTTPException(400, 'Page preview requires a PDF')
+    with pdfium.PdfDocument(str(source.path)) as document:
+        page_count = len(document)
+        if page_number > len(document):
+            raise HTTPException(404, 'Page not found')
+        page = document[page_number - 1]
+        try:
+            if page.get_width() * page.get_height() * 4 > 40_000_000:
+                raise HTTPException(413, 'Page is too large to preview. Open the original scan.')
+            bitmap = page.render(scale=2)
+            try:
+                image = bitmap.to_pil()
+                output = io.BytesIO()
+                image.save(output, format='PNG')
+            finally:
+                bitmap.close()
+        finally:
+            page.close()
+    return Response(output.getvalue(), media_type='image/png', headers={'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'X-Page-Count': str(page_count), 'Access-Control-Expose-Headers': 'X-Page-Count'})
+
+
+@app.post('/api/pao-intakes/')
+def save_paper_intake(payload: PaperIntakePayload, request: Request,
+                      user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    from paper_intake import APPLICANT, REPRESENTATIVE, validate_review
+    try:
+        validate_review(payload.sections, payload.unreadable_fields or [], payload.field_reviews)
+        from paper_checkboxes import validate_boxes, reviewed_detained
+        validate_boxes(payload.checkbox_states, payload.sections)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    # Lock the source to serialize double clicks and concurrent save attempts.
+    document = db.query(models.Document).filter_by(document_id=payload.document_id).with_for_update().first()
+    if not document:
+        raise HTTPException(404, 'Document not found')
+    if not is_admin(user) and document.uploaded_by != user.user_id:
+        raise HTTPException(403, 'Record access denied')
+    metadata = db.query(models.ExtractedMetadata).filter_by(document_id=payload.document_id).first()
+    if not metadata or metadata.extracted_json.get('intake_scope') != 'pao_parts_ii_iia':
+        raise HTTPException(422, 'Scan the PAO sheet in the intake workflow first.')
+    if db.query(models.ReviewedPaperIntake).filter_by(document_id=payload.document_id).first():
+        raise HTTPException(409, 'This reviewed sheet is already saved.')
+    candidate_snapshot = reviewed_candidate_source(db, payload, metadata.extracted_json)
+    applicant, representative = payload.sections[APPLICANT], payload.sections[REPRESENTATIVE]
+    # The JSON text above is the canonical reviewed record. Typed compatibility
+    # fields only receive directly representable values, never inferred ones.
+    def age(value):
+        return int(value) if value.isascii() and value.isdigit() and len(value) <= 3 else None
+    client = models.Client(created_by_user_id=user.user_id,
+        **{key: paper_compat_text(models.Client, key, applicant[key]) for key in ('name', 'sex', 'civil_status', 'religion',
+           'educational_attainment', 'citizenship', 'language_dialect')}, age=age(applicant['age']))
+    db.add(client)
+    db.flush()
+    db.add(models.ClientDetails(client_id=client.client_id,
+        address=applicant['address'], contact_no=applicant['contact_no'], email=applicant['email'],
+        individual_monthly_income=applicant['individual_monthly_income'],
+        spouse=applicant['spouse_name'], address_of_spouse=applicant['spouse_address'],
+        contact_no_of_spouse=applicant['spouse_contact_no'],
+        representative_name=representative['name'], representative_age=age(representative['age']),
+        representative_sex=paper_compat_text(models.ClientDetails, 'representative_sex', representative['sex']),
+        representative_civil_status=paper_compat_text(models.ClientDetails, 'representative_civil_status', representative['civil_status']),
+        representative_address=representative['address'], representative_contact_no=representative['contact_no'],
+        representative_relationship=paper_compat_text(models.ClientDetails, 'representative_relationship', representative['relationship_to_applicant']), representative_email=representative['email'],
+        detained=reviewed_detained(payload.checkbox_states) if reviewed_detained(payload.checkbox_states) is not None else null(), detained_since=None, place_of_detention=paper_compat_text(models.ClientDetails, 'place_of_detention', applicant['place_of_detention'])))
+    db.add(models.ReviewedPaperIntake(client_id=client.client_id, document_id=document.document_id,
+        reviewed_by=user.user_id, sections=payload.sections, unreadable_fields=payload.unreadable_fields or [], field_reviews=payload.field_reviews, checkbox_states=payload.checkbox_states, source_draft_id=payload.source_draft_id, candidate_snapshot=candidate_snapshot))
+    metadata.verified_by = user.user_id
+    metadata.verified_at = datetime.now(timezone.utc)
+    metadata.verification_status = 'REVIEWED'
+    write_audit(db, user.user_id, 'Review Intake', 'client', 'Reviewed PAO Parts II and II-A', str(client.client_id), request)
+    commit_or_client_error(db, 'create')
+    db.refresh(client)
+    return get_client_payload(client)
+
+
+@app.patch('/api/pao-intakes/{client_id}')
+def update_paper_intake(client_id: int, payload: PaperIntakePayload, request: Request,
+                        user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    from paper_intake import APPLICANT, REPRESENTATIVE, validate_review
+    client = ensure_client_access(db.get(models.Client, client_id), user, db)
+    saved = db.query(models.ReviewedPaperIntake).filter_by(client_id=client_id).with_for_update().first()
+    if not saved or saved.document_id != payload.document_id:
+        raise HTTPException(422, 'Reviewed intake source does not match.')
+    try:
+        validate_review(payload.sections, payload.unreadable_fields or [], payload.field_reviews)
+        from paper_checkboxes import validate_boxes, reviewed_detained
+        validate_boxes(payload.checkbox_states, payload.sections)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if payload.checkbox_states is None and saved.checkbox_states is not None:
+        try:
+            validate_boxes(saved.checkbox_states, payload.sections)
+        except ValueError as exc:
+            raise HTTPException(422, 'Review the stored checkbox states before changing Nakakulong.') from exc
+    if payload.source_draft_id is not None:
+        saved.candidate_snapshot = reviewed_candidate_source(db, payload)
+        saved.source_draft_id = payload.source_draft_id
+    saved.sections = payload.sections
+    if payload.checkbox_states is not None:
+        saved.checkbox_states = payload.checkbox_states
+    # Simplified intake edits omit status metadata. Preserve existing values;
+    # never infer a new field status from a correction or an empty text box.
+    if payload.unreadable_fields is not None:
+        saved.unreadable_fields = payload.unreadable_fields
+    if payload.field_reviews is not None:
+        saved.field_reviews = payload.field_reviews
+    saved.reviewed_by, saved.reviewed_at = user.user_id, datetime.now(timezone.utc)
+    applicant, representative = payload.sections[APPLICANT], payload.sections[REPRESENTATIVE]
+    for key in ('name', 'sex', 'civil_status', 'religion', 'educational_attainment', 'citizenship', 'language_dialect'):
+        setattr(client, key, paper_compat_text(models.Client, key, applicant[key]))
+    def age(value):
+        return int(value) if value.isascii() and value.isdigit() and len(value) <= 3 else None
+    client.age = age(applicant['age'])
+    details = client.details
+    if details is None:
+        details = models.ClientDetails(client_id=client_id, detained=null())
+        db.add(details)
+    for source, target in [('address', 'address'), ('contact_no', 'contact_no'), ('email', 'email'),
+                           ('individual_monthly_income', 'individual_monthly_income'), ('spouse_name', 'spouse'),
+                           ('spouse_address', 'address_of_spouse'), ('spouse_contact_no', 'contact_no_of_spouse'),
+                           ('place_of_detention', 'place_of_detention')]:
+        setattr(details, target, paper_compat_text(models.ClientDetails, target, applicant[source]))
+    for source, target in [('name', 'name'), ('sex', 'sex'), ('civil_status', 'civil_status'),
+                           ('address', 'address'), ('contact_no', 'contact_no'), ('email', 'email'),
+                           ('relationship_to_applicant', 'relationship')]:
+        setattr(details, f'representative_{target}', paper_compat_text(models.ClientDetails, f'representative_{target}', representative[source]))
+    if payload.checkbox_states is not None:
+        projected = reviewed_detained(payload.checkbox_states)
+        details.detained = projected if projected is not None else null()
+    details.representative_age = age(representative['age'])
+    write_audit(db, user.user_id, 'Review Intake', 'client', 'Corrected reviewed PAO Parts II and II-A', str(client_id), request)
+    commit_or_client_error(db, 'update')
+    db.refresh(client)
+    return get_client_payload(client)
+
+
+@app.post('/api/pao-intakes/documents/{document_id}/extract')
+async def reread_paper_intake(document_id: int, request: Request,
+                              extraction_mode: Literal['auto', 'offline', 'cloud'] = Query(default='auto'),
+                              user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    source = paper_intake_scan(document_id, user, db)
+    metadata = db.query(models.ExtractedMetadata).filter_by(document_id=document_id).first()
+    if not metadata or metadata.extracted_json.get('intake_scope') != 'pao_parts_ii_iia':
+        raise HTTPException(422, 'This document is not a PAO paper intake.')
+    if Path(source.path).suffix.lower() == '.pdf' and extraction_mode == 'cloud':
+        raise HTTPException(400, 'Cloud mode does not support PDFs. Select offline mode.')
+    try:
+        extracted = await extract_document(str(source.path), extraction_mode, 'paper_intake', is_disconnected=request.is_disconnected)
+    except ExtractionBusy as exc:
+        raise HTTPException(503, 'OCR is busy. Retry after the current scan finishes.', headers={'Retry-After': '5'}) from exc
+    except ExtractionTimeout as exc:
+        raise HTTPException(504, 'OCR timed out. Review the source or retry.') from exc
+    except ExtractionCancelled as exc:
+        raise HTTPException(499, 'Document extraction cancelled.') from exc
+    except ExtractionWorkerError as exc:
+        raise HTTPException(503, 'OCR worker failed. Retry or review the scan manually.') from exc
+    # Re-reading produces a fresh draft. It must not rewrite either the original
+    # OCR evidence or any attorney-reviewed record until an explicit save.
+    public = public_extraction_payload(extracted)
+    draft_id = store_paper_draft(db, document_id, public)
+    db.commit()
+    return {'document_id': document_id, 'source_draft_id': draft_id, 'extracted_data': public}
+
+
+@app.post('/api/pao-intakes/capture-analyze')
+async def analyze_paper_capture(request: Request, file: UploadFile = File(...),
+                                corners_json: str | None = Form(default=None), rotation: int = Form(default=0),
+                                user: models.User = Depends(current_user)):
+    """Return local crop suggestions; the uploaded image is not a saved record."""
+    from paper_capture import (PaperCropError, detect_document, load_capture, preview_data_url,
+                               rectify, suggest_sections, validate_plan)
+    original_name = Path(file.filename or 'camera.jpg').name
+    extension = Path(original_name).suffix.lower()
+    if extension not in DOCUMENT_CONTENT_TYPES or file.content_type not in DOCUMENT_CONTENT_TYPES[extension]:
+        raise HTTPException(400, 'Crop review requires a JPG, PNG, WEBP, or single-page PDF scan.')
+    if rotation not in (0, 90, 180, 270):
+        raise HTTPException(422, 'Choose a quarter-turn rotation.')
+    source = UPLOAD_DIR / f'{uuid.uuid4()}{extension}'
+    page_file = UPLOAD_DIR / f'{uuid.uuid4()}-crop-preview.jpg'
+    try:
+        save_bounded_upload(file.file, source, MAX_DOCUMENT_BYTES)
+        if extension != '.pdf':
+            verify_image(source, extension)
+        image = await asyncio.to_thread(load_capture, source)
+        detected = await asyncio.to_thread(detect_document, image)
+        corners = detected['corners']
+        if corners_json:
+            try:
+                raw_corners = json.loads(corners_json)
+                corners = validate_plan({'corners': raw_corners, 'rotation': rotation,
+                                         'sections': {'part_ii': [.2, .6], 'part_iia': [.6, .9]},
+                                         'document_reviewed': True, 'sections_reviewed': True})['corners']
+            except (json.JSONDecodeError, PaperCropError) as exc:
+                raise HTTPException(422, str(exc)) from exc
+        page, _ = await asyncio.to_thread(rectify, image, corners, rotation)
+        import cv2
+        if not cv2.imwrite(str(page_file), page, [cv2.IMWRITE_JPEG_QUALITY, 93]):
+            raise PaperCropError('Could not prepare the preview.')
+        warnings = []
+        try:
+            headings = await extract_document(str(page_file), 'offline', 'paper_boundaries', is_disconnected=request.is_disconnected)
+            positions = headings.get('headings', {})
+            warnings.extend(headings.get('warnings') or [])
+        except (ExtractionBusy, ExtractionTimeout, ExtractionWorkerError, ExtractionCancelled):
+            positions = {}
+            warnings.append('Automatic heading detection was unavailable. Set both section boundaries manually.')
+        sections = suggest_sections(positions, page.shape[0])
+        if detected['confidence'] == 'uncertain' and not corners_json:
+            warnings.append(detected['warning'])
+        if sections['confidence'] == 'uncertain':
+            warnings.append(sections['warning'])
+        return {'document': {'corners': corners, 'confidence': 'manual' if corners_json else detected['confidence'],
+                             'warning': detected['warning'] if not corners_json else 'Check the adjusted page before OCR.'},
+                'rotation': rotation, 'original_size': [image.shape[1], image.shape[0]],
+                'page': {'width': page.shape[1], 'height': page.shape[0], 'preview': preview_data_url(page)},
+                'original_preview': preview_data_url(image) if extension == '.pdf' else None,
+                'sections': sections, 'headings_found': {key: key in positions for key in ('applicant_personal_circumstances', 'representative_personal_circumstances', 'end')},
+                'warnings': warnings}
+    except HTTPException:
+        raise
+    except PaperCropError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    finally:
+        source.unlink(missing_ok=True)
+        page_file.unlink(missing_ok=True)

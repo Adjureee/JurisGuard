@@ -82,6 +82,7 @@ class Client(Base):
     created_at = Column(DateTime, server_default=func.now())
     deleted_at = Column(DateTime)
 
+    paper_intake = relationship("ReviewedPaperIntake", uselist=False)
     details = relationship("ClientDetails", back_populates="client", uselist=False)
     classification = relationship("ClientClassification", back_populates="client", uselist=False)
     intakes = relationship("IntakeRecord", back_populates="client")
@@ -552,3 +553,25 @@ class CaseTransferAdministrativeEntry(Base):
     cause_of_action = Column(Text)
 
     report = relationship("CaseTransferReport", back_populates="administrative_entries")
+
+
+class PaperExtractionDraft(Base):
+    __tablename__ = 'paper_extraction_draft'
+    draft_id = Column(String(64), primary_key=True)
+    document_id = Column(Integer, ForeignKey('document.document_id'), nullable=False, index=True)
+    extraction_json = Column(JSONB, nullable=False)
+
+
+class ReviewedPaperIntake(Base):
+    __tablename__ = 'reviewed_paper_intake'
+    id = Column(Integer, primary_key=True)
+    client_id = Column(Integer, ForeignKey('client.client_id'), nullable=False, unique=True)
+    document_id = Column(Integer, ForeignKey('document.document_id'), nullable=False, unique=True)
+    reviewed_by = Column(Integer, ForeignKey('user.user_id'), nullable=False)
+    reviewed_at = Column(DateTime, nullable=False, server_default=func.now())
+    sections = Column(JSONB, nullable=False)
+    unreadable_fields = Column(JSONB, nullable=False)
+    field_reviews = Column(JSONB)
+    checkbox_states = Column(JSONB)
+    source_draft_id = Column(String(64))
+    candidate_snapshot = Column(JSONB)

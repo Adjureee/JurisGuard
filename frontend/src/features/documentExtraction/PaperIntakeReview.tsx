@@ -6,7 +6,7 @@ import { useConfirmation } from '../../components/ConfirmationProvider';
 import { PaperDocumentSetup, type IntakeStage } from './PaperDocumentSetup';
 import { useExtractionRequest } from './useExtractionRequest';
 import { extractPaper, getPaperScan, getPaperSchema, rereadPaper, savePaper, type PaperExtraction,
-  getPaperPage, type FieldEvidence, type PaperSchema, type PaperSection, type PaperSections, type SavedPaperIntake, type PaperCropPlan } from '../../services/paperIntakeService';
+  getPaperPage, type FieldEvidence, type PaperSchema, type PaperSection, type PaperSections, type SavedPaperIntake } from '../../services/paperIntakeService';
 import type { ClientRecord } from '../../types';
 import { representativeIsEmpty, reviewLabels, unknownBoxes, checkboxPrefix, detainedSummary, type CheckboxStates, type CheckboxState } from './paperReviewState';
 
@@ -26,7 +26,7 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
   const confirm = useConfirmation();
   const [dirty, setDirty] = useState(false);
   const [activeField, setActiveField] = useState<{ path: string; label: string }>();
-  const [fieldEvidence, setFieldEvidence] = useState<Record<string, FieldEvidence>>(saved?.candidate_snapshot?.diagnostics.field_evidence ?? {});
+  const [fieldEvidence, setFieldEvidence] = useState<Record<string, FieldEvidence>>(saved?.candidate_snapshot?.diagnostics.image_preparation?.selected_copy ? {} : saved?.candidate_snapshot?.diagnostics.field_evidence ?? {});
   const [fieldStates, setFieldStates] = useState<Record<string, string>>(saved?.candidate_snapshot?.diagnostics.field_states ?? {});
   const [unreadableFields, setUnreadableFields] = useState<string[]>(saved?.unreadable_fields ?? []);
   const [mobilePane, setMobilePane] = useState<'scan' | 'fields'>('fields');
@@ -53,13 +53,14 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
   const [candidateSections, setCandidateSections] = useState<PaperSections | undefined>(saved?.candidate_snapshot?.sections);
   const [schema, setSchema] = useState<PaperSchema>();
   const [schemaError, setSchemaError] = useState('');
+  const [schemaAttempt, setSchemaAttempt] = useState(0);
   const [sections, setSections] = useState<PaperSections | undefined>(saved?.sections);
   const [documentId, setDocumentId] = useState<number | undefined>(saved?.document_id);
   const [preview, setPreview] = useState<Blob>();
   const [previewUrl, setPreviewUrl] = useState('');
   const [scanError, setScanError] = useState('');
   const [retryFile, setRetryFile] = useState<File>();
-  const [retryPlan, setRetryPlan] = useState<PaperCropPlan>();
+  const [retryOriginal, setRetryOriginal] = useState<File>();
   const [ocrFailure, setOcrFailure] = useState('');
   const [representativeExpanded, setRepresentativeExpanded] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -76,11 +77,14 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
 
   useEffect(() => {
     const controller = new AbortController();
+    setSchemaError('');
     getPaperSchema(controller.signal).then(setSchema).catch(error => {
-      if (!controller.signal.aborted) setSchemaError(message(error));
+      if (!controller.signal.aborted) setSchemaError(error instanceof AxiosError && error.response?.status === 404
+        ? 'The backend is missing the PAO intake service. Restart the updated backend, then retry. Your selected image is kept.'
+        : `Could not load the intake fields: ${message(error)}. Check that the backend is running, then retry. Your selected image is kept.`);
     });
     return () => controller.abort();
-  }, []);
+  }, [schemaAttempt]);
   useEffect(() => {
     if (!saved) return;
     const controller = new AbortController();
@@ -112,7 +116,7 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
 
   function applyExtraction(result: PaperExtraction) {
     setDirty(true); setMobilePane('fields');
-    setFieldEvidence(result.extracted_data.diagnostics.field_evidence ?? {});
+    setFieldEvidence(result.extracted_data.diagnostics.image_preparation?.selected_copy ? {} : result.extracted_data.diagnostics.field_evidence ?? {});
     setFieldStates(result.extracted_data.diagnostics.field_states ?? {});
     setUnreadableFields([]);
     setPageCount(result.extracted_data.diagnostics.page_count ?? 1); setPageNumber(1);
@@ -124,15 +128,20 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
       ? 'No text could be read from this scan. Enter the details from the paper or try another scan.' : '');
     setRepresentativeExpanded(false); setSaveError(''); setSuccess('');
   }
-  async function scan(file: File, plan?: PaperCropPlan) {
+  async function scan(file: File, original?: File) {
     if (sections && !await mayReplace()) return;
     const request = extraction.startExtraction('Reading Parts II and II-A…');
     if (!request) return;
-    setDirty(true); setRetryFile(file); setRetryPlan(plan);
-    setSections(undefined); setDocumentId(undefined); setPreview(file); setScanError(''); setOcrFailure(''); setSaveError(''); setSuccess('');
+    setDirty(true); setRetryFile(file); setRetryOriginal(original);
+    setSections(undefined); setDocumentId(undefined); setPreview(original ?? file); setScanError(''); setOcrFailure(''); setSaveError(''); setSuccess('');
     try {
-      const result = await extractPaper(file, request.controller.signal, mode, plan);
-      if (extraction.isCurrentExtraction(request)) { applyExtraction(result); setRetryFile(undefined); }
+      const result = await extractPaper(file, request.controller.signal, mode, original);
+      if (extraction.isCurrentExtraction(request)) {
+        applyExtraction(result);
+        // Edited-image coordinates do not describe the retained original scan.
+        if(original && original !== file) setFieldEvidence({});
+        setRetryFile(undefined);setRetryOriginal(undefined);
+      }
     } catch (error) {
       if (extraction.isCurrentExtraction(request)) {
         setDirty(true);
@@ -214,7 +223,7 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
       className={sections ? 'max-h-[36dvh] shrink-0 overflow-y-auto border-b px-4 py-2' : 'min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8'}>
       <summary className={sections ? 'cursor-pointer py-2 text-sm font-semibold' : 'hidden'} tabIndex={sections ? 0 : -1} aria-hidden={!sections}>Replace scan or change OCR settings</summary>
       <div className={`space-y-5 ${sections ? 'pb-3' : 'mx-auto w-full max-w-5xl pb-8'}`}>
-      <PaperDocumentSetup disabled={busy} schemaReady={!!schema} mode={mode} onModeChange={setMode} onExtract={(file,plan)=>void scan(file,plan)} onPending={setDirty} onStageChange={setSetupStage} inputMethod={inputMethod}/>
+      <PaperDocumentSetup inputMethod={inputMethod} disabled={busy} schemaReady={!!schema} mode={mode} onModeChange={setMode} onExtract={(file,original)=>void scan(file,original)} onPending={pending=>{if(pending||!sections)setDirty(pending);}} onStageChange={setSetupStage}/>
     </div></details>}
     {extraction.isExtracting && <div role="status" className="shrink-0 space-y-3 border-b bg-[#FAF7FC] px-5 py-4 text-sm text-[#542F69]">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold">Processing captured document</p><p className="mt-1">Extracting Parts II and II-A and preparing the information for review… {extraction.elapsedSeconds}s</p></div>
@@ -222,8 +231,8 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
       </div>
       <div role="progressbar" aria-label="Document extraction progress" aria-valuetext="Processing document; progress is indeterminate" className="h-2 overflow-hidden rounded-full bg-[#E5D9EB]"><div className="pao-progress-indeterminate h-full w-1/3 rounded-full bg-[#704389]" /></div>
     </div>}
-    {schemaError && <p role="alert" className="text-rose-700">{schemaError}</p>}
-    {scanError && <div role="alert" className="flex shrink-0 flex-wrap items-center gap-3 border-b bg-rose-50 px-4 py-2 text-sm text-rose-800"><span>{scanError}</span>{retryFile && !busy && <button type="button" onClick={() => void scan(retryFile, retryPlan)} className="rounded border border-rose-300 bg-white px-3 py-2 font-semibold">Retry OCR</button>}</div>}
+    {schemaError && <div role="alert" className="flex flex-wrap items-center gap-3 rounded border border-rose-200 bg-rose-50 p-4 text-rose-800"><p>{schemaError}</p><button type="button" onClick={()=>setSchemaAttempt(value=>value+1)} className="min-h-11 rounded border border-rose-300 bg-white px-4 py-2 font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Retry loading intake fields</button></div>}
+    {scanError && <div role="alert" className="flex shrink-0 flex-wrap items-center gap-3 border-b bg-rose-50 px-4 py-2 text-sm text-rose-800"><span>{scanError}</span>{retryFile && !busy && <button type="button" onClick={() => void scan(retryFile, retryOriginal)} className="rounded border border-rose-300 bg-white px-3 py-2 font-semibold">Retry OCR</button>}</div>}
     {ocrFailure && <p role="alert" className="shrink-0 border-b bg-rose-50 px-4 py-2 text-sm text-rose-800">{ocrFailure}</p>}
     {sections && <p className="shrink-0 border-b bg-slate-50 px-4 py-2 text-sm text-slate-700">Compare every entry, including the Oo/Hindi boxes, with the complete original scan. Correct the fields before saving.</p>}
     {sections && <div className="flex shrink-0 gap-2 border-b px-4 lg:hidden" role="group" aria-label="Review view">

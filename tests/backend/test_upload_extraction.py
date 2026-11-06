@@ -77,7 +77,7 @@ class UploadExtractionTests(unittest.IsolatedAsyncioTestCase):
             return await self.handler(
                 request=SimpleNamespace(is_disconnected=AsyncMock(return_value=False)),
                 user=SimpleNamespace(user_id=1, full_name="Synthetic Tester"),
-                user_id=None, file=file, case_id=None, intake_id=None,
+                user_id=None, file=file, ocr_image=None, crop_plan=None, case_id=None, intake_id=None,
                 extraction_mode="offline", extraction_target="full", db=self.db,
             )
         finally:

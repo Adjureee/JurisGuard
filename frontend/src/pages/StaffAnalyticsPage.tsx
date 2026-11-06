@@ -43,9 +43,10 @@ function ocrStatusColor(status: string) {
   return OCR_STATUS_COLORS[status.trim().toUpperCase()] ?? "#64748B";
 }
 
-type AnalyticsPreset = "last30" | "last90" | "year";
+type AnalyticsPreset = "all" | "last30" | "last90" | "year";
 
 function analyticsPresetRange(preset: AnalyticsPreset) {
+  if (preset === 'all') return { dateFrom: '', dateTo: '' };
   const end = new Date();
   const start = new Date(end);
   if (preset === "last30") start.setDate(end.getDate() - 29);
@@ -71,9 +72,9 @@ export default function StaffAnalyticsPage() {
   const [selectedBarangay, setSelectedBarangay] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [exportOpen, setExportOpen] = useState(false);
-  const [datePreset, setDatePreset] = useState<AnalyticsPreset>("last30");
-  const [dateRange, setDateRange] = useState(() => analyticsPresetRange("last30"));
-  const { monthlyTrends, intakeLoad, caseCategories, heatmap, terminatedStats, ocrAnalytics, isLoading: trendsLoading } = useDashboardAnalytics({ dateRange, heatmapScope: "office" });
+  const [datePreset, setDatePreset] = useState<AnalyticsPreset>("all");
+  const [dateRange, setDateRange] = useState(() => analyticsPresetRange("all"));
+  const { monthlyTrends, intakeLoad, caseCategories, heatmap, terminatedStats, ocrAnalytics, isLoading: trendsLoading } = useDashboardAnalytics({ dateRange });
 
   useEffect(() => {
     let cancelled = false;
@@ -184,7 +185,7 @@ export default function StaffAnalyticsPage() {
       ) : (
         <>
           <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
-            <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Office-wide barangay markers with aggregate case counts." headerClassName="rounded-t-xl bg-[#604477]">
+            <AnalyticsPanel title="Client locations" subtitle="Unique clients grouped by recorded address in the selected registration period." headerClassName="rounded-t-xl bg-[#604477]">
               {heatmap && heatmap.barangays.length > 0 ? (
                 <Suspense fallback={<SkeletonBlock className="h-[520px]" />}>
                   <GeoAnalyticsMap
@@ -193,13 +194,12 @@ export default function StaffAnalyticsPage() {
                     barangays={heatmap.barangays}
                     selectedBarangay={selectedBarangay}
                     onSelectBarangay={setSelectedBarangay}
-                    aggregateOnly
                   />
                 </Suspense>
-              ) : <EmptyState message="No office-wide hotspot data is available yet." />}
+              ) : <EmptyState message="No client addresses are available for this period." />}
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-full min-h-0" headerClassName="rounded-t-xl bg-[#604477]">
+            <AnalyticsPanel title="Client address groups" subtitle="Ranked by the number of unique clients." className="h-full min-h-0" headerClassName="rounded-t-xl bg-[#604477]">
               <div className="max-h-[520px] min-h-[460px] space-y-3 overflow-y-auto pr-2">
                 {!heatmap || heatmap.barangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : heatmap.barangays.map((barangay, index) => (
                   <button
@@ -225,11 +225,12 @@ export default function StaffAnalyticsPage() {
                 <p className="mt-1 text-xs font-medium text-[#6B7280]">Personal trends and closure analytics refresh from this range.</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {([["last30", "Last 30 Days"], ["last90", "Last 90 Days"], ["year", "This Year"]] as Array<[AnalyticsPreset, string]>).map(([value, label]) => (
+                {([["all", "All dates"], ["last30", "Last 30 Days"], ["last90", "Last 90 Days"], ["year", "This Year"]] as Array<[AnalyticsPreset, string]>).map(([value, label]) => (
                   <button
                     key={value}
                     type="button"
-                    onClick={() => { setDatePreset(value); setDateRange(analyticsPresetRange(value)); }}
+                    onClick={() => { setSelectedBarangay(null); setDatePreset(value); setDateRange(analyticsPresetRange(value)); }}
+                    aria-pressed={datePreset === value}
                     className={`rounded-lg border px-3 py-2 text-xs font-semibold ${datePreset === value ? "border-[#704389] bg-[#F7F0FA] text-[#704389]" : "border-[#D1D5DB] bg-white text-[#4B5563] hover:bg-[#F3F4F6]"}`}
                   >
                     {label}

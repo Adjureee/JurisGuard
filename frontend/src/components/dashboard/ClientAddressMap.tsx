@@ -68,7 +68,8 @@ export default function ClientAddressMap({ barangays = [], selectedBarangay, onS
   }, []);
 
   const cityData = useMemo(() => boundaries ? cityClientFeatures(barangays, boundaries) : null, [barangays, boundaries]);
-  const selected = useMemo(() => boundaries && selectedBarangay ? matchAddressCity(selectedBarangay, boundaries) : null, [boundaries, selectedBarangay]);
+  const selected = useMemo(() => boundaries && selectedBarangay ? matchAddressCity(selectedBarangay, boundaries,
+    barangays.find(group => group.barangay === selectedBarangay)?.city) : null, [boundaries, selectedBarangay, barangays]);
   const total = barangays.reduce((sum, item) => sum + item.total_cases, 0);
   const located = cityData?.features.reduce((sum, feature) => sum + Number(feature.properties?.clientCount ?? 0), 0) ?? 0;
 

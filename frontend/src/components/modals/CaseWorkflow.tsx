@@ -4,7 +4,6 @@ import toast from "react-hot-toast";
 import { useForm } from "react-hook-form";
 import type { KeyboardEvent } from "react";
 import type {
-  Resolver,
   UseFormRegisterReturn,
 } from "react-hook-form";
 import { StepIndicator } from "../../features/criminalCases/components/StepIndicator";
@@ -12,12 +11,14 @@ import {
   addCaseFormSchema,
   criminalAddCaseFormSchema,
   type AddCaseFormValues,
+  type AddCaseFormInput,
 } from "../../features/criminalCases/schemas";
 import type {
   CaseType,
   ClientRecord,
 } from "../../types";
 import ClientInformationModal from "./ClientInformationModal";
+import { ScannedIntakeEditModal } from '../../features/documentExtraction/ScannedIntakeEditModal';
 import { getClientCases } from "../../services/recordService";
 import { useConfirmation } from "../ConfirmationProvider";
 import { relationshipOptions } from "../../features/criminalCases/clientFieldOptions";
@@ -142,7 +143,7 @@ const createDefaultValues = (
       cause_of_action: "",
       ...civilCaseDefaults,
     },
-  } as AddCaseFormValues;
+  };
 };
 
 const urbanBarangays = [
@@ -567,8 +568,8 @@ export function CaseWorkflow({
     watch,
     trigger,
     formState: { isSubmitting, errors },
-  } = useForm<AddCaseFormValues>({
-    resolver: zodResolver(formSchema) as Resolver<AddCaseFormValues>,
+  } = useForm<AddCaseFormInput, unknown, AddCaseFormValues>({
+    resolver: zodResolver(formSchema),
     defaultValues: createDefaultValues(
       lockedSelectionClients[0]?.client_id ?? "",
       caseType,
@@ -1816,7 +1817,7 @@ export function CaseWorkflow({
                   </h3>
                   <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                     <ReviewField label="Representative Name" value={representative?.rep_name} />
-                    <ReviewField label="Representative Age" value={representative?.rep_age} />
+                    <ReviewField label="Representative Age" value={typeof representative?.rep_age === 'number' || typeof representative?.rep_age === 'string' ? representative.rep_age : undefined} />
                     <ReviewField label="Representative Sex" value={representative?.rep_sex} />
                     <ReviewField label="Civil Status" value={representative?.civil_status} />
                     <ReviewField label="Representative Address" value={representative?.rep_address} />
@@ -1895,11 +1896,7 @@ export function CaseWorkflow({
         client={viewingClient}
         onClose={() => setViewingClient(null)}
       />
-      <ClientInformationModal
-        client={editingClient}
-        onClose={() => setEditingClient(null)}
-        onSaved={onClientUpdated}
-      />
+      {editingClient && onClientUpdated && <ScannedIntakeEditModal client={editingClient} onClose={() => setEditingClient(null)} onSaved={onClientUpdated} />}
     </form>
   );
 }
