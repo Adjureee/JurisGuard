@@ -72,9 +72,9 @@ export default function StaffAnalyticsPage() {
   const [selectedBarangay, setSelectedBarangay] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [exportOpen, setExportOpen] = useState(false);
-  const [datePreset, setDatePreset] = useState<AnalyticsPreset>("last30");
-  const [dateRange, setDateRange] = useState(() => analyticsPresetRange("last30"));
-  const { monthlyTrends, intakeLoad, caseCategories, heatmap, terminatedStats, ocrAnalytics, isLoading: trendsLoading } = useDashboardAnalytics({ dateRange, heatmapScope: "office" });
+  const [datePreset, setDatePreset] = useState<AnalyticsPreset>("all");
+  const [dateRange, setDateRange] = useState(() => analyticsPresetRange("all"));
+  const { monthlyTrends, intakeLoad, caseCategories, heatmap, terminatedStats, ocrAnalytics, isLoading: trendsLoading } = useDashboardAnalytics({ dateRange });
 
   useEffect(() => {
     let cancelled = false;
@@ -185,7 +185,7 @@ export default function StaffAnalyticsPage() {
       ) : (
         <>
           <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
-            <AnalyticsPanel title="Geospatial Criminal Case Hotspots" subtitle="Office-wide barangay markers with aggregate case counts." headerClassName="rounded-t-xl bg-[#604477]">
+            <AnalyticsPanel title="Client locations" subtitle="Unique clients grouped by recorded address in the selected registration period." headerClassName="rounded-t-xl bg-[#604477]">
               {heatmap && heatmap.barangays.length > 0 ? (
                 <Suspense fallback={<SkeletonBlock className="h-[520px]" />}>
                   <GeoAnalyticsMap
@@ -194,13 +194,12 @@ export default function StaffAnalyticsPage() {
                     barangays={heatmap.barangays}
                     selectedBarangay={selectedBarangay}
                     onSelectBarangay={setSelectedBarangay}
-                    aggregateOnly
                   />
                 </Suspense>
-              ) : <EmptyState message="No office-wide hotspot data is available yet." />}
+              ) : <EmptyState message="No client addresses are available for this period." />}
             </AnalyticsPanel>
 
-            <AnalyticsPanel title="Top Affected Barangays" subtitle="Ranked by total criminal case records." className="h-full min-h-0" headerClassName="rounded-t-xl bg-[#604477]">
+            <AnalyticsPanel title="Client address groups" subtitle="Ranked by the number of unique clients." className="h-full min-h-0" headerClassName="rounded-t-xl bg-[#604477]">
               <div className="max-h-[520px] min-h-[460px] space-y-3 overflow-y-auto pr-2">
                 {!heatmap || heatmap.barangays.length === 0 ? <EmptyState message="No barangay analytics available yet." /> : heatmap.barangays.map((barangay, index) => (
                   <button

@@ -67,6 +67,7 @@ export const emptyOcrAnalytics: OcrAnalytics = {
   total_scans: 0,
   successful_extractions: 0,
   failed_scans: 0,
+  status_breakdown: [],
   document_types: [],
   trends: [],
   recent: [],
@@ -151,6 +152,7 @@ function safeOcrAnalytics(value: unknown): OcrAnalytics {
         : 0,
     failed_scans: typeof candidate.failed_scans === "number" && Number.isFinite(candidate.failed_scans) ? candidate.failed_scans : 0,
     document_types: safeArray<OcrAnalytics["document_types"][number]>(candidate.document_types),
+    status_breakdown: safeArray<OcrAnalytics["status_breakdown"][number]>(candidate.status_breakdown),
     trends: safeArray<OcrAnalytics["trends"][number]>(candidate.trends),
     recent: safeArray<OcrAnalytics["recent"][number]>(candidate.recent),
   };

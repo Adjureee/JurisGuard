@@ -62,6 +62,7 @@ export interface ClientClassification {
 }
 
 export interface ClientRecord {
+  paper_intake?: import('./services/paperIntakeService').SavedPaperIntake | null;
   client_id: string;
   created_by_user_id: number | null;
   client: Client;

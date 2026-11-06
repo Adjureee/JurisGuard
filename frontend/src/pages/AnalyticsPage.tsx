@@ -290,8 +290,8 @@ function ChartDownloadButton({
 }
 
 export default function AnalyticsPage() {
-  const [datePreset, setDatePreset] = useState<DatePreset>("last30");
-  const [dateRange, setDateRange] = useState(() => presetRange("last30"));
+  const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [dateRange, setDateRange] = useState(() => presetRange("all"));
   const [dateInputs, setDateInputs] = useState(dateRange);
   const invalidRange = datePreset !== 'all' && (!dateInputs.dateFrom || !dateInputs.dateTo || dateInputs.dateFrom > dateInputs.dateTo);
   const {

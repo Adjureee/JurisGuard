@@ -317,5 +317,16 @@ export const criminalAddCaseFormSchema = z
 
 export type ClientFormValues = z.infer<typeof clientFormSchema>;
 export type CaseFormValues = z.infer<typeof caseFormSchema>;
-export type AddCaseFormValues = z.infer<typeof addCaseFormSchema>;
 export type CriminalAddCaseFormValues = z.infer<typeof criminalAddCaseFormSchema>;
+type CivilAddCaseFormValues = z.infer<typeof addCaseFormSchema>;
+// Civil-only fields are optional in shared state; the criminal resolver omits them.
+export type AddCaseFormValues = Omit<CivilAddCaseFormValues, 'intake_record' | 'cases'> & {
+  intake_record: CriminalAddCaseFormValues['intake_record'] & Partial<CivilAddCaseFormValues['intake_record']>;
+  cases: CriminalAddCaseFormValues['cases'] & Partial<CivilAddCaseFormValues['cases']>;
+};
+type CivilAddCaseFormInput = z.input<typeof addCaseFormSchema>;
+type CriminalAddCaseFormInput = z.input<typeof criminalAddCaseFormSchema>;
+export type AddCaseFormInput = Omit<CivilAddCaseFormInput, 'intake_record' | 'cases'> & {
+  intake_record: CriminalAddCaseFormInput['intake_record'] & Partial<CivilAddCaseFormInput['intake_record']>;
+  cases: CriminalAddCaseFormInput['cases'] & Partial<CivilAddCaseFormInput['cases']>;
+};

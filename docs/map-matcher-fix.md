@@ -38,6 +38,12 @@ node --test tests/frontend/client_map_data.test.cjs
 .\backend\venv\Scripts\python.exe scripts/verify_demo_export.py
 ```
 
-Full-project TypeScript validation remains blocked by pre-existing errors in CaseWorkflow, CriminalCases, dashboard analytics and StaffAnalyticsPage (missing/mismatched intake and analytics types). Those files are unchanged by this map fix. Map-specific dependency graph validation is checked separately. Production build does not perform a full typecheck.
+The subsequent TypeScript contract repair resolved the case-workflow, reviewed-intake and analytics type errors. Full-project `npm run typecheck` and the production build now pass.
 
 Unqualified duplicate names, contradictory addresses, unknown places and unsupported source-edition metadata remain unmatched. The map locates city/municipality reference areas, not individual homes. The backend's optional barangay-point layer remains Panabo-only; the city map now reconciles the broader address counts using the nationwide offline boundary index.
+
+## Records hidden by the default date filter
+
+A follow-up read-only check on November 6, 2026 found 101 clients with addresses, but only one registered within the last 30 days. Both analytics pages previously opened with that recent-period filter, making the map appear not to fetch older records. They now open with All dates. Existing registration-date filters, unique-client counting and access scopes remain in place; no registration dates or records were changed. Staff map labels now describe client addresses rather than crime incidents.
+
+`tests/frontend/analytics_all_dates_browser.py` verifies that the initial unfiltered API requests show 101 synthetic clients, Last 30 Days shows one, and switching back restores 101. The real local address-group/map check matched all 101 current clients, with zero remote map requests. Eight matcher regressions, TypeScript and the frontend build passed. Street-level offline detail remains limited to the installed Mati tiles; city-level client counts work across the nationwide boundary layer.
