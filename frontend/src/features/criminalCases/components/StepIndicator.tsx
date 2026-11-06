@@ -1,9 +1,10 @@
 interface StepIndicatorProps {
   steps: string[];
   currentStep: number;
+  stepNumberOffset?: number;
 }
 
-export function StepIndicator({ steps, currentStep }: StepIndicatorProps) {
+export function StepIndicator({ steps, currentStep, stepNumberOffset = 0 }: StepIndicatorProps) {
   return (
     <div className="grid gap-2 sm:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
       {steps.map((item, index) => (
@@ -18,7 +19,7 @@ export function StepIndicator({ steps, currentStep }: StepIndicatorProps) {
           }`}
         >
           <span className="block text-[11px] font-semibold uppercase tracking-wide opacity-80">
-            Step {index + 1}
+            Step {index + 1 + stepNumberOffset}
           </span>
           <span className="mt-0.5 block truncate">{item}</span>
         </div>

@@ -108,17 +108,12 @@ assert call("GET", f"/api/case-submissions/{submission_id}", 200, a)["status"] =
 call("GET", f"/api/case-submissions/{submission_id}", 403, b)
 call("PATCH", f"/api/case-submissions/{submission_id}", 403, b, json=coverage)
 call("POST", f"/api/case-submissions/{submission_id}/submit", 403, b)
-call("POST", f"/api/case-submissions/{submission_id}/approve", 403, a)
-call("POST", f"/api/case-submissions/{submission_id}/approve", 400, admin)
+call("POST", f"/api/case-submissions/{submission_id}/review", 404, admin)
+call("POST", f"/api/case-submissions/{submission_id}/request-correction", 404, admin, json={"comments": "Synthetic correction"})
+call("POST", f"/api/case-submissions/{submission_id}/approve", 404, admin)
 assert call("POST", f"/api/case-submissions/{submission_id}/submit", 200, a)["status"] == "Submitted"
-assert call("POST", f"/api/case-submissions/{submission_id}/review", 200, admin)["status"] == "Under Review"
-corrected = call("POST", f"/api/case-submissions/{submission_id}/request-correction", 200, admin, json={"comments": "Synthetic correction"})
-assert corrected["status"] == "Correction Required"
-resubmitted = call("POST", f"/api/case-submissions/{submission_id}/resubmit", 200, a, json=coverage)
-assert resubmitted["version"] == 2 and resubmitted["status"] == "Resubmitted"
-call("POST", f"/api/case-submissions/{submission_id}/approve", 409, admin)
-assert call("POST", f'/api/case-submissions/{resubmitted["submission_id"]}/approve', 200, admin)["status"] == "Approved"
-assert len(call("GET", f"/api/case-submissions/{submission_id}/history", 200, a)) == 2
+assert call("GET", f"/api/case-submissions/{submission_id}", 200, a)["status"] == "Submitted"
+assert len(call("GET", f"/api/case-submissions/{submission_id}/history", 200, a)) == 1
 call("POST", f"/api/upload-document/?case_id={case_id}&extraction_mode=offline", 403, b, files={"file": ("intake.png", fixture.read_bytes(), "image/png")})
 # Document blobs must not be accessible through the public uploads route.
 call("GET", f'/uploads/{result["document_id"]}', 404)

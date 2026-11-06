@@ -29,6 +29,7 @@ interface CaseWorkflowProps {
   caseType?: CaseType;
   requireReviewBeforeSubmit?: boolean;
   submitLabel?: string;
+  stepNumberOffset?: number;
   onClientUpdated?: (client: ClientRecord) => void;
   onSubmit: (values: AddCaseFormValues) => void | Promise<void>;
 }
@@ -519,6 +520,7 @@ export function CaseWorkflow({
   caseType = "Criminal",
   requireReviewBeforeSubmit = false,
   submitLabel = "Save Case",
+  stepNumberOffset = 0,
   onClientUpdated,
   onSubmit,
 }: CaseWorkflowProps) {
@@ -902,6 +904,25 @@ export function CaseWorkflow({
     }
   };
 
+  const selectedClientsSection = (
+    <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+      <h3 className="text-base font-semibold text-[#1F2937]">
+        {selectedClients.length === 1 ? "Selected Client" : "Selected Clients"}
+      </h3>
+      <div className="mt-3 flex flex-wrap content-start gap-2">
+        {selectedClients.map((client) => (
+          <SelectedClientCard
+            key={client.client_id}
+            client={client}
+            locked={hasLockedSelection}
+            onView={() => setViewingClient(client)}
+            onRemove={hasLockedSelection ? undefined : () => void removeSelectedClient(client.client_id)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+
   return (
     <form
       onSubmit={handleSubmit(submitCase, () =>
@@ -913,7 +934,7 @@ export function CaseWorkflow({
       className="flex max-h-[calc(92vh-138px)] flex-col"
     >
       <div className="border-b border-[#E5E7EB] bg-white px-6 py-4">
-        <StepIndicator steps={steps} currentStep={step} />
+        <StepIndicator steps={steps} currentStep={step} stepNumberOffset={stepNumberOffset} />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8FAFC] px-6 py-5">
@@ -1024,6 +1045,8 @@ export function CaseWorkflow({
 
         {isCaseFormStep && (
           <div className="space-y-6">
+            {hasLockedSelection && selectedClientsSection}
+
             {caseType === "Criminal" && (
               <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
                 <h3 className="text-base font-semibold text-[#1F2937]">
@@ -1045,22 +1068,7 @@ export function CaseWorkflow({
               </section>
             )}
 
-            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
-              <h3 className="text-base font-semibold text-[#1F2937]">
-                {selectedClients.length === 1 ? "Selected Client" : "Selected Clients"}
-              </h3>
-              <div className="mt-3 flex flex-wrap content-start gap-2">
-                {selectedClients.map((client) => (
-                  <SelectedClientCard
-                    key={client.client_id}
-                    client={client}
-                    locked={hasLockedSelection}
-                    onView={() => setViewingClient(client)}
-                    onRemove={hasLockedSelection ? undefined : () => void removeSelectedClient(client.client_id)}
-                  />
-                ))}
-              </div>
-            </section>
+            {!hasLockedSelection && selectedClientsSection}
 
             {caseType === "Criminal" && (
               <>

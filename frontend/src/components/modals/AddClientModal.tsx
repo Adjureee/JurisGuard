@@ -49,9 +49,9 @@ function IntakeSession({ onClose, initialMode }: { onClose: () => void; initialM
   });
   const reviewingClient = (phase === 'manual' && manualReview) || (phase === 'scan' && stage === 'review');
   return <ModalPortal><div ref={dialog} className="jurisguard-modal-overlay intake-modal bg-black/60 p-3 sm:p-5" role="dialog" aria-modal="true" aria-labelledby="paper-intake-title">
-    <div className="flex h-[92vh] max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
-      <header className="flex shrink-0 gap-3 items-start justify-between border-b px-5 py-4"><div className="min-w-0 flex-1"><h2 id="paper-intake-title" className="text-xl font-semibold">Add client</h2>
-        <p className="mt-1 text-sm text-slate-600">{phase==='scan'?'PAO Interview Sheet · Parts II and II-A':'Create a client record.'}</p></div>
+    <div className={`flex w-full flex-col overflow-hidden rounded-2xl bg-white shadow-xl ${phase === 'saved' ? 'max-h-[92vh] max-w-2xl' : phase === 'case' ? 'h-[92vh] max-h-[92vh] max-w-5xl' : 'h-[92vh] max-h-[92vh] max-w-6xl'}`}>
+      <header className="flex shrink-0 gap-3 items-start justify-between border-b px-5 py-4"><div className="min-w-0 flex-1">{phase !== 'case' && <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#704389]">Step 1 — Client Details</p>}<h2 id="paper-intake-title" className="text-xl font-semibold">{phase === 'case' ? 'Case Details' : 'Add client'}</h2>
+        <p className="mt-1 text-sm text-slate-600">{phase === 'case' ? 'Enter case information for the selected client.' : phase === 'scan' ? 'PAO Interview Sheet · Parts II and II-A' : 'Create a client record.'}</p></div>
         {!reviewingClient && <button type="button" onClick={() => void leave(onClose)} className="intake-secondary"><X size={16} aria-hidden="true"/>Close</button>}</header>
       {(phase==='scan'||phase==='manual')&&<div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-5 py-2"><button type="button" className="intake-secondary" onClick={()=>void leave(()=>{setManualReview(false);setPhase('method');setStage('select');setSession(s=>s+1);})}>Change Method</button>{dirty&&<button type="button" className="inline-flex min-h-11 items-center justify-center rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-800 transition hover:bg-rose-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-700" onClick={()=>void leave(()=>{setManualReview(false);setSession(s=>s+1);setStage('select');})}>Discard Entry</button>}</div>}
       {phase==='scan'&&<ol aria-label="Document intake stages" className="flex shrink-0 flex-wrap gap-x-4 gap-y-2 border-b bg-slate-50 px-5 py-3 text-xs sm:text-sm">{(['Select document','Review crop (optional)','Extract','Review details','Save'] as const).map((label,i)=>{const active=['select','crop','extract','review','save'].indexOf(stage)===i;return <li key={label} aria-current={active?'step':undefined} className={`flex items-center gap-2 ${active?'font-semibold text-[#704389]':'text-slate-600'}`}><span>{label}</span>{i<4&&<ArrowRight size={12} aria-hidden="true"/>}</li>;})}</ol>}
@@ -61,17 +61,17 @@ function IntakeSession({ onClose, initialMode }: { onClose: () => void; initialM
         {phase === 'scan' && <PaperIntakeReview key={session} onStageChange={setStage} onDirtyChange={setDirty} onSaved={client => {
           setDirty(false); upsertClient(client); setClients(current => [...current, client]); setSuccessKind('paper'); setPhase('saved');
         }} />}
-        {phase === 'saved' && <div className="flex h-full flex-col p-5"><div className="flex-1 space-y-4">
+        {phase === 'saved' && <div className="flex flex-col p-5"><div className="space-y-4">
           <p role="status" className="font-semibold text-emerald-800">{successKind === 'manual' ? 'Client created manually.' : 'Reviewed intake saved with its original scan.'}</p>
           {latestClient && <button type="button" onClick={() => setViewing(latestClient)} className="block w-full rounded border p-3 text-left font-semibold text-[#704389] underline underline-offset-2">
             {latestClient.client.name} — View client record
           </button>}
         </div><div className="grid gap-2 border-t border-[#E5E7EB] pt-4 sm:grid-cols-[1fr_auto_1fr]">
-          <button type="button" onClick={() => { setDirty(false); setManualReview(false); setSession(current => current + 1); setStage('select'); setPhase(successKind === 'manual' ? 'manual' : 'method'); }} className="intake-secondary sm:justify-self-start">Add another client</button>
-          <button type="button" onClick={() => setPhase('case')} className="intake-primary sm:col-start-2 sm:row-start-1">Continue to Case Details</button>
-          <button type="button" onClick={onClose} className="intake-secondary sm:col-start-3 sm:row-start-1 sm:justify-self-end">Done</button>
+          <button type="button" onClick={() => { setDirty(false); setManualReview(false); setSession(current => current + 1); setStage('select'); setPhase(successKind === 'manual' ? 'manual' : 'method'); }} className="intake-secondary whitespace-nowrap sm:justify-self-start">Add another client</button>
+          <button type="button" onClick={() => setPhase('case')} className="intake-primary whitespace-nowrap sm:col-start-2 sm:row-start-1 sm:justify-self-center">Continue to Case Details</button>
+          <button type="button" onClick={onClose} className="intake-secondary whitespace-nowrap sm:col-start-3 sm:row-start-1 sm:justify-self-end">Done</button>
         </div></div>}
-        {phase === 'case' && latestClient && <CaseWorkflow clients={[]} lockedClient={latestClient} lockedClients={[latestClient]} submitLabel="Save Case" onClientUpdated={updated => {
+        {phase === 'case' && latestClient && <CaseWorkflow clients={[]} lockedClient={latestClient} lockedClients={[latestClient]} stepNumberOffset={1} submitLabel="Save Case" onClientUpdated={updated => {
           upsertClient(updated);
           setClients(current => current.map(client => client.client_id === updated.client_id ? updated : client));
         }} onSubmit={async values => {

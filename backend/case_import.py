@@ -9,6 +9,14 @@ from typing import Any
 
 
 MAX_WORKBOOK_BYTES = 15 * 1024 * 1024
+VALID_CIVIL_NATURES = frozenset({"Criminal", "Administrative", "Civil", "Labor", "Appeal"})
+
+
+def is_valid_import_nature_of_case(case_type: str, value: Any) -> bool:
+    """Nature of Case is part of Civil intake; Criminal intake no longer collects it."""
+    if case_type == "Criminal":
+        return True
+    return str(value or "").strip() in VALID_CIVIL_NATURES
 
 HEADER_ALIASES: dict[str, tuple[str, ...]] = {
     "control_no": ("CONTROL NUMBER", "CONTROL NO", "CONTROL NO.", "CONTROL #"),

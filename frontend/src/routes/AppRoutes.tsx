@@ -111,7 +111,7 @@ export default function AppRoutes() {
         <Route
           path="/case-submissions"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredRole="staff">
               <CaseSubmissionsPage />
             </ProtectedRoute>
           }
@@ -121,14 +121,6 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <CaseTransferPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/case-review-center"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <CaseSubmissionsPage />
             </ProtectedRoute>
           }
         />

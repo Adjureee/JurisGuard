@@ -6,10 +6,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
 
-from case_import import read_workbook, resolve_incident_location
+from case_import import is_valid_import_nature_of_case, read_workbook, resolve_incident_location
 
 
 class CaseImportWorkbookTests(unittest.TestCase):
+    def test_nature_of_case_is_only_validated_for_civil_imports(self):
+        self.assertTrue(is_valid_import_nature_of_case("Criminal", None))
+        self.assertTrue(is_valid_import_nature_of_case("Criminal", "legacy source value"))
+        self.assertTrue(is_valid_import_nature_of_case("Civil", "Civil"))
+        self.assertFalse(is_valid_import_nature_of_case("Civil", None))
+        self.assertFalse(is_valid_import_nature_of_case("Civil", "Unknown"))
+
     def test_incident_location_maps_unambiguous_indicators(self):
         self.assertEqual(("Urban", False), resolve_incident_location([("1", "0")]))
         self.assertEqual(("Rural", False), resolve_incident_location([("0", "1")]))

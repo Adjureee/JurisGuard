@@ -52,19 +52,20 @@ function isMissingReviewValue(value: unknown) {
   return value == null || (typeof value === "string" && (!value.trim() || isReviewNA(value)));
 }
 
-const caseIssueCache = new WeakMap<CaseImportReviewCase, string[]>();
+const caseIssueCache = new WeakMap<CaseImportReviewCase, Partial<Record<CaseType, string[]>>>();
 
 function isRecognizedOption(value: string, options: string[]) {
   return options.some((option) => option.toLocaleLowerCase() === value.trim().toLocaleLowerCase());
 }
 
-function caseIssues(entry: CaseImportReviewCase) {
-  const cached = caseIssueCache.get(entry);
+function caseIssues(entry: CaseImportReviewCase, caseType: CaseType) {
+  const cachedByType = caseIssueCache.get(entry);
+  const cached = cachedByType?.[caseType];
   if (cached) return cached;
   const issues: string[] = [];
   if (isMissingReviewValue(entry.control_no) || entry.control_no.length > 20) issues.push("Control Number is required (20 characters maximum).");
   if (isMissingReviewValue(entry.title) || entry.title.length > 255) issues.push("Title of the Case is required (255 characters maximum).");
-  if (isMissingReviewValue(entry.nature_of_case) || !natureOfCaseOptions.includes(entry.nature_of_case)) issues.push("Choose a valid Nature of Case.");
+  if (caseType === "Civil" && (isMissingReviewValue(entry.nature_of_case) || !natureOfCaseOptions.includes(entry.nature_of_case))) issues.push("Choose a valid Nature of Case.");
   if (entry.court.length > 255) issues.push("Court / Body must be 255 characters or fewer.");
   if (entry.case_no.length > 20) issues.push("Case Number must be 20 characters or fewer.");
   if (isMissingReviewValue(entry.case_received) || !toDateInput(entry.case_received)) issues.push("A valid Case Received date is required.");
@@ -125,7 +126,7 @@ function caseIssues(entry: CaseImportReviewCase) {
       issues.push(`Client ${index + 1}: review and confirm the Female, Senior, and CICL indicators.`);
     }
   });
-  caseIssueCache.set(entry, issues);
+  caseIssueCache.set(entry, { ...cachedByType, [caseType]: issues });
   return issues;
 }
 
@@ -216,8 +217,8 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
   const skippedRecords = result ? result.cases_held + result.duplicate_cases_skipped : 0;
 
   const readyEntries = useMemo(
-    () => entries.filter((entry) => caseIssues(entry).length === 0),
-    [entries],
+    () => entries.filter((entry) => caseIssues(entry, caseType).length === 0),
+    [entries, caseType],
   );
   const reviewStats = useMemo(() => entries.reduce((stats, entry) => {
     stats.clientRows += entry.clients.length;
@@ -333,7 +334,7 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
     setError("");
     try {
       const duplicateCaseCount = entries.filter((entry) => entry.duplicate).length;
-      const heldCaseCount = entries.filter((entry) => !entry.duplicate && caseIssues(entry).length > 0).length;
+      const heldCaseCount = entries.filter((entry) => !entry.duplicate && caseIssues(entry, caseType).length > 0).length;
       const imported = await importCaseRecords(caseType, preview.source_filename, readyEntries, heldCaseCount, duplicateCaseCount);
       setResult(imported);
       try {
@@ -441,7 +442,7 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
               </div>
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#F9FAFB] px-4 py-4 sm:px-6">
                 {visibleEntries.map((entry) => {
-                  const issues = caseIssues(entry);
+                  const issues = caseIssues(entry, caseType);
                   const hasInvalidValue = issues.some((issue) => /invalid|must be|unrecognized|choose a valid|conflicting/i.test(issue));
                   const casePatch = (patch: Partial<CaseImportReviewCase>) => updateEntry(entry.import_key, patch);
                   return <details key={entry.import_key} className="overflow-hidden rounded-lg border border-[#9CA3AF] bg-white shadow-sm open:border-[#704389]" open={openCases.has(entry.import_key)} onToggle={(event) => {
@@ -465,7 +466,7 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
                         <Field label="Court / Body" value={entry.court} onChange={(value) => casePatch({ court: value })} />
                         <Field label="Case Number" value={entry.case_no} onChange={(value) => casePatch({ case_no: value })} />
                         <Field label="Cause of Action" value={entry.cause_of_action} onChange={(value) => casePatch({ cause_of_action: value })} />
-                        <SelectField label="Nature of Case" value={entry.nature_of_case} options={natureOfCaseOptions} onChange={(value) => casePatch({ nature_of_case: value })} />
+                        {caseType === "Civil" && <SelectField label="Nature of Case" value={entry.nature_of_case} options={natureOfCaseOptions} onChange={(value) => casePatch({ nature_of_case: value })} />}
                         <label className="block"><span className="text-xs font-semibold text-[#4B5563]">Status</span><select value={entry.status} onChange={(event) => casePatch({ status: event.target.value })} className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-2.5 text-sm"><option value="">Select</option><option>Pending</option><option>Terminated</option></select></label>
                         <Field label="Case Received" type="date" value={entry.case_received} onChange={(value) => casePatch({ case_received: value })} />
                         <Field label="Last Action Taken" value={entry.last_action} onChange={(value) => casePatch({ last_action: value })} />

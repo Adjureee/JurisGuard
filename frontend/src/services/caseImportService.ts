@@ -297,7 +297,11 @@ export async function importCaseRecords(
     held_case_count: heldCaseCount,
     duplicate_case_count: duplicateCaseCount,
     cases: cases.map((entry) => {
-      const caseData = omitKeys(entry, ["import_key", "errors", "duplicate", "duplicate_message", "ready", "source_rows", "conflicting_values", "clients"]);
+      const caseFieldsToOmit = [
+        "import_key", "errors", "duplicate", "duplicate_message", "ready", "source_rows", "conflicting_values", "clients",
+        ...(caseType === "Criminal" ? ["nature_of_case" as const] : []),
+      ] as const;
+      const caseData = omitKeys(entry, caseFieldsToOmit);
       const caseFields = Object.fromEntries(Object.entries(caseData).map(([key, value]) => [key, datePlaceholderFields.has(key) && isReviewNA(value) ? "" : value]));
       return {
         ...caseFields,

@@ -46,6 +46,7 @@ from reminder_status import PHILIPPINE_TIMEZONE, calculate_reminder_status, can_
 from case_import import (
     MAX_WORKBOOK_BYTES,
     extract_case_title_client_names,
+    is_valid_import_nature_of_case,
     normalize_binary_indicator,
     resolve_incident_location,
     read_workbook,
@@ -268,10 +269,6 @@ class CaseSubmissionPayload(BaseModel):
     date_from: str
     date_to: str
     notes: str | None = None
-
-
-class SubmissionFeedbackPayload(BaseModel):
-    comments: str
 
 
 def template_path(language: str) -> Path:
@@ -2150,6 +2147,65 @@ def dashboard_overview(
     }
 
 
+def ensure_dashboard_insights_access(user: models.User) -> None:
+    role_name = (user.role.role_name or "").strip().lower() if user.role else ""
+    if not is_admin(user) and role_name not in {"staff", "attorney", "legal_staff", "legal staff", "user"}:
+        raise HTTPException(status_code=403, detail="Dashboard insights are not available for this role")
+
+
+@app.get("/api/dashboard/intelligence-brief")
+def dashboard_intelligence_brief(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    ensure_dashboard_insights_access(user)
+    # This endpoint returns office-level aggregates only; it does not expose
+    # client names, case titles, or other personally identifying record data.
+    records = db.query(models.Case).outerjoin(models.IntakeRecord).all()
+    now = datetime.now()
+    month_start = datetime(now.year, now.month, 1)
+    total_cases = len(records)
+    terminated = sum(1 for record in records if is_case_terminated(record))
+    monthly_count = 0
+    counts_by_type: dict[str, int] = {}
+    counts_by_category: dict[str, int] = {}
+    counts_by_barangay: dict[str, int] = {}
+    weekday_counts = [0] * 7
+    hour_counts: dict[int, int] = {}
+    for record in records:
+        case_type = record.case_type or "Other"
+        counts_by_type[case_type] = counts_by_type.get(case_type, 0) + 1
+        category = case_category(record)
+        counts_by_category[category] = counts_by_category.get(category, 0) + 1
+        barangay = case_barangay(record)
+        counts_by_barangay[barangay] = counts_by_barangay.get(barangay, 0) + 1
+        intake_date = (record.intake.form_date if record.intake else None) or record.last_updated
+        if intake_date:
+            if intake_date >= month_start:
+                monthly_count += 1
+            weekday_counts[intake_date.weekday()] += 1
+            hour_counts[intake_date.hour] = hour_counts.get(intake_date.hour, 0) + 1
+    pending_reviews = db.query(models.CaseSubmission).filter(
+        models.CaseSubmission.status.in_(["Submitted", "Under Review", "Resubmitted"])
+    ).count()
+    busiest_hour = max(hour_counts, key=hour_counts.get) if hour_counts else None
+    busiest_day = (
+        ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][weekday_counts.index(max(weekday_counts))]
+        if any(weekday_counts)
+        else None
+    )
+    top_barangay = max(counts_by_barangay, key=counts_by_barangay.get) if counts_by_barangay else None
+    return {
+        "total_cases": total_cases,
+        "active_cases": max(total_cases - terminated, 0),
+        "criminal_cases": counts_by_type.get("Criminal", 0),
+        "civil_cases": counts_by_type.get("Civil", 0),
+        "cases_this_month": monthly_count,
+        "busiest_day": busiest_day,
+        "busiest_hour": f"{busiest_hour:02d}:00" if busiest_hour is not None else None,
+        "top_barangay": top_barangay,
+        "leading_category": max(counts_by_category, key=counts_by_category.get) if counts_by_category else None,
+        "pending_reviews": pending_reviews,
+    }
+
+
 @app.get("/api/dashboard/monthly-trends")
 def dashboard_monthly_trends(
     user: models.User = Depends(current_user),
@@ -2249,6 +2305,28 @@ def dashboard_heatmap(user: models.User = Depends(current_user), db: Session = D
     from client_hotspots import client_hotspots
     stats, points = client_hotspots(analytics_client_query(db, user, date_from, date_to).all(), BARANGAY_CENTROIDS)
     return {"center": PANABO_CENTER, "points": points, "barangays": stats}
+
+
+@app.get("/api/dashboard/office-hotspots")
+def dashboard_office_hotspots(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    ensure_dashboard_insights_access(user)
+    # Staff analytics receives aggregate case-location counts only.
+    records = db.query(models.Case).outerjoin(models.IntakeRecord).all()
+    barangays = [
+        {
+            "barangay": row["barangay"],
+            "city": row["city"],
+            "total_cases": row["total_cases"],
+            "active_cases": row["active_cases"],
+            "terminated_cases": row["terminated_cases"],
+            "most_common_category": row["most_common_category"],
+            "latitude": row["latitude"],
+            "longitude": row["longitude"],
+        }
+        for row in build_barangay_stats(records)
+        if row["latitude"] is not None and row["longitude"] is not None
+    ]
+    return {"center": PANABO_CENTER, "points": [], "barangays": barangays}
 
 
 @app.get("/api/dashboard/terminated-cases")
@@ -2380,8 +2458,12 @@ def dashboard_staff_workload(user: models.User = Depends(current_user), db: Sess
     for record in cases:
         status = normalize_case_status(record.status_of_case)
         status_counts[status] = status_counts.get(status, 0) + 1
-        if record.client_id:
+        participant_ids = [participant.client_id for participant in record.participants if participant.client_id]
+        if participant_ids:
+            client_ids.extend(participant_ids)
+        elif record.client_id:
             client_ids.append(record.client_id)
+    client_ids = list(dict.fromkeys(client_ids))
     clients = db.query(models.Client).filter(models.Client.client_id.in_(client_ids[:20])).all() if client_ids else []
     return {
         "assigned_cases": len(cases),
@@ -2961,71 +3043,6 @@ def submit_case_submission(
     return submission_to_payload(submission)
 
 
-@app.post("/api/case-submissions/{submission_id}/review")
-def start_case_submission_review(
-    submission_id: int,
-    request: Request,
-    user: models.User = Depends(admin_user),
-    db: Session = Depends(get_db),
-):
-    submission = ensure_submission_access(submission_id, user, db)
-    ensure_latest_submission_version(db, submission)
-    status = normalize_submission_status(submission.status)
-    if status in {"Submitted", "Resubmitted"}:
-        submission.status = "Under Review"
-        submission.reviewed_by = user.user_id
-        submission.updated_at = datetime.now()
-        write_audit(db, user.user_id, "Viewed Submission", "case_submission", f"Started review for {submission.title} version {submission.version}", str(submission.submission_id), request)
-        db.commit()
-        db.refresh(submission)
-    return submission_to_payload(submission)
-
-
-@app.post("/api/case-submissions/{submission_id}/request-correction")
-def request_submission_correction(
-    submission_id: int,
-    payload: SubmissionFeedbackPayload,
-    request: Request,
-    user: models.User = Depends(admin_user),
-    db: Session = Depends(get_db),
-):
-    submission = ensure_submission_access(submission_id, user, db)
-    ensure_latest_submission_version(db, submission)
-    status = normalize_submission_status(submission.status)
-    if status not in {"Submitted", "Under Review", "Correction Required", "Resubmitted"}:
-        raise HTTPException(status_code=400, detail="Submission is not available for correction review")
-    submission.status = "Correction Required"
-    submission.reviewed_by = user.user_id
-    submission.updated_at = datetime.now()
-    db.add(models.SubmissionFeedback(submission_id=submission.submission_id, reviewer_id=user.user_id, comments=payload.comments))
-    write_audit(db, user.user_id, "Correction Requested", "case_submission", f"Requested correction for {submission.title} version {submission.version}", str(submission.submission_id), request)
-    db.commit()
-    db.refresh(submission)
-    return submission_to_payload(submission)
-
-
-@app.post("/api/case-submissions/{submission_id}/approve")
-def approve_case_submission(
-    submission_id: int,
-    request: Request,
-    user: models.User = Depends(admin_user),
-    db: Session = Depends(get_db),
-):
-    submission = ensure_submission_access(submission_id, user, db)
-    ensure_latest_submission_version(db, submission)
-    status = normalize_submission_status(submission.status)
-    if status not in {"Submitted", "Under Review", "Correction Required", "Resubmitted"}:
-        raise HTTPException(status_code=400, detail="Submission is not ready for approval")
-    submission.status = "Approved"
-    submission.reviewed_by = user.user_id
-    submission.approved_at = datetime.now()
-    submission.updated_at = datetime.now()
-    write_audit(db, user.user_id, "Version Approved", "case_submission", f"Approved {submission.title} version {submission.version}", str(submission.submission_id), request)
-    db.commit()
-    db.refresh(submission)
-    return submission_to_payload(submission)
-
-
 @app.post("/api/case-submissions/{submission_id}/resubmit")
 def resubmit_case_submission(
     submission_id: int,
@@ -3297,6 +3314,8 @@ async def preview_case_import(
             "cause_of_termination", "date_of_termination", "date_of_confinement",
             "place_of_detention", "case_received", "location_type", "incident_barangay",
         )
+        if case_type == "Criminal":
+            shared_fields = tuple(field for field in shared_fields if field != "nature_of_case")
         for field in shared_fields:
             value = row.get(field)
             if value in (None, ""):
@@ -3489,7 +3508,7 @@ async def preview_case_import(
                 "court": fields.get("court") or "",
                 "case_no": fields.get("case_no") or "",
                 "cause_of_action": fields.get("cause_of_action") or "",
-                "nature_of_case": fields.get("nature_of_case") or "",
+                "nature_of_case": fields.get("nature_of_case") or "" if case_type == "Civil" else "",
                 "status": fields.get("status") or "",
                 "last_action": fields.get("last_action") or "",
                 "cause_of_termination": fields.get("cause_of_termination") or "",
@@ -3569,7 +3588,7 @@ def import_case_records(
         received_raw = entry.get("case_received")
         if (
             not control_no or len(control_no) > 20 or not title or len(title) > 255
-            or str(entry.get("nature_of_case") or "").strip() not in {"Criminal", "Administrative", "Civil", "Labor", "Appeal"}
+            or not is_valid_import_nature_of_case(payload.case_type, entry.get("nature_of_case"))
             or status_raw.lower() not in {"pending", "terminated"}
             or not clients or parse_date(received_raw) is None
             or len(str(entry.get("case_no") or "")) > 20
@@ -3710,7 +3729,7 @@ def import_case_records(
                 form_date=form_date,
                 party_represented=party,
                 applicant_role=party,
-                nature_of_case=limit_text(entry.get("nature_of_case"), 50),
+                nature_of_case=limit_text(entry.get("nature_of_case"), 50) if payload.case_type == "Civil" else None,
             )
             db.add(intake)
             db.flush()
