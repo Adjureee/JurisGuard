@@ -1,19 +1,19 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "../components/auth/ProtectedRoute";
-import ApplicantDetailsPage from "../pages/admin/ApplicantDetailsPage";
-import VerificationPage from "../pages/admin/VerificationPage";
+const ApplicantDetailsPage = lazy(() => import("../pages/admin/ApplicantDetailsPage"));
+const VerificationPage = lazy(() => import("../pages/admin/VerificationPage"));
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
-import AuditLogsPage from "../pages/AuditLogsPage";
-import CaseSubmissionsPage from "../pages/CaseSubmissionsPage";
-import CaseTransferPage from "../pages/CaseTransferPage";
-import CivilCases from "../pages/CivilCases";
-import CriminalCases from "../pages/CriminalCases";
-import Dashboard from "../pages/Dashboard";
-import FormViewPage from "../pages/FormViewPage";
-import TerminatedCasesPage from "../pages/TerminatedCases";
-import UserProfilePage from "../pages/UserProfilePage";
+const AuditLogsPage = lazy(() => import("../pages/AuditLogsPage"));
+const CaseSubmissionsPage = lazy(() => import("../pages/CaseSubmissionsPage"));
+const CaseTransferPage = lazy(() => import("../pages/CaseTransferPage"));
+const CivilCases = lazy(() => import("../pages/CivilCases"));
+const CriminalCases = lazy(() => import("../pages/CriminalCases"));
+const Dashboard = lazy(() => import("../pages/Dashboard"));
+const FormViewPage = lazy(() => import("../pages/FormViewPage"));
+const TerminatedCasesPage = lazy(() => import("../pages/TerminatedCases"));
+const UserProfilePage = lazy(() => import("../pages/UserProfilePage"));
 
 const AnalyticsPage = lazy(() => import("../pages/AnalyticsPage"));
 const StaffAnalyticsPage = lazy(() => import("../pages/StaffAnalyticsPage"));
@@ -21,7 +21,7 @@ const StaffAnalyticsPage = lazy(() => import("../pages/StaffAnalyticsPage"));
 function RouteLoadingFallback() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] text-sm font-semibold text-[#4B5563]">
-      Loading analytics workspace...
+      Loading workspace…
     </div>
   );
 }
@@ -29,7 +29,7 @@ function RouteLoadingFallback() {
 export default function AppRoutes() {
   return (
     <BrowserRouter>
-      <Routes>
+      <Suspense fallback={<RouteLoadingFallback />}><Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route
@@ -170,7 +170,7 @@ export default function AppRoutes() {
         />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
+      </Routes></Suspense>
     </BrowserRouter>
   );
 }

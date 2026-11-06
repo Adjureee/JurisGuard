@@ -1949,7 +1949,7 @@ export default function CriminalCasesPage({
  return (
     <MainLayout>
       {/* 1. Global Height Wrapper: Locks the page to the viewport height */}
-      <div className="flex h-[calc(100vh-110px)] max-w-full flex-col gap-4 overflow-hidden">
+      <div className="records-workspace flex h-full max-w-full flex-col gap-4">
         
         {/* 2. Header Area: shrink-0 keeps it from compressing */}
         <div className="shrink-0">
@@ -1988,7 +1988,7 @@ export default function CriminalCasesPage({
         <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#CBD5E1] bg-white p-4 shadow-sm">
           
           {/* 4. Filters Area: shrink-0 preserves its height */}
-          <div className="mb-3 grid min-w-0 shrink-0 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,360px)_170px_165px_165px_165px_auto_auto_auto] xl:items-end">
+          <div className="records-toolbar mb-3 grid min-w-0 shrink-0 gap-3 md:grid-cols-2 xl:items-end">
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
                 Search
@@ -2042,16 +2042,13 @@ export default function CriminalCasesPage({
                 <option value="Rural">Rural</option>
               </select>
             </label>
-            <div className="flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-[#F8FAFC] px-3">
-              <span className="font-semibold text-[#4B5563]">Total:</span>
-              <span className="rounded-md bg-[#704389] px-2.5 py-1 text-base font-semibold leading-none text-white">
-                {filteredRows.length}
-              </span>
-            </div>
+            <div className="records-toolbar-footer">
+              <p className="text-sm text-[#526174]"><strong className="font-semibold tabular-nums text-[#243344]">{filteredRows.length}</strong> records shown</p>
+            <div role="group" aria-label="Excel import and export" className="records-excel-actions flex min-w-0 items-center gap-2">
             {user?.role === "admin" && <button
               type="button"
               onClick={() => setShowImportModal(true)}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#CBD5E1] bg-white px-4 text-sm font-semibold text-[#334155] transition hover:bg-[#F8FAFC]"
             >
               <FileUp className="h-4 w-4" aria-hidden="true" />
               Import Excel
@@ -2063,11 +2060,13 @@ export default function CriminalCasesPage({
             >
               Export Excel
             </button>
+            </div>
+            </div>
           </div>
 
           {/* 5. Scrollable Table Container: Flex-1 fills the rest of the card perfectly */}
-          <div className="relative min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto rounded-lg border border-[#CBD5E1]">
-            <table className="w-full min-w-[1040px] text-sm">
+          <div tabIndex={0} role="region" aria-label="Case records table. Scroll horizontally for all columns." className="records-table-scroll relative min-h-0 max-w-full flex-1 overflow-auto rounded-lg border border-[#CBD5E1]">
+            <table className="records-table w-full min-w-[1040px] text-sm">
               <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
                 <tr>
                   <th className="px-3 py-3 text-left font-semibold">Control No.</th>

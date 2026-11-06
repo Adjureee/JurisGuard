@@ -108,6 +108,10 @@ def prepare_capture(path):
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     h, w = gray.shape
     interior = gray[max(0,h//20):max(1,h-h//20), max(0,w//20):max(1,w-w//20)]
+    if np.percentile(interior, 90) < 165:
+        warnings.append('The photo is dark. Use brighter, even lighting and retake if handwriting or checkbox marks are difficult to read.')
+    if max(w, h) < 1600:
+        warnings.append('The image has limited resolution for handwriting. Select a higher camera resolution or move closer while keeping Parts II and II-A visible.')
     if cv2.Laplacian(interior, cv2.CV_64F).var() < 35:
         warnings.append('The photo may be blurred or lack readable detail. Retake closer, hold the camera steady and check handwriting and checkbox marks.')
     # Saturation alone also describes blank paper; warn only on abrupt bright patches in a dark capture.

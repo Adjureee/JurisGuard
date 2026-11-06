@@ -17,18 +17,12 @@ export default function PageHeader({
 }: PageHeaderProps) {
   return (
     <div
-      className={`flex min-w-0 flex-col lg:flex-row lg:items-end lg:justify-between ${
+      className={`page-heading flex min-w-0 flex-col lg:flex-row lg:items-end lg:justify-between ${
         compact ? "mb-3 gap-2" : "mb-6 gap-3"
       }`}
     >
       <div className="min-w-0">
-        <p
-          className={`font-semibold uppercase tracking-wide text-[#704389] ${
-            compact ? "text-xs" : "text-sm"
-          }`}
-        >
-          {eyebrow}
-        </p>
+        <span className="sr-only">{eyebrow}</span>
         <h1
           className={`mt-1 font-bold text-[#2B3642] ${
             compact ? "text-xl" : "text-2xl"

@@ -3,7 +3,7 @@ import re
 
 
 def positioned_candidates(text, layout, refinements=None):
-    from paper_intake import SCHEMA, APPLICANT, REPRESENTATIVE, HEADINGS, END, label_pattern, empty_sections
+    from paper_intake import SCHEMA, APPLICANT, REPRESENTATIVE, HEADINGS, END, field_label_pattern, empty_sections
     if not layout or len(layout) != len(text.splitlines()) or any(not box.get('bbox') for box in layout):
         return None
     entries = [dict(box, text=line, priority=1) for box, line in zip(layout, text.splitlines())]
@@ -26,7 +26,7 @@ def positioned_candidates(text, layout, refinements=None):
         raw = [e for e in entries if inside(e)]
         refined = [dict(e, priority=0) for e in (refinements or []) if inside(e)]
         alternatives = sorted(fields, key=lambda field: len(field[1]), reverse=True)
-        pattern = re.compile('|'.join(f'(?P<{key}>(?<!\\w){label_pattern(label)})(?=$|[\\s:.])\\s*[:.]?' for key, label in alternatives), re.I)
+        pattern = re.compile('|'.join(field_label_pattern(key, label) for key, label in alternatives), re.I)
         right_keys = right if section == APPLICANT else {'age', 'sex', 'civil_status', 'contact_no', 'email'}
         right_edges = [e['bbox'][0] for e in refined + raw
                        if (m := pattern.match(e['text'])) and m.lastgroup in right_keys]
@@ -43,9 +43,11 @@ def positioned_candidates(text, layout, refinements=None):
                 return (e['bbox'][0] >= split) == is_right
             primary = [e for e in refined if column(e)]
             fallback = [e for e in raw if column(e)]
-            primary_labels = {m.lastgroup for e in primary for m in pattern.finditer(e['text'])}
-            pool = primary + [e for e in fallback if not any(m.lastgroup in primary_labels for m in pattern.finditer(e['text']))]
+            # A refinement that only re-detects the printed label is not evidence
+            # that the original answer was blank. Keep both passes available.
+            pool = primary + fallback
             anchors, candidates = [], {}
+            rejected_refinements = set()
             def candidate(key, value, source):
                 value = value.strip()
                 path = f'{section}.{key}'
@@ -55,10 +57,15 @@ def positioned_candidates(text, layout, refinements=None):
                     states[path] = 'checkbox_unverified'
                     return
                 if key == 'age' and not re.fullmatch(r'\d{1,3}', value):
+                    if source['priority'] == 0:
+                        rejected_refinements.add(key)
                     states[path] = 'ocr_failed'
                     evidence[path] = {'reason': 'Age reading needs review.', 'source_text': source['text'],
                                       'candidates': [{'text': value, 'bbox': source['bbox'], 'page': page}]}
                     return
+                # Preserve the complete OCR box as evidence, but never draw its
+                # printed label as though it were handwritten answer pixels.
+                source = dict(source, highlight_bbox=None if pattern.search(source['text']) else source['bbox'])
                 candidates.setdefault(key, []).append((source['priority'], value, source))
             for entry in pool:
                 matches = list(pattern.finditer(entry['text']))
@@ -84,7 +91,8 @@ def positioned_candidates(text, layout, refinements=None):
                     continue
                 x1, y1, x2, y2 = entry['bbox']
                 nearby = [a for a in anchors if a['x'] < x1 and
-                          abs(sum(a['bbox'][1::2])/2-(y1+y2)/2) <= max(y2-y1, a['bbox'][3]-a['bbox'][1])*.8]
+                          abs(sum(a['bbox'][1::2])/2-(y1+y2)/2) <= min(y2-y1, a['bbox'][3]-a['bbox'][1])*.6
+                          and min(y2, a['bbox'][3])-max(y1, a['bbox'][1]) >= min(y2-y1, a['bbox'][3]-a['bbox'][1])*.25]
                 if not nearby:
                     continue
                 # For Edad/Sex/Civil Status, use the label immediately to the
@@ -94,9 +102,29 @@ def positioned_candidates(text, layout, refinements=None):
                 anchor = max(same_row, key=lambda a: a['x']) if same_row else anchor
                 candidate(anchor['key'], entry['text'], entry)
             for key, options in candidates.items():
+                if key in rejected_refinements:
+                    # A visible but invalid refinement is an unresolved reading,
+                    # unlike a label-only pass. Do not hide it with a raw default.
+                    continue
                 priority = min(option[0] for option in options)
                 selected = [option for option in options if option[0] == priority]
                 path = f'{section}.{key}'
+                # OCR can split a handwritten answer into adjacent word boxes.
+                # Join only disjoint fragments on one row, never competing reads
+                # of the same pixels or repeated labels on different rows.
+                ordered = sorted(selected, key=lambda option: option[2]['bbox'][0])
+                if len({option[1] for option in selected}) > 1 and sum(bool(pattern.search(option[2]['text'])) for option in selected) <= 1:
+                    adjacent = all(
+                        0 <= b[2]['bbox'][0]-a[2]['bbox'][2] <= max(a[2]['bbox'][3]-a[2]['bbox'][1], b[2]['bbox'][3]-b[2]['bbox'][1])*3
+                        and abs(sum(a[2]['bbox'][1::2])/2-sum(b[2]['bbox'][1::2])/2) <= min(a[2]['bbox'][3]-a[2]['bbox'][1], b[2]['bbox'][3]-b[2]['bbox'][1])*.5
+                        for a, b in zip(ordered, ordered[1:]))
+                    if adjacent:
+                        combined = dict(ordered[0][2])
+                        combined['bbox'] = [min(o[2]['bbox'][0] for o in ordered), min(o[2]['bbox'][1] for o in ordered), max(o[2]['bbox'][2] for o in ordered), max(o[2]['bbox'][3] for o in ordered)]
+                        combined['text'] = ' '.join(o[2]['text'] for o in ordered)
+                        combined['engine_score'] = min(o[2].get('engine_score', 1) for o in ordered)
+                        combined['highlight_bbox'] = combined['bbox'] if all(o[2].get('highlight_bbox') for o in ordered) else None
+                        selected = [(priority, ' '.join(o[1] for o in ordered), combined)]
                 if len({option[1] for option in selected}) != 1:
                     states[path] = 'ocr_failed'
                     evidence[path] = {'reason': 'Conflicting OCR candidates; compare with scan.',
@@ -105,8 +133,41 @@ def positioned_candidates(text, layout, refinements=None):
                     continue
                 value, source = selected[0][1:]
                 values[section][key] = value
-                states[path] = 'uncertain' if source.get('engine_score', 1) < .85 else 'candidate'
+                pass_disagreement = any(o[0] != priority and o[1] != value for o in options)
+                states[path] = 'uncertain' if pass_disagreement or source.get('engine_score', 1) < .85 else 'candidate'
                 evidence[path] = {'page': page, 'bbox': source['bbox'], 'engine_score': source.get('engine_score'),
+                                  'highlight_bbox': source.get('highlight_bbox'),
                                   'source_text': source['text'],
+                                  'pass_disagreement': pass_disagreement,
+                                  'candidates': [{'text': o[1], 'source_text': o[2]['text'], 'bbox': o[2]['bbox'], 'page': page,
+                                                  'source': 'local_ocr_refinement' if o[0] == 0 else 'local_ocr'} for o in options],
                                   'source': 'local_ocr_refinement' if priority == 0 else 'local_ocr'}
+            # Empty readings still need a review location. Use detected printed
+            # labels and the next label/column edge, never invent an answer or
+            # treat the resulting region as proof that the paper is blank.
+            for key in allowed:
+                if values[section][key] or key == 'detained':
+                    continue
+                matches = [a for a in anchors if a['key'] == key]
+                if not matches:
+                    continue
+                anchor = min(matches, key=lambda a: a['priority'])
+                label_matches = list(pattern.finditer(anchor['text']))
+                if len(label_matches) != 1 or anchor['text'][:label_matches[0].start()].strip() or not re.fullmatch(r'[\s_.\-]*', anchor['text'][label_matches[0].end():]):
+                    # Character proportions inside a merged OCR line are not
+                    # reliable enough to locate an individual blank answer.
+                    evidence.setdefault(f'{section}.{key}', {})['highlight_bbox'] = None
+                    continue
+                y1, y2 = anchor['bbox'][1], anchor['bbox'][3]
+                following = [a['x'] for a in anchors if a['key'] != key and a['x'] > anchor['label_end']
+                             and abs(sum(a['bbox'][1::2])/2-(y1+y2)/2) <= (y2-y1)*.6]
+                edge = split if not is_right else max(start['bbox'][2], end['bbox'][2])
+                x1, x2 = anchor['label_end']+2, min(following, default=edge)-2
+                if x2 <= x1:
+                    continue
+                path = f'{section}.{key}'
+                area = [round(x1), y1-2, round(x2), y2+2]
+                evidence.setdefault(path, {}).update(page=page, bbox=area, highlight_bbox=area,
+                    location_kind='label_answer_area', source_text=anchor['text'],
+                    location_note='Approximate answer area from printed labels; check for blank or unreadable handwriting.')
     return values, states, evidence

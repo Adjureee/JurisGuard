@@ -8,6 +8,7 @@ import { getDashboardOverview, getRecentActivities, getStaffWorkload, type Dashb
 import { listCaseSubmissions, type CaseSubmission } from '../../services/caseSubmissionService';
 import { AdminReminders } from './AdminReminders';
 import './dashboard.css';
+import DashboardClock from './DashboardClock';
 
 export function dashboardDate(value?: string) {
   if (!value) return 'Date not recorded';
@@ -73,7 +74,7 @@ export default function DashboardWorkspace({ admin }: { admin: boolean }) {
 
   return <MainLayout><div className="dashboard-workspace mx-auto max-w-[1440px] space-y-6">
     <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-      <div><h1 className="text-3xl font-bold tracking-tight text-[#172534]">Dashboard</h1><p className="mt-2 text-sm text-[#526174]">{admin ? 'Office workload and records requiring attention.' : 'Available case work and your intake tasks.'} <span className="whitespace-nowrap">{dashboardDate(new Date().toISOString())}</span></p></div>
+      <div className="min-w-0 space-y-2"><h1 className="text-3xl font-bold tracking-tight text-[#172534]">Dashboard</h1><p className="text-sm text-[#526174]">{admin ? 'Office workload and records requiring attention.' : 'Available case work and your intake tasks.'}</p><DashboardClock /></div>
       <Link to="/cases?action=intake" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#704389] px-5 py-3 font-semibold text-white hover:bg-[#5F3675]"><FileScan size={20} aria-hidden="true" />Scan interview sheet</Link>
     </header>
     <nav aria-label="Common dashboard tasks" className="flex flex-wrap gap-3">

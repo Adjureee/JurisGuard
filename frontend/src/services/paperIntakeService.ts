@@ -6,7 +6,7 @@ import type { ClientRecord } from '../types';
 export type PaperSection = 'applicant_personal_circumstances' | 'representative_personal_circumstances';
 export type PaperSections = Record<PaperSection, Record<string, string>>;
 export type PaperSchema = Record<PaperSection, [string, string][]>;
-export type FieldEvidence = { page: number; bbox: [number, number, number, number]; source_text?: string };
+export type FieldEvidence = { page: number; bbox: [number, number, number, number]; highlight_bbox?: [number, number, number, number] | null; source_text?: string; location_kind?: 'label_answer_area'; location_note?: string };
 export type SavedPaperIntake = { source_draft_id?: string | null; candidate_snapshot?: PaperExtraction['extracted_data'] | null; document_id: number; sections: PaperSections; checkbox_states?: CheckboxStates | null; unreadable_fields: string[]; field_reviews?: import('../features/documentExtraction/paperReviewState').FieldReviews | null };
 export type PaperExtraction = {
   document_id: number;

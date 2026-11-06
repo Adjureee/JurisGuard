@@ -48,8 +48,8 @@ function IntakeSession({ onClose, initialMode }: { onClose: () => void; initialM
     document.addEventListener('keydown',keyboard);return()=>document.removeEventListener('keydown',keyboard);
   });
   const reviewingClient = (phase === 'manual' && manualReview) || (phase === 'scan' && stage === 'review');
-  return <ModalPortal><div ref={dialog} className="jurisguard-modal-overlay intake-modal bg-black/60 p-3 sm:p-5" role="dialog" aria-modal="true" aria-labelledby="paper-intake-title">
-    <div className="flex h-[92vh] max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+  return <ModalPortal><div ref={dialog} data-intake-phase={phase} data-intake-stage={stage} className="jurisguard-modal-overlay intake-modal bg-black/60 p-3 sm:p-5" role="dialog" aria-modal="true" aria-labelledby="paper-intake-title">
+    <div className="intake-session-surface flex h-[92vh] max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
       <header className="flex shrink-0 gap-3 items-start justify-between border-b px-5 py-4"><div className="min-w-0 flex-1"><h2 id="paper-intake-title" className="text-xl font-semibold">Add client</h2>
         <p className="mt-1 text-sm text-slate-600">{phase==='scan'?'PAO Interview Sheet · Parts II and II-A':'Create a client record.'}</p></div>
         {!reviewingClient && <button type="button" onClick={() => void leave(onClose)} className="intake-secondary"><X size={16} aria-hidden="true"/>Close</button>}</header>
