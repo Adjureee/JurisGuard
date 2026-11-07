@@ -5,6 +5,12 @@ from extraction_mapping import public_extraction_payload
 
 
 class PaperIntakeTests(unittest.TestCase):
+    def test_language_label_glyph_confusion_preserves_answer(self):
+        for label in ('Salita/Dialekto', 'Salita/Dlalekto', 'Salita / Dialekto'):
+            result = extract_paper_intake(self.sheet(f'{label}: Cebuano / Tagalog'))
+            self.assertEqual(result['sections'][A]['language_dialect'], 'Cebuano / Tagalog')
+            self.assertTrue(all(not value for value in result['sections'][R].values()))
+
     def sheet(self, applicant='', representative=''):
         return ('INTERVIEW SHEET\nI. URI NG INIHIHINGI NG TULONG\nPangalan: OUTSIDE\n'
                 'II. IMPORMASYON UKOL SA APLIKANTE\n' + applicant + '\n'

@@ -39,6 +39,9 @@ def section_blocks(text):
     }
 
 def label_pattern(label):
+    if label == 'Salita/Dialekto':
+        # Printed capital I and lowercase l are commonly confused by OCR.
+        return r'Salita\s*/\s*D[il]alekto'
     if label == 'Pagkamamamayan':
         # Observed OCR insertion in the printed label, not an answer repair.
         return r'(?:Pagkamamamayan|Pagkamamnamayan)'
