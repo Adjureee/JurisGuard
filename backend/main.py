@@ -1738,7 +1738,7 @@ def case_category(record: models.Case) -> str:
         return record.intake.nature_of_case
     if record.cause_of_action:
         return str(record.cause_of_action).split(";")[0][:80]
-    return "Uncategorized"
+    return record.case_type or "Uncategorized"
 
 
 def case_barangay(record: models.Case) -> str:
@@ -2317,15 +2317,20 @@ def dashboard_intake_load(
 
 @app.get("/api/dashboard/case-categories")
 def dashboard_case_categories(user: models.User = Depends(current_user), db: Session = Depends(get_db), date_from: str | None = Query(None), date_to: str | None = Query(None)):
+    category = func.coalesce(
+        func.nullif(models.IntakeRecord.nature_of_case, ""),
+        func.nullif(models.Case.case_type, ""),
+        "Uncategorized",
+    )
     rows = (
         apply_case_date_filters(scoped_case_query(db, user), date_from, date_to)
-        .with_entities(models.IntakeRecord.nature_of_case, func.count(models.Case.case_id).label("total_cases"))
-        .group_by(models.IntakeRecord.nature_of_case)
+        .with_entities(category.label("category"), func.count(models.Case.case_id).label("total_cases"))
+        .group_by(category)
         .order_by(func.count(models.Case.case_id).desc())
         .all()
     )
     categories = [
-        {"category": row.nature_of_case or "Uncategorized", "total_cases": row.total_cases}
+        {"category": row.category or "Uncategorized", "total_cases": row.total_cases}
         for row in rows
     ]
     return categories
@@ -3742,6 +3747,7 @@ async def preview_case_import(
         results.append(
             {
                 "import_key": f"case-{index + 1}",
+                "case_type": case_type,
                 "control_no": control_no,
                 "title": fields.get("title") or "",
                 "court": fields.get("court") or "",
@@ -3813,7 +3819,7 @@ def import_case_records(
     }
     for entry in payload.cases:
         entry_case_type = entry.get("case_type")
-        if entry_case_type not in (None, "", payload.case_type):
+        if entry_case_type != payload.case_type:
             failed += 1
             failures.append({
                 "control_no": str(entry.get("control_no") or "(missing)"),

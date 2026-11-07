@@ -127,7 +127,7 @@ export default function StaffAnalyticsPage() {
       report_section: "My Cases",
       report_date: record.intake_record.form_date || record.last_updated,
       case_status: record.cases.status_of_case,
-      case_category: record.cases.cause_of_action || record.intake_record.nature_of_case || "Uncategorized",
+      case_category: record.cases.cause_of_action || record.intake_record.nature_of_case || record.case_type || "Uncategorized",
       barangay: record.cases.incident_barangay ?? "",
       staff: "Me",
       ocr_status: "",

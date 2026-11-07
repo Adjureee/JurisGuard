@@ -45,6 +45,7 @@ export interface CaseImportClient {
 
 export interface CaseImportReviewCase {
   import_key: string;
+  case_type: CaseType;
   control_no: string;
   title: string;
   court: string;
@@ -145,10 +146,13 @@ function omitKeys<T extends object, K extends keyof T>(value: T, keys: readonly 
   return Object.fromEntries(Object.entries(value).filter(([key]) => !omitted.has(key as keyof T))) as Omit<T, K>;
 }
 
-function normalizePreview(value: unknown): CaseImportPreview {
+function normalizePreview(value: unknown, expectedCaseType: CaseType): CaseImportPreview {
   const payload = asRecord(value);
   if (!Array.isArray(payload.cases)) {
     throw new Error("The server returned an unexpected extraction response. Please retry the file.");
+  }
+  if (payload.case_type !== expectedCaseType) {
+    throw new Error("The server returned a different case destination than the selected page. Please retry the file.");
   }
 
   const cases = payload.cases.map((rawCase, index): CaseImportReviewCase => {
@@ -199,6 +203,7 @@ function normalizePreview(value: unknown): CaseImportPreview {
 
     return {
       import_key: asString(entry.import_key) || `case-${index + 1}`,
+      case_type: expectedCaseType,
       control_no: asReviewValue(entry.control_no),
       title: asReviewValue(entry.title),
       court: asReviewValue(entry.court),
@@ -234,7 +239,7 @@ function normalizePreview(value: unknown): CaseImportPreview {
   return {
     source_filename: asString(payload.source_filename),
     workbook_format: asString(payload.workbook_format),
-    case_type: payload.case_type === "Civil" ? "Civil" : "Criminal",
+    case_type: expectedCaseType,
     rows_processed: asNumber(payload.rows_processed),
     cases,
     summary: {
@@ -281,7 +286,7 @@ export async function previewCaseImport(
       if (event.total) onUploadProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
     },
   });
-  return normalizePreview(response.data);
+  return normalizePreview(response.data, caseType);
 }
 
 export async function importCaseRecords(
@@ -305,6 +310,7 @@ export async function importCaseRecords(
       const caseFields = Object.fromEntries(Object.entries(caseData).map(([key, value]) => [key, datePlaceholderFields.has(key) && isReviewNA(value) ? "" : value]));
       return {
         ...caseFields,
+        case_type: caseType,
         clients: entry.clients.map((client) => {
           const clientData = omitKeys(client, ["possible_matches", "source_row", "urban", "rural", "location_indicators_present"]);
           const ordinaryFields = new Set(["client_name", "age", "sex", "civil_status", "religion", "educational_attainment", "citizenship", "language_dialect", "address", "contact_no", "relationship", "party_represented"]);

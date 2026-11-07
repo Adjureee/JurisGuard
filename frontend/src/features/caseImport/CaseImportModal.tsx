@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, FileSpreadsheet, FileUp, LoaderCircle, Trash2, Upload } from "lucide-react";
 import toast from "react-hot-toast";
 import ModalPortal from "../../components/modals/ModalPortal";
+import { useConfirmation } from "../../components/ConfirmationProvider";
 import {
   importCaseRecords,
   previewCaseImport,
@@ -192,6 +193,7 @@ function ComboField({ label, value, options, listId, onChange }: {
 }
 
 export default function CaseImportModal({ caseType, existingClients, onClose, onImported }: CaseImportModalProps) {
+  const confirm = useConfirmation();
   const inputRef = useRef<HTMLInputElement>(null);
   const extractionInFlight = useRef(false);
   const importInFlight = useRef(false);
@@ -215,6 +217,21 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
         : "success"
     : "failed";
   const skippedRecords = result ? result.cases_held + result.duplicate_cases_skipped : 0;
+
+  const handleClose = async () => {
+    const hasUnfinishedWorkbook = ["upload", "extracting", "review"].includes(phase) &&
+      Boolean(file || preview || entries.length);
+    if (hasUnfinishedWorkbook) {
+      const shouldCancel = await confirm({
+        title: "Cancel Excel import?",
+        message: "The selected workbook and any extracted review changes will be discarded. No records from this import will be added.",
+        confirmLabel: "Cancel import",
+      });
+      if (!shouldCancel) return;
+    }
+    if (phase === "extracting") extractionAbort.current?.abort();
+    onClose();
+  };
 
   const readyEntries = useMemo(
     () => entries.filter((entry) => caseIssues(entry, caseType).length === 0),
@@ -374,7 +391,7 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
                 <p className="mt-0.5 text-sm text-white/85">Destination: {result ? result.case_type ? `${result.case_type} Cases` : "Unavailable" : `${caseType} Cases`}</p>
               </div>
             </div>
-            <button type="button" onClick={onClose} disabled={phase === "importing"} className="rounded-md px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10 disabled:opacity-50">Close</button>
+            <button type="button" onClick={() => void handleClose()} disabled={phase === "importing"} className="rounded-md px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10 disabled:opacity-50">Close</button>
           </header>
 
           {phase === "upload" && (
@@ -400,7 +417,7 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
               </div>}
               {error && <p role="alert" className="flex items-start gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</p>}
               <div className="flex justify-end gap-2 border-t border-[#E5E7EB] pt-4">
-                <button type="button" onClick={onClose} className="h-9 rounded-md border border-[#D1D5DB] px-4 text-sm font-semibold text-[#4B5563]">Cancel</button>
+                <button type="button" onClick={() => void handleClose()} className="h-9 rounded-md border border-[#D1D5DB] px-4 text-sm font-semibold text-[#4B5563]">Cancel</button>
                 <button type="button" onClick={() => void extract()} disabled={!file} className="h-9 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50">Start Extraction</button>
               </div>
             </div>
@@ -529,7 +546,7 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
               </div>
               <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#E5E7EB] px-5 py-4 sm:px-6">
                 <button type="button" onClick={() => { setPhase("upload"); setPreview(null); setEntries([]); setError(""); }} className="h-9 rounded-md border border-[#D1D5DB] px-4 text-sm font-semibold text-[#4B5563]">Back to Upload</button>
-                <div className="flex gap-2"><button type="button" onClick={onClose} className="h-9 rounded-md border border-[#D1D5DB] px-4 text-sm font-semibold text-[#4B5563]">Cancel Import</button><button type="button" disabled={!readyEntries.length} onClick={() => void importReady()} className="inline-flex h-9 items-center gap-2 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="h-4 w-4" />Import {readyEntries.length} Valid Case(s)</button></div>
+                <div className="flex gap-2"><button type="button" onClick={() => void handleClose()} className="h-9 rounded-md border border-[#D1D5DB] px-4 text-sm font-semibold text-[#4B5563]">Cancel Import</button><button type="button" disabled={!readyEntries.length} onClick={() => void importReady()} className="inline-flex h-9 items-center gap-2 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="h-4 w-4" />Import {readyEntries.length} Valid Case(s)</button></div>
               </footer>
             </>
           )}
@@ -562,7 +579,7 @@ export default function CaseImportModal({ caseType, existingClients, onClose, on
             <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] pt-4">
               {result && (result.cases_held > 0 || result.duplicate_cases_skipped > 0) && <button type="button" onClick={() => {
                 const failureControls = new Set(result.failures.map((failure) => failure.control_no));
-                const heldEntries = entries.filter((entry) => entry.duplicate || caseIssues(entry).length > 0 || failureControls.has(entry.control_no));
+                const heldEntries = entries.filter((entry) => entry.duplicate || caseIssues(entry, caseType).length > 0 || failureControls.has(entry.control_no));
                 setEntries(heldEntries);
                 setReviewPage(0);
                 setOpenCases(new Set(heldEntries.map((entry) => entry.import_key)));
