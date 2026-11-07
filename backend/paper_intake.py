@@ -20,8 +20,8 @@ SCHEMA = {
         ('relationship_to_applicant', 'Relasyon sa aplikante'), ('email', 'E-mail')],
 }
 HEADINGS = {
-    APPLICANT: r'\bII[.\s]+(?:I[M N]PORMASYON|IMPORMASYON|INFORMATION|APPLICANT)',
-    REPRESENTATIVE: r'\bII\s*[-. ]\s*A[.\s]+',
+    APPLICANT: r'\bII[.\s]+(?:I[M N]PORMASYON|IMPORMASYON|INFORMATION|APPLICANT)|\bIMPORMASYON\s+UKOL\s+SA\s+APLIKANTE\b',
+    REPRESENTATIVE: r'\bII\s*[-. ]\s*A[.\s]+|\bIMPORMASYON\s+UKOL\s+SA\s+REPRESENTATIVE\b',
 }
 END = r'\bIII[.\s]+(?:URI|NATURE)'
 
@@ -39,6 +39,19 @@ def section_blocks(text):
     }
 
 def label_pattern(label):
+    if label == 'Salita/Dialekto':
+        # Printed capital I and lowercase l are commonly confused by OCR.
+        return r'Salita\s*/\s*D[il]alekto'
+    if label == 'Pagkamamamayan':
+        # Observed OCR insertion in the printed label, not an answer repair.
+        return r'(?:Pagkamamamayan|Pagkamamnamayan)'
+    if label == 'Lugar ng Detention':
+        # The printed final n is sometimes recognized as r. This is a label
+        # alias, not a replacement for any handwritten detention location.
+        return r'Lugar\s+ng\s+Detentio[nr]'
+    if label == 'Contact No.':
+        # OCR confusion in the printed label only; never repair answer digits.
+        return r'Contact\s+N[o0]\.?'
     if label == 'Relihiyon':
         return r'Relih\w+'
     if label == 'E-mail':
@@ -46,6 +59,17 @@ def label_pattern(label):
     if label == 'Petsa ng pagakakulong':
         return r'Petsa\s+ng\s+pag\w+kulong'
     return re.escape(label).replace(r'\ ', r'\s+').replace(r'\.', r'\.?')
+
+
+def field_label_pattern(key, label, *, require_colon=False):
+    """Printed-label boundaries; underscores are blank rules, not word letters."""
+    normal = rf'(?<![^\W_]){label_pattern(label)}'
+    if key == 'civil_status':
+        # The answer F/M can touch the following printed label in an OCR box.
+        # Require its explicit colon in this joined spelling; never expand F/M.
+        normal = rf'(?:{normal}|(?<=[FMfm])Civil\s+Status(?=\s*:))'
+    suffix = r'\s*:' if require_colon else r'(?=$|[\s:._])\s*[:.]?'
+    return rf'(?P<{key}>{normal}){suffix}'
 
 def checkbox_candidate(value):
     """Text evidence only. Missing box glyphs never establish either state."""
@@ -109,7 +133,7 @@ def extract_paper_intake(text, layout=None, refinements=None):
         # Longest labels first prevents spouse/address/contact labels being
         # mistaken for the applicant's shorter labels.
         alternatives = sorted(fields, key=lambda field: len(field[1]), reverse=True)
-        pattern = re.compile('|'.join(f'(?P<{key}>{label_pattern(label)})\s*:' for key, label in alternatives), re.I)
+        pattern = re.compile('|'.join(field_label_pattern(key, label, require_colon=True) for key, label in alternatives), re.I)
         candidates = {}
         for line in blocks[section].splitlines():
             matches = list(pattern.finditer(line))

@@ -125,7 +125,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         <img
           src={logo1}
           alt="JurisGuard logo"
-          className="h-36 w-36 object-cover object-center"
+          className="h-36 w-36 shrink-0 object-cover object-center"
         />
       </div>
 

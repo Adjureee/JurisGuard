@@ -1,4 +1,3 @@
-import ExcelJS from "exceljs";
 import { apiClient } from "../api/client";
 
 export type TransferStatus = "Draft" | "Pending Receipt" | "Returned for Correction" | "Completed";
@@ -101,6 +100,7 @@ async function loadImage(url: string) {
 }
 
 export async function buildCaseTransferExcel(report: CaseTransfer, logo1Url: string, logo2Url: string) {
+  const { default: ExcelJS } = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "JurisGuard";
   workbook.created = new Date();

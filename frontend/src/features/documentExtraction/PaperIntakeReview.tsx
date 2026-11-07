@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { ScanViewer } from './ScanViewer';
@@ -36,7 +36,11 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
   const [pageError, setPageError] = useState('');
   const fieldsRef = useRef<HTMLDivElement>(null);
   const rawEvidence = activeField ? fieldEvidence[activeField.path] : undefined;
-  const activeEvidence = rawEvidence && Array.isArray(rawEvidence.bbox) && rawEvidence.bbox.length === 4 && rawEvidence.bbox.every(Number.isFinite) && Number.isInteger(rawEvidence.page) && rawEvidence.page > 0 ? rawEvidence : undefined;
+  // New drafts explicitly separate answer pixels from full OCR source boxes.
+  // Older label-containing boxes must not be presented as answer highlights.
+  const highlightBox = rawEvidence && ('highlight_bbox' in rawEvidence ? rawEvidence.highlight_bbox
+    : rawEvidence.source_text?.includes(':') && rawEvidence.location_kind !== 'label_answer_area' ? undefined : rawEvidence.bbox);
+  const activeEvidence = useMemo(() => rawEvidence && Array.isArray(highlightBox) && highlightBox.length === 4 && highlightBox.every(Number.isFinite) && Number.isInteger(rawEvidence.page) && rawEvidence.page > 0 ? { ...rawEvidence, bbox: highlightBox } : undefined, [rawEvidence, highlightBox]);
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => {
     if (!dirty) return;
@@ -211,7 +215,7 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
       </div> : <input id={`paper-${section}-${key}`} type="text" value={value} readOnly={readOnly} disabled={busy}
         ref={section === 'representative_personal_circumstances' && key === 'name' ? representativeNameRef : undefined}
         autoComplete="off" onChange={event => change(event.target.value)}
-        className="mt-2 min-h-11 w-full rounded border border-slate-300 bg-white px-3 py-2 text-base disabled:bg-slate-100" />}
+        className="mt-2 min-h-11 w-full min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-base disabled:bg-slate-100" />}
       {!checkbox && !readOnly && <button type="button" disabled={busy} aria-pressed={unreadableFields.includes(path)} onClick={() => {
         if (unreadableFields.includes(path)) { setUnreadableFields(current => current.filter(field => field !== path)); setDirty(true); return; }
         change(''); setUnreadableFields(current => [...current, path]);
@@ -258,8 +262,8 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
           {blankRepresentative && <p className="my-3 text-sm text-slate-700">{saved ? 'No representative details provided' : 'No representative text was extracted. Check Part II-A in the scan before leaving it blank.'}</p>}
           {blankRepresentative && !representativeExpanded ? (!readOnly && <button type="button" onClick={() => { setRepresentativeExpanded(true); requestAnimationFrame(() => representativeNameRef.current?.focus()); }} className="rounded border border-slate-300 bg-white px-4 py-3 text-sm font-semibold">Review representative fields</button>) :
             <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
-              <div className="sm:col-span-2">{field(section, ...schema[section][0])}</div>
-              <div className="grid gap-4 sm:col-span-2 sm:grid-cols-3">{schema[section].slice(1, 4).map(([key, label]) => field(section, key, label))}</div>
+              <div className="min-w-0 sm:col-span-2">{field(section, ...schema[section][0])}</div>
+              <div className="grid min-w-0 gap-4 sm:col-span-2 sm:grid-cols-3">{schema[section].slice(1, 4).map(([key, label]) => field(section, key, label))}</div>
               {schema[section].slice(4).map(([key, label]) => field(section, key, label))}
             </div>}
         </fieldset>;

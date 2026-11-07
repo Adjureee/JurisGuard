@@ -35,8 +35,9 @@ INVENTORY = {
 
 def applicant_bounds(entries):
     """Require both printed section boundaries; never assume photo proportions."""
-    start = next((e for e in entries if re.search(r'II\.?\s*IMPORMASYON', e['text'], re.I)), None)
-    end = next((e for e in entries if re.search(r'II[ .-]*A\.', e['text'], re.I)), None)
+    from paper_intake import HEADINGS, APPLICANT, REPRESENTATIVE
+    start = next((e for e in entries if re.search(HEADINGS[APPLICANT], e['text'], re.I)), None)
+    end = next((e for e in entries if re.search(HEADINGS[REPRESENTATIVE], e['text'], re.I)), None)
     if not start or not end or start['page'] != end['page']:
         return None
     if start['bbox'][3] >= end['bbox'][1]:

@@ -36,7 +36,7 @@ def local_settings(ocr):
 
 def attach_provenance(result, source, backend, settings):
     root = Path(__file__).parent
-    rules = {name:digest_file(root/name) for name in ('paper_intake.py','paper_intake_layout.py','paper_checkboxes.py','cloud_intake.py','local_ocr.py','ai_service.py')}
+    rules = {name:digest_file(root/name) for name in ('paper_intake.py','paper_intake_layout.py','intake_layout.py','paper_checkboxes.py','cloud_intake.py','local_ocr.py','ai_service.py')}
     result['diagnostics']['provenance'] = {
         'source_sha256':digest_file(source), 'backend':backend, 'settings':settings,
         'rules_sha256':canonical_digest(rules), 'settings_sha256':canonical_digest(settings),

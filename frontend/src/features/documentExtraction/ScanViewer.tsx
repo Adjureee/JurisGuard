@@ -18,6 +18,7 @@ export function ScanViewer({ url, pdf, evidence, label, fullSize = false, onClos
   const openButton = useRef<HTMLButtonElement>(null);
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const [open, setOpen] = useState(false);
+  const [showHighlight, setShowHighlight] = useState(true);
   const [size, setSize] = useState({ width: 1, height: 1 });
   const [bounds, setBounds] = useState({ width: 1, height: 1 });
   const [zoom, setZoom] = useState(1);
@@ -32,7 +33,6 @@ export function ScanViewer({ url, pdf, evidence, label, fullSize = false, onClos
     return () => observer.disconnect();
   }, []);
   useEffect(() => { setZoom(1); setPan({ x: 0, y: 0 }); setRotation(0); }, [url]);
-  useEffect(() => { setZoom(1); setPan({ x: 0, y: 0 }); }, [evidence]);
   useEffect(() => {
     if (!open || fullSize) return;
     const node = dialog.current;
@@ -41,6 +41,18 @@ export function ScanViewer({ url, pdf, evidence, label, fullSize = false, onClos
   }, [open, fullSize]);
 
   const fit = fitScan(size.width, size.height, bounds.width, bounds.height, rotation);
+  useEffect(() => {
+    if (!evidence) { setZoom(1); setPan({ x: 0, y: 0 }); return; }
+    if (size.width <= 1 || bounds.width <= 1 || bounds.height <= 1) return;
+    const [x1, y1, x2, y2] = evidence.bbox;
+    const nextZoom = Math.max(1, Math.min(6, bounds.width / Math.max(1, (x2-x1)*2) / Math.max(fit, .01), bounds.height / Math.max(1, (y2-y1)*6) / Math.max(fit, .01)));
+    const radians = rotation * Math.PI / 180;
+    const dx = (x1+x2)/2-size.width/2, dy = (y1+y2)/2-size.height/2;
+    setZoom(nextZoom);
+    setPan({ x: -(dx*Math.cos(radians)-dy*Math.sin(radians))*fit*nextZoom,
+             y: -(dx*Math.sin(radians)+dy*Math.cos(radians))*fit*nextZoom });
+    setShowHighlight(true);
+  }, [evidence, size.width, size.height, bounds.width, bounds.height, fit, rotation]);
   const scale = fit * zoom;
   const reset = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
   const closeDialog = () => dialog.current?.close();
@@ -58,9 +70,10 @@ export function ScanViewer({ url, pdf, evidence, label, fullSize = false, onClos
           <button type="button" aria-label="Zoom out" className={button} disabled={zoom <= 1} onClick={() => setZoom(value => Math.max(1, value / 1.4))}>Zoom out</button>
           <button type="button" aria-label="Zoom in" className={button} disabled={zoom >= 16} onClick={() => setZoom(value => Math.min(16, value * 1.4))}>Zoom in</button>
           <button type="button" className={button} onClick={() => { setRotation(value => (value + 90) % 360); reset(); }}>Rotate 90°</button>
+          {evidence && <button type="button" className={button} aria-pressed={showHighlight} onClick={() => setShowHighlight(value => !value)}>{showHighlight ? 'Hide highlight' : 'Show highlight'}</button>}
         </>}
       </div>
-      <p className="shrink-0 px-3 py-2 text-sm text-slate-700" aria-live="polite">{label ? `${label} — ${evidence ? 'source outlined below' : 'compare with the scan'}` : 'Select a field to see its source. Drag or use arrow keys to pan.'}</p>
+      <p className="shrink-0 px-3 py-2 text-sm text-slate-700" aria-live="polite">{label ? `${label} — ${evidence?.location_kind === 'label_answer_area' ? 'approximate answer area; check for blank or unreadable handwriting' : evidence ? 'source outlined below' : 'compare with the scan'}` : 'Select a field to see its source. Drag or use arrow keys to pan.'}</p>
       <div ref={viewport} tabIndex={pdf ? undefined : 0} aria-label="Scan viewport. Drag or use arrow keys to pan. Use zoom controls to enlarge."
         className="relative min-h-0 flex-1 touch-none overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-700"
         onKeyDown={event => { const moves: Record<string, [number, number]> = { ArrowLeft: [40, 0], ArrowRight: [-40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] }; const move = moves[event.key]; if (move) { event.preventDefault(); setPan(position => ({ x: position.x + move[0], y: position.y + move[1] })); } }}
@@ -71,7 +84,7 @@ export function ScanViewer({ url, pdf, evidence, label, fullSize = false, onClos
         {pdf ? <iframe title="Complete original PAO Interview Sheet" src={url} className="h-full w-full" /> :
           <div className="absolute left-1/2 top-1/2 origin-center" style={{ width: size.width, height: size.height, transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) rotate(${rotation}deg) scale(${scale})` }}>
             <img src={url} draggable={false} alt="Complete original PAO Interview Sheet" className="h-full w-full select-none" onLoad={event => setSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} />
-            {evidence && <div data-source-highlight aria-label={`Source of ${label}`} className="pointer-events-none absolute border-[5px] border-amber-600 bg-amber-300/20" style={{ left: evidence.bbox[0], top: evidence.bbox[1], width: evidence.bbox[2] - evidence.bbox[0], height: evidence.bbox[3] - evidence.bbox[1] }} />}
+            {evidence && showHighlight && <div data-source-highlight aria-label={`Source of ${label}`} className="pointer-events-none absolute bg-transparent" style={{ left: evidence.bbox[0], top: evidence.bbox[1], width: evidence.bbox[2] - evidence.bbox[0], height: evidence.bbox[3] - evidence.bbox[1], outline: `${2 / Math.max(scale, .01)}px solid #b45309`, outlineOffset: `${3 / Math.max(scale, .01)}px` }} />}
           </div>}
       </div>
     </section>

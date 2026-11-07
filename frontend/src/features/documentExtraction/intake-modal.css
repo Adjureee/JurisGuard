@@ -10,6 +10,19 @@
 .intake-link { min-height:44px;padding:8px 0;font-size:14px;text-decoration:underline;text-underline-offset:4px;color:#704389; }
 .intake-modal button:disabled { opacity:.5;cursor:not-allowed; }
 .paper-setup input[type=range] { min-height:44px; }
+.intake-modal .intake-session-surface { height:94dvh;max-height:94dvh; }
+.intake-modal[data-intake-stage=select] .intake-session-surface { height:min(740px,94dvh);max-width:900px; }
+.intake-modal[data-intake-phase=method] .intake-session-surface,
+.intake-modal[data-intake-phase=saved] .intake-session-surface { height:auto;min-height:0;max-width:640px; }
+.intake-modal[data-intake-stage=crop] .intake-session-surface,
+.intake-modal[data-intake-stage=review] .intake-session-surface { max-width:1440px; }
+.intake-modal header { padding:16px 20px; }
+.intake-modal :is(input:not([type=checkbox]):not([type=radio]),select,textarea) { border-color:#b8c4d1;color:#243344; }
+.intake-modal fieldset legend { color:#243344;line-height:1.5; }
+.intake-modal [aria-label="Extracted fields"] { scrollbar-gutter:stable;scroll-padding-block:16px; }
+.intake-modal [aria-label="Extracted fields"] label { line-height:1.5; }
+.intake-modal [aria-label="Extracted fields"] :is(input,select) { min-height:44px; }
+@media (max-width:767px) { .intake-modal .intake-session-surface { max-height:96dvh;height:96dvh; } }
 @keyframes pao-progress-indeterminate {
   0% { transform:translateX(-110%); }
   50% { transform:translateX(110%); }

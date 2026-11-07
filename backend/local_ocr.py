@@ -57,6 +57,37 @@ def _bool_env(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def intake_refinement_regions(entries, width, height):
+    """Locate both sections from printed evidence, never page percentages."""
+    import re
+    from paper_intake import APPLICANT, REPRESENTATIVE, HEADINGS, END
+    starts = {key: next((e for e in entries if re.search(pattern, e['text'], re.I)), None)
+              for key, pattern in HEADINGS.items()}
+    end = next((e for e in entries if re.search(END, e['text'], re.I)), None)
+    regions = []
+    for section, finish in ((APPLICANT, starts[REPRESENTATIVE]), (REPRESENTATIVE, end)):
+        start = starts[section]
+        if not start or not finish or start['page'] != finish['page']:
+            continue
+        top, bottom = start['bbox'][3], finish['bbox'][1]
+        if not 0 <= top < bottom <= height:
+            continue
+        block = [e for e in entries if e['page'] == start['page'] and top <= (e['bbox'][1]+e['bbox'][3])/2 < bottom]
+        # These printed labels identify the right column on the actual form.
+        anchor_pattern = r'^\s*Naabot\b' if section == APPLICANT else r'^\s*Contact\s+N[o0]\.?'
+        anchors = [e for e in block if re.search(anchor_pattern, e['text'], re.I)]
+        if not block or not anchors:
+            continue
+        left = max(0, min(e['bbox'][0] for e in block)-12)
+        right = min(width, max(e['bbox'][2] for e in block)+40)
+        split = min(e['bbox'][0] for e in anchors)-12
+        if not left < split < right:
+            continue
+        for x1, x2 in ((left, split), (split, right)):
+            regions.append((section, (x1, top, x2, bottom)))
+    return regions
+
+
 class LocalOCR:
     def __init__(self) -> None:
         cache = Path.home() / ".paddlex" / "official_models"
@@ -268,7 +299,8 @@ class LocalOCR:
             paddle_attempted = True
             page_started = time.perf_counter()
             entries = self._paddle_page(working, page_number)
-            page_timings.append({"page": page_number, "seconds": round(time.perf_counter() - page_started, 3)})
+            page_timings.append({"page": page_number, "seconds": round(time.perf_counter() - page_started, 3),
+                                 "source_size": [source_width, source_height], "recognition_size": list(working.size)})
             if not entries:
                 warnings.append(f"Page {page_number}: OCR found no readable text.")
             scale_x = original.width / working.width
@@ -282,34 +314,31 @@ class LocalOCR:
                 entry["region"] = region_name
                 entry["line"] = len(layout) + 1
                 layout.append(entry)
-            # Re-read only the bounded applicant columns. Keep the first pass
+            # Re-read both bounded sections. Keep the first pass
             # immutable and expose the additional candidates separately.
             if target == "full" and _bool_env("LOCAL_OCR_REFINE_INTAKE", True):
-                from intake_layout import applicant_bounds
-                bounds = applicant_bounds(entries)
-                if bounds:
-                    _, top, bottom = bounds
-                    block = [e for e in entries if top <= e["bbox"][1] < bottom]
-                    anchors = [e for e in block if "Naabot" in e["text"]]
-                    if block and anchors:
-                        left = max(0, min(e["bbox"][0] for e in block) - 12)
-                        right = min(original.width, max(e["bbox"][2] for e in block) + 40)
-                        split = anchors[0]["bbox"][0] - 12
-                        for x1, x2 in ((left, split), (split, right)):
-                            if x2 <= x1 or bottom <= top:
-                                continue
-                            crop = ImageOps.autocontrast(original.crop((x1, top, x2, bottom)), cutoff=1)
-                            factor = min(2.0, self.max_dimension / max(crop.size))
-                            crop = crop.resize((round(crop.width*factor), round(crop.height*factor)), Image.Resampling.LANCZOS)
-                            try:
-                                refined = self._paddle_page(crop, page_number)
-                            except OfflineOCRError:
-                                warnings.append(f"Page {page_number}: applicant refinement failed; first-pass OCR preserved.")
-                                break
-                            for item in refined:
-                                item["bbox"] = [round(item["bbox"][i]/factor + (x1 if i%2 == 0 else top)) for i in range(4)]
-                                item["region"] = "applicant_refinement"
-                            refinements.extend(refined)
+                regions = intake_refinement_regions(entries, original.width, original.height)
+                refinement_started = time.perf_counter()
+                for section, (x1, top, x2, bottom) in regions:
+                    if x2 <= x1 or bottom <= top:
+                        continue
+                    # Percentile clipping can erase faint pen strokes or
+                    # small checkbox marks. Re-read original RGB pixels.
+                    crop = original.crop((x1, top, x2, bottom))
+                    factor = min(2.0, self.max_dimension / max(crop.size))
+                    crop = crop.resize((round(crop.width*factor), round(crop.height*factor)), Image.Resampling.LANCZOS)
+                    try:
+                        refined = self._paddle_page(crop, page_number)
+                    except OfflineOCRError:
+                        warnings.append(f"Page {page_number}: intake refinement failed; first-pass OCR preserved.")
+                        break
+                    for item in refined:
+                        item["bbox"] = [round(item["bbox"][i]/factor + (x1 if i%2 == 0 else top)) for i in range(4)]
+                        item["region"] = f"{section.split('_', 1)[0]}_refinement"
+                    refinements.extend(refined)
+                if regions:
+                    page_timings[-1]['refinement_seconds'] = round(time.perf_counter()-refinement_started, 3)
+                    page_timings[-1]['refinement_regions'] = len(regions)
             if target == "client":
                 break
         engine = "paddleocr" if paddle_attempted else None
