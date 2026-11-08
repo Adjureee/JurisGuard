@@ -1,7 +1,14 @@
 import axios from "axios";
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000/api";
+const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim();
+const isSecurePage = typeof window !== "undefined" && window.location.protocol === "https:";
+const insecureConfiguredApi = configuredApiBase?.toLowerCase().startsWith("http://") ?? false;
+
+// Keep HTTPS deployments on the same-origin TLS reverse proxy. The loopback
+// HTTP default remains useful for local Vite development on http://localhost.
+export const API_BASE_URL = isSecurePage && insecureConfiguredApi
+  ? "/api"
+  : configuredApiBase || (isSecurePage ? "/api" : "http://127.0.0.1:8000/api");
 
 export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
 export const TOKEN_STORAGE_KEY = "jurisguard_token";

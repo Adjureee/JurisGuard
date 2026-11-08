@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field, ConfigDict, StrictStr
 from sqlalchemy import func, or_, text, null
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from starlette.concurrency import run_in_threadpool
 
 import models
@@ -44,6 +44,8 @@ from reminder_permissions import (
     can_manage_shared_reminders as role_can_manage_shared_reminders,
 )
 from reminder_status import PHILIPPINE_TIMEZONE, calculate_reminder_status, can_complete_reminder
+from messaging_permissions import can_message_designations, normalize_message_content
+from presence_status import personnel_designation
 from case_import import (
     MAX_WORKBOOK_BYTES,
     extract_case_title_client_names,
@@ -54,6 +56,18 @@ from case_import import (
 
 
 models.Base.metadata.create_all(bind=engine)
+for _case_list_index in (
+    models.IntakeRecord.__table__.indexes,
+    models.Case.__table__.indexes,
+):
+    for _index in _case_list_index:
+        if _index.name in {
+            "ix_intake_interviewer_form_date",
+            "ix_case_type_status_updated_id",
+            "ix_case_intake_id",
+            "ix_case_client_id",
+        }:
+            _index.create(bind=engine, checkfirst=True)
 
 def seed_calendar_holidays() -> None:
     with SessionLocal() as db:
@@ -95,6 +109,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "").strip()
 if len(SECRET_KEY) < 32:
     raise RuntimeError("SECRET_KEY must be set to a private random value of at least 32 characters.")
 TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "720"))
+REQUIRE_MFA = os.getenv("REQUIRE_MFA", "false").strip().lower() in {"true", "1", "yes"}
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
@@ -162,6 +177,19 @@ class RegisterPayload(BaseModel):
     password: str
     employee_id_path: str
     bootstrap_key: str | None = None
+
+
+class PrivateMessagePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    content: StrictStr = Field(min_length=1, max_length=2000)
+
+
+class PrivateMessageReactionPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    emoji: Literal["👍", "❤️", "😂", "😮", "😢", "😡"]
+
+
+MESSAGE_REACTION_EMOJIS = ("👍", "❤️", "😂", "😮", "😢", "😡")
 
 
 class RegisterResponse(BaseModel):
@@ -515,6 +543,28 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS entity_id VARCHAR(100)",
         """
+        CREATE OR REPLACE FUNCTION prevent_audit_log_mutation() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        BEGIN
+            RAISE EXCEPTION 'Audit log is append-only';
+        END;
+        $$
+        """,
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_trigger
+                WHERE tgrelid = 'audit_log'::regclass AND tgname = 'audit_log_append_only'
+            ) THEN
+                CREATE TRIGGER audit_log_append_only
+                BEFORE UPDATE OR DELETE OR TRUNCATE ON audit_log
+                FOR EACH STATEMENT EXECUTE FUNCTION prevent_audit_log_mutation();
+            END IF;
+        END;
+        $$
+        """,
+        """
         CREATE TABLE IF NOT EXISTS case_submission (
             submission_id SERIAL PRIMARY KEY,
             parent_submission_id INTEGER REFERENCES case_submission(submission_id),
@@ -701,12 +751,13 @@ def b64url_decode(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + padding)
 
 
-def create_access_token(user_id: int) -> str:
+def create_access_token(user_id: int, mfa_fingerprint: str | None = None) -> str:
     payload = {
         "purpose": "access",
         "sub": user_id,
         "exp": int((datetime.now(timezone.utc) + timedelta(minutes=TOKEN_TTL_MINUTES)).timestamp()),
         "jti": secrets.token_hex(16),
+        "mfa": mfa_fingerprint,
     }
     payload_segment = b64url(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     signature = hmac.new(SECRET_KEY.encode("utf-8"), payload_segment.encode("utf-8"), hashlib.sha256)
@@ -747,13 +798,25 @@ def read_access_token(token: str) -> int:
         raise HTTPException(status_code=401, detail="Could not validate credentials") from exc
 
 
-def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
+def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db), request: Request = None) -> models.User:
     user_id = read_access_token(token)
     if db.get(models.RevokedAccessToken, hashlib.sha256(token.encode("utf-8")).hexdigest()):
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     user = db.get(models.User, user_id)
     if not user or not user.is_active or user.approval_status != "approved":
         raise HTTPException(status_code=401, detail="Could not validate credentials")
+    if REQUIRE_MFA:
+        fingerprint = hashlib.sha256(user.mfa_secret.encode()).hexdigest() if user.mfa_enabled and user.mfa_secret else None
+        payload = json.loads(b64url_decode(token.split(".", 1)[0]))
+        enrollment_routes = {
+            ("GET", "/api/auth/me"),
+            ("POST", "/api/auth/me/mfa/setup"),
+            ("POST", "/api/auth/me/mfa/enable"),
+            ("POST", "/api/auth/logout"),
+        }
+        enrollment_request = request and (request.method, request.url.path) in enrollment_routes
+        if (not fingerprint or payload.get("mfa") != fingerprint) and not enrollment_request:
+            raise HTTPException(status_code=403, detail="Set up MFA in your profile, then sign in with your authenticator code.")
     return user
 
 
@@ -1046,28 +1109,28 @@ def case_participant_payload(
         and case_representative.rep_name != "Not applicable"
     )
     representative = {
-        "rep_name": participant.representative_name or (
+        "rep_name": getattr(participant, "representative_name", None) or (
             case_representative.rep_name if case_is_primary_client and case_representative_available else ""
         ),
-        "rep_age": participant.representative_age or (
+        "rep_age": getattr(participant, "representative_age", None) or (
             case_representative.rep_age if case_is_primary_client and case_representative_available else 0
         ) or 0,
-        "rep_sex": participant.representative_sex or (
+        "rep_sex": getattr(participant, "representative_sex", None) or (
             case_representative.rep_sex if case_is_primary_client and case_representative_available else ""
         ),
-        "civil_status": participant.representative_civil_status or (
+        "civil_status": getattr(participant, "representative_civil_status", None) or (
             case_representative.civil_status if case_is_primary_client and case_representative_available else ""
         ),
-        "rep_address": participant.representative_address or (
+        "rep_address": getattr(participant, "representative_address", None) or (
             case_representative.rep_address if case_is_primary_client and case_representative_available else ""
         ),
-        "rep_contact_no": participant.representative_contact_no or (
+        "rep_contact_no": getattr(participant, "representative_contact_no", None) or (
             case_representative.rep_contact_no if case_is_primary_client and case_representative_available else ""
         ),
-        "relationship_to_applicant": participant.representative_relationship or (
+        "relationship_to_applicant": getattr(participant, "representative_relationship", None) or (
             case_representative.relationship_to_applicant if case_is_primary_client and case_representative_available else ""
         ),
-        "rep_email": participant.representative_email or "",
+        "rep_email": getattr(participant, "representative_email", None) or "",
     }
     return {
         "case_client_id": str(participant.case_client_id or ""),
@@ -1345,6 +1408,43 @@ def get_case_payload(record: models.Case) -> dict[str, Any]:
             case_participant_payload(participant, record.location_type)
             for participant in case_participants(record)
         ],
+        "last_updated": record.last_updated.date().isoformat() if record.last_updated else "",
+    }
+
+
+def get_case_list_item(record: models.Case) -> dict[str, Any]:
+    intake = record.intake
+    participants = case_participants(record)
+    participant_rows = [
+        {
+            "client_id": str(participant.client_id or (participant.client.client_id if participant.client else "")),
+            "name": participant.client.name if participant.client else "",
+            "sex": participant.client.sex if participant.client else "",
+            "party_represented": participant.party_represented
+            or represented_party_from_role(participant.applicant_role, participant.applicant_role_other)
+            or "",
+            "applicant_role": participant.applicant_role or "",
+            "applicant_role_other": participant.applicant_role_other or "",
+        }
+        for participant in participants
+    ]
+    return {
+        "case_id": str(record.case_id),
+        "client_id": str(record.client_id or ""),
+        "case_type": normalize_case_type(getattr(record, "case_type", "Criminal")),
+        "created_by_user_id": intake.interviewer_id if intake else None,
+        "control_no": intake.control_no or "" if intake else "",
+        "form_date": format_date(intake.form_date) if intake else "",
+        "party_represented": intake.party_represented or "" if intake else "",
+        "nature_of_case": intake.nature_of_case or "" if intake else "",
+        "title_of_case": generated_case_title_for_case(record),
+        "case_no": record.case_no or "",
+        "court_body": record.court_body or "",
+        "status_of_case": normalize_case_status(record.status_of_case or record.case_status),
+        "is_terminated": bool(record.is_terminated or record.status_of_case == "Terminated"),
+        "location_type": record.location_type or "",
+        "cause_of_action": record.cause_of_action or "",
+        "participants": participant_rows,
         "last_updated": record.last_updated.date().isoformat() if record.last_updated else "",
     }
 
@@ -1689,6 +1789,9 @@ def write_audit(
     extraction_mode: str | None = None,
     fallback_reason: str | None = None,
 ) -> None:
+    # Serialize chain appends across workers. Flush each row so a second
+    # event in the same transaction sees it.
+    db.execute(text("SELECT pg_advisory_xact_lock(746236901)"))
     previous_hash = (
         db.query(models.AuditLog.current_hash)
         .filter(models.AuditLog.current_hash.isnot(None))
@@ -1711,21 +1814,21 @@ def write_audit(
         ]
     )
     current_hash = hashlib.sha256(hash_payload.encode("utf-8")).hexdigest()
-    db.add(
-        models.AuditLog(
-            user_id=user_id,
-            action=action[:50],
-            target_entity=target_entity,
-            timestamp=timestamp,
-            description=description,
-            entity_id=entity_id,
-            ip_address=request.client.host if request and request.client else None,
-            extraction_mode=extraction_mode,
-            fallback_reason=fallback_reason,
-            previous_hash=previous_hash,
-            current_hash=current_hash,
-        )
+    row = models.AuditLog(
+        user_id=user_id,
+        action=action[:50],
+        target_entity=target_entity,
+        timestamp=timestamp,
+        description=description,
+        entity_id=entity_id,
+        ip_address=request.client.host if request and request.client else None,
+        extraction_mode=extraction_mode,
+        fallback_reason=fallback_reason,
+        previous_hash=previous_hash,
+        current_hash=current_hash,
     )
+    db.add(row)
+    db.flush()
 
 
 def case_category(record: models.Case) -> str:
@@ -2533,24 +2636,35 @@ def login(
         source_attempts.consume(request.client.host)
     auth_attempts.consume(f"login:{username}")
     user = db.query(models.User).filter((models.User.email == username) | (models.User.username == username)).first()
+    def record_failed_login(reason: str) -> None:
+        actor = user.user_id if user else None
+        write_audit(db, actor, "Login Failed", "Authentication", reason, str(actor) if actor is not None else None, request)
+        db.commit()
+
     if not user or not verify_password(form.password, user.password_hash):
+        record_failed_login("Invalid sign-in credentials")
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     if not user.is_active or user.approval_status != "approved":
+        record_failed_login("Account is inactive or unapproved")
         raise HTTPException(status_code=401, detail="Account is not approved")
     new_trusted_device_token = None
+    mfa_fingerprint = None
     if user.mfa_enabled:
-        trusted_device_ok = verify_mfa_trusted_device_token(user, trusted_device_token)
+        trusted_device_ok = not REQUIRE_MFA and verify_mfa_trusted_device_token(user, trusted_device_token)
         if not trusted_device_ok:
             if not verify_totp(user.mfa_secret, otp_code):
+                if otp_code:
+                    record_failed_login("Invalid authenticator code")
                 raise HTTPException(status_code=401, detail="Invalid MFA code" if otp_code else "MFA code required")
-            if remember_device:
+            mfa_fingerprint = hashlib.sha256(user.mfa_secret.encode()).hexdigest()
+            if remember_device and not REQUIRE_MFA:
                 new_trusted_device_token = create_mfa_trusted_device_token(user)
 
     user.last_login_at = datetime.now()
     write_audit(db, user.user_id, "Login", "user", "User signed in", str(user.user_id), request)
     db.commit()
     return {
-        "access_token": create_access_token(user.user_id),
+        "access_token": create_access_token(user.user_id, mfa_fingerprint),
         "token_type": "bearer",
         "mfa_trusted_device_token": new_trusted_device_token,
     }
@@ -3096,20 +3210,28 @@ def resubmit_case_submission(
 
 
 @app.get("/api/clients/")
-def list_clients(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def list_clients(request: Request, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     clients = scoped_client_query(db, user).order_by(models.Client.created_at.desc()).all()
-    return [get_client_payload(client) for client in clients]
+    payload = [get_client_payload(client) for client in clients]
+    write_audit(db, user.user_id, "Read Clients", "client",
+                f"Loaded {len(clients)} client records", request=request)
+    db.commit()
+    return payload
 
 
 @app.get("/api/clients/{client_id}")
-def get_client(client_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def get_client(client_id: int, request: Request, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     client = ensure_client_access(db.get(models.Client, client_id), user, db)
-    return get_client_payload(client)
+    payload = get_client_payload(client)
+    write_audit(db, user.user_id, "Read Client", "client", entity_id=str(client_id), request=request)
+    db.commit()
+    return payload
 
 
 @app.get("/api/clients/{client_id}/cases")
 def get_client_cases(
     client_id: int,
+    request: Request,
     case_type: Literal["Criminal", "Civil", "All"] = Query(default="Criminal"),
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -3119,11 +3241,23 @@ def get_client_cases(
         scoped_case_query(db, user)
         .outerjoin(models.CaseClient)
         .filter(or_(models.Case.client_id == client_id, models.CaseClient.client_id == client_id))
+        .options(
+            joinedload(models.Case.intake).selectinload(models.IntakeRecord.representatives),
+            joinedload(models.Case.intake).selectinload(models.IntakeRecord.adverse_parties),
+            joinedload(models.Case.client).selectinload(models.Client.details),
+            joinedload(models.Case.client).selectinload(models.Client.classification),
+            selectinload(models.Case.participants).joinedload(models.CaseClient.client).selectinload(models.Client.details),
+            selectinload(models.Case.participants).joinedload(models.CaseClient.client).selectinload(models.Client.classification),
+        )
     )
     if case_type != "All":
         query = query.filter(models.Case.case_type == case_type)
     records = query.order_by(models.Case.last_updated.desc()).distinct().all()
-    return [get_case_payload(record) for record in records]
+    payload = [get_case_payload(record) for record in records]
+    write_audit(db, user.user_id, "Read Client Cases", "client",
+                f"Loaded {len(payload)} linked case records", str(client_id), request)
+    db.commit()
+    return payload
 
 
 @app.post("/api/clients/")
@@ -3283,8 +3417,6 @@ async def preview_case_import(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin access required")
     filename = Path(file.filename or "").name
     if Path(filename).suffix.lower() not in {".xlsx", ".xls"}:
         raise HTTPException(status_code=422, detail="Choose an .xlsx or .xls file.")
@@ -3388,9 +3520,9 @@ async def preview_case_import(
     clients_by_name: dict[str, list[models.Client]] = {}
     if names_to_match:
         existing_clients = (
-            db.query(models.Client)
+            scoped_client_query(db, user)
             .options(joinedload(models.Client.details))
-            .filter(models.Client.deleted_at.is_(None), func.lower(models.Client.name).in_(names_to_match))
+            .filter(func.lower(models.Client.name).in_(names_to_match))
             .order_by(models.Client.client_id)
             .all()
         )
@@ -3499,7 +3631,7 @@ async def preview_case_import(
                 if flag_value and flag_value not in {"1", "0", "yes", "no", "true", "false", "y", "n"}:
                     errors.append(f"Client {client_index + 1}: {flag.title()} must be a yes/no value.")
             if any(client.get(flag) not in (None, "") for flag in ("female", "senior", "cicl")) and not client.get("flags_reviewed"):
-                # The administrator confirms these tri-state classifications in the review UI.
+                # The importing staff member confirms these tri-state classifications in the review UI.
                 errors.append(f"Client {client_index + 1}: review the Female, Senior, and CICL indicators before import.")
         found_types = duplicate_types.get(control_no, set()) if control_no else set()
         duplicate = bool(found_types)
@@ -3565,8 +3697,6 @@ def import_case_records(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin access required")
     imported = created_clients = linked_clients = failed = 0
     held = max(0, payload.held_case_count)
     failures: list[dict[str, str]] = []
@@ -3642,8 +3772,8 @@ def import_case_records(
                     raise ValueError("Review the Female, Senior, and CICL indicators before import.")
                 client_id = client_data.get("existing_client_id")
                 if client_id:
-                    existing_client = db.query(models.Client).filter(
-                        models.Client.client_id == int(client_id), models.Client.deleted_at.is_(None)
+                    existing_client = scoped_client_query(db, user).filter(
+                        models.Client.client_id == int(client_id)
                     ).first()
                     if not existing_client:
                         raise ValueError("A selected existing client is no longer available.")
@@ -3794,7 +3924,7 @@ def import_case_records(
                     previous_status=None,
                     new_status=normalized_status,
                     action_taken=record.last_action_taken or "Case imported from Excel",
-                    remarks="Initial case record imported by administrator",
+                    remarks=f"Initial case record imported by {display_role_name(user)}",
                 )
             )
             db.flush()
@@ -3834,6 +3964,7 @@ def import_case_records(
 
 @app.get("/api/cases/")
 def list_cases(
+    request: Request,
     case_type: Literal["Criminal", "Civil", "All"] = Query(default="Criminal"),
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -3842,11 +3973,131 @@ def list_cases(
     if case_type != "All":
         query = query.filter(models.Case.case_type == case_type)
     records = query.order_by(models.Case.last_updated.desc()).all()
-    return [get_case_payload(record) for record in records]
+    payload = [get_case_payload(record) for record in records]
+    write_audit(db, user.user_id, "Read Cases", "case",
+                f"Loaded {len(payload)} case records", request=request)
+    db.commit()
+    return payload
+
+
+@app.get("/api/cases/paged")
+def list_cases_paged(
+    request: Request,
+    case_type: Literal["Criminal", "Civil", "All"] = Query(default="Criminal"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    search: str = Query(default="", max_length=200),
+    gender: Literal["All", "Male", "Female"] = Query(default="All"),
+    location: Literal["All", "Urban", "Rural"] = Query(default="All"),
+    court: str = Query(default="All", max_length=255),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    include_details: bool = Query(default=False),
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """Return a bounded, filtered case page for table views."""
+    query = scoped_case_query(db, user).filter(
+        models.Case.is_terminated.is_not(True),
+        models.Case.status_of_case != "Terminated",
+    )
+    if case_type != "All":
+        query = query.filter(models.Case.case_type == case_type)
+    if location != "All":
+        query = query.filter(models.Case.location_type == location)
+    if court and court != "All":
+        query = query.filter(models.Case.court_body == court)
+    if gender != "All":
+        sex_values = ("m", "male") if gender == "Male" else ("f", "female")
+        query = query.filter(or_(
+            models.Case.client.has(func.lower(func.trim(models.Client.sex)).in_(sex_values)),
+            models.Case.participants.any(
+                models.CaseClient.client.has(func.lower(func.trim(models.Client.sex)).in_(sex_values))
+            ),
+        ))
+    normalized_search = search.strip()
+    if normalized_search:
+        escaped_search = normalized_search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        term = f"%{escaped_search}%"
+        query = query.filter(or_(
+            models.Case.case_no.ilike(term, escape="\\"),
+            models.Case.title_of_case.ilike(term, escape="\\"),
+            models.Case.court_body.ilike(term, escape="\\"),
+            models.Case.cause_of_action.ilike(term, escape="\\"),
+            models.Case.intake.has(models.IntakeRecord.control_no.ilike(term, escape="\\")),
+            models.Case.client.has(models.Client.name.ilike(term, escape="\\")),
+            models.Case.participants.any(models.CaseClient.client.has(models.Client.name.ilike(term, escape="\\"))),
+        ))
+    date_column = func.coalesce(models.IntakeRecord.form_date, models.Case.last_updated)
+    if date_from:
+        query = query.filter(date_column >= datetime.combine(date_from, time.min))
+    if date_to:
+        query = query.filter(date_column < datetime.combine(date_to + timedelta(days=1), time.min))
+
+    total = query.order_by(None).count()
+    eager_options = [
+        joinedload(models.Case.intake).selectinload(models.IntakeRecord.representatives),
+        joinedload(models.Case.intake).selectinload(models.IntakeRecord.adverse_parties),
+        joinedload(models.Case.client).selectinload(models.Client.details),
+        joinedload(models.Case.client).selectinload(models.Client.classification),
+        selectinload(models.Case.participants).joinedload(models.CaseClient.client).selectinload(models.Client.details),
+        selectinload(models.Case.participants).joinedload(models.CaseClient.client).selectinload(models.Client.classification),
+    ] if include_details else [
+        joinedload(models.Case.intake),
+        joinedload(models.Case.client),
+        selectinload(models.Case.participants).joinedload(models.CaseClient.client),
+    ]
+    records = (
+        query.options(*eager_options)
+        .order_by(models.Case.last_updated.desc().nullslast(), models.Case.case_id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    payload = [get_case_payload(record) for record in records] if include_details else [get_case_list_item(record) for record in records]
+    write_audit(
+        db,
+        user.user_id,
+        "Read Cases",
+        "case",
+        f"Loaded page {page} with {len(records)} of {total} matching case records",
+        request=request,
+    )
+    db.commit()
+    return {"items": payload, "total": total, "page": page, "page_size": page_size}
+
+
+@app.get("/api/cases/by-id/{case_id}")
+def get_case_record(
+    case_id: int,
+    request: Request,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    record = (
+        scoped_case_query(db, user)
+        .filter(models.Case.case_id == case_id)
+        .options(
+            joinedload(models.Case.intake).selectinload(models.IntakeRecord.representatives),
+            joinedload(models.Case.intake).selectinload(models.IntakeRecord.adverse_parties),
+            joinedload(models.Case.client).selectinload(models.Client.details),
+            joinedload(models.Case.client).selectinload(models.Client.classification),
+            selectinload(models.Case.participants).joinedload(models.CaseClient.client).selectinload(models.Client.details),
+            selectinload(models.Case.participants).joinedload(models.CaseClient.client).selectinload(models.Client.classification),
+        )
+        .first()
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="Case record not found")
+    payload = get_case_payload(record)
+    write_audit(db, user.user_id, "Read Case", "case", entity_id=str(case_id), request=request)
+    db.commit()
+    return payload
 
 
 @app.get("/api/cases/terminated")
 def list_terminated_cases(
+    request: Request,
     case_type: Literal["Criminal", "Civil", "All"] = Query(default="Criminal"),
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -3858,12 +4109,17 @@ def list_terminated_cases(
     if case_type != "All":
         query = query.filter(models.Case.case_type == case_type)
     records = query.order_by(models.Case.terminated_at.desc().nullslast(), models.Case.last_updated.desc()).all()
-    return [get_case_payload(record) for record in records]
+    payload = [get_case_payload(record) for record in records]
+    write_audit(db, user.user_id, "Read Terminated Cases", "case",
+                f"Loaded {len(payload)} terminated case records", request=request)
+    db.commit()
+    return payload
 
 
 @app.get("/api/printable-intake/{case_id}")
 def get_printable_intake(
     case_id: int,
+    request: Request,
     client_id: int | None = Query(default=None),
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -3934,7 +4190,7 @@ def get_printable_intake(
             if involvement == "Others"
             else ""
         )
-    return {
+    payload = {
         "client": get_client_payload(selected_client),
         "selected_case": selected_case,
         "cases": [get_case_payload(case) for case in cases],
@@ -3943,6 +4199,9 @@ def get_printable_intake(
             "filipino": read_form_template("filipino"),
         },
     }
+    write_audit(db, user.user_id, "Read Printable Intake", "case", entity_id=str(case_id), request=request)
+    db.commit()
+    return payload
 
 
 @app.post("/api/cases/")
@@ -4357,7 +4616,8 @@ def list_audit_logs(
     for row in rows:
         target = row.target_entity or ""
         target_key = target.lower()
-        module = "Export" if "export" in target_key else module_labels.get(target_key, target or "Admin")
+        export_event = row.action.startswith("Export ") or row.action == "Print Form"
+        module = "Export" if export_event or "export" in target_key else module_labels.get(target_key, target or "Admin")
         payload.append(
             {
                 "id": str(row.log_id),
@@ -4390,21 +4650,36 @@ def create_audit_log(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    if payload.action.strip().lower() in {"create client", "resolve client owner"}:
-        raise HTTPException(status_code=403, detail="Client creation audit entries are server-managed")
-    target = payload.entity_type or payload.module
-    if payload.module == "Export" and not target:
-        target = "export"
+    if payload.action not in {"Export Excel", "Export CSV", "Export PDF", "Export PNG", "Print Form"} or payload.module != "Export":
+        raise HTTPException(status_code=403, detail="Only export activity may be reported by the browser")
+    if payload.action != "Print Form" and not is_admin(user):
+        raise HTTPException(status_code=403, detail="Data exports are available to administrators only")
+    scope = payload.entity_type
+    if scope == "admin_report_export" and not is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    entity_id = None
+    if scope in {"case_submission", "case_transfer_export", "intake_export"}:
+        try:
+            record_id = int(payload.entity_id or "")
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="A valid export record ID is required") from exc
+        if scope == "case_submission":
+            ensure_submission_access(record_id, user, db)
+        elif scope == "case_transfer_export":
+            ensure_transfer_access(record_id, user, db)
+        else:
+            ensure_case_access(db.get(models.Case, record_id), user)
+        entity_id = str(record_id)
+    elif scope not in {"criminal_case_export", "terminated_case_export", "analytics_chart_export", "staff_report_export", "admin_report_export"}:
+        scope = "export"
     write_audit(
         db,
         user.user_id,
         payload.action,
-        target,
-        payload.description,
-        payload.entity_id,
+        scope,
+        "Browser reported an export request",
+        entity_id,
         request,
-        payload.extraction_mode,
-        payload.fallback_reason,
     )
     db.commit()
     return {"message": "Audit log saved"}
@@ -4427,7 +4702,10 @@ async def upload_document(
     new_document = None
     file_location = None
     processing_location = None
+    plaintext_dir = None
     try:
+        from tempfile import TemporaryDirectory
+        from document_storage import document_cipher, encrypt_document
         # Keep the legacy query parameter for client compatibility, but never
         # trust it as an ownership or attribution source.
         uploader = user
@@ -4449,13 +4727,19 @@ async def upload_document(
 
         safe_filename = f"{uuid.uuid4()}{extension}"
         file_location = UPLOAD_DIR / safe_filename
+        cipher = document_cipher()
+        original_location = file_location
+        if cipher is not None:
+            plaintext_dir = TemporaryDirectory(prefix="jurisguard-upload-")
+            original_location = Path(plaintext_dir.name) / safe_filename
+            file_location = file_location.with_suffix(extension + ".enc")
 
-        save_bounded_upload(file.file, file_location, MAX_DOCUMENT_BYTES)
+        save_bounded_upload(file.file, original_location, MAX_DOCUMENT_BYTES)
         if extension != ".pdf":
             try:
-                verify_image(file_location, extension)
+                verify_image(original_location, extension)
             except HTTPException:
-                file_location.unlink(missing_ok=True)
+                original_location.unlink(missing_ok=True)
                 raise
 
         processing = None
@@ -4466,7 +4750,7 @@ async def upload_document(
             processing_location = UPLOAD_DIR / f'{uuid.uuid4()}-paper-crop.jpg'
             try:
                 plan = json.loads(crop_plan)
-                processing = await asyncio.to_thread(build_ocr_image, file_location, plan, processing_location)
+                processing = await asyncio.to_thread(build_ocr_image, original_location, plan, processing_location)
             except (ValueError, PaperCropError) as exc:
                 raise HTTPException(422, str(exc)) from exc
         if ocr_image is not None:
@@ -4477,6 +4761,8 @@ async def upload_document(
             save_bounded_upload(ocr_image.file, processing_location, MAX_DOCUMENT_BYTES)
             verify_image(processing_location, processing_extension)
 
+        if cipher is not None:
+            encrypt_document(original_location, file_location, cipher)
         new_document = models.Document(
             case_id=case_id,
             intake_id=intake_id,
@@ -4490,7 +4776,7 @@ async def upload_document(
         db.refresh(new_document)
 
         extracted_json = await extract_document(
-            str(processing_location or file_location), extraction_mode, extraction_target, is_disconnected=request.is_disconnected
+            str(processing_location or original_location), extraction_mode, extraction_target, is_disconnected=request.is_disconnected
         )
         if processing:
             from paper_capture import remap_field_evidence
@@ -4535,6 +4821,8 @@ async def upload_document(
             raise exc
 
         db.rollback()
+        if new_document is None and file_location is not None:
+            file_location.unlink(missing_ok=True)
         if new_document is not None:
             new_document.ocr_status = "FAILED"
             db.add(new_document)
@@ -4553,6 +4841,8 @@ async def upload_document(
     finally:
         if processing_location is not None:
             processing_location.unlink(missing_ok=True)
+        if plaintext_dir is not None:
+            plaintext_dir.cleanup()
 
 
 def store_paper_draft(db, document_id, extracted):
@@ -4595,35 +4885,63 @@ async def prepare_camera_image(file: UploadFile = File(...), user: models.User =
         source.unlink(missing_ok=True)
 
 
-@app.get('/api/pao-intakes/documents/{document_id}')
-def paper_intake_scan(document_id: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def authorized_paper_document(document_id: int, user: models.User, db: Session):
     document = db.get(models.Document, document_id)
     if not document:
         raise HTTPException(404, 'Document not found')
     saved = db.query(models.ReviewedPaperIntake).filter_by(document_id=document_id).first()
-    if saved:
+    if document.case_id is not None:
+        ensure_case_access(db.get(models.Case, document.case_id), user)
+    elif document.intake_id is not None and not is_admin(user):
+        intake = db.get(models.IntakeRecord, document.intake_id)
+        if not intake or intake.interviewer_id != user.user_id:
+            raise HTTPException(403, 'Record access denied')
+    elif saved:
         ensure_client_access(db.get(models.Client, saved.client_id), user, db)
     elif not is_admin(user) and document.uploaded_by != user.user_id:
         raise HTTPException(403, 'Record access denied')
     location = Path(document.encrypted_file_path).resolve()
     if not location.is_relative_to(UPLOAD_DIR.resolve()) or not location.is_file():
         raise HTTPException(404, 'Document not found')
-    return FileResponse(location, media_type=document.document_type,
-                        headers={'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'})
+    return location, document.document_type
+
+
+def read_archived_document(location: Path) -> bytes:
+    from cryptography.exceptions import InvalidTag
+    from document_storage import read_document
+
+    try:
+        return read_document(location)
+    except (InvalidTag, RuntimeError, OSError, ValueError) as exc:
+        raise HTTPException(503, "The archived document could not be opened.") from exc
+
+
+@app.get('/api/pao-intakes/documents/{document_id}')
+def paper_intake_scan(document_id: int, request: Request, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+    location, media_type = authorized_paper_document(document_id, user, db)
+    headers = {'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'}
+    response = (
+        Response(read_archived_document(location), media_type=media_type, headers=headers)
+        if location.suffix == ".enc" else FileResponse(location, media_type=media_type, headers=headers)
+    )
+    write_audit(db, user.user_id, "Read Document", "document", entity_id=str(document_id), request=request)
+    db.commit()
+    return response
 
 
 @app.get('/api/pao-intakes/documents/{document_id}/pages/{page_number}')
-def paper_intake_page(document_id: int, page_number: int, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
+def paper_intake_page(document_id: int, page_number: int, request: Request, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
     """Render at the same scale as local OCR so evidence boxes share coordinates."""
-    source = paper_intake_scan(document_id, user, db)
+    location, media_type = authorized_paper_document(document_id, user, db)
     if page_number < 1:
         raise HTTPException(404, 'Page not found')
     import io
     import pypdfium2 as pdfium
     from fastapi.responses import Response
-    if source.media_type != 'application/pdf':
+    if media_type != 'application/pdf':
         raise HTTPException(400, 'Page preview requires a PDF')
-    with pdfium.PdfDocument(str(source.path)) as document:
+    source = read_archived_document(location) if location.suffix == ".enc" else str(location)
+    with pdfium.PdfDocument(source) as document:
         page_count = len(document)
         if page_number > len(document):
             raise HTTPException(404, 'Page not found')
@@ -4640,6 +4958,8 @@ def paper_intake_page(document_id: int, page_number: int, user: models.User = De
                 bitmap.close()
         finally:
             page.close()
+    write_audit(db, user.user_id, "Read Document Page", "document", f"Rendered page {page_number}", str(document_id), request)
+    db.commit()
     return Response(output.getvalue(), media_type='image/png', headers={'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'X-Page-Count': str(page_count), 'Access-Control-Expose-Headers': 'X-Page-Count'})
 
 
@@ -4762,14 +5082,22 @@ def update_paper_intake(client_id: int, payload: PaperIntakePayload, request: Re
 async def reread_paper_intake(document_id: int, request: Request,
                               extraction_mode: Literal['auto', 'offline', 'cloud'] = Query(default='auto'),
                               user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    source = paper_intake_scan(document_id, user, db)
+    location, media_type = authorized_paper_document(document_id, user, db)
     metadata = db.query(models.ExtractedMetadata).filter_by(document_id=document_id).first()
     if not metadata or metadata.extracted_json.get('intake_scope') != 'pao_parts_ii_iia':
         raise HTTPException(422, 'This document is not a PAO paper intake.')
-    if Path(source.path).suffix.lower() == '.pdf' and extraction_mode == 'cloud':
+    if media_type == 'application/pdf' and extraction_mode == 'cloud':
         raise HTTPException(400, 'Cloud mode does not support PDFs. Select offline mode.')
+    from tempfile import TemporaryDirectory
+
     try:
-        extracted = await extract_document(str(source.path), extraction_mode, 'paper_intake', is_disconnected=request.is_disconnected)
+        if location.suffix == ".enc":
+            with TemporaryDirectory(prefix="jurisguard-reread-") as directory:
+                source = Path(directory) / location.stem
+                source.write_bytes(read_archived_document(location))
+                extracted = await extract_document(str(source), extraction_mode, 'paper_intake', is_disconnected=request.is_disconnected)
+        else:
+            extracted = await extract_document(str(location), extraction_mode, 'paper_intake', is_disconnected=request.is_disconnected)
     except ExtractionBusy as exc:
         raise HTTPException(503, 'OCR is busy. Retry after the current scan finishes.', headers={'Retry-After': '5'}) from exc
     except ExtractionTimeout as exc:
@@ -4782,6 +5110,7 @@ async def reread_paper_intake(document_id: int, request: Request,
     # OCR evidence or any attorney-reviewed record until an explicit save.
     public = public_extraction_payload(extracted)
     draft_id = store_paper_draft(db, document_id, public)
+    write_audit(db, user.user_id, "Re-extract Document", "document", entity_id=str(document_id), request=request)
     db.commit()
     return {'document_id': document_id, 'source_draft_id': draft_id, 'extracted_data': public}
 
@@ -5008,6 +5337,277 @@ def create_user_notification(
         is_read=False,
     ).on_conflict_do_nothing(constraint="uq_notification_user_event")
     db.execute(statement)
+
+
+def require_messaging_designation(user: models.User) -> str:
+    designation = personnel_designation(
+        user.role.role_name if user.role else None,
+        is_admin(user),
+    )
+    if designation not in {"Attorney", "Administrator"}:
+        raise HTTPException(status_code=403, detail="Private messaging is not available for this designation")
+    return designation
+
+
+def messaging_peer(db: Session, user: models.User, peer_id: int) -> tuple[models.User, str]:
+    sender_designation = require_messaging_designation(user)
+    if peer_id <= 0 or peer_id == user.user_id:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    peer = db.query(models.User).options(joinedload(models.User.role)).filter(
+        models.User.user_id == peer_id,
+        models.User.is_active.is_(True),
+        models.User.approval_status == "approved",
+    ).first()
+    if not peer:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    peer_designation = personnel_designation(
+        peer.role.role_name if peer.role else None,
+        is_admin(peer),
+    )
+    if not can_message_designations(sender_designation, peer_designation):
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return peer, peer_designation
+
+
+def private_message_reaction_summary(
+    db: Session,
+    message_ids: list[int],
+    viewer_id: int,
+) -> dict[int, list[dict[str, Any]]]:
+    if not message_ids:
+        return {}
+    rows = db.query(
+        models.PrivateMessageReaction.message_id,
+        models.PrivateMessageReaction.emoji,
+        models.PrivateMessageReaction.user_id,
+    ).filter(
+        models.PrivateMessageReaction.message_id.in_(message_ids),
+    ).order_by(
+        models.PrivateMessageReaction.message_id,
+        models.PrivateMessageReaction.emoji,
+    ).all()
+
+    summaries: dict[int, dict[str, dict[str, Any]]] = {}
+    for message_id, emoji, user_id in rows:
+        if emoji not in MESSAGE_REACTION_EMOJIS:
+            continue
+        by_emoji = summaries.setdefault(message_id, {})
+        summary = by_emoji.setdefault(emoji, {"emoji": emoji, "count": 0, "reacted_by_me": False})
+        summary["count"] += 1
+        if user_id == viewer_id:
+            summary["reacted_by_me"] = True
+    return {message_id: list(by_emoji.values()) for message_id, by_emoji in summaries.items()}
+
+
+def private_message_payload(
+    message: models.PrivateMessage,
+    viewer_id: int,
+    reactions: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return {
+        "message_id": message.message_id,
+        "sender_user_id": message.sender_user_id,
+        "recipient_user_id": message.recipient_user_id,
+        "content": message.content,
+        "created_at": message.created_at.isoformat() if message.created_at else "",
+        "read_at": message.read_at.isoformat() if message.read_at else None,
+        "is_mine": message.sender_user_id == viewer_id,
+        "reactions": reactions or [],
+    }
+
+
+@app.get("/api/messages/personnel")
+def list_messaging_personnel(
+    response: Response,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    sender_designation = require_messaging_designation(user)
+    candidates = db.query(models.User).options(joinedload(models.User.role)).filter(
+        models.User.is_active.is_(True),
+        models.User.approval_status == "approved",
+    ).order_by(models.User.full_name, models.User.user_id).all()
+    eligible = []
+    for person in candidates:
+        designation = personnel_designation(
+            person.role.role_name if person.role else None,
+            is_admin(person),
+        )
+        is_self = person.user_id == user.user_id
+        if is_self or can_message_designations(sender_designation, designation):
+            eligible.append((person, designation, is_self))
+
+    peer_ids = [person.user_id for person, _, is_self in eligible if not is_self]
+    unread_by_sender: dict[int, int] = {}
+    if peer_ids:
+        unread_rows = db.query(
+            models.PrivateMessage.sender_user_id,
+            func.count(models.PrivateMessage.message_id),
+        ).filter(
+            models.PrivateMessage.recipient_user_id == user.user_id,
+            models.PrivateMessage.sender_user_id.in_(peer_ids),
+            models.PrivateMessage.read_at.is_(None),
+        ).group_by(models.PrivateMessage.sender_user_id).all()
+        unread_by_sender = {sender_id: count for sender_id, count in unread_rows}
+
+    return {
+        "personnel": [
+            {
+                "user_id": person.user_id,
+                "full_name": person.full_name or person.email or person.username,
+                "profile_image_path": person.profile_image_path,
+                "designation": designation,
+                "is_self": is_self,
+                "unread_count": unread_by_sender.get(person.user_id, 0),
+            }
+            for person, designation, is_self in eligible
+        ],
+        "summary": None,
+    }
+
+
+@app.get("/api/messages/{peer_id}")
+def get_private_conversation(
+    peer_id: int,
+    response: Response,
+    limit: int = Query(default=50, ge=1, le=100),
+    before_message_id: int | None = Query(default=None, ge=1),
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    peer, _ = messaging_peer(db, user, peer_id)
+    query = db.query(models.PrivateMessage).filter(
+        or_(
+            (models.PrivateMessage.sender_user_id == user.user_id)
+            & (models.PrivateMessage.recipient_user_id == peer.user_id),
+            (models.PrivateMessage.sender_user_id == peer.user_id)
+            & (models.PrivateMessage.recipient_user_id == user.user_id),
+        )
+    )
+    if before_message_id is not None:
+        query = query.filter(models.PrivateMessage.message_id < before_message_id)
+    rows = query.order_by(models.PrivateMessage.message_id.desc()).limit(limit + 1).all()
+    has_more = len(rows) > limit
+    rows = list(reversed(rows[:limit]))
+    reactions_by_message = private_message_reaction_summary(
+        db,
+        [message.message_id for message in rows],
+        user.user_id,
+    )
+    return {
+        "messages": [
+            private_message_payload(message, user.user_id, reactions_by_message.get(message.message_id))
+            for message in rows
+        ],
+        "has_more": has_more,
+    }
+
+
+@app.post("/api/messages/{peer_id}")
+def send_private_message(
+    peer_id: int,
+    payload: PrivateMessagePayload,
+    response: Response,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    peer, _ = messaging_peer(db, user, peer_id)
+    try:
+        content = normalize_message_content(payload.content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    message = models.PrivateMessage(
+        sender_user_id=user.user_id,
+        recipient_user_id=peer.user_id,
+        content=content,
+    )
+    db.add(message)
+    db.flush()
+    sender_name = user.full_name or user.email or user.username
+    create_user_notification(
+        db,
+        peer.user_id,
+        f"private-message:{message.message_id}",
+        "New private message",
+        f"You have a new private message from {sender_name}.",
+        f"/dashboard?messageFrom={user.user_id}",
+        "private_message",
+        str(user.user_id),
+    )
+    db.commit()
+    db.refresh(message)
+    return private_message_payload(message, user.user_id)
+
+
+@app.post("/api/messages/{peer_id}/{message_id}/reaction")
+def toggle_private_message_reaction(
+    peer_id: int,
+    message_id: int,
+    payload: PrivateMessageReactionPayload,
+    response: Response,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    peer, _ = messaging_peer(db, user, peer_id)
+    message = db.query(models.PrivateMessage).filter(
+        models.PrivateMessage.message_id == message_id,
+        or_(
+            (models.PrivateMessage.sender_user_id == user.user_id)
+            & (models.PrivateMessage.recipient_user_id == peer.user_id),
+            (models.PrivateMessage.sender_user_id == peer.user_id)
+            & (models.PrivateMessage.recipient_user_id == user.user_id),
+        ),
+    ).with_for_update().first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    reaction = db.query(models.PrivateMessageReaction).filter(
+        models.PrivateMessageReaction.message_id == message.message_id,
+        models.PrivateMessageReaction.user_id == user.user_id,
+    ).first()
+    if reaction and reaction.emoji == payload.emoji:
+        db.delete(reaction)
+    elif reaction:
+        reaction.emoji = payload.emoji
+    else:
+        db.add(models.PrivateMessageReaction(
+            message_id=message.message_id,
+            user_id=user.user_id,
+            emoji=payload.emoji,
+        ))
+    db.commit()
+
+    reactions = private_message_reaction_summary(db, [message.message_id], user.user_id)
+    return {"reactions": reactions.get(message.message_id, [])}
+
+
+@app.post("/api/messages/{peer_id}/read")
+def mark_private_conversation_read(
+    peer_id: int,
+    response: Response,
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    peer, _ = messaging_peer(db, user, peer_id)
+    read_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    updated_count = db.query(models.PrivateMessage).filter(
+        models.PrivateMessage.sender_user_id == peer.user_id,
+        models.PrivateMessage.recipient_user_id == user.user_id,
+        models.PrivateMessage.read_at.is_(None),
+    ).update({models.PrivateMessage.read_at: read_at}, synchronize_session=False)
+    db.query(models.Notification).filter(
+        models.Notification.user_id == user.user_id,
+        models.Notification.entity_type == "private_message",
+        models.Notification.entity_id == str(peer.user_id),
+        models.Notification.is_read.is_(False),
+    ).update({models.Notification.is_read: True}, synchronize_session=False)
+    db.commit()
+    return {"updated": updated_count, "read_at": read_at.isoformat()}
 
 
 @app.get("/api/case-transfers/attorneys")

@@ -8,6 +8,7 @@ import {
 } from "../features/auditLogs/auditLogStore";
 import MainLayout from "../layouts/MainLayout";
 import { listAuditLogs } from "../services/auditService";
+import { presentActivity } from "../features/dashboard/activityPresentation";
 import {
   matchesDateFilter,
   type DateFilterValue,
@@ -307,7 +308,7 @@ export default function AuditLogsPage() {
                       {log.action}
                     </td>
                     <td className="px-3 py-4 text-[#4B5563]">
-                      {log.description}
+                      {presentActivity(log)}
                     </td>
                   </tr>
                 ))

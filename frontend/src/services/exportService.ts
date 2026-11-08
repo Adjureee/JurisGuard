@@ -36,7 +36,7 @@ export interface CriminalCaseRowFilterDto extends Partial<CriminalCaseExportFilt
 
 const PAO_EXPORT_COLUMN_COUNT = 24;
 
-const PAO_INVENTORY_HEADERS = [
+const PAO_CSV_HEADERS = [
   "CONTROL NUMBER",
   "PARTY REPRESENTED",
   "GENDER / SEX",
@@ -61,6 +61,37 @@ const PAO_INVENTORY_HEADERS = [
   "ADDRESS",
   "CONTACT NUMBER",
   "RELATIONSHIP TO APPLICANT",
+] as const;
+
+const PAO_EXCEL_CORE_COLUMNS = [
+  { field: "ITEM_NO", label: "Item No.", width: 48 },
+  { field: "CONTROL_NUMBER", label: "CONTROL NUMBER", width: 125 },
+  { field: "PARTY_REPRESENTED", label: "PARTY REPRESENTED", width: 87 },
+  { field: "GENDER_SEX", label: "GENDER/SEX", width: 54 },
+  { field: "TITLE_OF_THE_CASE", label: "TITLE OF THE CASE", width: 167 },
+  { field: "COURT_BODY", label: "COURT/BODY", width: 59 },
+  { field: "CASE_NO", label: "CASE NO.", width: 94 },
+  { field: "CAUSE_OF_ACTION", label: "CAUSE OF ACTION", width: 118 },
+  { field: "STATUS_OF_THE_CASE", label: "STATUS OF THE CASE", width: 115 },
+  { field: "LAST_ACTION_TAKEN", label: "LAST ACTION TAKEN", width: 160 },
+  { field: "CAUSE_OF_TERMINATION", label: "CAUSE OF TERMINATION", width: 122 },
+  { field: "DATE_OF_TERMINATION", label: "DATE OF TERMINATION", width: 129 },
+] as const;
+
+const PAO_EXCEL_SUPPLEMENTAL_COLUMNS = [
+  { field: "TEMPLATE_SPACER", label: "", width: 85 },
+  { field: "AGE", label: "", width: 77 },
+  { field: "URBAN", label: "urban", width: 38 },
+  { field: "RURAL", label: "rural", width: 51 },
+  { field: "DRUGS", label: "drugs", width: 51 },
+  { field: "FEMALE", label: "female", width: 51 },
+  { field: "SENIOR", label: "SENIOR", width: 51 },
+  { field: "CICL", label: "CICL", width: 51 },
+  { field: "DATE_OF_CONFINEMENT", label: "Date of Confinement/ arrest", width: 120 },
+  { field: "PLACE_OF_DETENTION", label: "place of detention", width: 139 },
+  { field: "CASE_RECEIVED", label: "case received", width: 127 },
+  { field: "ADDRESS", label: "address", width: 146 },
+  { field: "CONTACT_NUMBER", label: "contact number", width: 112 },
 ] as const;
 
 function recordDate(record: CriminalCaseRecord) {
@@ -344,7 +375,7 @@ export function buildCriminalCasesCsv(
   return [
     ...titleRows.map(centeredTitleRow),
     emptyCsvRow(),
-    csvRow([...PAO_INVENTORY_HEADERS]),
+    csvRow([...PAO_CSV_HEADERS]),
     ...lines,
   ].join("\n");
 }
@@ -356,11 +387,15 @@ function htmlCell(value: string | number | undefined | null) {
 export function buildCriminalCasesExcelHtml(
   rows: CriminalCaseRow[],
   filters: CriminalCaseExportFilterDto,
+  options: { includeSupplementalFields?: boolean } = {},
 ) {
   const parsedFilters = criminalCaseExportFilterSchema.parse(filters);
   const filteredRows = filterCriminalCaseRows(rows, parsedFilters);
-  const widths = [150, 150, 100, 240, 140, 120, 200, 140, 220, 200, 130, 70,
-    70, 70, 70, 70, 70, 70, 140, 200, 130, 260, 150, 200];
+  const includeSupplementalFields = options.includeSupplementalFields ?? true;
+  const columns = includeSupplementalFields
+    ? [...PAO_EXCEL_CORE_COLUMNS, ...PAO_EXCEL_SUPPLEMENTAL_COLUMNS]
+    : [...PAO_EXCEL_CORE_COLUMNS];
+  const columnCount = columns.length;
   const participantRows = filteredRows.flatMap(({ record, client }) =>
     exportParticipantRows(record, client).map((participant) => ({ record, participant })),
   );
@@ -378,6 +413,7 @@ export function buildCriminalCasesExcelHtml(
     }),
     { urban: 0, rural: 0, drugs: 0, female: 0, senior: 0, cicl: 0 },
   );
+  let itemNumber = 0;
   const body = filteredRows.map(({ record, client }) => {
     const participants = exportParticipantRows(record, client);
     const rowSpan = participants.length > 1 ? ` rowspan="${participants.length}"` : "";
@@ -396,8 +432,10 @@ export function buildCriminalCasesExcelHtml(
       record.intake_record.form_date,
     ];
     return participants.map((participant, index) => {
+      itemNumber += 1;
       const participantData = participantValues(record, participant);
       const cells = [
+        `<td>${itemNumber}</td>`,
         index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[0])}</td>` : "",
         `<td>${htmlCell(participantData[0])}</td>`,
         `<td>${htmlCell(participantData[1])}</td>`,
@@ -409,43 +447,50 @@ export function buildCriminalCasesExcelHtml(
         index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[6])}</td>` : "",
         index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[7])}</td>` : "",
         index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[8])}</td>` : "",
-        `<td>${htmlCell(participantData[2])}</td>`,
-        `<td>${htmlCell(participantData[3])}</td>`,
-        `<td>${htmlCell(participantData[4])}</td>`,
-        `<td>${htmlCell(participantData[5])}</td>`,
-        `<td>${htmlCell(participantData[6])}</td>`,
-        `<td>${htmlCell(participantData[7])}</td>`,
-        `<td>${htmlCell(participantData[8])}</td>`,
-        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[9])}</td>` : "",
-        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[10])}</td>` : "",
-        index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[11])}</td>` : "",
-        `<td>${htmlCell(participantData[9])}</td>`,
-        `<td>${htmlCell(participantData[10])}</td>`,
-        `<td>${htmlCell(participantData[11])}</td>`,
       ];
+      if (includeSupplementalFields) {
+        cells.push(
+          "<td></td>",
+          `<td>${htmlCell(participantData[2])}</td>`,
+          `<td>${htmlCell(participantData[3])}</td>`,
+          `<td>${htmlCell(participantData[4])}</td>`,
+          `<td>${htmlCell(participantData[5])}</td>`,
+          `<td>${htmlCell(participantData[6])}</td>`,
+          `<td>${htmlCell(participantData[7])}</td>`,
+          `<td>${htmlCell(participantData[8])}</td>`,
+          index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[9])}</td>` : "",
+          index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[10])}</td>` : "",
+          index === 0 ? `<td${rowSpan}>${htmlCell(sharedValues[11])}</td>` : "",
+          `<td>${htmlCell(participantData[9])}</td>`,
+          `<td>${htmlCell(participantData[10])}</td>`,
+        );
+      }
       return `<tr>${cells.join("")}</tr>`;
     }).join("");
   }).join("");
-  const totalValues: Array<string | number> = Array(PAO_INVENTORY_HEADERS.length).fill("");
-  totalValues[0] = `TOTAL CASES: ${totalCases}`;
-  totalValues[12] = totals.urban;
-  totalValues[13] = totals.rural;
-  totalValues[14] = totals.drugs;
-  totalValues[15] = totals.female;
-  totalValues[16] = totals.senior;
-  totalValues[17] = totals.cicl;
+  const totalValues: Array<string | number> = Array(columnCount).fill("");
+  totalValues[1] = `TOTAL CASES: ${totalCases}`;
+  if (includeSupplementalFields) {
+    totalValues[14] = totals.urban;
+    totalValues[15] = totals.rural;
+    totalValues[16] = totals.drugs;
+    totalValues[17] = totals.female;
+    totalValues[18] = totals.senior;
+    totalValues[19] = totals.cicl;
+  }
   const titles = [
     "REPUBLIKA NG PILIPINAS",
     "KAGAWARAN NG KATARUNGAN",
     "TANGGAPAN NG MANANANGGOL PAMBAYAN",
     "(PUBLIC ATTORNEY'S OFFICE)",
-    "Panabo City Public Attorney's Office",
+    "Regional Office No. XI",
+    "Panabo City District Office",
     "YEAR-END INVENTORY OF CASES",
     `As of ${formatAsOfDate()}`,
   ].map((title, index) =>
-    `<tr><td colspan="${PAO_INVENTORY_HEADERS.length}" class="title${index === 5 ? " report-title" : ""}">${htmlCell(title)}</td></tr>`,
+    `<tr><td colspan="${columnCount}" class="title${index === 6 ? " report-title" : ""}">${htmlCell(title)}</td></tr>`,
   ).join("");
-  const header = `<tr>${PAO_INVENTORY_HEADERS.map((name) => `<th>${htmlCell(name)}</th>`).join("")}</tr>`;
+  const header = `<tr>${columns.map(({ field, label }) => `<th data-field="${field}">${htmlCell(label)}</th>`).join("")}</tr>`;
   const totalRow = `<tr class="total">${totalValues.map((value) => `<td>${htmlCell(value)}</td>`).join("")}</tr>`;
 
   return `<!doctype html><html><head><meta charset="utf-8" /><style>
@@ -456,7 +501,7 @@ export function buildCriminalCasesExcelHtml(
     .title{text-align:center;font-weight:bold;border:0;height:22px}
     .report-title{background:#D9E8FC;border:1px solid #8AAFE0}
     .total td{font-weight:bold}td{mso-number-format:"\\@"}
-</style></head><body><table><colgroup>${widths.map((width) => `<col width="${width}" style="width:${width}px" />`).join("")}</colgroup><tbody>${titles}<tr class="spacer"><td colspan="${PAO_INVENTORY_HEADERS.length}"></td></tr>${header}${body}${totalRow}</tbody></table></body></html>`;
+</style></head><body><table><colgroup>${columns.map(({ width }) => `<col width="${width}" style="width:${width}px" />`).join("")}</colgroup><tbody>${titles}<tr class="spacer"><td colspan="${columnCount}"></td></tr>${header}${body}${totalRow}</tbody></table></body></html>`;
 }
 
 export async function downloadInventoryWorkbook(filename: string, html: string) {
@@ -468,8 +513,10 @@ export async function downloadInventoryWorkbook(filename: string, html: string) 
   const reportDocument = new DOMParser().parseFromString(html, "text/html");
   const columnWidths = Array.from(reportDocument.querySelectorAll("colgroup col"));
   const columnCount = columnWidths.length;
-  const headers = Array.from(reportDocument.querySelectorAll("tr th")).map((cell) => cell.textContent?.trim() ?? "");
-  const dateColumns = new Set(["DATE OF TERMINATION", "DATE OF CONFINEMENT", "CASE RECEIVED"]);
+  const headers = Array.from(reportDocument.querySelectorAll("tr th")).map((cell) =>
+    cell.getAttribute("data-field") || cell.textContent?.trim().toUpperCase() || "",
+  );
+  const dateColumns = new Set(["DATE_OF_TERMINATION", "DATE_OF_CONFINEMENT", "CASE_RECEIVED"]);
   const classificationColumns = new Set(["URBAN", "RURAL", "DRUGS", "FEMALE", "SENIOR", "CICL"]);
   sheet.columns = columnWidths.map((col) => ({ width: Math.max(7, Number(col.getAttribute("width")) / 7) }));
   const rows = Array.from(reportDocument.querySelectorAll("table > tbody > tr"));
@@ -477,13 +524,13 @@ export async function downloadInventoryWorkbook(filename: string, html: string) 
   rows.forEach((row, rowIndex) => {
     const r = rowIndex + 1;
     // Full-width headings keep the report centered independently of the seal.
-    if (rowIndex < 7) {
+    if (rowIndex < 8) {
       sheet.mergeCells(r, 1, r, columnCount);
       const cell = sheet.getCell(r, 1);
       cell.value = row.querySelector(".title")?.textContent ?? "";
-      cell.font = { name: "Arial", size: rowIndex === 5 ? 12 : 11, bold: true };
+      cell.font = { name: "Arial", size: rowIndex === 6 ? 12 : 11, bold: true };
       cell.alignment = { horizontal: "center", vertical: "middle" };
-      sheet.getRow(r).height = rowIndex === 5 ? 24 : 20;
+      sheet.getRow(r).height = rowIndex === 6 ? 24 : 20;
       return;
     }
     let column = 1;
@@ -498,7 +545,7 @@ export async function downloadInventoryWorkbook(filename: string, html: string) 
         const [, year, month, day] = value.match(/^(\d{4})-(\d{2})-(\d{2})$/) ?? [];
         cell.value = new Date(Number(year), Number(month) - 1, Number(day));
         cell.numFmt = "dd-mmm-yyyy";
-      } else if ((header === "AGE" || classificationColumns.has(header)) && value !== "" && /^\d+$/.test(value)) {
+      } else if ((header === "AGE" || header === "ITEM_NO" || classificationColumns.has(header)) && value !== "" && /^\d+$/.test(value)) {
         cell.value = Number(value);
         cell.numFmt = "0";
       } else {
@@ -508,7 +555,7 @@ export async function downloadInventoryWorkbook(filename: string, html: string) 
       cell.font = { name: "Arial", size: 11, bold: element.tagName === "TH" || row.classList.contains("total") };
       cell.alignment = {
         vertical: "middle",
-        horizontal: element.tagName === "TH" || classificationColumns.has(header) || header === "AGE" || dateColumns.has(header) ? "center" : "left",
+        horizontal: element.tagName === "TH" || classificationColumns.has(header) || header === "AGE" || header === "ITEM_NO" || dateColumns.has(header) ? "center" : "left",
         wrapText: true,
       };
       if (colspan === 1) cell.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
@@ -518,8 +565,8 @@ export async function downloadInventoryWorkbook(filename: string, html: string) 
     }
     sheet.getRow(r).height = row.classList.contains("spacer") ? 10 : row.querySelector("th") ? 44 : 56;
   });
-  sheet.views = [{ state: "frozen", ySplit: 9 }];
-  sheet.pageSetup.printTitlesRow = "1:9";
+  sheet.views = [{ state: "frozen", ySplit: 10 }];
+  sheet.pageSetup.printTitlesRow = "1:10";
   sheet.pageSetup.printArea = `A1:${sheet.getColumn(columnCount).letter}${rows.length}`;
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([new Uint8Array(buffer)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });

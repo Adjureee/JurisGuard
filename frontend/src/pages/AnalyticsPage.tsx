@@ -1,5 +1,7 @@
 import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
+import toast from "react-hot-toast";
+import { createAuditLog } from "../services/auditService";
 import {
   Area,
   AreaChart,
@@ -467,10 +469,12 @@ export default function AnalyticsPage() {
   };
   const period = datePreset === 'all' ? 'All dates' : `${formatExportDate(dateRange.dateFrom)} – ${formatExportDate(dateRange.dateTo)}`;
   const download = (ref: HTMLDivElement | null, title: string, legend?: ChartExportContext["legend"]) =>
-    void downloadChartPng(ref, `jurisguard-${title.toLowerCase().replaceAll(" ", "-")}.png`, {
+    void createAuditLog({ action: "Export PNG", module: "Export", entity_type: "analytics_chart_export" })
+      .then(() => downloadChartPng(ref, `jurisguard-${title.toLowerCase().replaceAll(" ", "-")}.png`, {
       title, description: "Recorded data for the selected period.", coveragePeriod: period,
       filtersApplied: "Selected date range; permitted records only", legend,
-    });
+      }))
+      .catch(() => toast.error("Unable to record and export the chart. Please retry."));
   const statusRows = [
     { name: "Not terminated", count: overview?.range_active_cases ?? 0, color: "#B45309" },
     { name: "Terminated", count: overview?.range_terminated_cases ?? 0, color: "#B91C1C" },

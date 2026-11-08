@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { ScanViewer } from './ScanViewer';
+import { isScanBox } from './scanGeometry';
 import { useConfirmation } from '../../components/ConfirmationProvider';
 import { PaperDocumentSetup, type IntakeStage } from './PaperDocumentSetup';
 import { useExtractionRequest } from './useExtractionRequest';
 import { extractPaper, getPaperScan, getPaperSchema, rereadPaper, savePaper, type PaperExtraction,
   getPaperPage, type FieldEvidence, type PaperSchema, type PaperSection, type PaperSections, type SavedPaperIntake } from '../../services/paperIntakeService';
 import type { ClientRecord } from '../../types';
-import { representativeIsEmpty, reviewLabels, unknownBoxes, checkboxPrefix, detainedSummary, type CheckboxStates, type CheckboxState } from './paperReviewState';
+import { representativeIsEmpty, expandSexAbbreviation, reviewLabels, unknownBoxes, checkboxPrefix, detainedSummary, type CheckboxStates, type CheckboxState } from './paperReviewState';
 
 const titles: Record<PaperSection, string> = {
   applicant_personal_circumstances: 'Part II — Impormasyon Ukol sa Aplikante',
@@ -25,7 +26,7 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
 }) {
   const confirm = useConfirmation();
   const [dirty, setDirty] = useState(false);
-  const [activeField, setActiveField] = useState<{ path: string; label: string }>();
+  const [activeField, setActiveField] = useState<{ path: string; label: string; selection: number }>();
   const [fieldEvidence, setFieldEvidence] = useState<Record<string, FieldEvidence>>(saved?.candidate_snapshot?.diagnostics.image_preparation?.selected_copy ? {} : saved?.candidate_snapshot?.diagnostics.field_evidence ?? {});
   const [fieldStates, setFieldStates] = useState<Record<string, string>>(saved?.candidate_snapshot?.diagnostics.field_states ?? {});
   const [unreadableFields, setUnreadableFields] = useState<string[]>(saved?.unreadable_fields ?? []);
@@ -40,7 +41,9 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
   // Older label-containing boxes must not be presented as answer highlights.
   const highlightBox = rawEvidence && ('highlight_bbox' in rawEvidence ? rawEvidence.highlight_bbox
     : rawEvidence.source_text?.includes(':') && rawEvidence.location_kind !== 'label_answer_area' ? undefined : rawEvidence.bbox);
-  const activeEvidence = useMemo(() => rawEvidence && Array.isArray(highlightBox) && highlightBox.length === 4 && highlightBox.every(Number.isFinite) && Number.isInteger(rawEvidence.page) && rawEvidence.page > 0 ? { ...rawEvidence, bbox: highlightBox } : undefined, [rawEvidence, highlightBox]);
+  const activeEvidence = useMemo(() => rawEvidence && isScanBox(highlightBox) ? { ...rawEvidence, bbox: highlightBox } : undefined, [rawEvidence, highlightBox]);
+  const focusBox = activeEvidence?.bbox ?? rawEvidence?.bbox;
+  const focusPage = rawEvidence && Number.isInteger(rawEvidence.page) && rawEvidence.page > 0 ? rawEvidence.page : undefined;
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => {
     if (!dirty) return;
@@ -106,8 +109,8 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
   useEffect(() => { if (saveError) errorRef.current?.focus(); }, [saveError]);
 
   useEffect(() => {
-    if (activeEvidence) setPageNumber(activeEvidence.page);
-  }, [activeEvidence]);
+    if (focusPage && isScanBox(focusBox)) setPageNumber(focusPage);
+  }, [focusPage, focusBox, activeField?.selection]);
   useEffect(() => {
     setPageUrl(''); setPageError('');
     if (preview?.type !== 'application/pdf' || !documentId) return;
@@ -120,14 +123,20 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
 
   function applyExtraction(result: PaperExtraction) {
     setDirty(true); setMobilePane('fields');
+    setActiveField(undefined);
     setFieldEvidence(result.extracted_data.diagnostics.image_preparation?.selected_copy ? {} : result.extracted_data.diagnostics.field_evidence ?? {});
     setFieldStates(result.extracted_data.diagnostics.field_states ?? {});
     setUnreadableFields([]);
     setPageCount(result.extracted_data.diagnostics.page_count ?? 1); setPageNumber(1);
     setSourceDraftId(result.source_draft_id);
-    setCandidateSections(result.extracted_data.sections);
+    const extracted = result.extracted_data.sections;
+    setCandidateSections(extracted);
     setCheckboxStates(result.extracted_data.checkbox_states ?? unknownBoxes());
-    setSections(result.extracted_data.sections); setDocumentId(result.document_id);
+    setSections({
+      applicant_personal_circumstances: { ...extracted.applicant_personal_circumstances, sex: expandSexAbbreviation(extracted.applicant_personal_circumstances.sex) },
+      representative_personal_circumstances: { ...extracted.representative_personal_circumstances, sex: expandSexAbbreviation(extracted.representative_personal_circumstances.sex) },
+    });
+    setDocumentId(result.document_id);
     setOcrFailure(['OFFLINE_OCR_FAILED', 'OFFLINE_OCR_EMPTY'].includes(result.extracted_data.extraction_mode)
       ? 'No text could be read from this scan. Enter the details from the paper or try another scan.' : '');
     setRepresentativeExpanded(false); setSaveError(''); setSuccess('');
@@ -182,17 +191,28 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
     const value = sections?.[section][key] ?? '';
     const checkbox = key === 'detained';
     const original = candidateSections?.[section][key];
+    const suggested = key === 'sex' && original !== undefined ? expandSexAbbreviation(original) : original;
     const change = (next: string) => {
       setDirty(true); setSaveError(''); setSuccess('');
       setUnreadableFields(current => current.filter(field => field !== path));
       if (section === 'representative_personal_circumstances') setRepresentativeExpanded(true);
       setSections(current => current && ({ ...current, [section]: { ...current[section], [key]: next } }));
     };
-    return <div key={key} className="min-w-0" onFocus={event => setActiveField({ path: (event.target as HTMLElement).dataset.sourcePath || path, label: `${section === 'applicant_personal_circumstances' ? 'Part II' : 'Part II-A'} — ${label}` })}>
-      <button type="button" onClick={() => { setActiveField({ path, label: `${section === 'applicant_personal_circumstances' ? 'Part II' : 'Part II-A'} — ${label}` }); setMobilePane('scan'); requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label^="Scan viewport"]')?.focus()); }} className="float-right rounded px-2 text-xs font-medium text-purple-800 underline lg:hidden" aria-label={`View scan for ${label}`}>View scan</button>
+    const selectSource = (sourcePath = path) => setActiveField(previous => ({
+      path: sourcePath,
+      label: `${section === 'applicant_personal_circumstances' ? 'Part II' : 'Part II-A'} — ${label}`,
+      selection: (previous?.selection ?? 0) + 1,
+    }));
+    return <div key={key} className="min-w-0"
+      onFocus={event => selectSource((event.target as HTMLElement).dataset.sourcePath)}
+      onClick={event => {
+        const control = (event.target as HTMLElement).closest<HTMLElement>('input, select, label');
+        if (control) selectSource(control.dataset.sourcePath);
+      }}>
+      <button type="button" onClick={() => { selectSource(); setMobilePane('scan'); requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label^="Scan viewport"]')?.focus()); }} className="float-right rounded px-2 text-xs font-medium text-purple-800 underline lg:hidden" aria-label={`View scan for ${label}`}>View scan</button>
       <label className="block text-sm font-medium text-slate-700" htmlFor={checkbox ? 'paper-detained-oo' : `paper-${section}-${key}`}>{label}:</label>
       {!checkbox && original !== undefined && original !== value && <p className="mt-1 text-sm text-slate-600">Original extracted reading: {original || 'No text recognized'}</p>}
-      {!checkbox && original === value && ['ocr_failed', 'uncertain'].includes(fieldStates[path]) && <p className="mt-1 text-sm text-amber-800">{value ? 'Check this reading against the scan.' : 'No reliable reading. Check the scan for a blank or unreadable entry.'}</p>}
+      {!checkbox && suggested === value && ['ocr_failed', 'uncertain'].includes(fieldStates[path]) && <p className="mt-1 text-sm text-amber-800">{value ? 'Check this reading against the scan.' : 'No reliable reading. Check the scan for a blank or unreadable entry.'}</p>}
       {!checkbox && unreadableFields.includes(path) && <p className="mt-1 text-sm text-amber-800">Marked unreadable after review. The value will remain empty.</p>}
       {checkbox ? <div className="mt-2 space-y-2">
         <div className="grid grid-cols-2 gap-3">{(['oo', 'hindi'] as const).map(option => {
@@ -211,7 +231,8 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
           </label>;
         })}</div>
         {checkboxStates && Object.values(checkboxStates).every(state => state === 'checked') && <p role="status" className="text-sm text-amber-800">Both boxes are marked. Confirm the selections against the scan; no single answer is assumed.</p>}
-        {checkboxStates && Object.values(checkboxStates).some(state => state === 'unknown') && <p className="text-sm text-amber-800">An unclear box remains unknown. Inspect its mark in the scan before confirming.</p>}
+        {checkboxStates && Object.values(checkboxStates).some(state => state === 'unknown') && !detainedSummary(checkboxStates) && <p className="text-sm text-amber-800">No single visible selection was identified. Inspect both boxes in the scan; unclear boxes remain unknown.</p>}
+        {checkboxStates && Object.values(checkboxStates).some(state => state === 'unknown') && !!detainedSummary(checkboxStates) && <p role="status" className="text-sm text-slate-600">{detainedSummary(checkboxStates)} is selected from its visible mark. The other box remains unknown unless you verify it as visibly empty.</p>}
       </div> : <input id={`paper-${section}-${key}`} type="text" value={value} readOnly={readOnly} disabled={busy}
         ref={section === 'representative_personal_circumstances' && key === 'name' ? representativeNameRef : undefined}
         autoComplete="off" onChange={event => change(event.target.value)}
@@ -247,7 +268,14 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
         {previewUrl ? <>
           {preview?.type === 'application/pdf' && <div className="flex shrink-0 items-center gap-3 px-3 py-1"><button type="button" disabled={pageNumber <= 1} onClick={() => setPageNumber(p => p - 1)}>Previous page</button><span>Page {pageNumber} of {pageCount}</span><button type="button" disabled={pageNumber >= pageCount} onClick={() => setPageNumber(p => p + 1)}>Next page</button></div>}
           {pageError && <p role="alert" className="px-3 text-sm text-amber-900">{pageError}</p>}
-          <ScanViewer url={pageUrl || previewUrl} pdf={preview?.type === 'application/pdf' && !pageUrl} evidence={preview?.type !== 'application/pdf' || pageUrl ? (activeEvidence?.page === pageNumber ? activeEvidence : undefined) : undefined} label={activeField?.label} />
+          <ScanViewer
+            url={pageUrl || previewUrl}
+            pdf={preview?.type === 'application/pdf' && !pageUrl}
+            evidence={focusPage === pageNumber && (preview?.type !== 'application/pdf' || pageUrl) ? activeEvidence : undefined}
+            focusBox={focusPage === pageNumber && isScanBox(focusBox) ? focusBox : undefined}
+            focusSelection={activeField?.selection}
+            label={activeField?.label}
+          />
         </> : <p className="p-8 text-slate-500">The full scan will appear here.</p>}
       </div>
       <div id="review-fields" className={`${mobilePane === 'fields' ? 'flex' : 'hidden'} min-h-0 flex-col lg:flex`}>

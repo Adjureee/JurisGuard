@@ -31,6 +31,7 @@ DATABASE_URL=postgresql://postgres:password@localhost:5432/jurisguard
 FRONTEND_ORIGIN=http://localhost:5173
 UPLOAD_DIR=uploads
 SECRET_KEY=<private random value of at least 32 characters>
+# Local Vite development only; HTTPS deployments use the same-origin /api TLS proxy.
 VITE_API_BASE_URL=http://localhost:8000/api
 ```
 
@@ -58,6 +59,12 @@ python -m uvicorn main:app --app-dir backend --reload --host 127.0.0.1 --port 80
 ```
 
 Profile images at `/uploads/profiles/{filename}` require an approved bearer token and are available only to their owner or an administrator. Uploaded legal documents in `UPLOAD_DIR` are not served publicly. Ensure reverse proxies/CDNs never serve `UPLOAD_DIR` directly; old publicly cached copies should be purged by the operator. Sign out using `POST /api/auth/logout` before deleting the browser token; the digest of that token is persisted in PostgreSQL until the token expires. A disconnected browser cannot revoke its token until the API is reachable.
+
+For a confidential deployment, set `REQUIRE_MFA=true`. Approved users can enroll in **Profile** and then sign out and sign in with their authenticator code. Password-only enrollment sessions and old sessions without authenticator proof cannot access protected records. Remembered-device bypass is disabled in this mode.
+
+Set `DOCUMENT_ENCRYPTION_KEY` to a separate, URL-safe base64 encoding of 32 cryptographically random bytes. New archived uploads use AES-256-GCM. Keep a protected backup of this key separate from document and database backups. Existing uploads use their original storage format. Encrypt database, backup, and temporary-file volumes at deployment to cover structured metadata and transient OCR files.
+
+PostgreSQL blocks ordinary audit updates, deletes, and truncation. Audit entries are hash-linked and the server serializes appends. Audit records include server-attributed reads and security events as well as browser-reported export requests. Store copies under a separate administrative boundary with retention protection when immutability against database administrators is required.
 
 On deployment, back up PostgreSQL and run the backend once with a migration-capable DB user. `ensure_schema_compatibility()` adds nullable `client.created_by_user_id` and the revocation table without deriving ownership from audit records or interviewers. Newly created clients get a server-recorded creator. Existing interviewer links continue to grant access to their client/case records, but **do not establish creation ownership**. An active, approved administrator can open `/admin/ownership` or inspect `GET /api/admin/clients/unresolved-owners` with an admin bearer token; the list contains client identifiers/names, creation dates, interviewer context, and linked case IDs. Investigate independent, trusted records before choosing an active, approved staff owner and supplying a reason and an internal evidence reference (not document contents). `POST /api/admin/clients/{client_id}/resolve-owner` makes a one-time row-locked ownership change and server-generated audit entry in the same transaction; a competing or repeated resolution returns 409. Never infer ownership solely from an audit entry. After rollout, review unresolved records and confirm staff access for each decision. For rollback, back up the database first; stop the app, restore the backup or use a reviewed transactional correction that records the original and corrected values in an external incident record—do not delete or rewrite the server audit trail. Reverting application code alone does not undo recorded ownership. Verify with the disposable `tests/legacy_ownership_smoke.py` and `tests/ownership_resolution_api.py` fixtures before deploying. See [real-document evaluation instructions](docs/real_document_evaluation.md) for accuracy measurement; no real-document score is available yet.
 
@@ -103,7 +110,7 @@ npm install
 npm run dev
 ```
 
-By default the frontend expects the API at `http://127.0.0.1:8000/api` (controlled by `VITE_API_BASE_URL`).
+For local Vite development the frontend uses the loopback API at `http://127.0.0.1:8000/api` (controlled by `VITE_API_BASE_URL`). When served over HTTPS, an HTTP API URL is ignored and requests use the same-origin `/api` TLS reverse proxy.
 
 ## Tests
 

@@ -95,7 +95,7 @@ export interface TerminatedDashboardStats {
 export interface RecentActivity {
   id: string;
   timestamp: string;
-  user: string;
+  user?: string;
   role?: string;
   action: string;
   title?: string;

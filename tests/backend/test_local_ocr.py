@@ -32,6 +32,76 @@ The Regional Trial Court was discussed in the case history."""
 
 
 class LocalOCRTests(unittest.TestCase):
+    def test_focused_sex_recovery_reads_a_bounded_mark_and_skips_blank_row(self):
+        from local_ocr import intake_refinement_regions
+        from paper_intake import APPLICANT, REPRESENTATIVE, extract_paper_intake
+
+        entries = [dict(page=1, text=text, bbox=box) for text, box in [
+            ('II. IMPORMASYON UKOL SA APLIKANTE', [0,10,590,30]),
+            ('Pangalan:', [10,40,100,60]), ('Sex:', [350,40,390,60]), ('Civil Status:', [460,40,580,60]),
+            ('Naabot na pag-aaral:', [320,70,580,90]),
+            ('II-A. IMPORMASYON UKOL SA REPRESENTATIVE', [0,150,590,170]),
+            ('Pangalan:', [10,180,100,200]), ('Sex:', [350,180,390,200]), ('Civil Status:', [460,180,580,200]),
+            ('Contact No.:', [320,210,580,230]), ('III. URI NG KASO', [0,270,590,290]),
+        ]]
+        image = Image.new('RGB', (600, 320), 'white')
+        draw = ImageDraw.Draw(image)
+        draw.line((400, 57, 400, 43, 410, 43), fill='black', width=3)
+        draw.line((400, 49, 408, 49), fill='black', width=3)
+        draw.line((393, 197, 456, 197), fill='black', width=2)
+        engine = LocalOCR()
+        with patch.object(engine, '_recognize_sex_crop', return_value=('f', .96)) as recognize:
+            focused = engine._recover_sex_fields(image, entries, [], intake_refinement_regions(entries, *image.size))
+        recognize.assert_called_once()
+        result = extract_paper_intake('\n'.join(entry['text'] for entry in entries), entries, focused)
+        self.assertEqual(result['sections'][APPLICANT]['sex'], 'f')
+        self.assertEqual(result['sections'][REPRESENTATIVE]['sex'], '')
+        self.assertEqual(result['diagnostics']['field_states'][f'{APPLICANT}.sex'], 'uncertain')
+        self.assertEqual(result['diagnostics']['field_evidence'][f'{APPLICANT}.sex']['source_text'], 'f')
+
+    def test_both_sections_receive_separate_bounded_refinement_regions(self):
+        from local_ocr import intake_refinement_regions
+        from paper_intake import APPLICANT, REPRESENTATIVE
+        entries = [dict(page=1, text=text, bbox=box) for text, box in [
+            ('II. IMPORMASYON UKOL SA APLIKANTE', [10,10,590,30]),
+            ('Pangalan:', [10,40,100,60]), ('Naabot na pag-aaral:', [320,40,580,60]),
+            ('II-A. IMPORMASYON UKOL SA REPRESENTATIVE', [10,150,590,170]),
+            ('Pangalan:', [10,180,100,200]), ('Contact N0.:', [320,210,580,230]),
+            ('III. URI NG KASO', [10,270,590,290])]]
+        regions = intake_refinement_regions(entries, 600, 800)
+        self.assertEqual([s for s, _ in regions], [APPLICANT, APPLICANT, REPRESENTATIVE, REPRESENTATIVE])
+        self.assertTrue(all(box[1] == 170 and box[3] == 270 for s, box in regions if s == REPRESENTATIVE))
+        self.assertEqual(intake_refinement_regions(entries[:-1], 600, 800), regions[:2])
+        # A similarly named section on another page is not a valid boundary.
+        entries[-1]['page'] = 2
+        self.assertEqual(intake_refinement_regions(entries, 600, 800), regions[:2])
+
+    def test_refinement_preserves_faint_original_pixels_without_percentile_clipping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'synthetic-faint.png'
+            image = Image.new('RGB', (300, 200), (240, 240, 240))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((0, 0, 299, 10), fill='black')
+            draw.line((30, 60, 90, 65), fill=(235, 235, 235), width=2)
+            image.save(path)
+            entries = [dict(page=1, text=text, bbox=box, engine_score=.9) for text, box in [
+                ('II. IMPORMASYON UKOL SA APLIKANTE', [0,10,290,20]),
+                ('Pangalan:', [10,40,110,55]),
+                ('Naabot na pag-aaral:', [160,40,260,55]),
+                ('II-A. IMPORMASYON UKOL SA REPRESENTATIVE', [0,120,290,130])]]
+            calls = []
+            def recognize(crop, page):
+                calls.append(crop.copy())
+                return entries if len(calls) == 1 else []
+            with patch.dict('os.environ', {'LOCAL_OCR_REFINE_INTAKE': 'true'}):
+                ocr = LocalOCR()
+                with patch.object(ocr, '_paddle_page', side_effect=recognize):
+                    ocr.extract(path)
+            self.assertEqual(len(calls), 3)
+            # Lanczos interpolation can overshoot by a pixel level; percentile
+            # autocontrast would instead stretch this paper background to 255.
+            self.assertTrue(all(crop.getextrema()[0][1] <= 242 for crop in calls[1:]))
+
     def test_handwriting_profile_uses_cached_medium_models_and_higher_resolution(self):
         with patch("local_ocr.os.getenv", side_effect=lambda name, default=None: "handwriting" if name == "PADDLEOCR_MODEL_PROFILE" else default):
             ocr = LocalOCR()

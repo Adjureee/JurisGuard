@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import LoadingState from "../LoadingState";
 import type { ReactNode } from "react";
 
 interface ProtectedRouteProps {
@@ -12,11 +13,7 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
   const { token, user, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] text-sm font-medium text-[#4B5563]">
-        Checking session...
-      </div>
-    );
+    return <LoadingState label="Checking session…" className="min-h-screen bg-[#F9FAFB]" />;
   }
 
   if (!token || !user || user.approval_status !== "approved") {

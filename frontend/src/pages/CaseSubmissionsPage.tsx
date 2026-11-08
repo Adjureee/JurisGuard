@@ -410,7 +410,7 @@ export default function CaseSubmissionsPage() {
   };
 
   const exportSubmission = async () => {
-    if (!selected || selected.status === "Draft") return;
+    if (!selected || selected.status === "Draft" || !isAdmin) return;
     const rows = snapshotRows(selected.items.map((item) => item.snapshot));
     const filters = {
       status: "All" as const,
@@ -425,18 +425,20 @@ export default function CaseSubmissionsPage() {
       termination_status: "All",
     };
     const stamp = new Date().toISOString().slice(0, 10);
+    try {
+      await createAuditLog({
+        action: "Export Excel", module: "Export",
+        entity_type: "case_submission", entity_id: selected.submission_id,
+      });
+    } catch {
+      toast.error("Unable to record the submission export. Please retry.");
+      return;
+    }
     downloadText(
       `report-submission-${selected.submission_id}_${stamp}.xls`,
       buildCriminalCasesExcelHtml(rows, filters),
       "application/vnd.ms-excel;charset=utf-8",
     );
-    await createAuditLog({
-      action: "Export Excel",
-      module: "Export",
-      description: `${user?.full_name || user?.email} exported report submission ${selected.title} version ${selected.version}`,
-      entity_type: "case_submission",
-      entity_id: selected.submission_id,
-    });
     addLog({
       userId: user?.user_id,
       user: user?.full_name || user?.email,

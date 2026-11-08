@@ -248,21 +248,22 @@ def remap_field_evidence(result: dict, processing: dict) -> None:
     inverse = np.array(processing['inverse_transform'], dtype=np.float64)
     width, height = processing['original_size']
     for item in evidence.values():
-        bbox = item.get('bbox')
-        if not isinstance(bbox, list) or len(bbox) != 4:
-            continue
-        center = (bbox[1]+bbox[3])/2
-        segment = next((part for part in processing['segments'] if part['ocr_top'] <= center <= part['ocr_bottom']), None)
-        if not segment:
-            item.pop('bbox', None)
-            continue
-        top = segment['page_top'] - segment['ocr_top']
-        points = np.array([[[bbox[0], bbox[1]+top]], [[bbox[2], bbox[1]+top]],
-                           [[bbox[2], bbox[3]+top]], [[bbox[0], bbox[3]+top]]], dtype=np.float64)
-        original = cv2.perspectiveTransform(points, inverse).reshape(4, 2)
-        item['processed_bbox'] = bbox
-        item['bbox'] = [max(0, round(float(original[:, 0].min()))), max(0, round(float(original[:, 1].min()))),
-                        min(width, round(float(original[:, 0].max()))), min(height, round(float(original[:, 1].max())))]
+        for key in ('bbox', 'highlight_bbox'):
+            bbox = item.get(key)
+            if not isinstance(bbox, list) or len(bbox) != 4:
+                continue
+            center = (bbox[1]+bbox[3])/2
+            segment = next((part for part in processing['segments'] if part['ocr_top'] <= center <= part['ocr_bottom']), None)
+            if not segment:
+                item[key] = None
+                continue
+            top = segment['page_top'] - segment['ocr_top']
+            points = np.array([[[bbox[0], bbox[1]+top]], [[bbox[2], bbox[1]+top]],
+                               [[bbox[2], bbox[3]+top]], [[bbox[0], bbox[3]+top]]], dtype=np.float64)
+            original = cv2.perspectiveTransform(points, inverse).reshape(4, 2)
+            item[f'processed_{key}'] = bbox
+            item[key] = [max(0, round(float(original[:, 0].min()))), max(0, round(float(original[:, 1].min()))),
+                         min(width, round(float(original[:, 0].max()))), min(height, round(float(original[:, 1].max())))]
     result.setdefault('diagnostics', {})['capture_processing'] = {
         key: processing[key] for key in ('plan', 'original_size', 'page_size', 'ocr_size',
                                         'original_sha256', 'generated_section_markers')}

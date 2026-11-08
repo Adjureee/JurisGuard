@@ -67,3 +67,10 @@ class CameraPreparationTests(unittest.TestCase):
         image=np.full((300,220,3),90,np.uint8);image[80:170,70:160]=255
         result,_=self.prepare(image)
         self.assertTrue(any('glare' in warning for warning in result['warnings']))
+
+    def test_dark_low_resolution_capture_gets_actionable_warnings_without_resampling(self):
+        image=np.full((300,220,3),100,np.uint8)
+        result,output=self.prepare(image,confidence=0)
+        self.assertEqual(output.shape,image.shape)
+        self.assertTrue(any('photo is dark' in warning for warning in result['warnings']))
+        self.assertTrue(any('resolution' in warning for warning in result['warnings']))

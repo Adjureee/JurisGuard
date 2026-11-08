@@ -47,6 +47,7 @@ export default function ExportCsvModal({
   const addLog = useAuditLogStore((state) => state.addLog);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const [filters, setFilters] = useState<CriminalCaseExportFilterDto>(initialFilters);
+  const [includeSupplementalFields, setIncludeSupplementalFields] = useState(true);
   const exportRows = useMemo(() => filterCriminalCaseRows(rows, filters), [filters, rows]);
   const options = useMemo(
     () => ({
@@ -72,7 +73,10 @@ export default function ExportCsvModal({
       const stamp = new Date().toISOString().slice(0, 10);
       const action = "Export Excel";
       const caseLabel = caseType.toLowerCase();
-      const description = `${user?.full_name || user?.email || "User"} exported ${exportRows.length} ${caseLabel} case record${exportRows.length === 1 ? "" : "s"} as EXCEL`;
+      const supplementalLabel = includeSupplementalFields
+        ? "with supplemental inventory fields"
+        : "without supplemental inventory fields";
+      const description = `${user?.full_name || user?.email || "User"} exported ${exportRows.length} ${caseLabel} case record${exportRows.length === 1 ? "" : "s"} as EXCEL ${supplementalLabel}`;
       const entityId = new Date().toISOString();
       await createAuditLog({
         action,
@@ -81,7 +85,10 @@ export default function ExportCsvModal({
         entity_type: "criminal_case_export",
         entity_id: entityId,
       });
-      await downloadInventoryWorkbook(`jurisguard-${caseLabel}-cases_${stamp}.xlsx`, buildCriminalCasesExcelHtml(rows, filters));
+      await downloadInventoryWorkbook(
+        `jurisguard-${caseLabel}-cases_${stamp}.xlsx`,
+        buildCriminalCasesExcelHtml(rows, filters, { includeSupplementalFields }),
+      );
       addLog({
         userId: user?.user_id,
         user: user?.full_name || user?.email,
@@ -213,6 +220,23 @@ export default function ExportCsvModal({
           <div className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-sm text-[#4B5563]">
             {exportRows.length} record{exportRows.length === 1 ? "" : "s"} will be exported.
           </div>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#2B3642] transition-colors hover:bg-[#F9FAFB]">
+            <input
+              type="checkbox"
+              checked={includeSupplementalFields}
+              onChange={(event) => setIncludeSupplementalFields(event.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[#704389] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
+            />
+            <span>
+              <span className="block font-medium">Include supplemental inventory fields</span>
+              <span className="mt-1 block text-[#64748B]">
+                Includes the template’s two blank-header columns after Date of Termination (Age is stored under the second),
+                followed by urban, rural, drugs, female, senior, CICL, confinement or arrest date, detention place,
+                case received date, address, and contact number. Uncheck to export only through Date of Termination.
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="sticky bottom-0 flex justify-between border-t border-[#E5E7EB] bg-[#F8FAFC] px-6 py-4">

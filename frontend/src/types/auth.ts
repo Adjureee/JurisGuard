@@ -25,7 +25,6 @@ export interface RegisterPayload {
   email: string;
   password: string;
   employee_id_path: string;
-  bootstrap_key?: string;
 }
 
 export interface RegisterResponse {

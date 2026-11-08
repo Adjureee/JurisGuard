@@ -16,6 +16,8 @@ def normalize_message_content(content: str) -> str:
     normalized = content.strip()
     if not normalized:
         raise ValueError("Message cannot be empty")
+    if "\x00" in normalized:
+        raise ValueError("Message contains an invalid character")
     if len(normalized) > 2000:
         raise ValueError("Message cannot exceed 2000 characters")
     return normalized

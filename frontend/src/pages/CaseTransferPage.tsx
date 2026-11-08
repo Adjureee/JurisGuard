@@ -7,6 +7,7 @@ import PageHeader from "../components/PageHeader";
 import ModalPortal from "../components/modals/ModalPortal";
 import logo1 from "../logo/logo1.png";
 import logo2 from "../logo/logo2.png";
+import { createAuditLog } from "../services/auditService";
 import {
   confirmCaseTransfer, createCaseTransfer, getCaseTransfer, listCaseTransfers,
   listTransferAttorneys, listTransferCases, returnCaseTransfer, submitCaseTransfer,
@@ -135,30 +136,67 @@ export default function CaseTransferPage() {
   const submit = async () => { if (!selected) return; setBusy(true); try { const report = await submitCaseTransfer(selected.report_id); setSelected(report); await load(); toast.success("Transfer submitted for receipt"); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to submit transfer"); } finally { setBusy(false); } };
   const returnReport = async () => { if (!selected || !returnRemarks.trim()) return; setBusy(true); try { const report = await returnCaseTransfer(selected.report_id, returnRemarks); setSelected(report); setReturnRemarks(""); setModal("view"); await load(); toast.success("Transfer returned for correction"); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to return transfer"); } finally { setBusy(false); } };
   const confirm = async () => { if (!selected || !window.confirm("Confirm receipt and update all selected case assignments?")) return; setBusy(true); try { const report = await confirmCaseTransfer(selected.report_id); setSelected(report); await load(); toast.success("Transfer received and assignments updated"); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to confirm transfer"); } finally { setBusy(false); } };
-  const downloadExcel = async () => { if (!selected) return; setBusy(true); try { const buffer = await buildCaseTransferExcel(selected, logo1, logo2); const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `transfer-of-cases-${selected.report_id}.xlsx`; link.click(); URL.revokeObjectURL(url); toast.success("Excel report downloaded"); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to generate Excel report"); } finally { setBusy(false); } };
+  const downloadExcel = async () => {
+    if (!selected || user?.role !== "admin") return;
+    setBusy(true);
+    try {
+      const buffer = await buildCaseTransferExcel(selected, logo1, logo2);
+      await createAuditLog({
+        action: "Export Excel", module: "Export",
+        entity_type: "case_transfer_export", entity_id: String(selected.report_id),
+      });
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `transfer-of-cases-${selected.report_id}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Excel report downloaded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to generate Excel report");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const selectedCounts = useMemo(() => ({ Criminal: selectedIds.filter((id) => cases.Criminal.some((item) => item.case_id === id)).length, Civil: selectedIds.filter((id) => cases.Civil.some((item) => item.case_id === id)).length }), [cases, selectedIds]);
   const editable = selected?.status === "Draft" || selected?.status === "Returned for Correction";
   const canReceive = Boolean(selected && selected.to_user_id === user?.user_id && selected.status === "Pending Receipt");
 
-  return <MainLayout><div className="mx-auto max-w-[1500px]">
-    <PageHeader eyebrow="Operations" title="Case Transfer" description="Prepare, review, receive, and preserve case handover reports." actions={<button type="button" onClick={openCreate} className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5f3675]">Create Transfer Report</button>} />
-    {selected?.initiated_by_user_name && <p className="mb-3 text-xs text-[#6B7280]">Initiated by administrator: <span className="font-semibold text-[#374151]">{selected.initiated_by_user_name}</span></p>}
-    {selected && editable && user?.role === "admin" && selected.initiated_by_user_id === user.user_id && <button type="button" onClick={() => openEdit(selected)} className="mb-3 rounded-md border border-[#704389] px-3 py-2 text-sm font-semibold text-[#704389]">Edit Selected Transfer</button>}
-    <div className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-[#F8FAFC] text-xs uppercase tracking-wide text-[#6B7280]"><tr><th className="px-4 py-3">Report</th><th className="px-4 py-3">From</th><th className="px-4 py-3">To</th><th className="px-4 py-3">Cases</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Updated</th><th /></tr></thead><tbody>{reports.map((report) => <tr key={report.report_id} className="border-t border-[#E5E7EB]"><td className="px-4 py-3 font-semibold text-[#111827]">{report.title}<div className="text-xs font-normal text-[#6B7280]">As of {dateText(report.report_date)}</div></td><td className="px-4 py-3">{report.from_user_name}</td><td className="px-4 py-3">{report.to_user_name}</td><td className="px-4 py-3">{report.items.length}</td><td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(report.status)}`}>{report.status}</span></td><td className="px-4 py-3 text-[#6B7280]">{dateText(report.updated_at)}</td><td className="px-4 py-3 text-right"><button type="button" onClick={() => void openReport(report)} className="font-semibold text-[#704389] hover:underline">Open</button></td></tr>)}{!reports.length && <tr><td colSpan={7} className="px-4 py-12 text-center text-[#6B7280]">No transfer reports yet.</td></tr>}</tbody></table></div></div>
+  return <MainLayout><div className="case-transfer-page mx-auto max-w-[1500px] space-y-4">
+    <PageHeader eyebrow="Operations" title="Case Transfer" description="Prepare, review, receive, and preserve case handover reports." actions={<div className="flex flex-wrap gap-2">{selected && editable && user?.role === "admin" && selected.initiated_by_user_id === user.user_id && <button type="button" onClick={() => openEdit(selected)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-4 text-sm font-semibold text-[#334155] transition hover:bg-[#F8FAFC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]">Edit Selected Transfer</button>}<button type="button" onClick={openCreate} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5f3675] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]">Create Transfer Report</button></div>} />
+    {selected?.initiated_by_user_name && <p className="rounded-lg border border-[#E7D7EE] bg-[#F7F0FA] px-4 py-3 text-sm text-[#526174]">Initiated by administrator: <span className="font-semibold text-[#243344]">{selected.initiated_by_user_name}</span></p>}
+    <section aria-label="Case transfer reports" className="overflow-hidden rounded-xl border border-[#CBD5E1] bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5E7EB] px-4 py-3 sm:px-5">
+        <div><h2 className="font-semibold text-[#243344]">Transfer reports</h2><p className="mt-0.5 text-sm text-[#64748B]">{reports.length} {reports.length === 1 ? "report" : "reports"}</p></div>
+      </div>
+      <div className="records-table-scroll max-w-full overflow-auto">
+        <table className="records-table w-full min-w-[760px] text-left text-sm">
+          <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] text-xs font-semibold uppercase tracking-wide"><tr><th className="px-4 py-3">Report</th><th className="px-4 py-3">From</th><th className="px-4 py-3">To</th><th className="px-4 py-3">Cases</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Updated</th><th className="px-4 py-3 text-right">Action</th></tr></thead>
+          <tbody className="divide-y divide-[#E5E7EB]">{reports.map((report) => <tr key={report.report_id}>
+            <td className="px-4 py-3 font-semibold text-[#243344]">{report.title}<div className="mt-0.5 text-xs font-normal text-[#64748B]">As of {dateText(report.report_date)}</div></td>
+            <td className="px-4 py-3">{report.from_user_name}</td><td className="px-4 py-3">{report.to_user_name}</td><td className="px-4 py-3 tabular-nums">{report.items.length}</td>
+            <td className="px-4 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(report.status)}`}>{report.status}</span></td>
+            <td className="px-4 py-3 text-[#64748B]">{dateText(report.updated_at)}</td>
+            <td className="px-4 py-3 text-right"><button type="button" onClick={() => void openReport(report)} className="inline-flex min-h-10 items-center rounded-md px-3 font-semibold text-[#704389] transition hover:bg-[#F7F0FA] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]">Open</button></td>
+          </tr>)}{!reports.length && <tr><td colSpan={7} className="px-4 py-12 text-center text-[#64748B]">No transfer reports yet. Create a report to begin a case handover.</td></tr>}</tbody>
+        </table>
+      </div>
+    </section>
     {modal === "create" && <ModalPortal>
-      <div className="jurisguard-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white p-0 shadow-xl">
-          <div className="flex shrink-0 items-center justify-between bg-[#604477] px-6 py-4">
+      <div className="jurisguard-modal-overlay case-transfer-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
+        <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#CBD5E1] bg-white p-0 shadow-2xl">
+          <div className="flex shrink-0 items-center justify-between bg-[#704389] px-5 py-4 text-white sm:px-6">
             <h2 className="text-xl font-bold text-white">Create Transfer of Cases</h2>
-            <button type="button" onClick={closeDraft} aria-label="Close create transfer modal" className="text-2xl text-white/80 hover:text-white">×</button>
+            <button type="button" onClick={closeDraft} aria-label="Close create transfer modal" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-white/50 text-2xl leading-none text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">×</button>
           </div>
-          <div className="min-h-0 overflow-y-auto p-6">
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="min-h-0 overflow-y-auto bg-[#F8FAFC] p-4 sm:p-6">
+          <div className="grid gap-4 rounded-xl border border-[#DDE3EA] bg-white p-4 md:grid-cols-2 sm:p-5">
             <label className="text-sm font-semibold">Report title<input value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] px-3 font-normal" /></label>
             <label className="text-sm font-semibold">Report date<input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] px-3 font-normal" /></label>
           </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-4 rounded-xl border border-[#DDE3EA] bg-white p-4 md:grid-cols-2 sm:p-5">
             <label className="text-sm font-semibold">From
               {user?.role === "admin" ? <select value={sourceAttorney} onChange={(event) => {
                 const nextSource = event.target.value;
@@ -181,38 +219,38 @@ export default function CaseTransferPage() {
               </select>
             </label>
           </div>
-          <div className="mt-5 grid gap-5 lg:grid-cols-2">
-            {(["Criminal", "Civil"] as const).map((type) => <section key={type} className="rounded-lg border border-[#E5E7EB] p-4">
-              <div className="flex items-center justify-between"><h3 className="font-bold text-[#111827]">{type} Cases <span className="text-sm font-normal text-[#6B7280]">({selectedCounts[type]} selected)</span></h3><button type="button" disabled={!sourceUserId || casesLoading[type] || !cases[type].length} onClick={() => { const visible = cases[type].map((item) => item.case_id); setSelectedIds((current) => Array.from(new Set([...current, ...visible]))); }} className="text-xs font-semibold text-[#704389] disabled:opacity-50">Select visible</button></div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {(["Criminal", "Civil"] as const).map((type) => <section key={type} className="rounded-xl border border-[#DDE3EA] bg-white p-4">
+              <div className="flex items-center justify-between gap-3"><h3 className="font-bold text-[#243344]">{type} cases <span className="ml-1 inline-flex rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-semibold text-[#704389]">{selectedCounts[type]} selected</span></h3><button type="button" disabled={!sourceUserId || casesLoading[type] || !cases[type].length} onClick={() => { const visible = cases[type].map((item) => item.case_id); setSelectedIds((current) => Array.from(new Set([...current, ...visible]))); }} className="min-h-10 rounded-md px-3 text-xs font-semibold text-[#704389] transition hover:bg-[#F7F0FA] disabled:opacity-50">Select visible</button></div>
               <input value={search[type]} onChange={(event) => setSearch((current) => ({ ...current, [type]: event.target.value }))} placeholder={`Search ${type.toLowerCase()} cases`} disabled={!sourceUserId} className="mt-3 h-9 w-full rounded-md border border-[#D1D5DB] px-3 text-sm disabled:bg-[#F8FAFC]" />
-              <div className="mt-3 max-h-64 overflow-y-auto divide-y divide-[#E5E7EB]">
+              <div className="mt-3 max-h-64 overflow-y-auto divide-y divide-[#E5E7EB] rounded-lg border border-[#E5E7EB] px-2">
                 {casesLoading[type] ? <p className="py-6 text-center text-xs text-[#6B7280]">Loading eligible cases...</p>
                   : casesError[type] ? <p role="alert" className="py-6 text-center text-xs text-red-700">{casesError[type]}</p>
                     : !sourceUserId ? <p className="py-6 text-center text-xs text-[#6B7280]">Select a transferring attorney to load eligible cases.</p>
-                      : cases[type].map((item) => <label key={item.case_id} className="flex gap-3 px-1 py-2 text-sm"><input type="checkbox" checked={selectedIds.includes(item.case_id)} onChange={() => toggleCase(item.case_id)} /><span><b>{item.control_no || `Case #${item.case_id}`}</b> {item.title_of_case}<span className="block text-xs text-[#6B7280]">{item.case_no || "No docket"} · {item.status_of_case}</span></span></label>)}
+                      : cases[type].map((item) => <label key={item.case_id} className="flex min-h-12 cursor-pointer items-start gap-3 rounded-md px-2 py-2 text-sm transition hover:bg-[#F8FAFC]"><input type="checkbox" checked={selectedIds.includes(item.case_id)} onChange={() => toggleCase(item.case_id)} className="mt-1 h-4 w-4 accent-[#704389]" /><span className="min-w-0 break-words"><b>{item.control_no || `Case #${item.case_id}`}</b> {item.title_of_case}<span className="block text-xs text-[#64748B]">{item.case_no || "No docket"} · {item.status_of_case}</span></span></label>)}
                 {!casesLoading[type] && !casesError[type] && sourceUserId && !cases[type].length && <p className="py-6 text-center text-xs text-[#6B7280]">No eligible cases found.</p>}
               </div>
             </section>)}
           </div>
-          <div className="mt-5 rounded-lg border border-[#E5E7EB] p-4">
+          <div className="mt-4 rounded-xl border border-[#DDE3EA] bg-white p-4 sm:p-5">
             <div className="flex items-center justify-between"><h3 className="font-bold">Administrative entries</h3><button type="button" onClick={() => { setEditingEntryIndex(null); setEntryDraft(emptyEntry("ADMIN 1", entries.filter((entry) => entry.section === "ADMIN 1").length + 1)); setModal("entry"); }} className="rounded-md border border-[#704389] px-3 py-1.5 text-xs font-semibold text-[#704389]">Add entry</button></div>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">{(["ADMIN 1", "ADMIN 2", "ADMIN 3"] as const).map((section) => <div key={section} className="rounded border border-[#E5E7EB] p-3"><h4 className="text-xs font-bold uppercase text-[#6B7280]">{section}</h4>{entries.map((entry, entryIndex) => entry.section === section ? <div key={`${entry.section}-${entry.row_number}-${entryIndex}`} className="mt-2 flex items-center justify-between gap-2 text-xs"><span>{entry.row_number}. {entry.title_of_case || "Untitled entry"}</span><span className="flex gap-2"><button type="button" onClick={() => { setEditingEntryIndex(entryIndex); setEntryDraft(entry); setModal("entry"); }} className="font-semibold text-[#704389]">Edit</button><button type="button" onClick={() => setEntries((current) => current.filter((_, index) => index !== entryIndex))} className="text-red-600">Remove</button></span></div> : null)}{!entries.some((entry) => entry.section === section) && <p className="mt-2 text-xs text-[#9CA3AF]">No entries</p>}</div>)}</div>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">{(["ADMIN 1", "ADMIN 2", "ADMIN 3"] as const).map((section) => <div key={section} className="rounded-lg border border-[#E5E7EB] bg-[#F8FAFC] p-3"><h4 className="text-xs font-bold uppercase text-[#64748B]">{section}</h4>{entries.map((entry, entryIndex) => entry.section === section ? <div key={`${entry.section}-${entry.row_number}-${entryIndex}`} className="mt-2 flex items-center justify-between gap-2 text-xs"><span className="min-w-0 break-words">{entry.row_number}. {entry.title_of_case || "Untitled entry"}</span><span className="flex shrink-0 gap-2"><button type="button" onClick={() => { setEditingEntryIndex(entryIndex); setEntryDraft(entry); setModal("entry"); }} className="min-h-9 rounded px-2 font-semibold text-[#704389] transition hover:bg-[#F7F0FA]">Edit</button><button type="button" onClick={() => setEntries((current) => current.filter((_, index) => index !== entryIndex))} className="min-h-9 rounded px-2 text-red-700 transition hover:bg-rose-50">Remove</button></span></div> : null)}{!entries.some((entry) => entry.section === section) && <p className="mt-2 text-xs text-[#64748B]">No entries</p>}</div>)}</div>
           </div>
-          <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={closeDraft} className="rounded-md border border-[#D1D5DB] px-4 py-2 text-sm">Cancel</button><button type="button" disabled={busy || !sourceUserId} onClick={() => void saveDraft()} className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy ? "Saving..." : "Create Draft"}</button></div>
+          <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] pt-4"><button type="button" onClick={closeDraft} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-4 text-sm font-semibold text-[#334155] transition hover:bg-[#F8FAFC]">Cancel</button><button type="button" disabled={busy || !sourceUserId} onClick={() => void saveDraft()} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675] disabled:opacity-50">{busy ? "Saving..." : "Create Draft"}</button></div>
           </div>
         </div>
       </div>
     </ModalPortal>}
-    {modal === "entry" && <ModalPortal><div className="jurisguard-modal-overlay fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"><div className="w-full max-w-2xl rounded-lg bg-white p-6"><h2 className="text-lg font-bold">Administrative entry</h2><div className="mt-4 grid gap-3 md:grid-cols-2">{([["section", "Administrative Section"], ["control_no", "Control No."], ["title_of_case", "Title of the Case"], ["docket_no", "Docket No."], ["date_received", "Date Received"], ["status_of_case", "Status of the Case"], ["cause_of_action", "Cause of Action"]] as const).map(([key, label]) => <label key={key} className="text-sm font-semibold">{label}{key === "section" ? <select value={entryDraft.section} onChange={(event) => setEntryDraft((current) => ({ ...current, section: event.target.value as TransferAdminEntry["section"] }))} className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] px-2 font-normal"><option value="ADMIN 1">ADMIN 1</option><option value="ADMIN 2">ADMIN 2</option><option value="ADMIN 3">ADMIN 3</option></select> : <input type={key === "date_received" ? "date" : "text"} value={entryDraft[key]} onChange={(event) => setEntryDraft((current) => ({ ...current, [key]: event.target.value }))} className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] px-2 font-normal" />}</label>)}</div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setModal("create")} className="rounded-md border px-3 py-2 text-sm">Cancel</button><button type="button" onClick={() => { const requiredFields: Array<[keyof TransferAdminEntry, string]> = [["control_no", "Control No."], ["title_of_case", "Title of the Case"], ["docket_no", "Docket No."], ["date_received", "Date Received"], ["status_of_case", "Status of the Case"], ["cause_of_action", "Cause of Action"]]; const missing = requiredFields.find(([key]) => !String(entryDraft[key]).trim()); if (missing) { toast.error(`${missing[1]} is required.`); return; } setEntries((current) => editingEntryIndex === null ? [...current, entryDraft] : current.map((entry, index) => index === editingEntryIndex ? entryDraft : entry)); setEditingEntryIndex(null); setModal("create"); }} className="rounded-md bg-[#704389] px-3 py-2 text-sm font-semibold text-white">{editingEntryIndex === null ? "Add Entry" : "Save Entry"}</button></div></div></div></ModalPortal>}
+    {modal === "entry" && <ModalPortal><div className="jurisguard-modal-overlay case-transfer-modal fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"><div className="w-full max-w-2xl rounded-xl border border-[#CBD5E1] bg-white p-5 shadow-2xl sm:p-6"><h2 className="text-lg font-bold">Administrative entry</h2><div className="mt-4 grid gap-3 md:grid-cols-2">{([["section", "Administrative Section"], ["control_no", "Control No."], ["title_of_case", "Title of the Case"], ["docket_no", "Docket No."], ["date_received", "Date Received"], ["status_of_case", "Status of the Case"], ["cause_of_action", "Cause of Action"]] as const).map(([key, label]) => <label key={key} className="text-sm font-semibold">{label}{key === "section" ? <select value={entryDraft.section} onChange={(event) => setEntryDraft((current) => ({ ...current, section: event.target.value as TransferAdminEntry["section"] }))} className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] px-2 font-normal"><option value="ADMIN 1">ADMIN 1</option><option value="ADMIN 2">ADMIN 2</option><option value="ADMIN 3">ADMIN 3</option></select> : <input type={key === "date_received" ? "date" : "text"} value={entryDraft[key]} onChange={(event) => setEntryDraft((current) => ({ ...current, [key]: event.target.value }))} className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] px-2 font-normal" />}</label>)}</div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setModal("create")} className="rounded-md border px-3 py-2 text-sm">Cancel</button><button type="button" onClick={() => { const requiredFields: Array<[keyof TransferAdminEntry, string]> = [["control_no", "Control No."], ["title_of_case", "Title of the Case"], ["docket_no", "Docket No."], ["date_received", "Date Received"], ["status_of_case", "Status of the Case"], ["cause_of_action", "Cause of Action"]]; const missing = requiredFields.find(([key]) => !String(entryDraft[key]).trim()); if (missing) { toast.error(`${missing[1]} is required.`); return; } setEntries((current) => editingEntryIndex === null ? [...current, entryDraft] : current.map((entry, index) => index === editingEntryIndex ? entryDraft : entry)); setEditingEntryIndex(null); setModal("create"); }} className="rounded-md bg-[#704389] px-3 py-2 text-sm font-semibold text-white">{editingEntryIndex === null ? "Add Entry" : "Save Entry"}</button></div></div></div></ModalPortal>}
     {modal === "view" && selected && <ModalPortal>
-      <div className="jurisguard-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
-        <div className="flex max-h-[88vh] w-[92vw] max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
-          <div className="flex shrink-0 items-start justify-between gap-4 bg-[#604477] px-5 py-4 text-white sm:px-6">
+      <div className="jurisguard-modal-overlay case-transfer-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
+        <div className="flex max-h-[88vh] w-[92vw] max-w-6xl flex-col overflow-hidden rounded-xl border border-[#CBD5E1] bg-white shadow-2xl">
+          <div className="flex shrink-0 items-start justify-between gap-4 bg-[#704389] px-5 py-4 text-white sm:px-6">
             <div className="min-w-0">
               <h2 className="text-lg font-bold sm:text-xl">Case Transfer Report</h2>
               <p className="mt-1 break-words text-sm text-white/85">{selected.title} · {selected.from_user_name} → {selected.to_user_name} · As of {dateText(selected.report_date)}</p>
             </div>
-            <button type="button" onClick={() => setModal(null)} aria-label="Close case transfer report" className="shrink-0 text-2xl leading-none text-white/80 hover:text-white">×</button>
+            <button type="button" onClick={() => setModal(null)} aria-label="Close case transfer report" className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-white/50 text-2xl leading-none text-white/90 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">×</button>
           </div>
           <div className="min-h-0 overflow-y-auto p-4 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
@@ -222,24 +260,24 @@ export default function CaseTransferPage() {
             {selected.remarks && <div className="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-800"><b>Remarks:</b> {selected.remarks}</div>}
             <div className="mt-5 grid gap-5 md:grid-cols-2">
               <section className="min-w-0">
-                <h3 className="font-bold">A. Criminal Cases</h3>
+                <h3 className="font-bold text-[#243344]">A. Criminal cases</h3>
                 {selected.items.filter((item) => item.section === "Criminal").map((item) => <p key={item.item_id} className="break-words border-b py-2 text-sm">{item.snapshot.control_no} · {item.snapshot.title_of_case}</p>)}
               </section>
               <section className="min-w-0">
-                <h3 className="font-bold">B. Civil Cases</h3>
+                <h3 className="font-bold text-[#243344]">B. Civil cases</h3>
                 {selected.items.filter((item) => item.section === "Civil").map((item) => <p key={item.item_id} className="break-words border-b py-2 text-sm">{item.snapshot.control_no} · {item.snapshot.title_of_case}</p>)}
               </section>
             </div>
-            <div className="mt-5 grid gap-3 md:grid-cols-3">{(["ADMIN 1", "ADMIN 2", "ADMIN 3"] as const).map((section) => <section key={section} className="min-w-0 rounded border p-3"><h3 className="text-xs font-bold uppercase text-[#6B7280]">{section}</h3>{selected.administrative_entries.filter((entry) => entry.section === section).map((entry) => <p key={entry.entry_id} className="mt-2 break-words text-xs">{entry.row_number}. {entry.title_of_case || "Untitled"}</p>)}</section>)}</div>
+            <div className="mt-5 grid gap-3 md:grid-cols-3">{(["ADMIN 1", "ADMIN 2", "ADMIN 3"] as const).map((section) => <section key={section} className="min-w-0 rounded-xl border border-[#DDE3EA] bg-[#F8FAFC] p-4"><h3 className="text-xs font-bold uppercase text-[#64748B]">{section}</h3>{selected.administrative_entries.filter((entry) => entry.section === section).map((entry) => <p key={entry.entry_id} className="mt-2 break-words border-t border-[#E5E7EB] pt-2 text-sm">{entry.row_number}. {entry.title_of_case || "Untitled"}</p>)}</section>)}</div>
           </div>
           <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#E5E7EB] bg-white px-4 py-3 sm:px-6">
-            <button type="button" onClick={downloadExcel} className="rounded-md border border-[#704389] px-4 py-2 text-sm font-semibold text-[#704389]">Download Excel Report</button>
-            {editable && selected.from_user_id === user?.user_id && <><button type="button" onClick={() => openEdit(selected)} className="rounded-md border border-[#704389] px-4 py-2 text-sm font-semibold text-[#704389]">Edit Report</button><button type="button" disabled={busy} onClick={() => void submit()} className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white">Submit Report</button></>}
-            {canReceive && <><button type="button" onClick={() => setModal("return")} className="rounded-md border border-amber-500 px-4 py-2 text-sm font-semibold text-amber-700">Return for Correction</button><button type="button" disabled={busy} onClick={() => void confirm()} className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">Confirm Receipt</button></>}
+            {user?.role === "admin" && <button type="button" onClick={downloadExcel} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-4 text-sm font-semibold text-[#334155] transition hover:bg-[#F8FAFC]">Download Excel report</button>}
+            {editable && selected.from_user_id === user?.user_id && <><button type="button" onClick={() => openEdit(selected)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-4 text-sm font-semibold text-[#334155] transition hover:bg-[#F8FAFC]">Edit report</button><button type="button" disabled={busy} onClick={() => void submit()} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#704389] px-4 text-sm font-semibold text-white transition hover:bg-[#5F3675]">Submit report</button></>}
+            {canReceive && <><button type="button" onClick={() => setModal("return")} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-800 transition hover:bg-amber-50">Return for correction</button><button type="button" disabled={busy} onClick={() => void confirm()} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800">Confirm receipt</button></>}
           </div>
         </div>
       </div>
     </ModalPortal>}
-    {modal === "return" && selected && <ModalPortal><div className="jurisguard-modal-overlay fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"><div className="w-full max-w-lg rounded-lg bg-white p-6"><h2 className="text-lg font-bold">Return for correction</h2><textarea value={returnRemarks} onChange={(event) => setReturnRemarks(event.target.value)} placeholder="Explain what needs correction" className="mt-4 min-h-32 w-full rounded-md border border-[#D1D5DB] p-3 text-sm" /><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setModal("view")} className="rounded-md border px-3 py-2 text-sm">Cancel</button><button type="button" disabled={busy || returnRemarks.trim().length < 5} onClick={() => void returnReport()} className="rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Return Report</button></div></div></div></ModalPortal>}
+    {modal === "return" && selected && <ModalPortal><div className="jurisguard-modal-overlay case-transfer-modal fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"><div className="w-full max-w-lg rounded-xl border border-[#CBD5E1] bg-white p-5 shadow-2xl sm:p-6"><h2 className="text-lg font-bold">Return for correction</h2><textarea value={returnRemarks} onChange={(event) => setReturnRemarks(event.target.value)} placeholder="Explain what needs correction" className="mt-4 min-h-32 w-full rounded-md border border-[#D1D5DB] p-3 text-sm" /><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setModal("view")} className="rounded-md border px-3 py-2 text-sm">Cancel</button><button type="button" disabled={busy || returnRemarks.trim().length < 5} onClick={() => void returnReport()} className="rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Return Report</button></div></div></div></ModalPortal>}
   </div></MainLayout>;
 }

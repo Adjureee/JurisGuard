@@ -3,16 +3,19 @@ import toast from "react-hot-toast";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import MainLayout from "../layouts/MainLayout";
 import PrintableFormEnglish from "../components/printable/PrintableFormEnglish";
 import PrintableFormFilipino from "../components/printable/PrintableFormFilipino";
 import { getPrintableIntake, type PrintableIntakeResponse } from "../services/recordService";
+import { createAuditLog } from "../services/auditService";
 import {
   hydrateOfficialTemplate,
   type PrintableFormLanguage,
 } from "../components/printable/officialFormHydrator";
 
 export default function FormViewPage() {
+  const { user } = useAuth();
   const { caseId = "" } = useParams();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -111,9 +114,14 @@ export default function FormViewPage() {
       return;
     }
 
-    await waitForPrintAssets();
-    window.print();
-  }, [printMarkup, waitForPrintAssets]);
+    try {
+      await waitForPrintAssets();
+      await createAuditLog({ action: "Print Form", module: "Export", entity_type: "intake_export", entity_id: caseId });
+      window.print();
+    } catch {
+      toast.error("Unable to record the print request. Please retry.");
+    }
+  }, [caseId, printMarkup, waitForPrintAssets]);
 
   const waitForFrameAssets = useCallback(async (frame: HTMLIFrameElement | null) => {
     const frameDocument = frame?.contentDocument;
@@ -138,6 +146,7 @@ export default function FormViewPage() {
   }, []);
 
   const downloadPdf = useCallback(async () => {
+    if (user?.role !== "admin") return;
     const frameDocuments = [
       pageOneFrameRef.current?.contentDocument,
       pageTwoFrameRef.current?.contentDocument,
@@ -203,6 +212,7 @@ export default function FormViewPage() {
         data.selected_case.intake_record.control_no || caseId,
       );
       const clientName = sanitizeFilenamePart(data.client.client.name);
+      await createAuditLog({ action: "Export PDF", module: "Export", entity_type: "intake_export", entity_id: caseId });
       pdf.save(`Interview_Sheet_${controlNumber}_${clientName}.pdf`);
       toast.success("Interview Sheet PDF downloaded.");
     } catch (error) {
@@ -214,7 +224,7 @@ export default function FormViewPage() {
     } finally {
       setIsDownloading(false);
     }
-  }, [caseId, data, waitForFrameAssets]);
+  }, [caseId, data, user?.role, waitForFrameAssets]);
 
   useEffect(() => {
     autoPrintDoneRef.current = false;
@@ -286,14 +296,14 @@ export default function FormViewPage() {
                 Filipino
               </button>
             </div>
-            <button
+            {user?.role === "admin" && <button
               type="button"
               onClick={downloadPdf}
               disabled={!data || !printMarkup || isDownloading}
               className="rounded-md border border-[#D1D5DB] bg-white px-3.5 py-2 text-sm font-semibold text-[#4B5563] shadow-sm transition hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isDownloading ? "Preparing PDF..." : "Download PDF"}
-            </button>
+            </button>}
             <button
               type="button"
               onClick={printPreview}

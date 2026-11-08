@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "../components/auth/ProtectedRoute";
+import LoadingState from "../components/LoadingState";
 const ApplicantDetailsPage = lazy(() => import("../pages/admin/ApplicantDetailsPage"));
 const VerificationPage = lazy(() => import("../pages/admin/VerificationPage"));
 import LoginPage from "../pages/auth/LoginPage";
@@ -14,16 +15,13 @@ const Dashboard = lazy(() => import("../pages/Dashboard"));
 const FormViewPage = lazy(() => import("../pages/FormViewPage"));
 const TerminatedCasesPage = lazy(() => import("../pages/TerminatedCases"));
 const UserProfilePage = lazy(() => import("../pages/UserProfilePage"));
+const UserSettingsPage = lazy(() => import("../pages/UserSettingsPage"));
 
 const AnalyticsPage = lazy(() => import("../pages/AnalyticsPage"));
 const StaffAnalyticsPage = lazy(() => import("../pages/StaffAnalyticsPage"));
 
 function RouteLoadingFallback() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] text-sm font-semibold text-[#4B5563]">
-      Loading workspace…
-    </div>
-  );
+  return <LoadingState label="Loading workspace…" className="min-h-screen bg-[#F9FAFB] font-semibold" />;
 }
 
 export default function AppRoutes() {
@@ -157,6 +155,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <UserProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <UserSettingsPage />
             </ProtectedRoute>
           }
         />

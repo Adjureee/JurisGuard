@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getDashboardOverview, getRecentActivities, getStaffWorkload, type DashboardOverview, type RecentActivity, type StaffWorkload } from '../../services/dashboardService';
 import { listCaseSubmissions, type CaseSubmission } from '../../services/caseSubmissionService';
 import { AdminReminders } from './AdminReminders';
+import { presentActivity } from './activityPresentation';
 import './dashboard.css';
 import DashboardClock from './DashboardClock';
 
@@ -73,9 +74,9 @@ export default function DashboardWorkspace({ admin }: { admin: boolean }) {
   ];
 
   return <MainLayout><div className="dashboard-workspace mx-auto max-w-[1440px] space-y-6">
-    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+    <header className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
       <div className="min-w-0 space-y-2"><h1 className="text-3xl font-bold tracking-tight text-[#172534]">Dashboard</h1><p className="text-sm text-[#526174]">{admin ? 'Office workload and records requiring attention.' : 'Available case work and your intake tasks.'}</p><DashboardClock /></div>
-      <Link to="/cases?action=intake" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#704389] px-5 py-3 font-semibold text-white hover:bg-[#5F3675]"><FileScan size={20} aria-hidden="true" />Scan interview sheet</Link>
+      <Link to="/cases?action=intake" className="inline-flex min-h-12 self-start items-center justify-center gap-2 rounded-lg bg-[#704389] px-5 py-3 font-semibold text-white hover:bg-[#5F3675] lg:self-auto"><FileScan size={20} aria-hidden="true" />Scan interview sheet</Link>
     </header>
     <nav aria-label="Common dashboard tasks" className="flex flex-wrap gap-3">
       <Link to="/cases" className={button}><Search size={18} aria-hidden="true" />Find client or case</Link>
@@ -98,7 +99,7 @@ export default function DashboardWorkspace({ admin }: { admin: boolean }) {
           <div className="mt-5 border-t border-[#E5E7EB] pt-4"><h3 className="font-semibold">Review a scanned interview</h3><p className="mt-1 text-sm leading-6 text-[#526174]">Review Parts II and II-A beside the original scan, correct the entries, then save.</p><Link to="/cases?action=intake" className="dashboard-text-link mt-2">Open scan and OCR review<ArrowRight size={16} aria-hidden="true" /></Link></div>
         </Panel>
         <Panel title="Recent activity">
-          {loading ? <SkeletonBlock className="h-24" /> : errors.includes('Recent activity') || (!admin && !workload) ? <p className="text-sm text-[#526174]">Activity is unavailable. Retry dashboard data above.</p> : recent.length === 0 ? <div><p className="text-sm leading-6 text-[#526174]">No recent activity recorded. Start with a client intake or find an existing record.</p><Link to="/cases" className="dashboard-text-link mt-3">Open client and case records<ArrowRight size={16} aria-hidden="true" /></Link></div> : <ul className="divide-y divide-[#E5E7EB]">{recent.map(item => <li key={item.id} className="py-3 first:pt-0"><p className="break-words text-sm leading-6">{item.description}</p><p className="mt-1 text-xs text-[#526174]">{dashboardDate(item.timestamp)}</p></li>)}</ul>}
+          {loading ? <SkeletonBlock className="h-24" /> : errors.includes('Recent activity') || (!admin && !workload) ? <p className="text-sm text-[#526174]">Activity is unavailable. Retry dashboard data above.</p> : recent.length === 0 ? <div><p className="text-sm leading-6 text-[#526174]">No recent activity recorded. Start with a client intake or find an existing record.</p><Link to="/cases" className="dashboard-text-link mt-3">Open client and case records<ArrowRight size={16} aria-hidden="true" /></Link></div> : <ul className="divide-y divide-[#E5E7EB]">{recent.map(item => <li key={item.id} className="py-3 first:pt-0"><p className="break-words text-sm leading-6">{presentActivity(item)}</p><p className="mt-1 text-xs text-[#526174]">{dashboardDate(item.timestamp)}</p></li>)}</ul>}
         </Panel>
       </div>
       <div className="min-w-0 space-y-6">
@@ -106,7 +107,7 @@ export default function DashboardWorkspace({ admin }: { admin: boolean }) {
           {loading ? <SkeletonBlock className="h-24" /> : !workload ? <p className="text-sm text-[#526174]">Recent cases unavailable.</p> : workload.recent_cases.length === 0 ? <p className="text-sm leading-6 text-[#526174]">No recent cases. Existing client profiles can still be found in client and case records.</p> : <ul className="divide-y divide-[#E5E7EB]">{workload.recent_cases.slice(0,5).map(record => <li key={record.case_id}><Link className="block py-3" to={`/cases?case=${encodeURIComponent(record.case_id)}`}><p className="break-words font-semibold">{record.intake_record.control_no || 'Control number not recorded'}</p><p className="mt-1 text-sm text-[#526174]">{record.cases.status_of_case} · {dashboardDate(record.last_updated)}</p></Link></li>)}</ul>}
         </Panel>}
         {!admin && workload && workload.recent_clients.length > 0 && <Panel title="Clients in recent cases"><ul className="divide-y divide-[#E5E7EB]">{workload.recent_clients.slice(0,5).map(client => <li key={client.client_id}><Link to={`/cases?client=${encodeURIComponent(client.client_id)}`} className="block break-words py-3 font-semibold hover:text-[#704389]">{client.client.name || 'Name not recorded'}</Link></li>)}</ul></Panel>}
-        {admin && <Link to="/analytics" className="flex items-center justify-between gap-3 rounded-xl border border-[#DDE3EA] bg-white p-5 hover:border-[#704389]"><div><h2 className="font-semibold">Explore analytics</h2><p className="mt-1 text-sm leading-6 text-[#526174]">Case trends, categories and client address distribution.</p></div><ArrowRight size={20} className="shrink-0" aria-hidden="true" /></Link>}
+        <Link to={admin ? "/analytics" : "/staff/analytics"} className="flex items-center justify-between gap-3 rounded-xl border border-[#DDE3EA] bg-white p-5 hover:border-[#704389]"><div><h2 className="font-semibold">Explore {admin ? "analytics" : "your analytics"}</h2><p className="mt-1 text-sm leading-6 text-[#526174]">{admin ? "Office-wide case trends, categories and client address distribution." : "Your case trends, categories, client address distribution and OCR activity."}</p></div><ArrowRight size={20} className="shrink-0" aria-hidden="true" /></Link>
       </div>
     </div>
     <div className="flex items-center gap-2 text-xs text-[#526174]"><RefreshCw size={14} aria-hidden="true" /><button className="min-h-11 underline underline-offset-4" type="button" disabled={loading} onClick={() => setRevision(v=>v+1)}>{loading ? 'Loading dashboard data…' : 'Refresh dashboard data'}</button><span>· {admin ? 'Office-wide summary' : 'Your workload'}</span></div>

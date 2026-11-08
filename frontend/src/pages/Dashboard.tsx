@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import ErrorBoundary from "../components/ErrorBoundary";
+import LoadingState from "../components/LoadingState";
 import { useAuth } from "../contexts/AuthContext";
 
 const AdminDashboard = lazy(() => import("./dashboard/AdminDashboard"));
@@ -28,11 +29,7 @@ export default function Dashboard() {
       }
     >
       <Suspense
-        fallback={
-          <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB] text-sm font-semibold text-[#4B5563]">
-            Loading dashboard intelligence...
-          </div>
-        }
+        fallback={<LoadingState label="Loading dashboard…" className="min-h-screen bg-[#F9FAFB] font-semibold" />}
       >
         {user?.role === "admin" ? <AdminDashboard /> : <StaffDashboard />}
       </Suspense>

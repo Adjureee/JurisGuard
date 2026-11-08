@@ -1,0 +1,19 @@
+{
+    auto_https disable_redirects
+}
+
+https://localhost:8443 {
+    bind 127.0.0.1
+    tls internal
+
+    @backend path /api/* /uploads/profiles/*
+    handle @backend {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    handle {
+        root * frontend/dist
+        try_files {path} /index.html
+        file_server
+    }
+}

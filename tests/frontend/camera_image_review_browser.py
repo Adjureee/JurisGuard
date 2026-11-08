@@ -8,7 +8,7 @@ import json
 from urllib.parse import urlparse
 import numpy as np
 from PIL import Image,ImageDraw
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'.local/camera-image-review';OUT.mkdir(parents=True,exist_ok=True)
@@ -28,8 +28,8 @@ frame=OUT/'synthetic-sheet.y4m'
 frame.write_bytes(b'YUV4MPEG2 W1280 H960 F5:1 Ip A1:1 C420jpeg\nFRAME\n'+yuv[:,:,0].tobytes()+yuv[::2,::2,1].tobytes()+yuv[::2,::2,2].tobytes())
 schema={'applicant_personal_circumstances':[['name','Pangalan'],['address','Tirahan'],['contact_no','Contact No.'],['detained','Nakakulong']],
     'representative_personal_circumstances':[['name','Pangalan'],['address','Tirahan'],['contact_no','Contact No.']]}
-sections={'applicant_personal_circumstances':{'name':'Ana Rivera','address':'Purok 2, Digos City','contact_no':'000-000-0001','detained':'Hindi'},
-    'representative_personal_circumstances':{'name':'','address':'','contact_no':''}}
+sections={'applicant_personal_circumstances':{'name':'Ana Rivera','sex':'F','address':'Purok 2, Digos City','contact_no':'000-000-0001','detained':'Hindi'},
+    'representative_personal_circumstances':{'name':'','sex':'','address':'','contact_no':''}}
 state={'uploads':[],'saved':None}
 
 def api(route):
@@ -59,10 +59,13 @@ def api(route):
         files={part.get_param('name',header='content-disposition'):part.get_payload(decode=True) for part in message.iter_parts()}
         state['uploads'].append(files)
         data={'document_id':77,'extracted_data':{'sections':sections,'intake_scope':'parts_ii_iia','extraction_mode':'OFFLINE',
-            'diagnostics':{'warnings':[]},'checkbox_states':{'applicant_personal_circumstances.detained.oo':'unchecked','applicant_personal_circumstances.detained.hindi':'checked'}}}
+            'diagnostics':{'warnings':[], 'field_evidence':{
+                'applicant_personal_circumstances.name': {'page':1, 'bbox':[170,235,420,275], 'highlight_bbox':None},
+                'applicant_personal_circumstances.address': {'page':1, 'bbox':[245,325,520,350], 'highlight_bbox':[245,325,520,350]},
+            }},'checkbox_states':{'applicant_personal_circumstances.detained.oo':'unchecked','applicant_personal_circumstances.detained.hindi':'checked'}}}
     elif '/pao-intakes/documents/77' in path:
         route.fulfill(status=200,headers=headers,content_type='image/jpeg',body=state['uploads'][-1]['file']);return
-    elif path.rstrip('/').endswith('/pao-intakes'):
+    elif path.rstrip('/').endswith('/pao-intakes') or path.endswith('/pao-intakes/SYN-77'):
         state['saved']=route.request.post_data_json
         data={'client_id':'SYN-77','client':{'name':state['saved']['sections']['applicant_personal_circumstances']['name']},'client_details':{},'client_classification':{}}
     else:data=[]
@@ -162,6 +165,46 @@ with sync_playwright() as p:
     page.get_by_role('button',name='Save reviewed record',exact=True).wait_for()
     assert state['uploads'][-1]['file']==(OUT/'synthetic-sheet.png').read_bytes()
     assert 'ocr_image' not in state['uploads'][-1]
+    name_field = page.locator('#paper-applicant_personal_circumstances-name')
+    name_field.click()
+    page.get_by_text('source row centered', exact=False).wait_for()
+    scan = page.locator('#review-scan')
+    zoom_out = scan.get_by_role('button', name='Zoom out', exact=True)
+    expect(zoom_out).to_be_enabled()
+    assert page.locator('[data-source-highlight]:visible').count() == 0
+    # Keep keyboard focus on the same field while resetting the viewer.
+    scan.get_by_role('button', name='Fit', exact=True).evaluate('button => button.click()')
+    expect(zoom_out).to_be_disabled()
+    name_field.click()
+    expect(zoom_out).to_be_enabled()
+    page.locator('#paper-applicant_personal_circumstances-address').focus()
+    page.locator('[data-source-highlight]:visible').wait_for()
+    page.screenshot(path=str(OUT/'field-source-zoom.png'))
+    # The case workflow's edit action must open a writable scan review, not a viewer.
+    client={'client_id':'SYN-77','created_by_user_id':999,'client':{'client_id':'SYN-77','name':'Fictional Ana','age':31,'sex':'Female','civil_status':'Single','religion':'','educational_attainment':'','citizenship':'','language_dialect':''},
+        'client_details':dict.fromkeys(['address','contact_no','email','individual_monthly_income','spouse','address_of_spouse','contact_no_of_spouse','representative_name','representative_sex','representative_civil_status','representative_address','representative_contact_no','representative_relationship','representative_email','detained_since','place_of_detention'],''),
+        'client_classification':{},'paper_intake':{'document_id':77,'sections':sections,'unreadable_fields':[],'checkbox_states':{'applicant_personal_circumstances.detained.oo':'unchecked','applicant_personal_circumstances.detained.hindi':'checked'}}}
+    client['client_details'].update(representative_age=0,detained=False)
+    page.goto('http://127.0.0.1:5173/login',wait_until='domcontentloaded')
+    page.evaluate('''async client=>{
+      const entry=await(await fetch('/src/main.tsx')).text();
+      const React=await import(entry.match(/from "([^"\\n]*\\/react\\.js[^"\\n]*)"/)[1]);
+      const DOM=await import(entry.match(/from "([^"\\n]*\\/react-dom_client\\.js[^"\\n]*)"/)[1]);
+      const {ConfirmationProvider}=await import('/src/components/ConfirmationProvider.tsx');
+      const {CaseWorkflow}=await import('/src/components/modals/CaseWorkflow.tsx');
+      document.querySelector('#root').style.display='none';const div=document.createElement('div');document.body.append(div);
+      const h=(React.default||React).createElement;
+      (DOM.createRoot||DOM.default.createRoot)(div).render(h(ConfirmationProvider,null,h(CaseWorkflow,{clients:[client],lockedClient:client,caseType:'Criminal',onSubmit:()=>{},onClientUpdated:updated=>{window.__updatedClient=updated}})));
+    }''',client)
+    page.get_by_role('button',name='Edit scanned Parts II and II-A',exact=True).click()
+    editor=page.get_by_role('dialog',name='Review PAO intake',exact=True)
+    editor.locator('#paper-applicant_personal_circumstances-name').fill('Fictional reviewed correction')
+    editor.get_by_role('button',name='Close',exact=True).click()
+    page.locator('dialog[open]').get_by_role('button',name='Cancel',exact=True).click()
+    assert editor.locator('#paper-applicant_personal_circumstances-name').input_value()=='Fictional reviewed correction'
+    editor.get_by_role('button',name='Save reviewed record',exact=True).click()
+    editor.wait_for(state='detached')
+    assert page.evaluate('window.__updatedClient.client.name')=='Fictional reviewed correction'
     assert not errors,errors
     browser.close()
 print('PASS: crop-only camera review, local synthetic cleanup, reset, retake/cancel, desktop/mobile, exact preview bytes sent to OCR, original retained, mocked OCR review/correction/save.')

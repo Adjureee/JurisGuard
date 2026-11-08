@@ -1934,7 +1934,7 @@ class JurisGuardExtractionEngine:
         if paper_intake:
             import hashlib
             from cloud_intake import validate_paper_response
-            from paper_intake import extract_paper_intake
+            from paper_intake import extract_paper_intake, review_detention_date
             from paper_checkboxes import checkbox_review_warnings
             sections, boxes, field_states, issues = validate_paper_response(cloud_response)
             result = extract_paper_intake('')
@@ -1953,7 +1953,7 @@ class JurisGuardExtractionEngine:
                 issues.append('Cloud provider returned a different model identifier; model version is not pinned by the requested name.')
             result['extraction_mode'] = 'ONLINE_MISTRAL'
             result['diagnostics']['warnings'] = cloud_warnings + issues + checkbox_review_warnings(boxes) + ['Verify every field against the scan. Blank or unclear entries remain empty.']
-            return result
+            return review_detention_date(result)
         sections = validate_sections(cloud_response, schema, cloud_warnings)
         extracted_data = self._flat_from_sectioned(sections)
         extracted_data["sections"] = sections

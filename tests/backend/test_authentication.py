@@ -37,17 +37,39 @@ def auth_namespace():
             node.returns = None
             for arg in node.args.args:
                 arg.annotation = None
-            if node.name in handlers:
+            if node.name == 'current_user':
+                node.args.defaults = node.args.defaults[-1:]
+            elif node.name in handlers:
                 node.args.defaults = []
             functions.append(node)
     namespace = dict(globals(), SECRET_KEY='synthetic-auth-test-key-not-for-production',
-                     TOKEN_TTL_MINUTES=720, write_audit=Mock(),
+                     TOKEN_TTL_MINUTES=720, REQUIRE_MFA=False, write_audit=Mock(),
                      auth_attempts=AttemptLimiter(), source_attempts=AttemptLimiter(attempts=60))
     exec(compile(ast.Module(body=functions, type_ignores=[]), 'backend/main.py', 'exec'), namespace)
     return namespace
 
 
 class AuthenticationTests(unittest.TestCase):
+    def test_required_mfa_blocks_old_and_enrollment_sessions_from_records(self):
+        self.auth['REQUIRE_MFA'] = True
+        self.db.get.side_effect = lambda model, key: None if model is models.RevokedAccessToken else self.user
+        enrollment_token = self.login()['access_token']
+        with self.assertRaises(HTTPException) as denied:
+            self.auth['current_user'](enrollment_token, self.db)
+        self.assertEqual(denied.exception.status_code, 403)
+        setup_request = SimpleNamespace(method='POST', url=SimpleNamespace(path='/api/auth/me/mfa/setup'))
+        self.assertIs(self.auth['current_user'](enrollment_token, self.db, setup_request), self.user)
+        setup = self.auth['setup_mfa'](self.user, self.db)
+        code = self.auth['generate_totp'](setup['secret'])
+        self.auth['enable_mfa'](SimpleNamespace(code=code), None, self.user, self.db)
+        with self.assertRaises(HTTPException):
+            self.auth['current_user'](enrollment_token, self.db)
+        with self.assertRaises(HTTPException):
+            self.login(trusted=self.auth['create_mfa_trusted_device_token'](self.user))
+        verified = self.login(code, remember=True)
+        self.assertIsNone(verified['mfa_trusted_device_token'])
+        self.assertIs(self.auth['current_user'](verified['access_token'], self.db), self.user)
+
     def test_http_authenticator_flow_and_logout_revocation(self):
         # Compile the original route decorators, form bindings and dependencies;
         # exclude only module startup which would mutate the configured database.

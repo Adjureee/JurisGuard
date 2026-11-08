@@ -29,6 +29,120 @@ def synthetic_layout(representative='', bad_age=False):
 
 
 class PaperEvidenceTests(unittest.TestCase):
+    def test_sparse_representative_section_preserves_applicant_source_boxes(self):
+        text, layout, refinements = synthetic_layout()
+        lines = []
+        boxes = []
+        for line, box in zip(text.splitlines(), layout):
+            if 420 < box['bbox'][1] < 600:
+                if not line.startswith('Pangalan'):
+                    continue
+                line = 'Pangalan: SYNTHETIC Delegate'
+            lines.append(line)
+            boxes.append(box)
+        for scale, offset in [(1, 0), (2, 130)]:
+            with self.subTest(scale=scale):
+                def transform(entry):
+                    return dict(entry, bbox=[coordinate*scale + offset for coordinate in entry['bbox']])
+                result = extract_paper_intake('\n'.join(lines), list(map(transform, boxes)), list(map(transform, refinements)))
+                self.assertEqual(result['sections'][A]['name'], 'SYNTHETIC Ana')
+                self.assertEqual(result['sections'][R]['name'], 'SYNTHETIC Delegate')
+                source = result['diagnostics']['field_evidence'][f'{A}.name']
+                self.assertEqual(source['highlight_bbox'], [n*scale + offset for n in [200,103,450,125]])
+                self.assertNotIn(f'{R}.name', result['diagnostics']['field_evidence'])
+
+    def test_instruction_row_above_name_and_printed_detention_label_are_not_answers(self):
+        rows = [
+            ('II. IMPORMASYON UKOL SA APLIKANTE', [10,10,1000,30]),
+            ('Pangalan:', [10,60,120,90]),
+            ('(Pars sa aphikantelrepresenative; Gumanit nn panit', [130,45,490,60]),
+            ('SYNTHETIC Flora', [140,61,350,90]),
+            ('Edad: 36 Sex: F', [600,60,790,90]),
+            ('Lugar ng Detention:', [600,160,790,180]),
+            ('II-A. IMPORMASYON UKOL SA REPRESENTATIVE', [10,200,1000,220]),
+            ('Pangalan:', [10,250,120,270]), ('Edad:', [600,250,680,270]),
+            ('III. URI NG KASO', [10,300,1000,320]),
+        ]
+        refined = [dict(page=1, text='Lugar ng Detentior:', bbox=[600,160,790,180])]
+        result=extract_paper_intake('\n'.join(t for t,_ in rows),[dict(page=1,bbox=b) for _,b in rows],refined)
+        self.assertEqual(result['sections'][A]['name'], 'SYNTHETIC Flora')
+        self.assertEqual(result['sections'][A]['place_of_detention'], '')
+        self.assertEqual(result['sections'][R]['name'], '')
+
+    def test_empty_field_has_label_anchored_answer_region_without_inventing_a_value(self):
+        text, layout, refinements = synthetic_layout()
+        result = extract_paper_intake(text, layout, refinements)
+        path = f'{R}.address'
+        self.assertEqual(result['sections'][R]['address'], '')
+        area = result['diagnostics']['field_evidence'][path]
+        self.assertEqual(area['location_kind'], 'label_answer_area')
+        self.assertGreater(area['bbox'][2], area['bbox'][0])
+        self.assertLess(area['bbox'][2], 1000)
+        self.assertEqual(result['diagnostics']['field_states'][path], 'unverified_empty')
+
+    def test_highlights_use_answer_boxes_and_never_combined_label_boxes(self):
+        text, layout, refinements = synthetic_layout()
+        result = extract_paper_intake(text, layout, refinements)
+        evidence = result['diagnostics']['field_evidence']
+        self.assertEqual(evidence[f'{A}.name']['highlight_bbox'], [200,103,450,125])
+        self.assertIsNone(evidence[f'{A}.sex']['highlight_bbox'])
+        self.assertIsNone(evidence[f'{R}.age']['highlight_bbox'])
+        area = evidence[f'{R}.address']['highlight_bbox']
+        self.assertGreater(area[0], 180)  # after the detected Tirahan label
+
+    def test_joined_sex_civil_status_and_misread_citizenship_labels_do_not_become_answers(self):
+        # Synthetic fixture uses the exact problematic OCR label strings from
+        # the report, with fictional values and independent section boundaries.
+        rows = [
+            ('II. IMPORMASYON UKOL SA APLIKANTE', [0,0,1000,20]),
+            ('Pangalan: SYNTHETIC Applicant', [10,40,400,60]),
+            ('Edad:_Sex:F', [600,40,760,60]), ('Civil Status:', [780,40,900,60]), ('Single', [910,40,980,60]),
+            ('Pagkamamamayan:', [10,100,240,120]), ('Fictional nationality', [250,100,490,120]),
+            ('II-A. IMPORMASYON UKOL SA REPRESENTATIVE', [0,200,1000,220]),
+            ('Pangalan: SYNTHETIC Representative', [10,240,400,260]),
+            ('Edad: 40 Sex:MCivil Status: Married', [600,240,990,260]),
+            ('III. URI NG KASO', [0,300,1000,320]),
+        ]
+        refinements = [
+            dict(page=1, text='Edad: Sex:FCivil Status:', bbox=[600,40,900,60], engine_score=.99),
+            dict(page=1, text='Single', bbox=[910,40,980,60], engine_score=.99),
+            dict(page=1, text='Pagkamamnamayan:', bbox=[10,100,240,120], engine_score=.99),
+            dict(page=1, text='Fictional nationality', bbox=[250,100,490,120], engine_score=.99),
+        ]
+        result = extract_paper_intake('\n'.join(t for t, _ in rows), [dict(page=1,bbox=b) for _,b in rows], refinements)
+        self.assertEqual(result['sections'][A]['sex'], 'F')
+        self.assertEqual(result['sections'][A]['civil_status'], 'Single')
+        self.assertEqual(result['sections'][A]['citizenship'], 'Fictional nationality')
+        self.assertEqual(result['sections'][A]['age'], '')
+        self.assertEqual(result['sections'][R]['sex'], 'M')
+        self.assertEqual(result['sections'][R]['civil_status'], 'Married')
+        # Original damaged strings remain inspectable as evidence.
+        self.assertEqual(result['diagnostics']['field_evidence'][f'{A}.sex']['source_text'], 'Edad: Sex:FCivil Status:')
+
+    def test_ocr_misspelling_of_civil_status_ends_the_sex_value(self):
+        text, layout, refinements = synthetic_layout()
+        for separator in (' ', ''):
+            with self.subTest(separator=separator):
+                row = f'Edad: 2$ Sex: M{separator}Civil Stalus:'
+                result = extract_paper_intake(text, layout, [
+                    *refinements,
+                    dict(page=1, text=row, bbox=[600,100,970,120], engine_score=.99),
+                ])
+                self.assertEqual(result['sections'][A]['sex'], 'M')
+                self.assertEqual(result['sections'][A]['civil_status'], 'Single')
+                self.assertEqual(result['diagnostics']['field_evidence'][f'{A}.sex']['source_text'], row)
+
+    def test_text_only_joined_labels_preserve_readings_without_correcting_spelling(self):
+        text = ('II. IMPORMASYON UKOL SA APLIKANTE\nEdad:_Sex:FCivil Status: Single\n'
+                'Pagkamamnamayan: Fixpino\nII-A. IMPORMASYON UKOL SA REPRESENTATIVE\n'
+                'Sex:MCivil Stalus: Married\nIII. URI NG KASO')
+        result = extract_paper_intake(text)
+        self.assertEqual(result['sections'][A]['sex'], 'F')
+        self.assertEqual(result['sections'][A]['civil_status'], 'Single')
+        self.assertEqual(result['sections'][A]['citizenship'], 'Fixpino')
+        self.assertEqual(result['sections'][R]['sex'], 'M')
+        self.assertEqual(result['sections'][R]['civil_status'], 'Married')
+
     def test_three_synthetic_column_variations_preserve_person_and_field(self):
         for representative, bad_age in [('', False), ('SYNTHETIC Ben', False), ('', True)]:
             with self.subTest(representative=bool(representative), bad_age=bad_age):

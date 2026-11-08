@@ -9,6 +9,7 @@ passlib[bcrypt]
 alembic
 email-validator
 python-dotenv
+cryptography
 tzdata
 requests
 pillow
