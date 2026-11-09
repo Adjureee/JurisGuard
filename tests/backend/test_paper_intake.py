@@ -11,6 +11,20 @@ class PaperIntakeTests(unittest.TestCase):
             self.assertEqual(result['sections'][A]['language_dialect'], 'Cebuano / Tagalog')
             self.assertTrue(all(not value for value in result['sections'][R].values()))
 
+    def test_unusable_heading_boxes_preserve_text_with_explicit_section_labels(self):
+        lines = ['II. IMPORMASYON UKOL SA APLIKANTE', 'Pangalan: Fictional Ana',
+                 'Sex: F', 'II-A. IMPORMASYON UKOL SA REPRESENTATIVE',
+                 'Pangalan: Fictional Ben', 'III. URI NG KASO']
+        # A merged heading detection overlaps the following section heading.
+        bounds = [[0,0,600,100], [0,30,250,45], [325,30,450,45],
+                  [0,80,600,95], [0,110,250,125], [0,150,600,165]]
+        result = extract_paper_intake('\n'.join(lines), [{'bbox': box, 'page': 1} for box in bounds])
+        self.assertEqual(result['sections'][A]['name'], 'Fictional Ana')
+        self.assertEqual(result['sections'][A]['sex'], 'F')
+        self.assertEqual(result['sections'][R]['name'], 'Fictional Ben')
+        self.assertNotIn(f'{A}.name', result['diagnostics']['field_evidence'])
+        self.assertTrue(result['needs_review'])
+
     def sheet(self, applicant='', representative=''):
         return ('INTERVIEW SHEET\nI. URI NG INIHIHINGI NG TULONG\nPangalan: OUTSIDE\n'
                 'II. IMPORMASYON UKOL SA APLIKANTE\n' + applicant + '\n'
@@ -40,6 +54,40 @@ class PaperIntakeTests(unittest.TestCase):
         result = extract_paper_intake(self.sheet('', 'Contact No.: 00123'))
         self.assertEqual(result['sections'][A]['contact_no'], '')
         self.assertEqual(result['sections'][R]['contact_no'], '00123')
+
+    def test_detention_date_repairs_only_unambiguous_separator_damage(self):
+        path = f'{A}.detained_since'
+        for source, expected, state in [
+            ('12120,12025', 'Dec. 20, 2025', 'uncertain'),
+            ('12/20,/2025', 'Dec. 20, 2025', 'uncertain'),
+            ('29|02,/2024', 'Feb. 29, 2024', 'uncertain'),
+            ('08/17/2023', '08/17/2023', 'candidate'),
+            ('2023-08-17', '2023-08-17', 'candidate'),
+            ('08/09,/2023', '08/09,/2023', 'uncertain'),
+            ('02/30,/2025', '02/30,/2025', 'uncertain'),
+            ('1212012025', '1212012025', 'uncertain'),
+            ('N/A', 'N/A', 'candidate'),
+            ('', '', 'unverified_empty'),
+        ]:
+            with self.subTest(source=source):
+                result = extract_paper_intake(self.sheet(f'Petsa ng pagkakakulong: {source}\nContact No.: 09120000000'))
+                diagnostics = result['diagnostics']
+                self.assertEqual(result['sections'][A]['detained_since'], expected)
+                self.assertEqual(diagnostics['field_states'][path], state)
+                self.assertEqual(result['sections'][A]['contact_no'], '09120000000')
+                if source != expected:
+                    self.assertEqual(diagnostics['detention_date_original_candidate'], source)
+                    self.assertIn(source, result['raw_text'])
+
+    def test_positioned_detention_date_keeps_original_source_box(self):
+        lines = ['II. IMPORMASYON UKOL SA APLIKANTE', 'Petsa ng pagkakakulong:', '12120,12025',
+                 'Lugar ng Detention:', 'II-A. IMPORMASYON UKOL SA REPRESENTATIVE', 'III. URI NG KASO']
+        bounds = [[0,0,600,15], [0,30,170,45], [180,30,280,45], [325,30,500,45], [0,65,600,80], [0,95,600,110]]
+        result = extract_paper_intake('\n'.join(lines), [{'bbox': box, 'page': 1} for box in bounds])
+        self.assertEqual(result['sections'][A]['detained_since'], 'Dec. 20, 2025')
+        evidence = result['diagnostics']['field_evidence'][f'{A}.detained_since']
+        self.assertEqual(evidence['bbox'], bounds[2])
+        self.assertEqual(evidence['source_text'], '12120,12025')
 
     def test_missing_or_reversed_boundaries_do_not_use_whole_page(self):
         for text in ['Pangalan: OUTSIDE', 'II. IMPORMASYON UKOL SA APLIKANTE\nPangalan: UNKNOWN',
@@ -95,6 +143,48 @@ class PaperIntakeTests(unittest.TestCase):
         result = extract_paper_intake(text, boxes)
         self.assertEqual(result['sections'][A]['name'], 'SYNTHETIC A?na')
         self.assertIn(f'{A}.name', result['diagnostics']['uncertain_fields'])
+
+    def test_complete_printed_titles_bound_sections_when_roman_numerals_are_missed(self):
+        text = self.sheet('Pangalan: SYNTHETIC Ana').replace('II. IMPORMASYON', 'I. IMPORMASYON').replace('II-A.', '')
+        result = extract_paper_intake(text)
+        self.assertEqual(result['sections'][A]['name'], 'SYNTHETIC Ana')
+        self.assertTrue(result['needs_review'])
+
+    def test_printed_contact_label_zero_does_not_repair_the_answer(self):
+        result = extract_paper_intake(self.sheet('Contact N0.: 00O12', 'Contact N0.: 00034'))
+        self.assertEqual(result['sections'][A]['contact_no'], '00O12')
+        self.assertEqual(result['sections'][R]['contact_no'], '00034')
+
+    def test_handwritten_word_fragments_join_without_crossing_columns_or_people(self):
+        # Synthetic spatial fixture: separate words, repeated labels, two people.
+        from paper_intake_layout import positioned_candidates
+        entries = [
+            ('II. IMPORMASYON UKOL SA APLIKANTE', [0,0,400,10]),
+            ('Pangalan:', [0,20,65,30]), ('Fictional', [75,20,115,30]), ('Rivera', [120,20,155,30]),
+            ('Edad: 29', [220,20,280,30]),
+            ('II-A. IMPORMASYON UKOL SA REPRESENTATIVE', [0,60,400,70]),
+            ('Pangalan: Synthetic Rosa', [0,80,160,90]), ('Edad: 40', [220,80,280,90]),
+            ('III. URI NG KASO', [0,120,400,130]),
+        ]
+        text = '\n'.join(e[0] for e in entries)
+        layout = [{'page': 1, 'bbox': e[1]} for e in entries]
+        values, states, evidence = positioned_candidates(text, layout)
+        self.assertEqual(values[A]['name'], 'Fictional Rivera')
+        self.assertEqual(values[R]['name'], 'Synthetic Rosa')
+        self.assertEqual(len(evidence[f'{A}.name']['candidates']), 2)
+        # A label-only refinement must not erase the first-pass answer.
+        refined = [{'page': 1, 'text': 'Pangalan:', 'bbox': [0,20,65,30]}]
+        self.assertEqual(positioned_candidates(text, layout, refined)[0][A]['name'], 'Fictional Rivera')
+        alternative = [{'page': 1, 'text': 'Pangalan: Fictional R?vera', 'bbox': [0,20,155,30], 'engine_score': .99}]
+        values, states, evidence = positioned_candidates(text, layout, alternative)
+        self.assertEqual(values[A]['name'], 'Fictional R?vera')
+        self.assertEqual(states[f'{A}.name'], 'uncertain')
+        self.assertTrue(evidence[f'{A}.name']['pass_disagreement'])
+        # Two readings of overlapping pixels are alternatives, not extra words.
+        entries.insert(3, ('Different', [75,20,115,30]))
+        values, states, evidence = positioned_candidates('\n'.join(e[0] for e in entries), [{'page': 1, 'bbox': e[1]} for e in entries])
+        self.assertEqual(values[A]['name'], '')
+        self.assertEqual(states[f'{A}.name'], 'ocr_failed')
 
     def test_paper_target_never_runs_other_section_extractors(self):
         from ai_service import JurisGuardExtractionEngine

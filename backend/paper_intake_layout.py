@@ -2,8 +2,9 @@
 import re
 
 
-def positioned_candidates(text, layout, refinements=None):
-    from paper_intake import SCHEMA, APPLICANT, REPRESENTATIVE, HEADINGS, END, field_label_pattern, empty_sections
+def positioned_candidates(text, layout, refinements=None, *, fallback_sections=None):
+    from paper_intake import (SCHEMA, APPLICANT, REPRESENTATIVE, HEADINGS, END,
+                              field_label_pattern, empty_sections, trim_neighbor_label)
     if not layout or len(layout) != len(text.splitlines()) or any(not box.get('bbox') for box in layout):
         return None
     entries = [dict(box, text=line, priority=1) for box, line in zip(layout, text.splitlines())]
@@ -19,12 +20,14 @@ def positioned_candidates(text, layout, refinements=None):
         start = boundaries[section]
         end = boundaries[REPRESENTATIVE if section == APPLICANT else 'end']
         if not start or not end or start.get('page', 1) != end.get('page', 1) or start['bbox'][3] >= end['bbox'][1]:
+            if fallback_sections is not None:
+                fallback_sections.add(section)
             continue
         top, bottom, page = start['bbox'][3], end['bbox'][1], start.get('page', 1)
         def inside(e):
             return e.get('page', 1) == page and top <= sum(e['bbox'][1::2])/2 <= bottom
         raw = [e for e in entries if inside(e)]
-        refined = [dict(e, priority=0) for e in (refinements or []) if inside(e)]
+        refined = [dict(e, priority=0) for e in (refinements or []) if not e.get('sex_field') and inside(e)]
         alternatives = sorted(fields, key=lambda field: len(field[1]), reverse=True)
         pattern = re.compile('|'.join(field_label_pattern(key, label) for key, label in alternatives), re.I)
         right_keys = right if section == APPLICANT else {'age', 'sex', 'civil_status', 'contact_no', 'email'}
@@ -36,7 +39,10 @@ def positioned_candidates(text, layout, refinements=None):
         # Without identifiable columns, withhold positioned claims and let the
         # text-only fallback require review rather than partitioning by guess.
         if split is None:
-            return None
+            if fallback_sections is None:
+                return None
+            fallback_sections.add(section)
+            continue
         for is_right in (False, True):
             allowed = {key for key, _ in fields if (key in right_keys) == is_right}
             def column(e):
@@ -50,8 +56,34 @@ def positioned_candidates(text, layout, refinements=None):
             rejected_refinements = set()
             def candidate(key, value, source):
                 value = value.strip()
+                value = trim_neighbor_label(value, key)
+                # Detection can join the end of a left-column address with
+                # the neighboring printed Contact No. label (sometimes with
+                # no space, e.g. "Panabo NContact N"). That label is not part
+                # of the address. Preserve the original OCR source below for
+                # attorney comparison, but keep the candidate in its field.
+                if key in {'address', 'spouse_address'}:
+                    contact_label = re.search(r'Contact\s+N(?:[o0]\.?|\b)', value, re.I)
+                    if contact_label:
+                        value = value[:contact_label.start()].rstrip(' :.-')
+                # A refinement may return the printed field separator as the
+                # first character of an answer-only crop (for example,
+                # ": Senior High school"). Keep source['text'] untouched in
+                # evidence, but do not expose that label punctuation as part
+                # of the applicant's educational-attainment value.
+                if key == 'educational_attainment' and not pattern.search(source['text']):
+                    value = re.sub(r'^\s*[:：]\s*', '', value, count=1)
                 path = f'{section}.{key}'
                 if not value or re.fullmatch(r'[\s_.\-☐\uf06f]*', value):
+                    return
+                # OCR sometimes splits a printed neighboring label from its
+                # colon. A form label is not evidence for a handwritten answer.
+                normalized = re.sub(r'[^a-z0-9]+', '', value.lower())
+                printed_labels = {
+                    re.sub(r'[^a-z0-9]+', '', label.lower())
+                    for _, label in fields
+                }
+                if normalized in printed_labels:
                     return
                 if key == 'detained':
                     states[path] = 'checkbox_unverified'
@@ -65,7 +97,16 @@ def positioned_candidates(text, layout, refinements=None):
                     return
                 # Preserve the complete OCR box as evidence, but never draw its
                 # printed label as though it were handwritten answer pixels.
-                source = dict(source, highlight_bbox=None if pattern.search(source['text']) else source['bbox'])
+                highlight_bbox = None if pattern.search(source['text']) else source['bbox']
+                # Address values belong to the left column. If one OCR box
+                # spans into the adjacent right column, limit only the visual
+                # highlight to the left-column area; retain the full source
+                # box and text in evidence for traceability.
+                if (highlight_bbox and key in {'address'} and not is_right
+                        and source['bbox'][2] > split):
+                    highlight_bbox = [source['bbox'][0], source['bbox'][1],
+                                      max(source['bbox'][0] + 1, round(split - 2)), source['bbox'][3]]
+                source = dict(source, highlight_bbox=highlight_bbox)
                 candidates.setdefault(key, []).append((source['priority'], value, source))
             for entry in pool:
                 matches = list(pattern.finditer(entry['text']))
@@ -91,8 +132,8 @@ def positioned_candidates(text, layout, refinements=None):
                     continue
                 x1, y1, x2, y2 = entry['bbox']
                 nearby = [a for a in anchors if a['x'] < x1 and
-                          abs(sum(a['bbox'][1::2])/2-(y1+y2)/2) <= min(y2-y1, a['bbox'][3]-a['bbox'][1])*.6
-                          and min(y2, a['bbox'][3])-max(y1, a['bbox'][1]) >= min(y2-y1, a['bbox'][3]-a['bbox'][1])*.25]
+                          abs(sum(a['bbox'][1::2])/2-(y1+y2)/2) <= max(
+                              6, min(y2-y1, a['bbox'][3]-a['bbox'][1])*.85)]
                 if not nearby:
                     continue
                 # For Edad/Sex/Civil Status, use the label immediately to the
@@ -170,4 +211,17 @@ def positioned_candidates(text, layout, refinements=None):
                 evidence.setdefault(path, {}).update(page=page, bbox=area, highlight_bbox=area,
                     location_kind='label_answer_area', source_text=anchor['text'],
                     location_note='Approximate answer area from printed labels; check for blank or unreadable handwriting.')
+    for section in SCHEMA:
+        path = f'{section}.sex'
+        focused = [e for e in (refinements or []) if e.get('sex_field') == section]
+        if len(focused) != 1 or values[section]['sex'] or states[path] != 'unverified_empty':
+            continue
+        source = focused[0]
+        if source['text'] not in {'M', 'm', 'F', 'f'}:
+            continue
+        values[section]['sex'] = source['text']
+        states[path] = 'uncertain'
+        evidence[path] = {'page': source['page'], 'bbox': source['bbox'], 'highlight_bbox': source['bbox'],
+                          'source_text': source['text'], 'engine_score': source['engine_score'],
+                          'source': 'local_ocr_sex_crop'}
     return values, states, evidence

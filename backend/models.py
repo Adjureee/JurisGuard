@@ -154,6 +154,9 @@ class ClientDetails(Base):
 
 class IntakeRecord(Base):
     __tablename__ = "intake_record"
+    __table_args__ = (
+        Index("ix_intake_interviewer_form_date", "interviewer_id", "form_date"),
+    )
 
     intake_id = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, ForeignKey("client.client_id"))
@@ -213,6 +216,11 @@ class CourtBranch(Base):
 
 class Case(Base):
     __tablename__ = "case"
+    __table_args__ = (
+        Index("ix_case_type_status_updated_id", "case_type", "status_of_case", "last_updated", "case_id"),
+        Index("ix_case_intake_id", "intake_id"),
+        Index("ix_case_client_id", "client_id"),
+    )
 
     case_id = Column(Integer, primary_key=True, index=True)
     intake_id = Column(Integer, ForeignKey("intake_record.intake_id"))
@@ -487,6 +495,19 @@ class PrivateMessage(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     read_at = Column(DateTime)
+
+
+class PrivateMessageReaction(Base):
+    __tablename__ = "private_message_reaction"
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", name="uq_private_message_reaction_user"),
+        Index("ix_private_message_reaction_message", "message_id"),
+    )
+
+    reaction_id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("private_message.message_id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("user.user_id", ondelete="CASCADE"), nullable=False)
+    emoji = Column(String(16), nullable=False)
 
 
 class Reminder(Base):

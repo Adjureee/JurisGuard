@@ -35,12 +35,26 @@ body {
 .records-table { font-variant-numeric:tabular-nums; }
 .records-table th { white-space:nowrap;text-transform:none;letter-spacing:0;background:#f0f3f7;color:#334155; }
 .records-table td { padding-top:12px;padding-bottom:12px; }
+.records-table tbody tr { transition:background-color 130ms ease-out; }
 .records-table tr:focus-within,.records-table tbody tr:hover { background:#faf7fc; }
 .records-table-scroll { scrollbar-gutter:stable;scrollbar-color:#b6a5bf #f1f4f8; }
 .records-table :is(th,td):first-child { white-space:nowrap; }
 .app-shell button:disabled,.jurisguard-modal-overlay button:disabled { cursor:not-allowed; }
-.jurisguard-modal-overlay { background-color:rgba(20,29,43,.55);backdrop-filter:none;-webkit-backdrop-filter:none; }
+.app-main > * { animation:pageContentIn 160ms ease-out both; }
+.jurisguard-modal-overlay { animation:modalBackdropIn 140ms ease-out both;background-color:rgba(20,29,43,.55);backdrop-filter:none;-webkit-backdrop-filter:none; }
 .jurisguard-modal-overlay > div:not(.jurisguard-print-root) { animation:modalIn 160ms ease-out; }
+.topbar-popover { animation:popoverIn 130ms ease-out both;transform-origin:top right; }
+.sidebar-backdrop { animation:modalBackdropIn 150ms ease-out both; }
+.intake-modal ol[aria-label="Document intake stages"] li { transition:color 130ms ease-out; }
+.intake-modal :is(button,input,select,textarea) { transition-property:color,background-color,border-color,box-shadow;transition-duration:130ms;transition-timing-function:ease-out; }
+.intake-modal [role="status"],.intake-modal [role="alert"] { animation:feedbackIn 150ms ease-out both; }
+.case-transfer-modal :is(input:not([type=checkbox]):not([type=radio]),select) { min-height:44px;border-color:#CBD5E1;border-radius:8px;color:#243344;transition:color 130ms ease-out,border-color 130ms ease-out,box-shadow 130ms ease-out; }
+.case-transfer-modal textarea { border-color:#CBD5E1;border-radius:8px;color:#243344;transition:color 130ms ease-out,border-color 130ms ease-out,box-shadow 130ms ease-out; }
+.case-transfer-modal :is(input:not([type=checkbox]):not([type=radio]),select,textarea):focus { border-color:#704389;box-shadow:0 0 0 3px rgba(112,67,137,.14);outline:none; }
+.case-transfer-modal :is(input:not([type=checkbox]):not([type=radio]),select,textarea):focus-visible { outline:3px solid #704389;outline-offset:2px; }
+.loading-state__spinner { width:28px;height:28px;border:3px solid #e7d7ee;border-top-color:#704389;border-radius:50%;animation:loadingSpin 800ms linear infinite; }
+.loading-state__track { display:block;width:min(180px,55vw);height:3px;overflow:hidden;border-radius:999px;background:#e7d7ee; }
+.loading-state__bar { display:block;width:38%;height:100%;border-radius:inherit;background:#704389;animation:loadingSweep 1.15s ease-in-out infinite; }
 @media (max-width:1100px) { .records-workspace .records-toolbar { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:767px) {
   .records-workspace { height:auto;min-height:0;overflow:visible; }
@@ -78,6 +92,32 @@ textarea {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+@keyframes modalBackdropIn {
+  from { opacity:0; }
+  to { opacity:1; }
+}
+
+@keyframes pageContentIn {
+  from { opacity:0;transform:translateY(5px); }
+  to { opacity:1;transform:translateY(0); }
+}
+
+@keyframes popoverIn {
+  from { opacity:0;transform:translateY(-3px) scale(.99); }
+  to { opacity:1;transform:translateY(0) scale(1); }
+}
+
+@keyframes feedbackIn {
+  from { opacity:0;transform:translateY(3px); }
+  to { opacity:1;transform:translateY(0); }
+}
+
+@keyframes loadingSpin { to { transform:rotate(360deg); } }
+@keyframes loadingSweep {
+  from { transform:translateX(-115%); }
+  to { transform:translateX(280%); }
 }
 
 .jurisguard-modal-overlay {

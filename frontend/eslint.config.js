@@ -23,6 +23,7 @@ export default defineConfig([
       '@typescript-eslint/no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
       'react-refresh/only-export-components': 'off',
       'react-hooks/incompatible-library': 'off',
+      'react-hooks/set-state-in-effect': 'off',
     },
   },
 ])

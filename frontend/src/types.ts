@@ -197,6 +197,35 @@ export interface CriminalCaseRecord {
   last_updated: string;
 }
 
+export interface CaseListParticipant {
+  client_id: string;
+  name: string;
+  sex: string;
+  party_represented: string;
+  applicant_role?: string;
+  applicant_role_other?: string;
+}
+
+export interface CaseListItem {
+  case_id: string;
+  client_id: string;
+  case_type: CaseType;
+  created_by_user_id: number | null;
+  control_no: string;
+  form_date: string;
+  party_represented: string;
+  nature_of_case: string;
+  title_of_case: string;
+  case_no: string;
+  court_body: string;
+  status_of_case: CaseStatus;
+  is_terminated: boolean;
+  location_type: "Urban" | "Rural" | "";
+  cause_of_action: string;
+  participants: CaseListParticipant[];
+  last_updated: string;
+}
+
 export interface ExtractedClientPayload {
   client: Partial<Omit<Client, "client_id">>;
   client_details: Partial<ClientDetails>;

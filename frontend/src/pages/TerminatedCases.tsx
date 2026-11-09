@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import MainLayout from "../layouts/MainLayout";
 import DateFilterSelect from "../components/DateFilterSelect";
 import PageHeader from "../components/PageHeader";
 import ModalPortal from "../components/modals/ModalPortal";
 import { listCaseRecords, listClientRecords } from "../services/recordService";
+import { createAuditLog } from "../services/auditService";
 import type { ClientRecord, CriminalCaseRecord } from "../types";
 import {
   buildCriminalCasesExcelHtml,
@@ -98,6 +100,7 @@ function SortHeader({
 }
 
 export default function TerminatedCasesPage() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [cases, setCases] = useState<CriminalCaseRecord[]>([]);
   const [clients, setClients] = useState<ClientRecord[]>([]);
@@ -235,12 +238,18 @@ export default function TerminatedCasesPage() {
     [clientById, filteredRows],
   );
 
-  const exportExcel = () => {
-    downloadText(
-      "terminated-cases.xls",
-      buildCriminalCasesExcelHtml(exportRows, terminatedExportFilters),
-      "application/vnd.ms-excel;charset=utf-8",
-    );
+  const exportExcel = async () => {
+    if (user?.role !== "admin") return;
+    try {
+      await createAuditLog({ action: "Export Excel", module: "Export", entity_type: "terminated_case_export" });
+      downloadText(
+        "terminated-cases.xls",
+        buildCriminalCasesExcelHtml(exportRows, terminatedExportFilters),
+        "application/vnd.ms-excel;charset=utf-8",
+      );
+    } catch {
+      toast.error("Unable to record and export terminated cases. Please retry.");
+    }
   };
 
   const changeSort = (column: TerminatedSortColumn) => {
@@ -257,7 +266,7 @@ return (
           <PageHeader
             eyebrow="Case Archive"
             title="Terminated Cases"
-            description="Review closed criminal case records, termination reasons, archive details, and official export outputs."
+            description="Review closed criminal case records, termination reasons, and archive details."
             compact
           />
         </div>
@@ -302,13 +311,13 @@ return (
               {filteredRows.length}
             </span>
           </div>
-          <button
+          {user?.role === "admin" && <button
             type="button"
             onClick={exportExcel}
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
           >
             Export Excel
-          </button>
+          </button>}
         </div>
 
         {/* NEW: Scrollable Table Container */}

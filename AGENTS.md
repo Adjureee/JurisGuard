@@ -10,7 +10,7 @@ JurisGuard is an offline-first legal intake and case archiving project for Phili
 
 ## Project structure
 
-- `backend/main.py`: API routes; `backend/ai_service.py` and `backend/local_ocr.py`: document processing and local OCR; `backend/inventory_mvp/`: inventory routing and schema.
+- `backend/main.py`: app setup, auth, and core helpers; `backend/routers/`: domain API routers (`admin`, `cases`, `dashboard`, `imports`, `intakes`, `messaging`, `reminders`, `submissions`, `transfers`); `backend/schemas.py` and `backend/bootstrap.py`: Pydantic payloads and DB schema/role bootstrap; `backend/ai_service.py` and `backend/local_ocr.py`: document processing and local OCR; `backend/inventory_mvp/`: inventory routing and schema.
 - `frontend/src/components/` and `frontend/src/features/`: shared and feature UI; `frontend/src/api/client.ts` and `frontend/src/services/`: API client and service functions.
 - `tests/`: application and extraction tests, with `tests/backend/` and `tests/lab/` for their respective suites.
 - `docs/`: implementation and testing notes. `uploads/`, `test_images/`, and lab ground truth/output folders contain local or generated material and are excluded from Git.

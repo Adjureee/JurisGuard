@@ -1,5 +1,6 @@
 """Part II/II-A contract. Original documents remain separate evidence."""
 import re
+from datetime import date
 
 APPLICANT = 'applicant_personal_circumstances'
 REPRESENTATIVE = 'representative_personal_circumstances'
@@ -42,6 +43,9 @@ def label_pattern(label):
     if label == 'Salita/Dialekto':
         # Printed capital I and lowercase l are commonly confused by OCR.
         return r'Salita\s*/\s*D[il]alekto'
+    if label == 'Civil Status':
+        # OCR can read the second t as l in this printed label.
+        return r'Civil\s+Sta[tl]us'
     if label == 'Pagkamamamayan':
         # Observed OCR insertion in the printed label, not an answer repair.
         return r'(?:Pagkamamamayan|Pagkamamnamayan)'
@@ -67,9 +71,30 @@ def field_label_pattern(key, label, *, require_colon=False):
     if key == 'civil_status':
         # The answer F/M can touch the following printed label in an OCR box.
         # Require its explicit colon in this joined spelling; never expand F/M.
-        normal = rf'(?:{normal}|(?<=[FMfm])Civil\s+Status(?=\s*:))'
+        normal = rf'(?:{normal}|(?<=[FMfm]){label_pattern(label)}(?=\s*:))'
     suffix = r'\s*:' if require_colon else r'(?=$|[\s:._])\s*[:.]?'
     return rf'(?P<{key}>{normal}){suffix}'
+
+
+def trim_neighbor_label(value, key):
+    """Remove a recognized next-field label accidentally joined to a value.
+
+    OCR can merge adjacent handwritten answers and printed labels into one
+    text box. Only these known row transitions are clipped; source OCR text
+    and bounding boxes remain unchanged for attorney review.
+    """
+    next_labels = {
+        'name': r'Edad\s*:?',
+        'age': r'Sex\s*:?',
+        'sex': r'Civil\s+Status\s*:?',
+    }
+    pattern = next_labels.get(key)
+    if not pattern or not value:
+        return value
+    match = re.search(pattern, value, re.I)
+    if not match:
+        return value
+    return value[:match.start()].rstrip(' :;')
 
 def checkbox_candidate(value):
     """Text evidence only. Missing box glyphs never establish either state."""
@@ -85,11 +110,66 @@ def checkbox_candidate(value):
     return ''
 
 
+def review_detention_date(result):
+    """Suggest a calendar date for damaged separators when the digits are unambiguous."""
+    applicant = result['sections'][APPLICANT]
+    raw = applicant['detained_since']
+    value = raw.strip()
+    if not re.fullmatch(r'[0-9][0-9\s/|,.-]*[0-9]', value):
+        return result
+
+    ordinary = re.fullmatch(r'([0-9]{1,2})\s*([/.-])\s*([0-9]{1,2})\s*\2\s*([0-9]{4})', value)
+    iso = re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', value)
+    if iso:
+        try:
+            date.fromisoformat(value)
+            return result
+        except ValueError:
+            pass
+
+    # Keep a visible separator as evidence. Only consider a misread '1' in
+    # fixed-width dates, so we cannot split arbitrary digit runs into dates.
+    damaged = re.fullmatch(r'([0-9]{1,2})\s*[/|,.-]+\s*([0-9]{1,2})\s*[/|,.-]+\s*([0-9]{4})', value)
+    if not damaged and re.search(r'[/|,.-]', value):
+        separator = r'(?:[/|,.-]+|[/|,.-]*1[/|,.-]*)'
+        damaged = re.fullmatch(rf'([0-9]{{2}})\s*{separator}\s*([0-9]{{2}})\s*{separator}\s*([0-9]{{4}})', value)
+
+    dates = set()
+    if ordinary or damaged:
+        first, second, year = map(int, (ordinary[1], ordinary[3], ordinary[4]) if ordinary else damaged.groups())
+        for month, day in ((first, second), (second, first)):
+            try:
+                dates.add(date(year, month, day))
+            except ValueError:
+                continue
+    if ordinary and len(dates) == 1:
+        return result
+
+    path = f'{APPLICANT}.detained_since'
+    diagnostics = result['diagnostics']
+    diagnostics['field_states'][path] = 'uncertain'
+    uncertain = diagnostics.setdefault('uncertain_fields', [])
+    if path not in uncertain:
+        uncertain.append(path)
+    if not ordinary and len(dates) == 1:
+        diagnostics['detention_date_original_candidate'] = raw
+        resolved = dates.pop()
+        applicant['detained_since'] = f'{resolved:%b}. {resolved.day}, {resolved.year:04d}'
+    return result
+
+
 def extract_paper_intake(text, layout=None, refinements=None):
+    return review_detention_date(_extract_paper_intake(text, layout, refinements))
+
+
+def _extract_paper_intake(text, layout, refinements):
     from paper_checkboxes import unknown_boxes
     from paper_intake_layout import positioned_candidates
-    positioned = positioned_candidates(text, layout, refinements)
-    if positioned is not None:
+    fallback_sections = set()
+    positioned = positioned_candidates(text, layout, refinements, fallback_sections=fallback_sections)
+    if positioned is None:
+        fallback_sections.update(SCHEMA)
+    if positioned is not None and not fallback_sections:
         values, states, evidence = positioned
         blocks = section_blocks(text)
         return {'intake_scope': 'pao_parts_ii_iia', 'sections': values, 'checkbox_states': unknown_boxes(),
@@ -104,7 +184,7 @@ def extract_paper_intake(text, layout=None, refinements=None):
     if layout and len(layout) == len(text.splitlines()):
         uncertain_lines = [line for box, line in zip(layout, text.splitlines())
                            if isinstance(box.get('engine_score'), (int, float)) and box['engine_score'] < .85]
-    if layout and len(layout) == len(text.splitlines()):
+    if positioned is None and layout and len(layout) == len(text.splitlines()):
         rows = []
         for box, line in zip(layout, text.splitlines()):
             if not box.get('bbox'):
@@ -112,7 +192,7 @@ def extract_paper_intake(text, layout=None, refinements=None):
             x1, y1, x2, y2 = box['bbox']
             page = box.get('page', 1)
             row = next((r for r in rows if r['page'] == page and
-                        abs(r['y'] - (y1+y2)/2) < min(r['height'], max(1, y2-y1))*.45), None)
+                        abs(r['y'] - (y1+y2)/2) < min(r['height'], max(1, y2-y1))*.75), None)
             if row is None:
                 row = {'page': page, 'y': (y1+y2)/2, 'height': max(1, y2-y1), 'entries': []}
                 rows.append(row)
@@ -127,6 +207,8 @@ def extract_paper_intake(text, layout=None, refinements=None):
     uncertain_fields = []
     seen_fields, rejected_fields = set(), set()
     for section, fields in SCHEMA.items():
+        if section not in fallback_sections:
+            continue
         if not blocks[section]:
             issues.append(f'{section}: section boundaries unreadable or missing; compare with scan.')
             continue
@@ -142,6 +224,7 @@ def extract_paper_intake(text, layout=None, refinements=None):
                 seen_fields.add(path)
                 value = line[match.end():matches[index+1].start() if index+1 < len(matches) else len(line)]
                 value = value.strip()
+                value = trim_neighbor_label(value, match.lastgroup)
                 if not value or re.fullmatch(r'[_ .\-\u2610\uf06f]*', value):
                     continue
                 # A damaged/missing colon must not turn a neighbouring printed
@@ -170,17 +253,31 @@ def extract_paper_intake(text, layout=None, refinements=None):
                 rejected_fields.add(f'{section}.{key}')
                 rejected_candidates[f'{section}.{key}'] = values
                 issues.append(f'{section}.{key}: conflicting OCR entries; compare with scan.')
+    states = {
+        f'{s}.{key}': ('uncertain' if f'{s}.{key}' in uncertain_fields else 'candidate') if value else
+        ('ocr_failed' if not blocks[s] or f'{s}.{key}' not in seen_fields or f'{s}.{key}' in rejected_fields else
+         'checkbox_unverified' if key == 'detained' else 'unverified_empty')
+        for s, fields in sections.items() for key, value in fields.items()
+    }
+    evidence = {}
+    if positioned is not None:
+        values, positional_states, evidence = positioned
+        for section in SCHEMA.keys() - fallback_sections:
+            sections[section] = values[section]
+            for key in sections[section]:
+                path = f'{section}.{key}'
+                states[path] = positional_states[path]
+                if states[path] == 'ocr_failed' and path in evidence:
+                    rejected_candidates[path] = [item['text'] for item in evidence[path].get('candidates', [])]
     return {
         'intake_scope': 'pao_parts_ii_iia', 'sections': sections, 'checkbox_states': unknown_boxes(),
         'raw_text': '\n'.join(blocks.values()), 'document_type': 'intake_form',
         'needs_review': True,
         'diagnostics': {'warnings': issues + ['Verify every field against the scan. Empty OCR may mean blank or unreadable handwriting.'],
                         'rejected_candidates': rejected_candidates,
-                        'field_states': {f'{s}.{key}': ('uncertain' if f'{s}.{key}' in uncertain_fields else 'candidate') if value else
-                                         ('ocr_failed' if not blocks[s] or f'{s}.{key}' not in seen_fields or f'{s}.{key}' in rejected_fields else
-                                          'checkbox_unverified' if key == 'detained' else 'unverified_empty')
-                                         for s, fields in sections.items() for key, value in fields.items()},
-                        'uncertain_fields': uncertain_fields,
+                        'field_states': states,
+                        'field_evidence': evidence,
+                        'uncertain_fields': [path for path, state in states.items() if state == 'uncertain'],
                         'field_review_required': {s: list(v) for s, v in sections.items()}},
     }
 

@@ -1,1750 +1,53 @@
-import { useConfirmation } from "../components/ConfirmationProvider";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Camera, FileScan, FileUp, Keyboard, Upload } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { FileScan, FileUp } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import MainLayout from "../layouts/MainLayout";
 import DateFilterSelect from "../components/DateFilterSelect";
 import PageHeader from "../components/PageHeader";
 import AddCaseModal from "../components/modals/AddCaseModal";
 import AddClientModal from "../components/modals/AddClientModal";
-import { ScanIntakeModal, UploadIntakeModal } from "../components/modals/DedicatedPaperIntakeModals";
-import { ScannedIntakeEditModal } from '../features/documentExtraction/ScannedIntakeEditModal';
+import {
+  ScanIntakeModal,
+  UploadIntakeModal,
+} from "../components/modals/DedicatedPaperIntakeModals";
 import ExportCsvModal from "../components/modals/ExportCsvModal";
 import CaseImportModal from "../features/caseImport/CaseImportModal";
-import ModalPortal from "../components/modals/ModalPortal";
-import { StatusBadge } from "../features/criminalCases/components/StatusBadge";
+import {
+  CASE_PAGE_SIZE,
+  caseDateRange,
+  courtFilterOptions,
+  participantNames,
+  toCaseListItem,
+} from "../features/criminalCases/caseRecordHelpers";
+import { ClientRecordModal } from "../features/criminalCases/components/ClientRecordModal";
+import {
+  EyeIcon,
+  ManualInputSelectionModal,
+  PlusIcon,
+  UploadScanSelectionModal,
+} from "../features/criminalCases/components/IntakeSelectionModals";
 import { useCriminalCasesStore } from "../features/criminalCases/criminalCasesStore";
+import type { CriminalCaseRow } from "../services/exportService";
 import {
-  filterCriminalCaseRows,
-  type CriminalCaseRow,
-} from "../services/exportService";
-import {
-  attachClientToCase,
-  listCaseRecords,
+  getCaseRecord,
+  getClientCases,
+  getClientRecord,
+  listCaseRecordsPage,
+  listCaseRecordsPageForExport,
   listClientRecords,
-  terminateCaseRecord,
-  updateCaseRecord,
-  updateClientRecord,
-  type TerminationPayload,
+  type CaseRecordPageFilters,
 } from "../services/recordService";
 import type {
-  CaseParticipant,
-  CaseStatus,
+  CaseListItem,
   CaseType,
-  ClientClassification,
-  ClientRecord,
   CriminalCaseRecord,
 } from "../types";
-import type {
-  CaseFormValues,
-  ClientFormValues,
-} from "../features/criminalCases/schemas";
-import {
-  matchesDateFilter,
-  type DateFilterValue,
-} from "../utils/dateFilters";
+import type { DateFilterValue } from "../utils/dateFilters";
 
-const accordionBorderClass: Record<CaseStatus, string> = {
-  Pending: "border-amber-200",
-  Terminated: "border-red-200",
-};
-
-const religionOptions = [
-  "Roman Catholic",
-  "Christian",
-  "Iglesia ni Cristo",
-  "Islam",
-  "Buddhist",
-  "Indigenous Belief",
-  "None",
-];
-
-const urbanBarangays = [
-  "Cagangohan",
-  "Datu Abdul Dadia",
-  "Gredu (Poblacion)",
-  "J.P. Laurel",
-  "New Pandan (Poblacion)",
-  "New Visayas",
-  "Quezon",
-  "San Francisco (Poblacion)",
-  "San Vicente",
-  "Salvacion",
-  "Santo Nino (Poblacion)",
-];
-
-const ruralBarangays = [
-  "A. O. Floirendo",
-  "Buenavista",
-  "Cacao",
-  "Consolacion",
-  "Dapco",
-  "Kasilak",
-  "Katipunan",
-  "Katualan",
-  "Kauswagan",
-  "Kiotoy",
-  "Little Panay",
-  "Lower Panaga (Roxas)",
-  "Mabunao",
-  "Maduao",
-  "Malativas",
-  "Manay",
-  "Nanyo",
-  "New Malaga (Dalisay)",
-  "New Malitbog",
-  "San Nicolas",
-  "San Pedro",
-  "San Roque",
-  "Santa Cruz",
-  "Sindaton",
-  "Southern Davao",
-  "Tagpore",
-  "Tibungol",
-  "Upper Licanan",
-  "Waterfall",
-];
-
-const panaboBarangays = [...urbanBarangays, ...ruralBarangays];
-
-const courtBodyOptions = [
-  "RTC Branch 4",
-  "RTC Branch 34",
-  "Family Court - Panabo District",
-  "MTCC - Panabo District",
-];
-
-const courtFilterOptions = ["All Courts", ...courtBodyOptions];
-
-const classificationOptions = [
-  ["flag_drugs", "Drug-related"],
-  ["flag_foreign_national", "Foreign National"],
-  ["flag_vawc_victim", "VAWC Victim"],
-  ["flag_refugee_evacuee", "Refugee / Evacuee"],
-  ["flag_law_enforcer", "Law Enforcer"],
-  ["flag_tenant_agrarian", "Tenant in Agrarian Case"],
-  ["flag_ofw_land_based", "OFW Land-Based"],
-  ["flag_ofw_sea_based", "OFW Sea-Based"],
-  ["flag_arrested_terrorism", "Arrested for Terrorism"],
-  ["flag_indigenous_people", "Indigenous People"],
-  ["flag_pwd", "PWD"],
-  ["flag_former_rebel_fve", "Former Rebel / FVE"],
-  ["flag_torture_victim", "Victim of Torture"],
-  ["flag_trafficking_victim", "Victim of Trafficking"],
-  ["flag_voluntary_rehab_petitioner", "Petitioner for Voluntary Rehab"],
-] as const;
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path fill="currentColor" d="M9 3h2v6h6v2h-6v6H9v-6H3V9h6V3Z" />
-    </svg>
-  );
-}
-
-function UserPlusIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path
-        fill="currentColor"
-        d="M8 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0 2c3.3 0 6 1.6 6 3.5V17H2v-1.5C2 13.6 4.7 12 8 12Zm7-6h2v3h3v2h-3v3h-2v-3h-3V9h3V6Z"
-      />
-    </svg>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path
-        fill="currentColor"
-        d="M10 4C5.8 4 2.7 7.1 1.5 10c1.2 2.9 4.3 6 8.5 6s7.3-3.1 8.5-6C17.3 7.1 14.2 4 10 4Zm0 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2.1a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"
-      />
-    </svg>
-  );
-}
-
-function InfoTile({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2.5">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
-        {label}
-      </p>
-      <p className="mt-1 text-base font-medium text-[#111827]">
-        {value || "-"}
-      </p>
-    </div>
-  );
-}
-
-function ManualInputSelectionModal({
-  caseType,
-  onClose,
-  onSelectCase,
-  onSelectClient,
-}: {
-  caseType: CaseType;
-  onClose: () => void;
-  onSelectCase: () => void;
-  onSelectClient: () => void;
-}) {
-  return (
-    <ModalPortal>
-      <div
-        className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="manual-input-title"
-        onKeyDown={(event) => { if (event.key === "Escape") onClose(); }}
-      >
-        <div className="jurisguard-modal-surface w-full max-w-xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
-          <header className="flex items-center gap-4 border-b border-[#5F3675] bg-[#704389] px-5 py-4 text-white">
-            <div className="flex items-center gap-3">
-              <Keyboard className="h-5 w-5 shrink-0" aria-hidden="true" />
-              <div>
-                <h2 id="manual-input-title" className="text-lg font-bold">Manual Input</h2>
-                <p className="mt-1 text-sm text-white/85">Select what you want to add.</p>
-              </div>
-            </div>
-          </header>
-          <div className="space-y-3 p-5">
-            <button
-              type="button"
-              onClick={onSelectClient}
-              className="flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#D1D5DB] bg-white p-4 text-left transition hover:bg-[#F8FAFC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
-            >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#15803D] shadow-sm">
-                <UserPlusIcon />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-semibold text-[#2B3642]">Add Client</span>
-                <span className="mt-1 block text-sm leading-5 text-[#6B7280]">Create a new client record manually.</span>
-              </span>
-              <span aria-hidden="true" className="text-lg text-[#704389]">›</span>
-            </button>
-            <button
-              type="button"
-              onClick={onSelectCase}
-              className="flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#D1D5DB] bg-white p-4 text-left transition hover:bg-[#F8FAFC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
-            >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white text-[#704389] shadow-sm">
-                <PlusIcon />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-semibold text-[#2B3642]">Add {caseType} Case</span>
-                <span className="mt-1 block text-sm leading-5 text-[#6B7280]">Manually enter a new {caseType.toLowerCase()} case and its associated client information.</span>
-              </span>
-              <span aria-hidden="true" className="text-lg text-[#704389]">›</span>
-            </button>
-          </div>
-          <footer className="flex justify-end border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] transition hover:bg-[#F3F4F6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
-            >
-              Cancel
-            </button>
-          </footer>
-        </div>
-      </div>
-    </ModalPortal>
-  );
-}
-
-function UploadScanSelectionModal({
-  onClose,
-  onSelectScan,
-  onSelectUpload,
-}: {
-  onClose: () => void;
-  onSelectScan: () => void;
-  onSelectUpload: () => void;
-}) {
-  return (
-    <ModalPortal>
-      <div
-        className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="upload-scan-title"
-        onKeyDown={(event) => { if (event.key === "Escape") onClose(); }}
-      >
-        <div className="jurisguard-modal-surface w-full max-w-xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
-          <header className="flex items-center gap-4 border-b border-[#5F3675] bg-[#704389] px-5 py-4 text-white">
-            <div className="flex items-center gap-3">
-              <FileScan className="h-5 w-5 shrink-0" aria-hidden="true" />
-              <div>
-                <h2 id="upload-scan-title" className="text-lg font-bold">Upload / Scan Input</h2>
-                <p className="mt-1 text-sm text-white/85">Scan or upload the whole paper document.</p>
-              </div>
-            </div>
-          </header>
-          <div className="space-y-3 p-5">
-            <button type="button" onClick={onSelectScan} className="flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#D1D5DB] bg-white p-4 text-left transition hover:bg-[#F8FAFC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"><Camera className="ml-1 h-6 w-6 shrink-0 text-[#704389]" aria-hidden="true" /><span className="flex-1"><span className="block font-semibold text-[#2B3642]">Scan</span><span className="mt-1 block text-sm text-[#6B7280]">Open the camera-only scanning workflow.</span></span><span aria-hidden="true" className="text-lg text-[#704389]">›</span></button>
-            <button type="button" onClick={onSelectUpload} className="flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#D1D5DB] bg-white p-4 text-left transition hover:bg-[#F8FAFC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"><Upload className="ml-1 h-6 w-6 shrink-0 text-[#704389]" aria-hidden="true" /><span className="flex-1"><span className="block font-semibold text-[#2B3642]">Upload</span><span className="mt-1 block text-sm text-[#6B7280]">Open the file-upload-only workflow.</span></span><span aria-hidden="true" className="text-lg text-[#704389]">›</span></button>
-          </div>
-          <footer className="flex justify-end border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-            <button type="button" onClick={onClose} className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm font-semibold text-[#4B5563] transition hover:bg-[#F3F4F6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]">Cancel</button>
-          </footer>
-        </div>
-      </div>
-    </ModalPortal>
-  );
-}
-
-function toClientFormValues(client: ClientRecord): ClientFormValues {
-  return {
-    client: { ...client.client },
-    client_details: { ...client.client_details, detained: client.client_details.detained ?? undefined },
-    client_classification: { ...client.client_classification },
-  };
-}
-
-const caseRepresentativeCivilStatuses = [
-  "Single", "Married", "Widowed", "Separated", "Annulled", "Divorced", "None",
-] as const;
-
-function caseRepresentativeSex(value?: string): "" | "Male" | "Female" {
-  return value === "Male" || value === "Female" ? value : "";
-}
-
-function caseRepresentativeCivilStatus(
-  value?: string,
-): (typeof caseRepresentativeCivilStatuses)[number] | "" {
-  return caseRepresentativeCivilStatuses.includes(value as (typeof caseRepresentativeCivilStatuses)[number])
-    ? value as (typeof caseRepresentativeCivilStatuses)[number]
-    : "";
-}
-
-function toCaseFormValues(record: CriminalCaseRecord): CaseFormValues {
-  const clientRepresentatives = record.participants?.length
-    ? record.participants.map((participant) => ({
-        client_id: participant.client_id,
-        representative: {
-          rep_name: participant.representative?.rep_name ?? "",
-          rep_age: participant.representative?.rep_age ?? 0,
-          rep_sex: caseRepresentativeSex(participant.representative?.rep_sex),
-          civil_status: caseRepresentativeCivilStatus(participant.representative?.civil_status),
-          rep_address: participant.representative?.rep_address ?? "",
-          rep_contact_no: participant.representative?.rep_contact_no ?? "",
-          relationship_to_applicant: participant.representative?.relationship_to_applicant ?? "",
-          rep_email: participant.representative?.rep_email ?? "",
-        },
-      }))
-    : [{
-        client_id: record.client_id,
-        representative: {
-          rep_name: record.representative.rep_name,
-          rep_age: record.representative.rep_age,
-          rep_sex: caseRepresentativeSex(record.representative.rep_sex),
-          civil_status: caseRepresentativeCivilStatus(record.representative.civil_status),
-          rep_address: record.representative.rep_address,
-          rep_contact_no: record.representative.rep_contact_no,
-          relationship_to_applicant: record.representative.relationship_to_applicant,
-          rep_email: record.representative.rep_email ?? "",
-        },
-      }];
-  return {
-    client_id: record.client_id,
-    client_representatives: clientRepresentatives,
-    intake_record: { ...record.intake_record },
-    representative: {
-      ...record.representative,
-      rep_email: record.representative.rep_email ?? "",
-    },
-    adverse_party: { ...record.adverse_party },
-    cases: {
-      ...record.cases,
-      case_status: record.cases.case_status ?? record.cases.status_of_case,
-      incident_barangay: record.cases.incident_barangay ?? "",
-      incident_city: record.cases.incident_city ?? "",
-      incident_address: record.cases.incident_address ?? "",
-      latitude: record.cases.latitude ?? "",
-      longitude: record.cases.longitude ?? "",
-      detained: Boolean(record.cases.detained),
-      date_of_confinement: record.cases.date_of_confinement ?? "",
-      place_of_detention: record.cases.place_of_detention ?? "",
-      location_type: record.cases.location_type ?? "",
-      cause_of_action: record.cases.cause_of_action ?? "",
-      facts_of_case: record.cases.facts_of_case ?? "",
-      assigned_pao: record.cases.assigned_pao ?? "",
-      filing_date: record.cases.filing_date ?? "",
-      hearing_schedule: record.cases.hearing_schedule ?? "",
-      remarks: record.cases.remarks ?? "",
-    },
-  };
-}
-
-function caseParticipants(
-  record: CriminalCaseRecord,
-  fallbackClient?: ClientRecord,
-): CaseParticipant[] {
-  if (record.participants?.length) return record.participants;
-  return fallbackClient
-    ? [
-        {
-          case_client_id: "",
-          client_id: fallbackClient.client_id,
-          name: fallbackClient.client.name,
-          sex: fallbackClient.client.sex,
-          age: fallbackClient.client.age,
-          party_represented: record.intake_record.party_represented,
-          applicant_role: record.intake_record.applicant_role,
-          applicant_role_other: record.intake_record.applicant_role_other,
-          address: fallbackClient.client_details.address,
-          contact_no: fallbackClient.client_details.contact_no,
-          classification: fallbackClient.client_classification,
-        },
-      ]
-    : [];
-}
-
-function participantNames(record: CriminalCaseRecord, fallbackClient?: ClientRecord) {
-  return caseParticipants(record, fallbackClient)
-    .map((participant) => participant.name)
-    .filter(Boolean);
-}
-
-function participantPartyRepresented(participant: CaseParticipant) {
-  if (participant.party_represented) return participant.party_represented;
-  if (participant.applicant_role === "Others") {
-    return participant.applicant_role_other || "";
-  }
-  return participant.applicant_role || "";
-}
-
-function participantSexes(record: CriminalCaseRecord, fallbackClient?: ClientRecord) {
-  return caseParticipants(record, fallbackClient)
-    .map((participant) => participant.sex)
-    .filter(Boolean);
-}
-
-function participantClassificationLabels(participant: CaseParticipant) {
-  return classificationOptions
-    .filter(([key]) => Boolean(participant.classification?.[key as keyof ClientClassification]))
-    .map(([, label]) => label);
-}
-
-function TextField({
-  label,
-  value,
-  onChange,
-  type = "text",
-  list,
-}: {
-  label: string;
-  value: string | number;
-  onChange: (value: string) => void;
-  type?: string;
-  list?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
-        {label}
-      </span>
-      <input
-        type={type}
-        list={list}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-      />
-    </label>
-  );
-}
-
-function TextAreaField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
-        {label}
-      </span>
-      <textarea
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        rows={3}
-        className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-      />
-    </label>
-  );
-}
-
-function CaseAccordion({
-  record,
-  fallbackClient,
-  showInterviewSheets = false,
-  onInterviewSheet,
-}: {
-  record: CriminalCaseRecord;
-  fallbackClient?: ClientRecord;
-  showInterviewSheets?: boolean;
-  onInterviewSheet?: (
-    record: CriminalCaseRecord,
-    participant: CaseParticipant,
-  ) => void;
-}) {
-  const participants = caseParticipants(record, fallbackClient);
-  const isMultiParty = participants.length > 1;
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div
-      className={`overflow-hidden rounded-xl border bg-white shadow-sm ${accordionBorderClass[record.cases.status_of_case]}`}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition hover:bg-[#F9FAFB]"
-      >
-        <div>
-          <p className="text-base font-bold text-[#111827]">
-            {record.intake_record.control_no}
-          </p>
-          <p className="mt-1 text-sm text-[#4B5563]">
-            {record.cases.title_of_case}
-          </p>
-        </div>
-        <StatusBadge status={record.cases.status_of_case} />
-      </button>
-
-      {open && (
-        <div className="space-y-5 border-t border-[#E5E7EB] bg-[#F9FAFB] px-5 py-5">
-          <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-            <h4 className="text-base font-semibold text-[#111827]">
-              Case Identification
-            </h4>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              {!isMultiParty && <InfoTile
-                label="Applicant Role"
-                value={
-                  participants[0]
-                    ? participants[0].applicant_role === "Others"
-                      ? participants[0].applicant_role_other
-                      : participants[0].applicant_role
-                    : record.intake_record.applicant_role
-                }
-              />}
-              {!isMultiParty && <InfoTile
-                label="Party Represented"
-                value={participants[0] ? participantPartyRepresented(participants[0]) : ""}
-              />}
-              <InfoTile label="Case No" value={record.cases.case_no} />
-              <InfoTile label="Court" value={record.cases.court_body} />
-              <InfoTile label="Title" value={record.cases.title_of_case} />
-              <InfoTile
-                label="Cause of Action"
-                value={record.cases.cause_of_action}
-              />
-              <InfoTile
-                label="Pending in Court"
-                value={record.cases.pending_in_court ? "Yes" : "No"}
-              />
-            </div>
-          </section>
-
-          {isMultiParty && (
-            <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-              <h4 className="text-base font-semibold text-[#111827]">
-                Participants
-              </h4>
-              <p className="mt-1 text-sm text-[#6B7280]">
-                Shared case, individual client information.
-              </p>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                {participants.map((participant) => (
-                  <div
-                    key={participant.case_client_id || participant.client_id}
-                    className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4"
-                  >
-                    <p className="text-lg font-bold text-[#111827]">
-                      {participant.name}
-                    </p>
-                    <div className="mt-3 grid gap-x-4 gap-y-3 sm:grid-cols-2">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                          Gender / Sex
-                        </p>
-                        <p className="mt-1 text-sm font-medium text-[#111827]">
-                          {participant.sex || "-"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                          Age
-                        </p>
-                        <p className="mt-1 text-sm font-medium text-[#111827]">
-                          {participant.age || "-"}
-                        </p>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                          Address
-                        </p>
-                        <p className="mt-1 break-words text-sm font-medium text-[#111827]">
-                          {participant.address || "-"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                          Contact Number
-                        </p>
-                        <p className="mt-1 text-sm font-medium text-[#111827]">
-                          {participant.contact_no || "-"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                          Applicant Case Involvement
-                        </p>
-                        <p className="mt-1 text-sm font-medium text-[#111827]">
-                          {participant.applicant_role === "Others"
-                            ? participant.applicant_role_other
-                            : participant.applicant_role || "Role not set"}
-                        </p>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                          Party Represented
-                        </p>
-                        <p className="mt-1 text-sm font-medium text-[#111827]">
-                          {participantPartyRepresented(participant) || "Not set"}
-                        </p>
-                      </div>
-                      {participantClassificationLabels(participant).length > 0 && (
-                        <div className="sm:col-span-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                            Applicant Classification
-                          </p>
-                          <p className="mt-1 break-words text-sm font-medium text-[#111827]">
-                            {participantClassificationLabels(participant).join("; ")}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    {showInterviewSheets && onInterviewSheet && (
-                      <button
-                        type="button"
-                        onClick={() => onInterviewSheet(record, participant)}
-                        className="mt-4 inline-flex w-full items-center justify-center rounded-md border border-[#704389] bg-white px-3 py-2 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
-                      >
-                        INTERVIEW SHEET - {participant.name}
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-            <h4 className="text-base font-semibold text-[#111827]">
-              Detention & Location
-            </h4>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <InfoTile
-                label="Urban/Rural"
-                value={record.cases.location_type}
-              />
-              <InfoTile
-                label="Incident Barangay"
-                value={record.cases.incident_barangay ?? ""}
-              />
-              <InfoTile
-                label="Incident City"
-                value={record.cases.incident_city ?? ""}
-              />
-              <InfoTile
-                label="Incident Address"
-                value={record.cases.incident_address ?? ""}
-              />
-              <InfoTile
-                label="Date Confined"
-                value={record.cases.date_of_confinement}
-              />
-              <InfoTile
-                label="Place of Detention"
-                value={record.cases.place_of_detention}
-              />
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-            <h4 className="text-base font-semibold text-[#111827]">
-              Case Status
-            </h4>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <InfoTile
-                label="Last Action Taken"
-                value={record.cases.last_action_taken}
-              />
-              <InfoTile
-                label="Facts of Case"
-                value={record.cases.facts_of_case}
-              />
-              {record.cases.status_of_case === "Terminated" && (
-                <>
-                  <InfoTile
-                    label="Cause of Termination"
-                    value={record.cases.cause_of_termination}
-                  />
-                  <InfoTile
-                    label="Date of Termination"
-                    value={record.cases.date_of_termination}
-                  />
-                </>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function UpdateClientInfoModal({
-  client, onClose, onSaved,
-}: { client: ClientRecord; onClose: () => void; onSaved: (client: ClientRecord) => void }) {
-  if (!client.paper_intake) return <LegacyUpdateClientInfoModal client={client} onClose={onClose} onSaved={onSaved} />;
-  return <ScannedIntakeEditModal client={client} onClose={onClose} onSaved={onSaved}/>;
-}
-
-function LegacyUpdateClientInfoModal({
-  client,
-  onClose,
-  onSaved,
-}: {
-  client: ClientRecord;
-  onClose: () => void;
-  onSaved: (client: ClientRecord) => void;
-}) {
-  const [values, setValues] = useState<ClientFormValues>(() =>
-    toClientFormValues(client),
-  );
-  const [saving, setSaving] = useState(false);
-
-  const updateClient = (
-    field: keyof ClientFormValues["client"],
-    value: string,
-  ) => {
-    setValues((current) => ({
-      ...current,
-      client: {
-        ...current.client,
-        [field]: field === "age" ? Number(value) : value,
-      },
-    }));
-  };
-  const updateDetails = (
-    field: keyof ClientFormValues["client_details"],
-    value: string,
-  ) => {
-    setValues((current) => ({
-      ...current,
-      client_details: {
-        ...current.client_details,
-        [field]: field === "representative_age" ? Number(value) : value,
-      },
-    }));
-  };
-  const updateClassification = (
-    field: keyof ClientFormValues["client_classification"],
-    value: boolean | string | null,
-  ) => {
-    setValues((current) => ({
-      ...current,
-      client_classification: {
-        ...current.client_classification,
-        [field]: value,
-      },
-    }));
-  };
-
-  const submit = async () => {
-    setSaving(true);
-    try {
-      const updated = await updateClientRecord(client.client_id, values);
-      onSaved(updated);
-      toast.success("Client information updated");
-      onClose();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Unable to update client",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <ModalPortal>
-    <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <h3 className="text-base font-bold text-[#2B3642]">
-            Update Client Info
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]"
-          >
-            Close
-          </button>
-        </div>
-        <div className="max-h-[calc(90vh-140px)] overflow-y-auto p-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <TextField
-              label="Full Name"
-              value={values.client.name}
-              onChange={(value) => updateClient("name", value)}
-            />
-            <TextField
-              label="Age"
-              type="number"
-              value={values.client.age}
-              onChange={(value) => updateClient("age", value)}
-            />
-            <TextField
-              label="Gender"
-              value={values.client.sex}
-              onChange={(value) => updateClient("sex", value)}
-            />
-            <TextField
-              label="Civil Status"
-              value={values.client.civil_status}
-              onChange={(value) => updateClient("civil_status", value)}
-            />
-            <TextField
-              label="Religion"
-              value={values.client.religion}
-              onChange={(value) => updateClient("religion", value)}
-              list="client-update-religion-options"
-            />
-            <datalist id="client-update-religion-options">
-              {religionOptions.map((option) => (
-                <option key={option} value={option} />
-              ))}
-            </datalist>
-            <TextField
-              label="Contact"
-              value={values.client_details.contact_no}
-              onChange={(value) => updateDetails("contact_no", value)}
-            />
-            <TextField
-              label="Email"
-              value={values.client_details.email}
-              onChange={(value) => updateDetails("email", value)}
-            />
-            <div className="md:col-span-2">
-              <TextAreaField
-                label="Address"
-                value={values.client_details.address}
-                onChange={(value) => updateDetails("address", value)}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <h4 className="mb-3 text-sm font-semibold text-[#2B3642]">
-                Applicant's Classification
-              </h4>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {classificationOptions.map(([name, label]) => (
-                  <label
-                    key={name}
-                    className="flex items-center gap-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#4B5563]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={Boolean(values.client_classification[name])}
-                      onChange={(event) =>
-                        updateClassification(name, event.target.checked)
-                      }
-                      className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-              <p className="mt-4 text-sm text-[#4B5563]">
-                Review the source document before setting these inventory classifications. Age and sex do not set them automatically.
-              </p>
-              <div className="mt-3 grid gap-3 md:grid-cols-3">
-                {([ ["flag_female", "Female"], ["flag_senior", "Senior Citizen"], ["flag_cicl", "CICL"] ] as const).map(([name, label]) => (
-                  <label key={name} className="text-sm font-medium text-[#4B5563]">
-                    {label}
-                    <select
-                      className="mt-1 w-full rounded-md border border-[#CBD5E1] bg-white px-3 py-2"
-                      value={values.client_classification[name] === null ? "" : String(values.client_classification[name])}
-                      onChange={(event) => {
-                        updateClassification(name, event.target.value === "" ? null : event.target.value === "true");
-                        updateClassification("flags_reviewed", true);
-                      }}
-                    >
-                      <option value="">Unresolved</option>
-                      <option value="true">Yes, explicitly supported</option>
-                      <option value="false">No, explicitly negated</option>
-                    </select>
-                  </label>
-                ))}
-              </div>
-              <label className="mt-3 flex items-center gap-2 text-sm text-[#4B5563]">
-                <input type="checkbox" checked={values.client_classification.flags_reviewed} onChange={(event) => updateClassification("flags_reviewed", event.target.checked)} />
-                Source evidence reviewed; unresolved values remain unknown
-              </label>
-            </div>
-            <div className="md:col-span-2">
-              <TextAreaField
-                label="Notes"
-                value={values.client_classification.classification_notes}
-                onChange={(value) =>
-                  updateClassification("classification_notes", value)
-                }
-              />
-            </div>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={saving}
-            className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:opacity-60"
-          >
-            {saving ? "Saving..." : "Save Client Info"}
-          </button>
-        </div>
-      </div>
-    </div>
-    </ModalPortal>
-  );
-}
-
-function UpdateCaseModal({
-  record,
-  onClose,
-  onSaved,
-}: {
-  record: CriminalCaseRecord;
-  onClose: () => void;
-  onSaved: (record: CriminalCaseRecord) => void;
-}) {
-  const [values, setValues] = useState<CaseFormValues>(() =>
-    toCaseFormValues(record),
-  );
-  const [saving, setSaving] = useState(false);
-  const filteredBarangays =
-    values.cases.location_type === "Urban"
-      ? urbanBarangays
-      : values.cases.location_type === "Rural"
-        ? ruralBarangays
-        : panaboBarangays;
-  const caseDetained = Boolean(values.cases.detained);
-  const updateCase = (
-    field: keyof CaseFormValues["cases"],
-    value: string | boolean,
-  ) => {
-    setValues((current) => ({
-      ...current,
-      cases: {
-        ...current.cases,
-        [field]: value,
-      },
-    }));
-  };
-  const updateLocationType = (value: "Urban" | "Rural" | "") => {
-    const nextBarangays =
-      value === "Urban" ? urbanBarangays : value === "Rural" ? ruralBarangays : panaboBarangays;
-    setValues((current) => ({
-      ...current,
-      cases: {
-        ...current.cases,
-        location_type: value,
-        incident_barangay: nextBarangays.includes(current.cases.incident_barangay ?? "")
-          ? current.cases.incident_barangay
-          : "",
-      },
-    }));
-  };
-  const submit = async () => {
-    setSaving(true);
-    try {
-      const updated = await updateCaseRecord(record.case_id, {
-        ...values,
-        cases: {
-          ...values.cases,
-          case_status: values.cases.status_of_case,
-          pending_in_court: values.cases.status_of_case === "Pending",
-          incident_city: values.cases.incident_city,
-          detained: caseDetained,
-          date_of_confinement: caseDetained ? values.cases.date_of_confinement : "",
-          place_of_detention: caseDetained ? values.cases.place_of_detention : "",
-        },
-      });
-      onSaved(updated);
-      toast.success("Case updated");
-      onClose();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Unable to update case",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <ModalPortal>
-    <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <h3 className="text-base font-bold text-[#2B3642]">Update Case</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]"
-          >
-            Close
-          </button>
-        </div>
-        <div className="max-h-[calc(90vh-140px)] overflow-y-auto p-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <TextField
-              label="Case Number"
-              value={values.cases.case_no}
-              onChange={(value) => updateCase("case_no", value)}
-            />
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
-                Court / Body
-              </span>
-              <select
-                value={values.cases.court_body}
-                onChange={(event) => updateCase("court_body", event.target.value)}
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-              >
-                <option value="">Select court/body</option>
-                {courtBodyOptions.map((option) => (
-                  <option key={option}>{option}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
-                Case Status
-              </span>
-              <select
-                value={values.cases.status_of_case}
-                onChange={(event) =>
-                  updateCase("status_of_case", event.target.value as CaseStatus)
-                }
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-              >
-                <option>Pending</option>
-                <option>Terminated</option>
-              </select>
-            </label>
-            <label className="flex h-10 items-center gap-3 self-end rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 text-sm font-medium text-[#4B5563]">
-              <input
-                type="checkbox"
-                checked={caseDetained}
-                onChange={(event) => updateCase("detained", event.target.checked)}
-                className="h-4 w-4 rounded border-[#E5E7EB] text-[#704389] focus:ring-[#704389]"
-              />
-              Detained
-            </label>
-            {caseDetained && (
-              <>
-                <TextField
-                  label="Date of Detention"
-                  type="date"
-                  value={values.cases.date_of_confinement}
-                  onChange={(value) => updateCase("date_of_confinement", value)}
-                />
-                <TextField
-                  label="Place of Detention"
-                  value={values.cases.place_of_detention}
-                  onChange={(value) => updateCase("place_of_detention", value)}
-                />
-              </>
-            )}
-            <TextField
-              label="Assigned PAO"
-              value={values.cases.assigned_pao ?? ""}
-              onChange={(value) => updateCase("assigned_pao", value)}
-            />
-            <TextField
-              label="Filing Date"
-              type="date"
-              value={values.cases.filing_date ?? values.intake_record.form_date}
-              onChange={(value) =>
-                setValues((current) => ({
-                  ...current,
-                  intake_record: { ...current.intake_record, form_date: value },
-                  cases: { ...current.cases, filing_date: value },
-                }))
-              }
-            />
-            <TextField
-              label="Hearing Schedule"
-              value={values.cases.hearing_schedule ?? ""}
-              onChange={(value) => updateCase("hearing_schedule", value)}
-            />
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
-                Location Type
-              </span>
-              <select
-                value={values.cases.location_type ?? ""}
-                onChange={(event) =>
-                  updateLocationType(event.target.value as "Urban" | "Rural" | "")
-                }
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-              >
-                <option value="">Select</option>
-                <option>Urban</option>
-                <option>Rural</option>
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
-                Barangay
-              </span>
-              <select
-                value={values.cases.incident_barangay ?? ""}
-                onChange={(event) =>
-                  updateCase("incident_barangay", event.target.value)
-                }
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-              >
-                <option value="">Select barangay</option>
-                {filteredBarangays.map((barangay) => (
-                  <option key={barangay}>{barangay}</option>
-                ))}
-              </select>
-            </label>
-            <TextField
-              label="City"
-              value={values.cases.incident_city ?? ""}
-              onChange={(value) => updateCase("incident_city", value)}
-            />
-            <TextField
-              label="Latitude"
-              value={values.cases.latitude ?? ""}
-              onChange={(value) => updateCase("latitude", value)}
-            />
-            <TextField
-              label="Longitude"
-              value={values.cases.longitude ?? ""}
-              onChange={(value) => updateCase("longitude", value)}
-            />
-            <div className="md:col-span-2">
-              <TextAreaField
-                label="Incident Address"
-                value={values.cases.incident_address ?? ""}
-                onChange={(value) => updateCase("incident_address", value)}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <TextAreaField
-                label="Remarks"
-                value={values.cases.remarks ?? values.cases.last_action_taken}
-                onChange={(value) =>
-                  setValues((current) => ({
-                    ...current,
-                    cases: {
-                      ...current.cases,
-                      remarks: value,
-                      last_action_taken: value,
-                    },
-                  }))
-                }
-              />
-            </div>
-            <div className="md:col-span-2">
-              <TextAreaField
-                label="Facts of Case"
-                value={values.cases.facts_of_case}
-                onChange={(value) => updateCase("facts_of_case", value)}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <TextAreaField
-                label="Cause of Action"
-                value={values.cases.cause_of_action}
-                onChange={(value) => updateCase("cause_of_action", value)}
-              />
-            </div>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={saving}
-            className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:opacity-60"
-          >
-            {saving ? "Saving..." : "Save Case"}
-          </button>
-        </div>
-      </div>
-    </div>
-    </ModalPortal>
-  );
-}
-
-function TerminationModal({
-  record,
-  onClose,
-  onTerminated,
-}: {
-  record: CriminalCaseRecord;
-  onClose: () => void;
-  onTerminated: (record: CriminalCaseRecord) => void;
-}) {
-  const confirm = useConfirmation();
-  const [values, setValues] = useState<TerminationPayload>({
-    termination_reason: "",
-    resolution_type: "",
-    date_terminated: new Date().toISOString().slice(0, 10),
-    final_remarks: "",
-    handled_by: "",
-    supporting_document_path: "",
-  });
-  const [saving, setSaving] = useState(false);
-
-  const submit = async () => {
-    if (!values.termination_reason.trim()) {
-      toast.error("Termination reason is required");
-      return;
-    }
-    if (!await confirm({ title: "Terminate this case?", message: "This case will be marked as terminated using the details you entered. Review them before continuing.", confirmLabel: "Terminate case" })) return;
-    setSaving(true);
-    try {
-      const updated = await terminateCaseRecord(record.case_id, values);
-      onTerminated(updated);
-      toast.success("Case terminated");
-      onClose();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Unable to terminate case",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <ModalPortal>
-    <div className="jurisguard-modal-overlay bg-black/75 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface w-full max-w-2xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <h3 className="text-base font-bold text-[#2B3642]">Terminate Case</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]"
-          >
-            Close
-          </button>
-        </div>
-        <div className="space-y-4 p-5">
-          <TextAreaField
-            label="Reason"
-            value={values.termination_reason}
-            onChange={(value) =>
-              setValues((current) => ({
-                ...current,
-                termination_reason: value,
-              }))
-            }
-          />
-          <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
-              Resolution Type
-            </span>
-            <select
-              value={values.resolution_type}
-              onChange={(event) =>
-                setValues((current) => ({
-                  ...current,
-                  resolution_type: event.target.value,
-                }))
-              }
-              className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-            >
-              <option value="">Select resolution</option>
-              <option>Dismissed</option>
-              <option>Resolved</option>
-              <option>Withdrawn</option>
-              <option>Referred</option>
-              <option>Closed after assistance</option>
-            </select>
-          </label>
-          <TextField
-            label="Date Terminated"
-            type="date"
-            value={values.date_terminated}
-            onChange={(value) =>
-              setValues((current) => ({ ...current, date_terminated: value }))
-            }
-          />
-          <TextAreaField
-            label="Final Remarks"
-            value={values.final_remarks}
-            onChange={(value) =>
-              setValues((current) => ({ ...current, final_remarks: value }))
-            }
-          />
-        </div>
-        <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={saving}
-            className="rounded-md bg-[#DC2626] px-4 py-2 text-sm font-semibold text-white hover:bg-[#B91C1C] disabled:opacity-60"
-          >
-            {saving ? "Terminating..." : "Confirm Termination"}
-          </button>
-        </div>
-      </div>
-    </div>
-    </ModalPortal>
-  );
-}
-
-function AttachClientModal({
-  record,
-  clients,
-  onClose,
-  onAttached,
-  onCreateClient,
-}: {
-  record: CriminalCaseRecord;
-  clients: ClientRecord[];
-  onClose: () => void;
-  onAttached: (record: CriminalCaseRecord) => void;
-  onCreateClient: () => void;
-}) {
-  const attachedIds = new Set(record.participants?.map((participant) => participant.client_id) ?? [record.client_id]);
-  const availableClients = clients.filter((client) => !attachedIds.has(client.client_id));
-  const [clientId, setClientId] = useState(availableClients[0]?.client_id ?? "");
-  const [applicantRole, setApplicantRole] = useState("Accused");
-  const [applicantRoleOther, setApplicantRoleOther] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const submit = async () => {
-    if (!clientId) {
-      toast.error("Select a client to attach");
-      return;
-    }
-    setSaving(true);
-    try {
-      const updated = await attachClientToCase(record.case_id, {
-        client_id: clientId,
-        applicant_role: applicantRole,
-        applicant_role_other: applicantRole === "Others" ? applicantRoleOther : "",
-        party_represented: applicantRole === "Others" ? applicantRoleOther : applicantRole,
-      });
-      onAttached(updated);
-      toast.success("Client attached to case");
-      onClose();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to attach client");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <ModalPortal>
-      <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true">
-        <div className="jurisguard-modal-surface w-full max-w-xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
-          <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-            <h3 className="text-base font-bold text-[#2B3642]">Attach Client / Party</h3>
-            <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-sm font-semibold text-[#4B5563] hover:bg-[#F8FAFC]">
-              Close
-            </button>
-          </div>
-          <div className="space-y-4 p-5">
-            {availableClients.length === 0 ? (
-              <div className="rounded-md border border-[#E5E7EB] bg-[#F9FAFB] p-4 text-sm text-[#4B5563]">
-                No unattached clients are available.
-              </div>
-            ) : (
-              <label className="block">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
-                  Existing Client
-                </span>
-                <select
-                  value={clientId}
-                  onChange={(event) => setClientId(event.target.value)}
-                  className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-                >
-                  {availableClients.map((client) => (
-                    <option key={client.client_id} value={client.client_id}>
-                      {client.client.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
-                Applicant Case Involvement
-              </span>
-              <select
-                value={applicantRole}
-                onChange={(event) => setApplicantRole(event.target.value)}
-                className="mt-1 h-10 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
-              >
-                {["Plaintiff", "Defendant", "Oppositor", "Petitioner", "Respondent", "Complainant", "Accused", "Others"].map((role) => (
-                  <option key={role}>{role}</option>
-                ))}
-              </select>
-            </label>
-            {applicantRole === "Others" && (
-              <TextField
-                label="Specify Role"
-                value={applicantRoleOther}
-                onChange={setApplicantRoleOther}
-              />
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onCreateClient();
-              }}
-              className="rounded-md border border-[#15803D] bg-white px-3 py-2 text-sm font-semibold text-[#166534] hover:bg-[#ECFDF5]"
-            >
-              Create New Client First
-            </button>
-          </div>
-          <div className="flex justify-end gap-2 border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
-            <button type="button" onClick={onClose} className="rounded-md border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#4B5563] hover:bg-[#F8FAFC]">
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={submit}
-              disabled={saving || !clientId}
-              className="rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:opacity-60"
-            >
-              {saving ? "Attaching..." : "Attach Client"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </ModalPortal>
-  );
-}
-
-function ClientRecordModal({
-  client,
-  cases,
-  clients,
-  mode,
-  caseType,
-  onClose,
-  onClientUpdated,
-  onCaseUpdated,
-  onCaseTerminated,
-  onCreateClient,
-}: {
-  client: ClientRecord | null;
-  cases: CriminalCaseRecord[];
-  clients: ClientRecord[];
-  mode: "view" | "update";
-  caseType: CaseType;
-  onClose: () => void;
-  onClientUpdated: (client: ClientRecord) => void;
-  onCaseUpdated: (record: CriminalCaseRecord) => void;
-  onCaseTerminated: (record: CriminalCaseRecord) => void;
-  onCreateClient: () => void;
-}) {
-  const navigate = useNavigate();
-  const [clientUpdateOpen, setClientUpdateOpen] = useState(false);
-  const [caseUpdateRecord, setCaseUpdateRecord] =
-    useState<CriminalCaseRecord | null>(null);
-  const [terminationRecord, setTerminationRecord] =
-    useState<CriminalCaseRecord | null>(null);
-  const [attachRecord, setAttachRecord] =
-    useState<CriminalCaseRecord | null>(null);
-  if (!client) return null;
-  const terminatedCount = cases.filter(
-    (record) =>
-      record.cases.is_terminated ||
-      record.cases.status_of_case === "Terminated",
-  ).length;
-  const activeCount = Math.max(cases.length - terminatedCount, 0);
-  const titleNames = Array.from(
-    new Set(
-      cases
-        .flatMap((record) => participantNames(record, client))
-        .filter(Boolean),
-    ),
-  );
-  const showCombinedParticipantTitle = mode === "view" && cases.length === 1;
-  const openInterviewSheet = (
-    record: CriminalCaseRecord,
-    participant: CaseParticipant,
-  ) => {
-    const params = new URLSearchParams({ clientId: participant.client_id });
-    const formBasePath =
-      caseType === "Civil" ? "/civil-cases" : "/criminal-cases";
-    navigate(`${formBasePath}/form-view/${record.case_id}?${params.toString()}`);
-  };
-
-  return (
-    <ModalPortal>
-    <div className="jurisguard-modal-overlay bg-black/70 backdrop-blur-sm transition-opacity duration-200" role="dialog" aria-modal="true">
-      <div className="jurisguard-modal-surface max-h-[92vh] w-full max-w-5xl animate-[modalIn_200ms_ease-out] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-[#F9FAFB] shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E5E7EB] bg-white px-6 py-5">
-          <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#704389]">
-              {caseType} Cases
-            </p>
-            <h2 className="mt-1 break-words text-2xl font-bold text-[#111827]">
-              {mode === "view"
-                ? showCombinedParticipantTitle && titleNames.length
-                  ? titleNames.map((name) => (
-                      <span key={name} className="block">
-                        {name}
-                      </span>
-                    ))
-                  : client.client.name
-                : "Update Record"}
-            </h2>
-            {mode !== "view" && (
-            <p className="mt-2 break-words text-sm text-[#6B7280]">
-                {client.client.name}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden gap-2 sm:flex">
-              <span className="rounded-full bg-[#F7F0FA] px-3 py-1 text-xs font-bold text-[#704389]">
-                {cases.length} case(s)
-              </span>
-              <span className="rounded-full bg-[#ECFDF5] px-3 py-1 text-xs font-bold text-[#065F46]">
-                {activeCount} active
-              </span>
-              <span className="rounded-full bg-[#FFF1F2] px-3 py-1 text-xs font-bold text-[#9F1239]">
-                {terminatedCount} closed
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-[#D1D5DB] bg-white px-3 py-1.5 text-sm font-semibold text-[#4B5563] transition duration-200 hover:bg-[#F3F4F6] hover:text-[#2B3642]"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-
-        <div className="max-h-[calc(92vh-90px)] overflow-y-auto bg-[#F9FAFB] px-6 py-5">
-          <section className="rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold text-[#111827]">
-                  Client Information
-                </h3>
-                <p className="mt-1 text-sm text-[#6B7280]">
-                  Personal information for the selected client record.
-                </p>
-              </div>
-              {mode === "view" && cases.length > 1 && (
-                <p className="text-sm font-medium text-[#6B7280]">
-                  {cases.length} shared case records
-                </p>
-              )}
-              {mode === "update" && (
-                <button
-                  type="button"
-                  onClick={() => setClientUpdateOpen(true)}
-                  className="rounded-md bg-[#704389] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#5F3675]"
-                >
-                  Update Client Info
-                </button>
-              )}
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-              <InfoTile label="Full Name" value={client.client.name} />
-              <InfoTile label="Gender" value={client.client.sex} />
-              <InfoTile label="Age" value={client.client.age} />
-              <InfoTile
-                label="Contact"
-                value={client.client_details.contact_no}
-              />
-              <InfoTile label="Address" value={client.client_details.address} />
-              <InfoTile
-                label="Status"
-                value={
-                  cases.some(
-                    (record) =>
-                      record.cases.is_terminated ||
-                      record.cases.status_of_case === "Terminated",
-                  )
-                    ? "Has terminated case"
-                    : "Pending"
-                }
-              />
-              <InfoTile
-                label="Notes"
-                value={client.client_classification.classification_notes}
-              />
-            </div>
-          </section>
-
-          <section className="mt-5 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-[#111827]">
-                {caseType} Cases
-              </h3>
-              <p className="text-sm text-[#6B7280]">{cases.length} records</p>
-            </div>
-
-            <div className="space-y-3">
-              {cases.map((record) => (
-                <div
-                  key={record.case_id}
-                  className="rounded-[10px] border border-[#E5E7EB] bg-white"
-                >
-                  <CaseAccordion
-                    record={record}
-                    fallbackClient={client}
-                    showInterviewSheets={mode === "view"}
-                    onInterviewSheet={openInterviewSheet}
-                  />
-                  <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
-                    {mode === "view" &&
-                      caseParticipants(record, client).length <= 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const [participant] = caseParticipants(record, client);
-                            if (participant) {
-                              openInterviewSheet(record, participant);
-                              return;
-                            }
-                            const formBasePath =
-                              caseType === "Civil"
-                                ? "/civil-cases"
-                                : "/criminal-cases";
-                            navigate(
-                              `${formBasePath}/form-view/${record.case_id}`,
-                            );
-                          }}
-                          className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
-                        >
-                          INTERVIEW SHEET
-                        </button>
-                      )}
-                    {mode === "update" && (
-                      <>
-                        {!(
-                          record.cases.is_terminated ||
-                          record.cases.status_of_case === "Terminated"
-                        ) && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setCaseUpdateRecord(record)}
-                              className="rounded-md bg-[#704389] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#5F3675]"
-                            >
-                              Update Case
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setAttachRecord(record)}
-                              className="rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition hover:bg-[#704389] hover:text-white"
-                            >
-                              Attach Client
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setTerminationRecord(record)}
-                              className="rounded-md border border-[#DC2626] bg-white px-3 py-1.5 text-xs font-semibold text-[#B91C1C] transition hover:bg-[#DC2626] hover:text-white"
-                            >
-                              Terminate
-                            </button>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
-      </div>
-      {clientUpdateOpen && (
-        <UpdateClientInfoModal
-          client={client}
-          onClose={() => setClientUpdateOpen(false)}
-          onSaved={onClientUpdated}
-        />
-      )}
-      {caseUpdateRecord && (
-        <UpdateCaseModal
-          record={caseUpdateRecord}
-          onClose={() => setCaseUpdateRecord(null)}
-          onSaved={onCaseUpdated}
-        />
-      )}
-      {terminationRecord && (
-        <TerminationModal
-          record={terminationRecord}
-          onClose={() => setTerminationRecord(null)}
-          onTerminated={onCaseTerminated}
-        />
-      )}
-      {attachRecord && (
-        <AttachClientModal
-          record={attachRecord}
-          clients={clients}
-          onClose={() => setAttachRecord(null)}
-          onAttached={onCaseUpdated}
-          onCreateClient={onCreateClient}
-        />
-      )}
-    </div>
-    </ModalPortal>
-  );
+interface CaseListRow {
+  record: CaseListItem;
 }
 
 interface CasesPageProps {
@@ -1765,15 +68,18 @@ export default function CriminalCasesPage({
     user?.role === "admin" ||
     user?.role === "staff" ||
     user?.role === "legal_staff";
+  const isAdmin = user?.role === "admin";
   const clients = useCriminalCasesStore((state) => state.clients);
-  const cases = useCriminalCasesStore((state) => state.cases);
   const setClients = useCriminalCasesStore((state) => state.setClients);
-  const setCases = useCriminalCasesStore((state) => state.setCases);
   const upsertClient = useCriminalCasesStore((state) => state.upsertClient);
   const upsertCase = useCriminalCasesStore((state) => state.upsertCase);
   const [search, setSearch] = useState("");
-  const [genderFilter, setGenderFilter] = useState<"All" | "Male" | "Female">("All");
-  const [locationFilter, setLocationFilter] = useState<"All" | "Urban" | "Rural">("All");
+  const [genderFilter, setGenderFilter] = useState<"All" | "Male" | "Female">(
+    "All",
+  );
+  const [locationFilter, setLocationFilter] = useState<
+    "All" | "Urban" | "Rural"
+  >("All");
   const [courtFilter, setCourtFilter] = useState("All Courts");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
   const [showCaseModal, setShowCaseModal] = useState(false);
@@ -1782,71 +88,169 @@ export default function CriminalCasesPage({
   const [showUploadScanModal, setShowUploadScanModal] = useState(false);
   const [showScanWorkflowModal, setShowScanWorkflowModal] = useState(false);
   const [showUploadWorkflowModal, setShowUploadWorkflowModal] = useState(false);
-  const [dashboardIntakeMode, setDashboardIntakeMode] = useState<'manual' | 'scan' | undefined>();
+  const [dashboardIntakeMode, setDashboardIntakeMode] = useState<
+    "manual" | "scan" | undefined
+  >();
   const [showExportModal, setShowExportModal] = useState(false);
+  const [exportRows, setExportRows] = useState<CriminalCaseRow[]>([]);
+  const [exportLoading, setExportLoading] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [matchingCaseCount, setMatchingCaseCount] = useState(0);
+  const [caseItems, setCaseItems] = useState<CaseListItem[]>([]);
+  const [casePage, setCasePage] = useState(1);
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
+  const [activeClientCases, setActiveClientCases] = useState<
+    CriminalCaseRecord[]
+  >([]);
+  const [hasLoadedClientDirectory, setHasLoadedClientDirectory] =
+    useState(false);
   const [dashboardParams, setDashboardParams] = useSearchParams();
   useEffect(() => {
-    const action = dashboardParams.get('action');
-    if (action === 'intake' || action === 'client') {
-      setDashboardIntakeMode(action === 'intake' ? 'scan' : 'manual');
+    const action = dashboardParams.get("action");
+    if (action === "intake" || action === "client") {
+      setDashboardIntakeMode(action === "intake" ? "scan" : "manual");
       setShowClientModal(true);
     }
-    if (action === 'case') setShowCaseModal(true);
-    const clientId = dashboardParams.get('client');
-    const caseId = dashboardParams.get('case');
-    if (clientId && clients.some(client => client.client_id === clientId)) setActiveClientId(clientId);
-    if (caseId) {
-      const record = cases.find(record => record.case_id === caseId);
-      if (record) setActiveClientId(record.client_id); else return;
-    }
-    if (clientId && !clients.some(client => client.client_id === clientId)) return;
-    if (action || clientId || caseId) {
+    if (action === "case") setShowCaseModal(true);
+    if (action) {
       const next = new URLSearchParams(dashboardParams);
-      next.delete('action'); next.delete('client'); next.delete('case');
+      next.delete("action");
       setDashboardParams(next, { replace: true });
     }
-  }, [dashboardParams, setDashboardParams, clients, cases]);
+  }, [dashboardParams, setDashboardParams]);
   const [actionMode, setActionMode] = useState<"view" | "update">("view");
 
   useEffect(() => {
-    if (!user) return;
-
+    const clientId = dashboardParams.get("client");
+    const caseId = dashboardParams.get("case");
+    if (!clientId && !caseId) return;
     let cancelled = false;
-    async function loadRecords() {
-      setIsLoading(true);
-      setLoadError("");
+    async function resolveRecordLink() {
       try {
-        const [clientRows, caseRows] = await Promise.all([
-          listClientRecords(),
-          listCaseRecords(caseType),
-        ]);
+        if (caseId) {
+          const record = await getCaseRecord(caseId);
+          const [client, relatedCases] = await Promise.all([
+            getClientRecord(record.client_id),
+            getClientCases(record.client_id, caseType),
+          ]);
+          if (cancelled) return;
+          upsertClient(client);
+          setActiveClientCases(relatedCases);
+          setActiveClientId(record.client_id);
+          setActionMode("view");
+        } else if (clientId) {
+          const client =
+            clients.find((item) => item.client_id === clientId) ??
+            (await getClientRecord(clientId));
+          const relatedCases = await getClientCases(clientId, caseType);
+          if (cancelled) return;
+          upsertClient(client);
+          setActiveClientId(clientId);
+          setActiveClientCases(relatedCases);
+          setActionMode("view");
+        }
         if (!cancelled) {
-          setClients(clientRows);
-          setCases(caseRows);
+          const next = new URLSearchParams(dashboardParams);
+          next.delete("client");
+          next.delete("case");
+          setDashboardParams(next, { replace: true });
         }
       } catch (error) {
         if (!cancelled) {
-          const message = error instanceof Error ? error.message : "Unable to load records";
-          setLoadError(message);
           toast.error(
-            message,
+            error instanceof Error
+              ? error.message
+              : "Unable to open the linked record",
           );
+        }
+      }
+    }
+    void resolveRecordLink();
+    return () => {
+      cancelled = true;
+    };
+  }, [caseType, clients, dashboardParams, setDashboardParams, upsertClient]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setDebouncedSearch(search.trim()),
+      300,
+    );
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setCasePage(1);
+  }, [
+    caseType,
+    debouncedSearch,
+    genderFilter,
+    locationFilter,
+    courtFilter,
+    dateFilter,
+  ]);
+
+  useEffect(() => {
+    const lastPage = Math.max(1, Math.ceil(matchingCaseCount / CASE_PAGE_SIZE));
+    if (casePage > lastPage) setCasePage(lastPage);
+  }, [casePage, matchingCaseCount]);
+
+  const dateRange = useMemo(() => caseDateRange(dateFilter), [dateFilter]);
+  const caseListFilters = useMemo<CaseRecordPageFilters>(
+    () => ({
+      case_type: caseType,
+      page: casePage,
+      page_size: CASE_PAGE_SIZE,
+      search: debouncedSearch,
+      gender: genderFilter,
+      location: locationFilter,
+      court: courtFilter === "All Courts" ? "All" : courtFilter,
+      ...dateRange,
+    }),
+    [
+      casePage,
+      caseType,
+      dateRange,
+      debouncedSearch,
+      genderFilter,
+      locationFilter,
+      courtFilter,
+    ],
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    async function loadCasePage() {
+      setIsLoading(true);
+      setLoadError("");
+      try {
+        const result = await listCaseRecordsPage(caseListFilters);
+        if (!cancelled) {
+          setCaseItems(result.items);
+          setMatchingCaseCount(result.total);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const message =
+            error instanceof Error ? error.message : "Unable to load records";
+          setLoadError(message);
+          toast.error(message);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
     }
 
-    void loadRecords();
+    void loadCasePage();
 
     return () => {
       cancelled = true;
     };
-  }, [caseType, setCases, setClients, user]);
+  }, [caseListFilters, user]);
 
   const visibleClients = useMemo(
     () =>
@@ -1859,37 +263,89 @@ export default function CriminalCasesPage({
           ),
     [canCollaborateOnCases, clients, user?.user_id],
   );
-  const visibleCases = useMemo(
-    () => {
-      const typedCases = cases.filter(
-        (record) => (record.case_type ?? "Criminal") === caseType,
-      );
-      return canCollaborateOnCases
-        ? typedCases
-        : typedCases.filter(
-            (record) =>
-              record.created_by_user_id === null ||
-              record.created_by_user_id === user?.user_id,
-          );
-    },
-    [canCollaborateOnCases, caseType, cases, user?.user_id],
-  );
-  const activeVisibleCases = useMemo(
-    () =>
-      visibleCases.filter(
-        (record) =>
-          !(
-            record.cases.is_terminated ||
-            record.cases.status_of_case === "Terminated"
-          ),
-      ),
-    [visibleCases],
-  );
-  const tableCases = activeVisibleCases;
+  const tableCases = caseItems;
 
-  const rows = useMemo<CriminalCaseRow[]>(
-    () =>
-      tableCases.map((record) => {
+  const rows = useMemo<CaseListRow[]>(
+    () => tableCases.map((record) => ({ record })),
+    [tableCases],
+  );
+
+  const filteredRows = rows;
+
+  const activeClient =
+    visibleClients.find((client) => client.client_id === activeClientId) ??
+    null;
+
+  const openRecord = async (record: CaseListItem, mode: "view" | "update") => {
+    setActiveClientCases([]);
+    try {
+      const details = await getCaseRecord(record.case_id);
+      const [client, relatedCases] = await Promise.all([
+        getClientRecord(details.client_id),
+        getClientCases(details.client_id, caseType),
+      ]);
+      upsertClient(client);
+      setActiveClientCases(relatedCases);
+      if (mode === "update" && !hasLoadedClientDirectory) {
+        setClients(await listClientRecords());
+        setHasLoadedClientDirectory(true);
+      }
+      setActionMode(mode);
+      setActiveClientId(details.client_id);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to open this client record",
+      );
+    }
+  };
+
+  const openImportModal = async () => {
+    try {
+      if (!hasLoadedClientDirectory) {
+        setClients(await listClientRecords());
+        setHasLoadedClientDirectory(true);
+      }
+      setShowImportModal(true);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to load clients for import",
+      );
+    }
+  };
+
+  const openExportModal = async () => {
+    if (!isAdmin) return;
+    setExportLoading(true);
+    const toastId = toast.loading("Loading all matching rows for export...");
+    try {
+      const firstPage = await listCaseRecordsPageForExport({
+        ...caseListFilters,
+        page: 1,
+      });
+      const records = [...firstPage.items];
+      const pageCount = Math.ceil(firstPage.total / CASE_PAGE_SIZE);
+      for (
+        let firstPageInBatch = 2;
+        firstPageInBatch <= pageCount;
+        firstPageInBatch += 4
+      ) {
+        const batch = await Promise.all(
+          Array.from(
+            { length: Math.min(4, pageCount - firstPageInBatch + 1) },
+            (_, offset) =>
+              listCaseRecordsPageForExport({
+                ...caseListFilters,
+                page: firstPageInBatch + offset,
+              }),
+          ),
+        );
+        batch.forEach((result) => records.push(...result.items));
+      }
+      const allRows = records.map((record) => {
         const client = visibleClients.find(
           (item) => item.client_id === record.client_id,
         );
@@ -1897,52 +353,53 @@ export default function CriminalCasesPage({
         return {
           record,
           client,
-          clientName: names.join(" ") || client?.client.name || "Unknown client",
+          clientName:
+            names.join(" ") || client?.client.name || "Unknown client",
         };
-      }),
-    [tableCases, visibleClients],
-  );
-
-  const filteredRows = useMemo(() => {
-    const baseRows = filterCriminalCaseRows(rows, {
-      search,
-      gender: genderFilter,
-      location_type: locationFilter,
-    });
-    return baseRows.filter(({ record }) => {
-      const courtMatches =
-        courtFilter === "All Courts" || record.cases.court_body === courtFilter;
-      if (!courtMatches) return false;
-      return matchesDateFilter(
-        record.intake_record.form_date ||
-          record.cases.filing_date ||
-          record.last_updated,
-        dateFilter,
+      });
+      setExportRows(allRows);
+      setShowExportModal(true);
+      toast.success(`${allRows.length.toLocaleString()} matching rows ready`, {
+        id: toastId,
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not load matching rows for export",
+        { id: toastId },
       );
-    });
-  }, [courtFilter, dateFilter, genderFilter, locationFilter, rows, search]);
-
-  const activeClient =
-    visibleClients.find((client) => client.client_id === activeClientId) ??
-    null;
-  const activeCases = visibleCases.filter(
-    (record) =>
-      record.client_id === activeClientId ||
-      record.participants?.some(
-        (participant) => participant.client_id === activeClientId,
-      ),
-  );
-
-  const openRecord = (record: CriminalCaseRecord, mode: "view" | "update") => {
-    setActiveClientId(record.client_id);
-    setActionMode(mode);
+    } finally {
+      setExportLoading(false);
+    }
   };
 
- return (
+  const refreshCaseListAfterSave = (record: CriminalCaseRecord) => {
+    upsertCase(record);
+    setCaseItems((current) =>
+      current.map((item) =>
+        item.case_id === record.case_id ? toCaseListItem(record) : item,
+      ),
+    );
+    setActiveClientCases((current) =>
+      current.map((item) => (item.case_id === record.case_id ? record : item)),
+    );
+    void listCaseRecordsPage(caseListFilters)
+      .then((result) => {
+        setCaseItems(result.items);
+        setMatchingCaseCount(result.total);
+      })
+      .catch(() =>
+        toast.error(
+          "The case was saved, but the table could not be refreshed. Refresh the page to see the latest list.",
+        ),
+      );
+  };
+
+  return (
     <MainLayout>
       {/* 1. Global Height Wrapper: Locks the page to the viewport height */}
       <div className="records-workspace flex h-full max-w-full flex-col gap-4">
-        
         {/* 2. Header Area: shrink-0 keeps it from compressing */}
         <div className="shrink-0">
           <PageHeader
@@ -1957,7 +414,10 @@ export default function CriminalCasesPage({
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <button
                   type="button"
-                  onClick={() => { setShowManualInputModal(false); setShowUploadScanModal(true); }}
+                  onClick={() => {
+                    setShowManualInputModal(false);
+                    setShowUploadScanModal(true);
+                  }}
                   className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#704389] bg-white px-3.5 text-sm font-semibold text-[#704389] shadow-sm transition hover:bg-[#FAF7FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
                 >
                   <FileScan className="h-4 w-4" aria-hidden="true" />
@@ -1965,7 +425,10 @@ export default function CriminalCasesPage({
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowUploadScanModal(false); setShowManualInputModal(true); }}
+                  onClick={() => {
+                    setShowUploadScanModal(false);
+                    setShowManualInputModal(true);
+                  }}
                   className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675]"
                 >
                   <PlusIcon />
@@ -1978,7 +441,6 @@ export default function CriminalCasesPage({
 
         {/* 3. Main Content Card: flex-1 min-h-0 allows it to absorb remaining screen space */}
         <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col rounded-xl border border-[#CBD5E1] bg-white p-4 shadow-sm">
-          
           {/* 4. Filters Area: shrink-0 preserves its height */}
           <div className="records-toolbar mb-3 grid min-w-0 shrink-0 gap-3 md:grid-cols-2 xl:items-end">
             <label className="block">
@@ -1990,17 +452,29 @@ export default function CriminalCasesPage({
                 placeholder="Search case..."
                 className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition placeholder:text-[#4B5563] focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setCasePage(1);
+                }}
               />
             </label>
-            <DateFilterSelect value={dateFilter} onChange={setDateFilter} />
+            <DateFilterSelect
+              value={dateFilter}
+              onChange={(value) => {
+                setDateFilter(value);
+                setCasePage(1);
+              }}
+            />
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
                 Court / Body
               </span>
               <select
                 value={courtFilter}
-                onChange={(event) => setCourtFilter(event.target.value)}
+                onChange={(event) => {
+                  setCourtFilter(event.target.value);
+                  setCasePage(1);
+                }}
                 className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               >
                 {courtFilterOptions.map((option) => (
@@ -2009,10 +483,17 @@ export default function CriminalCasesPage({
               </select>
             </label>
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Gender</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+                Gender
+              </span>
               <select
                 value={genderFilter}
-                onChange={(event) => setGenderFilter(event.target.value as "All" | "Male" | "Female")}
+                onChange={(event) => {
+                  setGenderFilter(
+                    event.target.value as "All" | "Male" | "Female",
+                  );
+                  setCasePage(1);
+                }}
                 aria-label="Filter by gender"
                 className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               >
@@ -2022,10 +503,17 @@ export default function CriminalCasesPage({
               </select>
             </label>
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">Location</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#4B5563]">
+                Location
+              </span>
               <select
                 value={locationFilter}
-                onChange={(event) => setLocationFilter(event.target.value as "All" | "Urban" | "Rural")}
+                onChange={(event) => {
+                  setLocationFilter(
+                    event.target.value as "All" | "Urban" | "Rural",
+                  );
+                  setCasePage(1);
+                }}
                 aria-label="Filter by location"
                 className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none transition focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
               >
@@ -2035,38 +523,77 @@ export default function CriminalCasesPage({
               </select>
             </label>
             <div className="records-toolbar-footer">
-              <p className="text-sm text-[#526174]"><strong className="font-semibold tabular-nums text-[#243344]">{filteredRows.length}</strong> records shown</p>
-            <div role="group" aria-label="Excel import and export" className="records-excel-actions flex min-w-0 items-center gap-2">
-            {user?.role === "admin" && <button
-              type="button"
-              onClick={() => setShowImportModal(true)}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#CBD5E1] bg-white px-4 text-sm font-semibold text-[#334155] transition hover:bg-[#F8FAFC]"
-            >
-              <FileUp className="h-4 w-4" aria-hidden="true" />
-              Import Excel
-            </button>}
-            <button
-              type="button"
-              onClick={() => setShowExportModal(true)}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
-            >
-              Export Excel
-            </button>
-            </div>
+              <p className="text-sm text-[#526174]">
+                Showing{" "}
+                <strong className="font-semibold tabular-nums text-[#243344]">
+                  {filteredRows.length
+                    ? (casePage - 1) * CASE_PAGE_SIZE + 1
+                    : 0}
+                  –{Math.min(casePage * CASE_PAGE_SIZE, matchingCaseCount)}
+                </strong>{" "}
+                of{" "}
+                <strong className="font-semibold tabular-nums text-[#243344]">
+                  {matchingCaseCount.toLocaleString()}
+                </strong>{" "}
+                matching records
+              </p>
+              <div
+                role="group"
+                aria-label={
+                  isAdmin ? "Excel import and export" : "Excel import"
+                }
+                className="records-excel-actions flex min-w-0 items-center gap-2"
+              >
+                {canCollaborateOnCases && (
+                  <button
+                    type="button"
+                    onClick={() => void openImportModal()}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#CBD5E1] bg-white px-4 text-sm font-semibold text-[#334155] transition hover:bg-[#F8FAFC]"
+                  >
+                    <FileUp className="h-4 w-4" aria-hidden="true" />
+                    Import Excel
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => void openExportModal()}
+                    disabled={exportLoading || isLoading}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#704389] px-3.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:bg-[#5F3675]"
+                  >
+                    {exportLoading ? "Preparing export…" : "Export Excel"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
           {/* 5. Scrollable Table Container: Flex-1 fills the rest of the card perfectly */}
-          <div tabIndex={0} role="region" aria-label="Case records table. Scroll horizontally for all columns." className="records-table-scroll relative min-h-0 max-w-full flex-1 overflow-auto rounded-lg border border-[#CBD5E1]">
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Case records table. Scroll horizontally for all columns."
+            className="records-table-scroll relative min-h-0 max-w-full flex-1 overflow-auto rounded-lg border border-[#CBD5E1]"
+          >
             <table className="records-table w-full min-w-[1040px] text-sm">
               <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
                 <tr>
-                  <th className="px-3 py-3 text-left font-semibold">Control No.</th>
-                  <th className="px-3 py-3 text-left font-semibold">Party Represented</th>
-                  <th className="px-3 py-3 text-left font-semibold">Gender / Sex</th>
+                  <th className="px-3 py-3 text-left font-semibold">
+                    Control No.
+                  </th>
+                  <th className="px-3 py-3 text-left font-semibold">
+                    Party Represented
+                  </th>
+                  <th className="px-3 py-3 text-left font-semibold">
+                    Gender / Sex
+                  </th>
                   <th className="px-3 py-3 text-left font-semibold">Title</th>
-                  <th className="px-3 py-3 text-left font-semibold">Case No.</th>
-                  <th className="px-3 py-3 text-left font-semibold">Court / Body</th>
+                  <th className="px-3 py-3 text-left font-semibold">
+                    Case No.
+                  </th>
+                  <th className="px-3 py-3 text-left font-semibold">
+                    Court / Body
+                  </th>
                   <th className="px-3 py-3 text-right font-semibold"></th>
                 </tr>
               </thead>
@@ -2085,100 +612,163 @@ export default function CriminalCasesPage({
                     </td>
                   </tr>
                 ) : (
-                  filteredRows.map(({ record, client }) => {
-                    const representedParties = caseParticipants(record, client)
-                      .map(participantPartyRepresented)
+                  filteredRows.map(({ record }) => {
+                    const representedParties = record.participants
+                      .map(
+                        (participant) =>
+                          participant.party_represented ||
+                          participant.applicant_role ||
+                          "",
+                      )
                       .filter(Boolean);
-                    const sexes = participantSexes(record, client);
+                    if (
+                      representedParties.length === 0 &&
+                      record.party_represented
+                    ) {
+                      representedParties.push(record.party_represented);
+                    }
+                    const sexes = record.participants
+                      .map((participant) => participant.sex)
+                      .filter(Boolean);
                     return (
-                    <tr
-                      key={record.case_id}
-                      className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]"
-                    >
-                      <td className="px-3 py-4 text-[#2B3642]">
-                        {record.intake_record.control_no}
-                      </td>
-                      <td className="px-3 py-4 text-[#4B5563]">
-                        <div className="space-y-1">
-                          {representedParties.length ? representedParties.map((party, index) => <div key={`${party}-${index}`}>{party}</div>) : "-"}
-                        </div>
-                      </td>
-                      <td className="px-3 py-4 text-[#4B5563]">
-                        <div className="space-y-1">
-                          {sexes.length ? sexes.map((sex, index) => <div key={`${sex}-${index}`}>{sex}</div>) : "-"}
-                        </div>
-                      </td>
-                      <td className="px-3 py-4 text-[#4B5563]">
-                        {record.cases.title_of_case}
-                      </td>
-                      <td className="px-3 py-4 text-[#4B5563]">
-                        {record.cases.case_no}
-                      </td>
-                      <td className="px-3 py-4 text-[#4B5563]">
-                        {record.cases.court_body}
-                      </td>
-                      <td className="px-3 py-4">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openRecord(record, "view")}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
-                          >
-                            <EyeIcon />
-                            View
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openRecord(record, "update")}
-                            className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
-                          >
-                            Update
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                      <tr
+                        key={record.case_id}
+                        className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]"
+                      >
+                        <td className="px-3 py-4 text-[#2B3642]">
+                          {record.control_no}
+                        </td>
+                        <td className="px-3 py-4 text-[#4B5563]">
+                          <div className="space-y-1">
+                            {representedParties.length
+                              ? representedParties.map((party, index) => (
+                                  <div key={`${party}-${index}`}>{party}</div>
+                                ))
+                              : "-"}
+                          </div>
+                        </td>
+                        <td className="px-3 py-4 text-[#4B5563]">
+                          <div className="space-y-1">
+                            {sexes.length
+                              ? sexes.map((sex, index) => (
+                                  <div key={`${sex}-${index}`}>{sex}</div>
+                                ))
+                              : "-"}
+                          </div>
+                        </td>
+                        <td className="px-3 py-4 text-[#4B5563]">
+                          {record.title_of_case}
+                        </td>
+                        <td className="px-3 py-4 text-[#4B5563]">
+                          {record.case_no}
+                        </td>
+                        <td className="px-3 py-4 text-[#4B5563]">
+                          {record.court_body}
+                        </td>
+                        <td className="px-3 py-4">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openRecord(record, "view")}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-[#704389] bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] transition duration-200 hover:-translate-y-px hover:bg-[#704389] hover:text-white"
+                            >
+                              <EyeIcon />
+                              View
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openRecord(record, "update")}
+                              className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#4B5563] transition duration-200 hover:-translate-y-px hover:bg-[#F8FAFC]"
+                            >
+                              Update
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
                     );
                   })
                 )}
               </tbody>
             </table>
           </div>
+          <div className="mt-3 flex shrink-0 flex-col gap-2 border-t border-[#E2E8F0] pt-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-[#526174]">
+              Page {casePage.toLocaleString()} of{" "}
+              {Math.max(
+                1,
+                Math.ceil(matchingCaseCount / CASE_PAGE_SIZE),
+              ).toLocaleString()}{" "}
+              · {CASE_PAGE_SIZE} records per page
+            </p>
+            <nav className="flex items-center gap-2" aria-label="Case record pages">
+              <button
+                type="button"
+                onClick={() => setCasePage((page) => Math.max(1, page - 1))}
+                disabled={casePage <= 1 || isLoading}
+                className="inline-flex h-9 items-center rounded-md border border-[#CBD5E1] bg-white px-3 text-sm font-medium text-[#334155] transition hover:bg-[#F8FAFC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setCasePage((page) => page + 1)}
+                disabled={
+                  casePage >= Math.ceil(matchingCaseCount / CASE_PAGE_SIZE) ||
+                  isLoading
+                }
+                className="inline-flex h-9 items-center rounded-md border border-[#CBD5E1] bg-white px-3 text-sm font-medium text-[#334155] transition hover:bg-[#F8FAFC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </nav>
+          </div>
         </div>
       </div>
 
       {/* Modals */}
-      {showManualInputModal && <ManualInputSelectionModal
-        caseType={caseType}
-        onClose={() => setShowManualInputModal(false)}
-        onSelectCase={() => {
-          setShowManualInputModal(false);
-          setShowCaseModal(true);
-        }}
-        onSelectClient={() => {
-          setShowManualInputModal(false);
-          setDashboardIntakeMode("manual");
-          setShowClientModal(true);
-        }}
-      />}
-      {showUploadScanModal && <UploadScanSelectionModal
-        onClose={() => setShowUploadScanModal(false)}
-        onSelectScan={() => {
-          setShowUploadScanModal(false);
-          setShowUploadWorkflowModal(false);
-          setShowScanWorkflowModal(true);
-        }}
-        onSelectUpload={() => {
-          setShowUploadScanModal(false);
-          setShowScanWorkflowModal(false);
-          setShowUploadWorkflowModal(true);
-        }}
-      />}
-      {showScanWorkflowModal && <ScanIntakeModal onClose={() => setShowScanWorkflowModal(false)} />}
-      {showUploadWorkflowModal && <UploadIntakeModal onClose={() => setShowUploadWorkflowModal(false)} />}
+      {showManualInputModal && (
+        <ManualInputSelectionModal
+          caseType={caseType}
+          onClose={() => setShowManualInputModal(false)}
+          onSelectCase={() => {
+            setShowManualInputModal(false);
+            setShowCaseModal(true);
+          }}
+          onSelectClient={() => {
+            setShowManualInputModal(false);
+            setDashboardIntakeMode("manual");
+            setShowClientModal(true);
+          }}
+        />
+      )}
+      {showUploadScanModal && (
+        <UploadScanSelectionModal
+          onClose={() => setShowUploadScanModal(false)}
+          onSelectScan={() => {
+            setShowUploadScanModal(false);
+            setShowUploadWorkflowModal(false);
+            setShowScanWorkflowModal(true);
+          }}
+          onSelectUpload={() => {
+            setShowUploadScanModal(false);
+            setShowScanWorkflowModal(false);
+            setShowUploadWorkflowModal(true);
+          }}
+        />
+      )}
+      {showScanWorkflowModal && (
+        <ScanIntakeModal onClose={() => setShowScanWorkflowModal(false)} />
+      )}
+      {showUploadWorkflowModal && (
+        <UploadIntakeModal onClose={() => setShowUploadWorkflowModal(false)} />
+      )}
       <AddClientModal
         isOpen={showClientModal}
         initialMode={dashboardIntakeMode}
-        onClose={() => { setShowClientModal(false); setDashboardIntakeMode(undefined); }}
+        onClose={() => {
+          setShowClientModal(false);
+          setDashboardIntakeMode(undefined);
+        }}
       />
       <AddCaseModal
         isOpen={showCaseModal}
@@ -2186,34 +776,41 @@ export default function CriminalCasesPage({
         caseType={caseType}
       />
       <ExportCsvModal
-        isOpen={showExportModal}
-        rows={filteredRows}
+        isOpen={isAdmin && showExportModal}
+        rows={exportRows}
         caseType={caseType}
         onClose={() => setShowExportModal(false)}
       />
-      {user?.role === "admin" && showImportModal && <CaseImportModal
-        caseType={caseType}
-        existingClients={visibleClients}
-        onClose={() => setShowImportModal(false)}
-        onImported={async () => {
-          const [clientRows, caseRows] = await Promise.all([
-            listClientRecords(),
-            listCaseRecords(caseType),
-          ]);
-          setClients(clientRows);
-          setCases(caseRows);
-        }}
-      />}
+      {canCollaborateOnCases && showImportModal && (
+        <CaseImportModal
+          caseType={caseType}
+          existingClients={visibleClients}
+          onClose={() => setShowImportModal(false)}
+          onImported={async () => {
+            const [clientRows, caseResult] = await Promise.all([
+              listClientRecords(),
+              listCaseRecordsPage(caseListFilters),
+            ]);
+            setClients(clientRows);
+            setHasLoadedClientDirectory(true);
+            setCaseItems(caseResult.items);
+            setMatchingCaseCount(caseResult.total);
+          }}
+        />
+      )}
       <ClientRecordModal
         mode={actionMode}
         caseType={caseType}
         client={activeClient}
-        cases={activeCases}
+        cases={activeClientCases}
         clients={visibleClients}
-        onClose={() => setActiveClientId(null)}
+        onClose={() => {
+          setActiveClientId(null);
+          setActiveClientCases([]);
+        }}
         onClientUpdated={upsertClient}
-        onCaseUpdated={upsertCase}
-        onCaseTerminated={upsertCase}
+        onCaseUpdated={refreshCaseListAfterSave}
+        onCaseTerminated={refreshCaseListAfterSave}
         onCreateClient={() => setShowClientModal(true)}
       />
     </MainLayout>

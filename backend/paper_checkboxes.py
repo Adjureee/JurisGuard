@@ -19,7 +19,12 @@ def unknown_boxes():
 
 def answer_from_boxes(states):
     pair = [states[PREFIX + option] for option in OPTIONS]
-    return 'Oo' if pair == ['checked', 'unchecked'] else 'Hindi' if pair == ['unchecked', 'checked'] else ''
+    # Nakakulong is a single-choice pair. One visible checked mark identifies
+    # the answer even if the other box could not be classified. Keep that
+    # counterpart as unknown in storage; never rewrite missing evidence as an
+    # unchecked box. Two checked boxes remain conflicting.
+    return 'Oo' if pair[0] == 'checked' and pair[1] != 'checked' else \
+           'Hindi' if pair[1] == 'checked' and pair[0] != 'checked' else ''
 
 
 def reviewed_detained(states):
@@ -207,7 +212,9 @@ def detect_page_boxes(image, entries, page=1, diagnostics=None):
 
 
 def checkbox_review_warnings(states):
-    warnings=[f'Nakakulong {option.title()}: box remains unknown; inspect the original scan.' for option in OPTIONS if states[PREFIX+option]=='unknown']
+    selected = answer_from_boxes(states)
+    warnings=[f'Nakakulong {option.title()}: box remains unknown; inspect the original scan.'
+              for option in OPTIONS if states[PREFIX+option]=='unknown' and not selected]
     if all(states[PREFIX+option]=='checked' for option in OPTIONS):
         warnings.append('Nakakulong: both boxes are checked; conflicting marks require review.')
     return warnings

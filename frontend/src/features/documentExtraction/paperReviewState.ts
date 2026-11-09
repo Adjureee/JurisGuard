@@ -11,11 +11,19 @@ export const reviewLabels: Record<ReviewState, string> = {
 export function representativeIsEmpty(sections: PaperSections) {
   return Object.values(sections.representative_personal_circumstances).every(value => value.trim() === '');
 }
+export function expandSexAbbreviation(value: string) {
+  const abbreviation = value.trim().toLowerCase();
+  if (abbreviation === 'm') return 'Male';
+  if (abbreviation === 'f') return 'Female';
+  return value;
+}
 export type CheckboxState = 'checked' | 'unchecked' | 'unknown';
 export type CheckboxStates = Record<string, CheckboxState>;
 export const checkboxPrefix = 'applicant_personal_circumstances.detained.';
 export const unknownBoxes = (): CheckboxStates => ({ [checkboxPrefix + 'oo']: 'unknown', [checkboxPrefix + 'hindi']: 'unknown' });
 export function detainedSummary(states: CheckboxStates) {
   const oo = states[checkboxPrefix + 'oo'], hindi = states[checkboxPrefix + 'hindi'];
-  return oo === 'checked' && hindi === 'unchecked' ? 'Oo' : oo === 'unchecked' && hindi === 'checked' ? 'Hindi' : '';
+  // A visible mark on one option identifies the single-choice answer. Keep
+  // the other box's unknown state intact instead of inferring it unchecked.
+  return oo === 'checked' && hindi !== 'checked' ? 'Oo' : hindi === 'checked' && oo !== 'checked' ? 'Hindi' : '';
 }

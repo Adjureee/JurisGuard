@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../contexts/AuthContext";
 import logo1 from "../logo/logo1.png";
 
 function DashboardIcon() {
@@ -115,7 +115,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           type="button"
           aria-label="Close sidebar"
           onClick={onClose}
-          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          className="sidebar-backdrop fixed inset-0 z-30 bg-black/60 md:hidden"
         />
       )}
       <aside className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-[#E5E7EB] bg-white px-5 py-5 text-[#111827] transition duration-200 md:visible md:translate-x-0 ${

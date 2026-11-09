@@ -1,10 +1,11 @@
 import { useConfirmation } from "../ConfirmationProvider";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAuditLogStore } from "../../features/auditLogs/auditLogStore";
 import ProtectedProfileImage from "../ProtectedProfileImage";
+import OfficeMessagesButton from "./OfficeMessagesButton";
 import {
   useNotificationStore,
   type NotificationType,
@@ -92,6 +93,10 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const closeTopbarPopovers = useCallback(() => {
+    setProfileOpen(false);
+    setNotificationsOpen(false);
+  }, []);
 
   useEffect(() => {
     setNotificationUserScope(user ? `${user.user_id}:${user.created_at}` : null);
@@ -364,7 +369,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
             </button>
 
             {notificationsOpen && (
-              <div className="absolute right-0 z-[9999] mt-2 w-80 rounded-xl border border-[#E5E7EB] bg-white shadow-xl">
+              <div className="topbar-popover absolute right-0 z-[9999] mt-2 w-80 rounded-xl border border-[#E5E7EB] bg-white shadow-xl">
                 <div className="border-b border-[#E5E7EB] bg-white px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-bold text-[#2B3642]">Notifications</p>
@@ -451,7 +456,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  if (await confirm({ title: "Remove notification?", message: "This notification will be removed from your list.", confirmLabel: "Remove" })) removeNotification(notification.id);
+                                  if (await confirm({ title: "Remove notification?", message: "This notification will be removed from your list.", confirmLabel: "Remove" })) handleRemoveNotification(notification.id);
                                 }}
                                 className="text-xs font-semibold text-[#DC2626] hover:text-[#B91C1C]"
                               >
@@ -474,6 +479,8 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
             )}
           </div>
 
+          <OfficeMessagesButton onLaunch={closeTopbarPopovers} />
+
           <div ref={profileRef} className="relative">
             <button
               type="button"
@@ -493,7 +500,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
             </button>
 
             {profileOpen && (
-              <div className="absolute right-0 z-[9999] mt-2 w-56 overflow-hidden rounded-xl border border-[#E5E7EB] bg-white py-2 shadow-xl">
+              <div className="topbar-popover absolute right-0 z-[9999] mt-2 w-56 overflow-hidden rounded-xl border border-[#E5E7EB] bg-white py-2 shadow-xl">
                 <Link
                   to="/profile"
                   onClick={() => setProfileOpen(false)}
@@ -502,7 +509,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
                   Profile
                 </Link>
                 <Link
-                  to="/profile#security"
+                  to="/settings"
                   onClick={() => setProfileOpen(false)}
                   className="block px-4 py-2.5 text-sm font-medium text-[#2B3642] transition duration-200 hover:bg-[#F8FAFC] hover:text-[#2B3642]"
                 >

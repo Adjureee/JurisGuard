@@ -17,6 +17,11 @@ import {
 import ModalPortal from "../../components/modals/ModalPortal";
 import { useAuth } from "../../contexts/AuthContext";
 import {
+  defaultReminderLeadFor,
+  useSettingsStore,
+  type ReminderLeadMinutes,
+} from "../settings/settingsStore";
+import {
   completeReminder,
   createReminder,
   deleteReminder,
@@ -111,7 +116,7 @@ function reminderTimeLabel(reminder: Reminder) {
     : formatTime(reminder.start_time);
 }
 
-function newReminderForm(date: string): ReminderFormState {
+function newReminderForm(date: string, notificationLeadMinutes: ReminderLeadMinutes = 15): ReminderFormState {
   return {
     title: "",
     description: "",
@@ -121,7 +126,7 @@ function newReminderForm(date: string): ReminderFormState {
     category: "Other",
     priority: "Normal",
     visibility: "personal",
-    notification_minutes_before: 15,
+    notification_minutes_before: notificationLeadMinutes,
   };
 }
 
@@ -147,6 +152,9 @@ function toneForPriority(priority: ReminderPriority) {
 
 export default function CalendarReminders() {
   const { user } = useAuth();
+  const settingsByUser = useSettingsStore((state) => state.byUser);
+  const loadSettingsForUser = useSettingsStore((state) => state.loadForUser);
+  const defaultReminderLead = defaultReminderLeadFor(user?.user_id, settingsByUser);
   const [searchParams, setSearchParams] = useSearchParams();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [completionClock, setCompletionClock] = useState(() => Date.now());
@@ -167,6 +175,10 @@ export default function CalendarReminders() {
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const monthPickerRef = useRef<HTMLDivElement>(null);
   const monthHeadingRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (user?.user_id) loadSettingsForUser(user.user_id);
+  }, [loadSettingsForUser, user?.user_id]);
 
   const refreshReminders = useCallback(async () => {
     const result = await listReminders();
@@ -344,7 +356,7 @@ export default function CalendarReminders() {
 
   const openCreate = () => {
     setEditingReminder(null);
-    setForm(newReminderForm(dateKey(selectedDate)));
+    setForm(newReminderForm(dateKey(selectedDate), defaultReminderLead));
     setActiveReminder(null);
     setActiveHoliday(null);
     setFormOpen(true);

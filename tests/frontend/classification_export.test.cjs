@@ -67,7 +67,8 @@ test('CSV retains its office headings while the Excel inventory uses the supplie
   assert.match(csv.split('\n')[4], /Synthetic Region/);
   assert.match(csv.split('\n')[5], /Synthetic District/);
   const html = loaded.exports.buildCriminalCasesExcelHtml([first], filters);
-  assert.match(html, /Panabo City Public Attorney's Office/);
+  assert.match(html, /Regional Office No\. XI/);
+  assert.match(html, /Panabo City District Office/);
   assert.doesNotMatch(html, /Synthetic Region|Synthetic District/);
 
   const second = row({});
@@ -78,7 +79,7 @@ test('CSV retains its office headings while the Excel inventory uses the supplie
   assert.doesNotMatch(mixed[5], /Synthetic District|Another District/);
 });
 
-test('Excel inventory has the fixed 24-column PAO format and one row per case', () => {
+test('Excel inventory follows the attorney template and includes supplemental fields by default', () => {
   const first = row({ flags_reviewed: true, flag_urban: false, flag_rural: false, flag_drugs: true, flag_female: true, flag_senior: false, flag_cicl: true });
   first.record.intake_record.control_no = '0007';
   first.client.client_details = { address: 'Primary address', contact_no: '0000123', representative_relationship: 'Mother' };
@@ -88,33 +89,63 @@ test('Excel inventory has the fixed 24-column PAO format and one row per case', 
     relation: 'Mother', flags: { flags_reviewed: true, flag_drugs: true, flag_female: true, flag_senior: false, flag_cicl: true },
   })];
   const html = loaded.exports.buildCriminalCasesExcelHtml([first], filters);
-  const headings = [...html.matchAll(/<tr><td colspan="24" class="title(?: report-title)?">([^<]*)<\/td><\/tr>/g)].map((match) => match[1]);
+  const headings = [...html.matchAll(/<tr><td colspan="25" class="title(?: report-title)?">([^<]*)<\/td><\/tr>/g)].map((match) => match[1]);
   assert.deepEqual(headings.slice(0, 6), [
     'REPUBLIKA NG PILIPINAS',
     'KAGAWARAN NG KATARUNGAN',
     'TANGGAPAN NG MANANANGGOL PAMBAYAN',
     "(PUBLIC ATTORNEY'S OFFICE)",
-    "Panabo City Public Attorney's Office",
-    'YEAR-END INVENTORY OF CASES',
+    'Regional Office No. XI',
+    'Panabo City District Office',
   ]);
-  assert.match(headings[6], /^As of [A-Z][a-z]+ \d{1,2}, \d{4}$/);
+  assert.equal(headings[6], 'YEAR-END INVENTORY OF CASES');
+  assert.match(headings[7], /^As of [A-Z][a-z]+ \d{1,2}, \d{4}$/);
 
-  const headers = [...html.matchAll(/<th>([^<]*)<\/th>/g)].map((match) => match[1]);
+  const headers = [...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((match) => match[1]);
   assert.deepEqual(headers, [
-    'CONTROL NUMBER', 'PARTY REPRESENTED', 'GENDER / SEX', 'TITLE OF THE CASE', 'COURT / BODY',
+    'Item No.', 'CONTROL NUMBER', 'PARTY REPRESENTED', 'GENDER/SEX', 'TITLE OF THE CASE', 'COURT/BODY',
     'CASE NO.', 'CAUSE OF ACTION', 'STATUS OF THE CASE', 'LAST ACTION TAKEN', 'CAUSE OF TERMINATION',
-    'DATE OF TERMINATION', 'AGE', 'URBAN', 'RURAL', 'DRUGS', 'FEMALE', 'SENIOR', 'CICL',
-    'DATE OF CONFINEMENT', 'PLACE OF DETENTION', 'CASE RECEIVED', 'ADDRESS', 'CONTACT NUMBER',
-    'RELATIONSHIP TO APPLICANT',
+    'DATE OF TERMINATION', '', '', 'urban', 'rural', 'drugs', 'female', 'SENIOR', 'CICL',
+    'Date of Confinement/ arrest', 'place of detention', 'case received', 'address', 'contact number',
   ]);
-  assert.equal(headers.length, 24);
-  assert.doesNotMatch(html, /Item No\.|A\. CRIMINAL|B\. CIVIL/);
+  assert.equal(headers.length, 25);
+  assert.match(html, /<th data-field="TEMPLATE_SPACER"><\/th><th data-field="AGE"><\/th>/);
+  const widths = [...html.matchAll(/<col width="(\d+)"/g)].map((match) => Number(match[1]));
+  assert.deepEqual(widths.slice(12, 15), [85, 77, 38]);
+  assert.doesNotMatch(html, /RELATIONSHIP TO APPLICANT|A\. CRIMINAL|B\. CIVIL/);
   const bodyRows = caseRows(html);
   assert.equal(bodyRows.length, 1);
-  assert.match(bodyRows[0], /<td>Accused<\/td><td>Female<\/td>/);
-  assert.match(bodyRows[0], /<td>Primary address<\/td><td>0000123<\/td><td>Mother<\/td>/);
+  assert.match(bodyRows[0], /<td>1<\/td><td>0007<\/td><td>Accused<\/td><td>Female<\/td>/);
+  const cells = [...bodyRows[0].matchAll(/<td(?: [^>]*)?>([\s\S]*?)<\/td>/g)].map((match) => match[1]);
+  assert.equal(cells[12], '');
+  assert.equal(cells[13], '67');
+  assert.deepEqual(cells.slice(14, 20), ['1', '0', '1', '1', '0', '1']);
+  assert.deepEqual(cells.slice(20), ['2026-02-03', 'Synthetic place', '2026-01-01', 'Primary address', '0000123']);
   assert.match(html, /TOTAL CASES: 1/);
-  assert.match(html, /<tr class="total"><td>TOTAL CASES: 1<\/td>(?:<td><\/td>){11}<td>1<\/td><td>0<\/td><td>1<\/td><td>1<\/td><td>0<\/td><td>1<\/td>(?:<td><\/td>){6}<\/tr>/);
+  const totalCells = [...html.match(/<tr class="total">([\s\S]*?)<\/tr>/)[1].matchAll(/<td>([\s\S]*?)<\/td>/g)].map((match) => match[1]);
+  assert.equal(totalCells.length, 25);
+  assert.equal(totalCells[0], '');
+  assert.equal(totalCells[1], 'TOTAL CASES: 1');
+  assert.deepEqual(totalCells.slice(14, 20), ['1', '0', '1', '1', '0', '1']);
+});
+
+test('excluding supplemental fields also removes the blank-header columns and age data', () => {
+  const html = loaded.exports.buildCriminalCasesExcelHtml([row({})], filters, { includeSupplementalFields: false });
+  const headers = [...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((match) => match[1]);
+  assert.deepEqual(headers, [
+    'Item No.', 'CONTROL NUMBER', 'PARTY REPRESENTED', 'GENDER/SEX', 'TITLE OF THE CASE', 'COURT/BODY',
+    'CASE NO.', 'CAUSE OF ACTION', 'STATUS OF THE CASE', 'LAST ACTION TAKEN', 'CAUSE OF TERMINATION',
+    'DATE OF TERMINATION',
+  ]);
+  const cells = [...caseRows(html)[0].matchAll(/<td(?: [^>]*)?>([\s\S]*?)<\/td>/g)].map((match) => match[1]);
+  assert.equal(cells.length, 12);
+  assert.equal(cells[0], '1');
+  assert.equal(cells[11], '');
+  assert.ok(!cells.includes('67'));
+  assert.doesNotMatch(html, /Date of Confinement\/ arrest|place of detention|case received|contact number/);
+  const totalCells = [...html.match(/<tr class="total">([\s\S]*?)<\/tr>/)[1].matchAll(/<td>([\s\S]*?)<\/td>/g)].map((match) => match[1]);
+  assert.equal(totalCells.length, 12);
+  assert.equal(totalCells[1], 'TOTAL CASES: 1');
 });
 
 function participant(clientId, { role, sex, age, address, contact, relation, flags }) {
@@ -152,20 +183,24 @@ test('one case with three clients emits three grouped rows and counts one case',
   const rows = caseRows(html);
   assert.equal(rows.length, 3);
   assert.equal((rows[0].match(/rowspan="3"/g) ?? []).length, 12);
-  assert.match(rows[0], /<td rowspan="3">0009<\/td><td>Accused<\/td><td>Female<\/td>/);
-  assert.match(rows[0], /<td>Address A<\/td><td>000111<\/td><td>Mother<\/td>/);
+  assert.match(rows[0], /<td>1<\/td><td rowspan="3">0009<\/td><td>Accused<\/td><td>Female<\/td>/);
+  assert.match(rows[0], /<td>Address A<\/td><td>000111<\/td>$/);
   assert.match(rows[1], /<td>Petitioner<\/td><td>Male<\/td>/);
-  assert.match(rows[1], /<td>Address B<\/td><td>000222<\/td><td>Father<\/td>/);
+  assert.match(rows[1], /<td>2<\/td><td>Petitioner/);
+  assert.match(rows[1], /<td>Address B<\/td><td>000222<\/td>$/);
   assert.match(rows[2], /<td>Others<\/td><td>Female<\/td>/);
-  assert.match(rows[2], /<td>Address C<\/td><td>000333<\/td><td>Guardian<\/td>/);
+  assert.match(rows[2], /<td>3<\/td><td>Others/);
+  assert.match(rows[2], /<td>Address C<\/td><td>000333<\/td>$/);
 
   const total = html.match(/<tr class="total">([\s\S]*?)<\/tr>/)?.[1] ?? '';
   const totalCells = [...total.matchAll(/<td>([\s\S]*?)<\/td>/g)].map((match) => match[1]);
-  assert.equal(totalCells.length, 24);
-  assert.equal(totalCells[0], 'TOTAL CASES: 1');
+  assert.equal(totalCells.length, 25);
+  assert.equal(totalCells[0], '');
+  assert.equal(totalCells[1], 'TOTAL CASES: 1');
+  assert.equal(totalCells[12], '');
   assert.equal(totalCells[11], '');
-  assert.deepEqual(totalCells.slice(12, 18), ['3', '0', '2', '1', '0', '1']);
-  assert.ok(totalCells.slice(18).every((value) => value === ''));
+  assert.deepEqual(totalCells.slice(14, 20), ['3', '0', '2', '1', '0', '1']);
+  assert.ok(totalCells.slice(20).every((value) => value === ''));
 });
 
 test('multiple cases keep participant groups and count unique cases', () => {
@@ -187,8 +222,8 @@ test('multiple cases keep participant groups and count unique cases', () => {
   assert.match(html, /TOTAL CASES: 2/);
   const total = html.match(/<tr class="total">([\s\S]*?)<\/tr>/)?.[1] ?? '';
   const cells = [...total.matchAll(/<td>([\s\S]*?)<\/td>/g)].map((match) => match[1]);
-  assert.equal(cells[11], '');
-  assert.deepEqual(cells.slice(12, 18), ['3', '0', '0', '1', '1', '0']);
+  assert.equal(cells[12], '');
+  assert.deepEqual(cells.slice(14, 20), ['3', '0', '0', '1', '1', '0']);
   assert.match(html, /<td><\/td><td><\/td><td><\/td>/);
 });
 
@@ -206,5 +241,5 @@ test('missing optional values keep the case row and exported text is HTML escape
   assert.match(html, /<td><\/td><td><\/td><td><\/td>/);
   assert.match(html, /TOTAL CASES: 1/);
   const cells = [...caseRows(html)[0].matchAll(/<td(?: [^>]*)?>([\s\S]*?)<\/td>/g)].map((match) => match[1]);
-  assert.deepEqual(cells.slice(15, 18), ['', '', '']);
+  assert.deepEqual(cells.slice(17, 20), ['', '', '']);
 });

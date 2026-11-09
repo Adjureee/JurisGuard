@@ -34,6 +34,10 @@ temp_vlm_payload*.jpg
 /docs/advanced_seminar_midterm_output_jurisguard.md
 /output/pdf/
 /output/docx/
+/groq-lab/
+/awesome-codex-subagents/
+/physicalcopies/
+/howtoon.txt
 
 # Logs
 logs/

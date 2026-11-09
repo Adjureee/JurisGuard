@@ -1,16 +1,13 @@
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import toast from "react-hot-toast";
+import { useLocation, useNavigate } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
 import ProtectedProfileImage from "../components/ProtectedProfileImage";
 import PageHeader from "../components/PageHeader";
 import { useConfirmation } from "../components/ConfirmationProvider";
 import { useAuth } from "../contexts/AuthContext";
 import {
-  disableMfa,
-  enableMfa,
-  forgetTrustedDevice,
   removeProfileImage,
-  setupMfa,
   uploadProfileImage,
 } from "../services/authService";
 
@@ -39,17 +36,19 @@ function initials(name?: string, email?: string) {
 }
 
 export default function UserProfilePage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const confirm = useConfirmation();
   const { user, getCurrentUser } = useAuth();
   const [uploadError, setUploadError] = useState("");
   const [previewSrc, setPreviewSrc] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [mfaSecret, setMfaSecret] = useState("");
-  const [mfaQrCode, setMfaQrCode] = useState("");
-  const [mfaCode, setMfaCode] = useState("");
-  const [isMfaBusy, setIsMfaBusy] = useState(false);
   const profileImageSrc = previewSrc;
+
+  useEffect(() => {
+    if (location.hash === "#security") navigate("/settings", { replace: true });
+  }, [location.hash, navigate]);
 
   const handleProfileImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -123,68 +122,12 @@ export default function UserProfilePage() {
     }
   };
 
-  const handleSetupMfa = async () => {
-    setIsMfaBusy(true);
-    setMfaQrCode("");
-    setMfaCode("");
-    try {
-      const setup = await setupMfa();
-      setMfaSecret(setup.secret);
-      try {
-        const { toDataURL } = await import("qrcode");
-        setMfaQrCode(await toDataURL(setup.otpauth_uri, {
-          width: 280, margin: 4, errorCorrectionLevel: "M",
-        }));
-      } catch {
-        toast.error("Unable to generate the QR code. Use the manual setup key below.");
-      }
-      toast.success("MFA setup started");
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Unable to start MFA setup",
-      );
-    } finally {
-      setIsMfaBusy(false);
-    }
-  };
-
-  const handleEnableMfa = async () => {
-    setIsMfaBusy(true);
-    try {
-      await enableMfa(mfaCode);
-      await getCurrentUser();
-      setMfaCode("");
-      setMfaSecret("");
-      setMfaQrCode("");
-      toast.success("MFA enabled");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Unable to enable MFA");
-    } finally {
-      setIsMfaBusy(false);
-    }
-  };
-
-  const handleDisableMfa = async () => {
-    if (!await confirm({ title: "Disable MFA?", message: "Your account will no longer require an authenticator code when signing in.", confirmLabel: "Disable MFA" })) return;
-    setIsMfaBusy(true);
-    try {
-      await disableMfa(mfaCode);
-      await getCurrentUser();
-      setMfaCode("");
-      toast.success("MFA disabled");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Unable to disable MFA");
-    } finally {
-      setIsMfaBusy(false);
-    }
-  };
-
   return (
     <MainLayout>
       <PageHeader
         eyebrow="Account"
         title="My Profile"
-        description="Manage your JurisGuard account details, profile photo, and authentication settings."
+        description="View your account details and manage your profile photo."
       />
 
       <section className="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-sm ">
@@ -258,105 +201,6 @@ export default function UserProfilePage() {
         </div>
       </section>
 
-      <section
-        id="security"
-        className="mt-4 rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-sm shadow-[#111827]/10"
-      >
-        <h3 className="font-semibold text-[#111827]">Security</h3>
-        {user?.email && (
-          <button
-            type="button"
-            className="mt-3 rounded-md border border-[#E5E7EB] px-3 py-2 text-sm font-semibold text-[#111827]"
-            onClick={async () => {
-              if (!await confirm({ title: "Forget this device?", message: "Your next sign-in on this browser will require an MFA code. Your current session will stay signed in.", confirmLabel: "Forget device" })) return;
-              try {
-                forgetTrustedDevice(user.email);
-                toast.success("Remembered device cleared. Sign out and sign in again to test MFA.");
-              } catch {
-                toast.error("Unable to clear this browser's remembered-device setting.");
-              }
-            }}
-          >
-            Forget this device
-          </button>
-        )}
-        <div className="mt-4 rounded-md border border-[#E5E7EB] p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-[#111827]">
-                Multi-Factor Authentication
-              </p>
-              <p className="mt-1 text-sm text-[#6B7280]">
-                Status: {user?.mfa_enabled ? "Enabled" : "Disabled"}
-              </p>
-            </div>
-            {!user?.mfa_enabled && (
-              <button
-                type="button"
-                onClick={handleSetupMfa}
-                disabled={isMfaBusy}
-                className="rounded-md bg-[#2F80ED] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1f6fd6] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                Start Setup
-              </button>
-            )}
-          </div>
-
-          {mfaSecret && !user?.mfa_enabled && (
-            <div className="mt-4 space-y-3">
-              <p className="text-sm text-[#6B7280]">
-                In your authenticator app, choose Add account, then Scan a QR code.
-                Scan below and enter the current 6-digit code to enable MFA.
-              </p>
-              {mfaQrCode && (
-                <img
-                  src={mfaQrCode}
-                  alt="Scan this QR code with your authenticator app to set up JurisGuard"
-                  width={280}
-                  height={280}
-                  className="h-auto max-w-full rounded-md border border-[#E5E7EB] bg-white"
-                />
-              )}
-              <details>
-                <summary className="cursor-pointer text-sm font-medium text-[#111827]">
-                  Can't scan? Enter a setup key manually
-                </summary>
-                <p className="mt-1 break-all rounded-md bg-[#F9FAFB] px-3 py-2 font-mono text-sm text-[#111827]">
-                  {mfaSecret}
-                </p>
-                <p className="mt-2 text-sm text-[#6B7280]">
-                  Choose a time-based account and enter this key.
-                </p>
-              </details>
-            </div>
-          )}
-
-          {(mfaSecret || user?.mfa_enabled) && (
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                value={mfaCode}
-                onChange={(event) =>
-                  setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                }
-                placeholder="6-digit code"
-                className="w-full rounded-md border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] outline-none transition focus:border-[#2F80ED] focus:ring-2 focus:ring-[#2F80ED]/20 sm:max-w-48"
-              />
-              <button
-                type="button"
-                onClick={user?.mfa_enabled ? handleDisableMfa : handleEnableMfa}
-                disabled={isMfaBusy || mfaCode.length !== 6}
-                className="rounded-md bg-[#111827] px-3 py-2 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {user?.mfa_enabled ? "Disable MFA" : "Enable MFA"}
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
     </MainLayout>
   );
 }

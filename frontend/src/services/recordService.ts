@@ -1,6 +1,6 @@
 import { apiClient } from "../api/client";
 import { AxiosError } from "axios";
-import type { CaseType, ClientRecord, CriminalCaseRecord } from "../types";
+import type { CaseListItem, CaseType, ClientRecord, CriminalCaseRecord } from "../types";
 import type { AddCaseFormValues, CaseFormValues, ClientFormValues } from "../features/criminalCases/schemas";
 
 function getRecordErrorMessage(error: unknown, fallback: string) {
@@ -43,6 +43,11 @@ export async function getClientCases(
   return response.data;
 }
 
+export async function getCaseRecord(caseId: string): Promise<CriminalCaseRecord> {
+  const response = await apiClient.get<CriminalCaseRecord>(`/cases/by-id/${caseId}`);
+  return response.data;
+}
+
 export async function createClientRecord(values: ClientFormValues): Promise<ClientRecord> {
   try {
     const response = await apiClient.post<ClientRecord>("/clients/", values);
@@ -70,6 +75,50 @@ export async function listCaseRecords(
   const response = await apiClient.get<CriminalCaseRecord[]>("/cases/", {
     params: { case_type: caseType },
   });
+  return response.data;
+}
+
+export interface CaseRecordPageFilters {
+  case_type?: CaseType | "All";
+  page?: number;
+  page_size?: number;
+  search?: string;
+  gender?: "All" | "Male" | "Female";
+  location?: "All" | "Urban" | "Rural";
+  court?: string;
+  date_from?: string;
+  date_to?: string;
+}
+
+export interface CaseRecordPage {
+  items: CaseListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export async function listCaseRecordsPage(
+  filters: CaseRecordPageFilters,
+): Promise<CaseRecordPage> {
+  const params = Object.fromEntries(
+    Object.entries(filters).filter(([, value]) => value !== "" && value !== undefined),
+  );
+  const response = await apiClient.get<CaseRecordPage>("/cases/paged", {
+    params,
+  });
+  return response.data;
+}
+
+export async function listCaseRecordsPageForExport(
+  filters: CaseRecordPageFilters,
+): Promise<Omit<CaseRecordPage, "items"> & { items: CriminalCaseRecord[] }> {
+  const params = Object.fromEntries(
+    Object.entries({ ...filters, include_details: true }).filter(([, value]) => value !== "" && value !== undefined),
+  );
+  const response = await apiClient.get<Omit<CaseRecordPage, "items"> & { items: CriminalCaseRecord[] }>(
+    "/cases/paged",
+    { params },
+  );
   return response.data;
 }
 

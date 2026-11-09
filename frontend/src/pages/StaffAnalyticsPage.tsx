@@ -1,10 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -12,7 +15,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { FileDown } from "lucide-react";
 import MainLayout from "../layouts/MainLayout";
 import PageHeader from "../components/PageHeader";
 import {
@@ -22,12 +24,11 @@ import {
   getStableCategoryColorMap,
   SkeletonBlock,
 } from "../components/dashboard/AnalyticsPrimitives";
-import ReportExportModal, { type ReportExportRow } from "../components/modals/ReportExportModal";
 import {
+  formatLegalMonth,
   getStaffWorkload,
   type StaffWorkload,
 } from "../services/dashboardService";
-import { formatLegalMonth } from "../services/dashboardService";
 import { useDashboardAnalytics } from "./dashboard/useDashboardAnalytics";
 
 const GeoAnalyticsMap = lazy(() => import("../components/dashboard/GeoAnalyticsMap"));
@@ -43,18 +44,21 @@ function ocrStatusColor(status: string) {
   return OCR_STATUS_COLORS[status.trim().toUpperCase()] ?? "#64748B";
 }
 
-type AnalyticsPreset = "all" | "last30" | "last90" | "year";
+type AnalyticsPreset = "all" | "last7" | "last30" | "month" | "year" | "custom";
 
-function analyticsPresetRange(preset: AnalyticsPreset) {
+function isoDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function analyticsPresetRange(preset: Exclude<AnalyticsPreset, "custom">) {
   if (preset === 'all') return { dateFrom: '', dateTo: '' };
   const end = new Date();
   const start = new Date(end);
+  if (preset === "last7") start.setDate(end.getDate() - 6);
   if (preset === "last30") start.setDate(end.getDate() - 29);
-  if (preset === "last90") start.setDate(end.getDate() - 89);
-  if (preset === "year") {
-    start.setMonth(0, 1);
-  }
-  return { dateFrom: start.toISOString().slice(0, 10), dateTo: end.toISOString().slice(0, 10) };
+  if (preset === "month") start.setDate(1);
+  if (preset === "year") start.setMonth(0, 1);
+  return { dateFrom: isoDate(start), dateTo: isoDate(end) };
 }
 
 function formatTrendLabel(value: string) {
@@ -69,24 +73,39 @@ function formatTrendLabel(value: string) {
 
 export default function StaffAnalyticsPage() {
   const [workload, setWorkload] = useState<StaffWorkload | null>(null);
+  const [workloadError, setWorkloadError] = useState<string | null>(null);
   const [selectedBarangay, setSelectedBarangay] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [exportOpen, setExportOpen] = useState(false);
+  const [workloadRevision, setWorkloadRevision] = useState(0);
   const [datePreset, setDatePreset] = useState<AnalyticsPreset>("all");
   const [dateRange, setDateRange] = useState(() => analyticsPresetRange("all"));
-  const { monthlyTrends, intakeLoad, caseCategories, heatmap, terminatedStats, ocrAnalytics, isLoading: trendsLoading } = useDashboardAnalytics({ dateRange });
+  const [dateInputs, setDateInputs] = useState(dateRange);
+  const invalidRange = datePreset !== "all" && (!dateInputs.dateFrom || !dateInputs.dateTo || dateInputs.dateFrom > dateInputs.dateTo);
+  const {
+    monthlyTrends,
+    intakeLoad,
+    caseCategories,
+    heatmap,
+    terminatedStats,
+    ocrAnalytics,
+    overview,
+    error: analyticsError,
+    retry: retryTrends,
+    isLoading: trendsLoading,
+  } = useDashboardAnalytics({ dateRange });
 
   useEffect(() => {
     let cancelled = false;
     async function loadWorkload() {
       setIsLoading(true);
+      setWorkloadError(null);
       try {
         const workloadData = await getStaffWorkload();
         if (!cancelled) {
           setWorkload(workloadData);
         }
       } catch (error) {
-        if (!cancelled) toast.error(error instanceof Error ? error.message : "Unable to load staff analytics");
+        if (!cancelled) setWorkloadError(error instanceof Error ? error.message : "Unable to load your personal analytics.");
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -95,12 +114,7 @@ export default function StaffAnalyticsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  const monthlyProductivity = useMemo(
-    () => monthlyTrends.map((row) => ({ month: formatTrendLabel(row.month), total_cases: row.total_cases })),
-    [monthlyTrends],
-  );
+  }, [workloadRevision]);
 
   const weeklyIntake = useMemo(
     () => intakeLoad?.weekly.map((row) => ({ week: row.day, total_cases: row.total_cases })) ?? [],
@@ -122,54 +136,85 @@ export default function StaffAnalyticsPage() {
     [ocrAnalytics],
   );
 
-  const exportRows = useMemo<ReportExportRow[]>(() => {
-    const caseRows = (workload?.recent_cases ?? []).map((record) => ({
-      report_section: "My Cases",
-      report_date: record.intake_record.form_date || record.last_updated,
-      case_status: record.cases.status_of_case,
-      case_category: record.cases.cause_of_action || record.intake_record.nature_of_case || record.case_type || "Uncategorized",
-      barangay: record.cases.incident_barangay ?? "",
-      staff: "Me",
-      ocr_status: "",
-      termination_status: record.cases.is_terminated ? "Terminated" : "Pending",
-      control_no: record.intake_record.control_no,
-      case_title: record.cases.title_of_case,
-      value: 1,
-    }));
-    const ocrRows = (workload?.ocr_recent ?? []).map((item) => ({
-      report_section: "OCR Usage",
-      report_date: item.uploaded_at,
-      case_status: "",
-      case_category: item.document_type,
-      barangay: "",
-      staff: "Me",
-      ocr_status: item.ocr_status,
-      termination_status: "",
-      control_no: `Document #${item.document_id}`,
-      case_title: item.document_type,
-      value: 1,
-    }));
-    return [...caseRows, ...ocrRows];
-  }, [workload]);
+  const displayMonthlyTrends = useMemo(
+    () => monthlyTrends.map((row) => ({ ...row, month: formatTrendLabel(row.month) })),
+    [monthlyTrends],
+  );
+
+  const displayTerminatedMonthly = useMemo(
+    () => (terminatedStats?.monthly ?? []).map((row) => ({ ...row, month: formatTrendLabel(row.month) })),
+    [terminatedStats],
+  );
+
+  const intakeTotal = useMemo(() => monthlyTrends.reduce((total, row) => total + row.total_cases, 0), [monthlyTrends]);
+  const categoryTotal = caseTypes.reduce((total, row) => total + row.total_cases, 0);
+
+  const applyPreset = (preset: AnalyticsPreset) => {
+    setSelectedBarangay(null);
+    setDatePreset(preset);
+    if (preset !== "custom") {
+      const range = analyticsPresetRange(preset);
+      setDateRange(range);
+      setDateInputs(range);
+    }
+  };
+
+  const changeDate = (field: "dateFrom" | "dateTo", value: string) => {
+    setDatePreset("custom");
+    const range = { ...dateInputs, [field]: value };
+    setDateInputs(range);
+    if (range.dateFrom && range.dateTo && range.dateFrom <= range.dateTo) {
+      setSelectedBarangay(null);
+      setDateRange(range);
+    }
+  };
+
+  const retryAnalytics = () => {
+    retryTrends();
+    setWorkloadRevision((revision) => revision + 1);
+  };
+
+  const periodLabel = datePreset === "all"
+    ? "All dates"
+    : `${dateRange.dateFrom || "Start date"} – ${dateRange.dateTo || "End date"}`;
 
   return (
     <MainLayout>
       <PageHeader
         eyebrow="Staff Analytics & Reports"
-        title="Personal Productivity Workspace"
-        description="Personal case trends, OCR activity, status breakdowns, and staff-only exports."
-        actions={
-          <button
-            type="button"
-            onClick={() => setExportOpen(true)}
-            disabled={exportRows.length === 0}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <FileDown className="h-4 w-4" />
-            Export Center
-          </button>
-        }
+        title="My Analytics"
+        description="Case activity, client locations, outcomes, and OCR trends from records available to your account."
       />
+
+      <section aria-label="Analytics filters" className="mt-6 rounded-xl border border-[#CBD5E1] bg-white p-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Reporting period">
+            {([
+              ["all", "All dates"],
+              ["last7", "Last 7 Days"],
+              ["last30", "Last 30 Days"],
+              ["month", "This Month"],
+              ["year", "This Year"],
+            ] as Array<[Exclude<AnalyticsPreset, "custom">, string]>).map(([value, label]) => (
+              <button key={value} type="button" aria-pressed={datePreset === value} onClick={() => applyPreset(value)}
+                className={`min-h-11 rounded-md border px-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389] ${datePreset === value ? "border-[#704389] bg-[#F7F0FA] text-[#5F3675]" : "border-[#CBD5E1] text-[#4B5563] hover:bg-[#F8FAFC]"}`}>{label}</button>
+            ))}
+            <button type="button" aria-pressed={datePreset === "custom"} onClick={() => applyPreset("custom")}
+              className={`min-h-11 rounded-md border px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389] ${datePreset === "custom" ? "border-[#704389] bg-[#F7F0FA] text-[#5F3675]" : "border-[#CBD5E1] text-[#4B5563]"}`}>Custom range</button>
+          </div>
+          <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
+            <label className="text-sm font-medium text-[#334155]">Start date<input type="date" aria-label="Start date" value={dateInputs.dateFrom} max={dateInputs.dateTo || undefined} onChange={(event) => changeDate("dateFrom", event.target.value)} className="mt-1 block min-h-11 w-full min-w-0 rounded-md border border-[#CBD5E1] px-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]" /></label>
+            <label className="text-sm font-medium text-[#334155]">End date<input type="date" aria-label="End date" value={dateInputs.dateTo} min={dateInputs.dateFrom || undefined} onChange={(event) => changeDate("dateTo", event.target.value)} className="mt-1 block min-h-11 w-full min-w-0 rounded-md border border-[#CBD5E1] px-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]" /></label>
+          </div>
+        </div>
+        {invalidRange ? <p role="alert" className="mt-3 text-sm text-red-800">Choose both dates and make sure the start date is on or before the end date.</p>
+          : <p className="mt-3 text-sm text-[#4B5563]" aria-live="polite">{periodLabel} · Analytics are limited to records available to your account.</p>}
+      </section>
+
+      {(analyticsError || workloadError) && <div role="alert" className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E4B875] bg-[#FFFBEB] p-4 text-sm text-[#78350F]">
+        <p>{analyticsError || workloadError} Some values may be unavailable.</p>
+        <button type="button" onClick={retryAnalytics} disabled={isLoading || trendsLoading} className="min-h-11 rounded-md border border-[#D6A65C] bg-white px-4 font-semibold disabled:opacity-50">Retry analytics</button>
+      </div>}
 
       {isLoading || trendsLoading ? (
         <>
@@ -182,8 +227,19 @@ export default function StaffAnalyticsPage() {
             <SkeletonBlock className="h-80" />
           </div>
         </>
+      ) : invalidRange ? null : analyticsError ? (
+        <div className="mt-6"><EmptyState message="Personal analytics could not be loaded. Use Retry analytics to try again." /></div>
       ) : (
         <>
+          <dl aria-label="Personal period summary" className="mt-6 grid grid-cols-2 divide-x divide-[#E5E7EB] rounded-xl border border-[#CBD5E1] bg-white lg:grid-cols-4">
+            {[
+              ["Cases received", overview?.cases_in_range ?? intakeTotal],
+              ["Clients registered", overview?.clients_in_range ?? 0],
+              ["Cases terminated", terminatedStats?.total ?? overview?.range_terminated_cases ?? 0],
+              ["Documents uploaded", ocrAnalytics?.total_scans ?? 0],
+            ].map(([label, value]) => <div key={label} className="min-w-0 px-5 py-4"><dt className="text-sm text-[#4B5563]">{label}</dt><dd className="mt-1 text-3xl font-semibold tabular-nums text-[#2B3642]">{Number(value).toLocaleString()}</dd></div>)}
+          </dl>
+
           <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
             <AnalyticsPanel title="Client locations" subtitle="Unique clients grouped by recorded address in the selected registration period." headerClassName="rounded-t-xl bg-[#604477]">
               {heatmap && heatmap.barangays.length > 0 ? (
@@ -218,40 +274,18 @@ export default function StaffAnalyticsPage() {
             </AnalyticsPanel>
           </div>
 
-          <div className="mt-6 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-bold text-[#111827]">Analytics Date Range</p>
-                <p className="mt-1 text-xs font-medium text-[#6B7280]">Personal trends and closure analytics refresh from this range.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {([["all", "All dates"], ["last30", "Last 30 Days"], ["last90", "Last 90 Days"], ["year", "This Year"]] as Array<[AnalyticsPreset, string]>).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => { setSelectedBarangay(null); setDatePreset(value); setDateRange(analyticsPresetRange(value)); }}
-                    aria-pressed={datePreset === value}
-                    className={`rounded-lg border px-3 py-2 text-xs font-semibold ${datePreset === value ? "border-[#704389] bg-[#F7F0FA] text-[#704389]" : "border-[#D1D5DB] bg-white text-[#4B5563] hover:bg-[#F3F4F6]"}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
           <div className="grid gap-6 xl:grid-cols-2">
             <AnalyticsPanel title="Case Intake Trends" subtitle="Case movement from your currently assigned cases." headerClassName="rounded-t-xl bg-[#604477]">
-              {monthlyProductivity.length === 0 ? <EmptyState message="No personal case productivity data is available yet." /> : (
+              {displayMonthlyTrends.length === 0 ? <EmptyState message="No personal case productivity data is available yet." /> : (
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
-                    <BarChart data={monthlyProductivity}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                      <XAxis dataKey="month" stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} />
-                      <YAxis allowDecimals={false} stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} />
+                    <LineChart data={displayMonthlyTrends} margin={{ top: 16, right: 16, bottom: 8, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                      <XAxis dataKey="month" stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} minTickGap={24} />
+                      <YAxis allowDecimals={false} width={38} stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} />
                       <Tooltip />
-                      <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill={CHART_COLORS[0]} />
-                    </BarChart>
+                      <Line type="linear" dataKey="total_cases" name="Cases received" stroke={CHART_COLORS[0]} strokeWidth={3} dot={{ r: 4 }} isAnimationActive={false} />
+                    </LineChart>
                   </ResponsiveContainer>
                 </div>
               )}
@@ -306,7 +340,7 @@ export default function StaffAnalyticsPage() {
                 <div className="space-y-3">
                   {caseTypes.slice(0, 6).map((row) => (
                     <div key={row.label}>
-                      <div className="mb-1 flex justify-between text-sm"><span className="font-semibold text-[#111827]">{row.label}</span><span className="text-[#475569]">{row.total_cases}</span></div>
+                      <div className="mb-1 flex justify-between gap-3 text-sm"><span className="break-words font-semibold text-[#111827]">{row.label}</span><span className="shrink-0 text-[#475569]">{row.total_cases} · {categoryTotal ? Math.round(row.total_cases / categoryTotal * 100) : 0}%</span></div>
                       <div className="h-2 rounded-full bg-[#E9EEF3]"><div className="h-2 rounded-full" style={{ backgroundColor: caseTypeColors.get(row.label) ?? CHART_COLORS[0], width: `${Math.max((row.total_cases / Math.max(...caseTypes.map((item) => item.total_cases), 1)) * 100, 6)}%` }} /></div>
                     </div>
                   ))}
@@ -314,51 +348,38 @@ export default function StaffAnalyticsPage() {
               )}
             </AnalyticsPanel>
           </div>
-          <div className="mt-6 grid gap-6">
-            <AnalyticsPanel title="Terminated Case Analytics" subtitle="Closure distribution for your currently assigned cases." headerClassName="rounded-t-xl bg-[#604477]">
-              {(terminatedStats?.by_reason ?? []).length === 0 ? <EmptyState message="No terminated case data is available in this range." /> : (
+          <div className="mt-6 grid gap-6 xl:grid-cols-2">
+            <AnalyticsPanel title="Terminations over time" subtitle="Cases closed during the selected period." headerClassName="rounded-t-xl bg-[#604477]">
+              {displayTerminatedMonthly.length === 0 ? <EmptyState message="No terminations are recorded in this range." /> : (
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
-                    <BarChart data={terminatedStats?.by_reason ?? []}>
+                    <AreaChart data={displayTerminatedMonthly}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                      <XAxis dataKey="reason" stroke="#475569" tick={{ fill: "#475569" }} fontSize={11} />
+                      <XAxis dataKey="month" stroke="#475569" tick={{ fill: "#475569" }} fontSize={11} />
                       <YAxis allowDecimals={false} stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} />
                       <Tooltip />
-                      <Bar dataKey="total_cases" name="Closed cases" radius={[8, 8, 0, 0]} fill="#DC2626" />
-                    </BarChart>
+                      <Area type="linear" dataKey="total_cases" name="Closed cases" stroke="#B91C1C" fill="#FEE2E2" />
+                    </AreaChart>
                   </ResponsiveContainer>
+                </div>
+              )}
+            </AnalyticsPanel>
+            <AnalyticsPanel title="Termination reasons" subtitle="Recorded reasons for closed cases in your permitted records." headerClassName="rounded-t-xl bg-[#604477]">
+              {(terminatedStats?.by_reason ?? []).length === 0 ? <EmptyState message="No termination reasons are available in this range." /> : (
+                <div className="space-y-3">
+                  {terminatedStats!.by_reason.map((row) => (
+                    <div key={row.reason}>
+                      <div className="mb-1 flex justify-between gap-3 text-sm"><span className="break-words font-semibold text-[#111827]">{row.reason}</span><span className="shrink-0 text-[#475569]">{row.total_cases}</span></div>
+                      <div className="h-2 rounded-full bg-[#E9EEF3]"><div className="h-2 rounded-full bg-[#B91C1C]" style={{ width: `${Math.max((row.total_cases / Math.max(...terminatedStats!.by_reason.map((item) => item.total_cases), 1)) * 100, 6)}%` }} /></div>
+                    </div>
+                  ))}
                 </div>
               )}
             </AnalyticsPanel>
           </div>
 
-          <div className="mt-6 rounded-xl border border-[#D7DEE7] bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-[#111827]">Export Center</h2>
-            <p className="mt-1 text-sm leading-6 text-[#6B7280]">
-              Staff exports are restricted to your own cases, productivity rows, and OCR activity. Use the export filters before generating CSV or PDF reports.
-            </p>
-            <button
-              type="button"
-              onClick={() => setExportOpen(true)}
-              disabled={exportRows.length === 0}
-              className="mt-4 rounded-md bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Open Export Filters
-            </button>
-          </div>
         </>
       )}
-
-      <ReportExportModal
-        isOpen={exportOpen}
-        title="Personal Staff Report Export"
-        description="Export only your own cases, personal productivity rows, and OCR activity. Apply filters before generating a report."
-        fileName="jurisguard_staff_personal_report"
-        rows={exportRows}
-        scope="staff"
-        redirectTo="/staff/analytics"
-        onClose={() => setExportOpen(false)}
-      />
     </MainLayout>
   );
 }

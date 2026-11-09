@@ -6,13 +6,15 @@ type Props = {
   url: string;
   pdf?: boolean;
   evidence?: FieldEvidence;
+  focusBox?: FieldEvidence['bbox'];
+  focusSelection?: number;
   label?: string;
   fullSize?: boolean;
   onClose?: () => void;
 };
 
 /** The same scan controls work beside the fields and inside the full-size dialog. */
-export function ScanViewer({ url, pdf, evidence, label, fullSize = false, onClose }: Props) {
+export function ScanViewer({ url, pdf, evidence, focusBox, focusSelection, label, fullSize = false, onClose }: Props) {
   const viewport = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const openButton = useRef<HTMLButtonElement>(null);
@@ -41,18 +43,22 @@ export function ScanViewer({ url, pdf, evidence, label, fullSize = false, onClos
   }, [open, fullSize]);
 
   const fit = fitScan(size.width, size.height, bounds.width, bounds.height, rotation);
+  const targetBox = pdf ? undefined : focusBox ?? evidence?.bbox;
   useEffect(() => {
-    if (!evidence) { setZoom(1); setPan({ x: 0, y: 0 }); return; }
+    if (!targetBox) { setZoom(1); setPan({ x: 0, y: 0 }); return; }
     if (size.width <= 1 || bounds.width <= 1 || bounds.height <= 1) return;
-    const [x1, y1, x2, y2] = evidence.bbox;
-    const nextZoom = Math.max(1, Math.min(6, bounds.width / Math.max(1, (x2-x1)*2) / Math.max(fit, .01), bounds.height / Math.max(1, (y2-y1)*6) / Math.max(fit, .01)));
+    const [x1, y1, x2, y2] = targetBox;
+    const sideways = rotation % 180 === 90;
+    const targetWidth = sideways ? y2-y1 : x2-x1;
+    const targetHeight = sideways ? x2-x1 : y2-y1;
+    const nextZoom = Math.max(1, Math.min(8, bounds.width / (targetWidth * 1.4 * fit), bounds.height / (targetHeight * 4 * fit)));
     const radians = rotation * Math.PI / 180;
     const dx = (x1+x2)/2-size.width/2, dy = (y1+y2)/2-size.height/2;
     setZoom(nextZoom);
     setPan({ x: -(dx*Math.cos(radians)-dy*Math.sin(radians))*fit*nextZoom,
              y: -(dx*Math.sin(radians)+dy*Math.cos(radians))*fit*nextZoom });
     setShowHighlight(true);
-  }, [evidence, size.width, size.height, bounds.width, bounds.height, fit, rotation]);
+  }, [targetBox, focusSelection, size.width, size.height, bounds.width, bounds.height, fit, rotation]);
   const scale = fit * zoom;
   const reset = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
   const closeDialog = () => dialog.current?.close();
@@ -73,7 +79,7 @@ export function ScanViewer({ url, pdf, evidence, label, fullSize = false, onClos
           {evidence && <button type="button" className={button} aria-pressed={showHighlight} onClick={() => setShowHighlight(value => !value)}>{showHighlight ? 'Hide highlight' : 'Show highlight'}</button>}
         </>}
       </div>
-      <p className="shrink-0 px-3 py-2 text-sm text-slate-700" aria-live="polite">{label ? `${label} — ${evidence?.location_kind === 'label_answer_area' ? 'approximate answer area; check for blank or unreadable handwriting' : evidence ? 'source outlined below' : 'compare with the scan'}` : 'Select a field to see its source. Drag or use arrow keys to pan.'}</p>
+      <p className="shrink-0 px-3 py-2 text-sm text-slate-700" aria-live="polite">{label ? `${label} — ${evidence?.location_kind === 'label_answer_area' ? 'approximate answer area; check for blank or unreadable handwriting' : evidence ? 'source outlined below' : targetBox ? 'source row centered; compare the answer with the scan' : 'compare with the scan'}` : 'Select a field to see its source. Drag or use arrow keys to pan.'}</p>
       <div ref={viewport} tabIndex={pdf ? undefined : 0} aria-label="Scan viewport. Drag or use arrow keys to pan. Use zoom controls to enlarge."
         className="relative min-h-0 flex-1 touch-none overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-700"
         onKeyDown={event => { const moves: Record<string, [number, number]> = { ArrowLeft: [40, 0], ArrowRight: [-40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] }; const move = moves[event.key]; if (move) { event.preventDefault(); setPan(position => ({ x: position.x + move[0], y: position.y + move[1] })); } }}
@@ -92,7 +98,7 @@ export function ScanViewer({ url, pdf, evidence, label, fullSize = false, onClos
       onClose={() => { setOpen(false); requestAnimationFrame(() => openButton.current?.focus()); }}
       onClick={event => { if (event.target === event.currentTarget) closeDialog(); }}
       className="m-auto h-[calc(100dvh-1.5rem)] max-h-none w-[calc(100vw-1.5rem)] max-w-none overflow-hidden rounded-lg border-0 bg-white p-0 shadow-2xl backdrop:bg-slate-950/85 sm:h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)]">
-      {open && <ScanViewer url={url} pdf={pdf} evidence={evidence} label={label} fullSize onClose={closeDialog} />}
+      {open && <ScanViewer url={url} pdf={pdf} evidence={evidence} focusBox={focusBox} focusSelection={focusSelection} label={label} fullSize onClose={closeDialog} />}
     </dialog>}
   </>;
 }

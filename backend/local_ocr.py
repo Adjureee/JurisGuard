@@ -117,7 +117,79 @@ class LocalOCR:
         self.recognition_batch_size = max(1, min(32, _positive_env("PADDLEOCR_RECOGNITION_BATCH_SIZE", 8)))
         self.enable_mkldnn = _bool_env("PADDLEOCR_ENABLE_MKLDNN", False)
         self._paddle = None
+        self._character_recognizer = None
         self._paddle_failure: str | None = None
+
+    def _recognize_sex_crop(self, crop: Image.Image) -> tuple[str, float] | None:
+        """Read an isolated handwritten character without text detection."""
+        try:
+            if self._character_recognizer is None:
+                if not self._model_complete(self.rec_model):
+                    return None
+                from paddleocr import TextRecognition
+
+                self._character_recognizer = TextRecognition(
+                    model_name=self.rec_model_name, model_dir=str(self.rec_model),
+                    device="cpu", enable_mkldnn=self.enable_mkldnn, cpu_threads=self.cpu_threads,
+                )
+            enlarged = crop.resize((crop.width * 3, crop.height * 3), Image.Resampling.LANCZOS)
+            readings = [
+                self._character_recognizer.predict(np.asarray(image))[0].json["res"]
+                for image in (crop, enlarged)
+            ]
+            answers = [reading["rec_text"].strip() for reading in readings]
+            score = min(float(reading["rec_score"]) for reading in readings)
+            if answers[0] in {"M", "m", "F", "f"} and answers[0].casefold() == answers[1].casefold() and score >= .85:
+                return answers[0], score
+            return None
+        except Exception as exc:
+            raise OfflineOCRError("Focused Sex field recognition failed") from exc
+
+    def _recover_sex_fields(self, image, entries, refinements, regions):
+        import re
+        import cv2
+        from paper_intake import label_pattern
+        from paper_intake_layout import positioned_candidates
+
+        if not regions:
+            return []
+        mapped = positioned_candidates("\n".join(entry["text"] for entry in entries), entries, refinements,
+                                       fallback_sections=set())
+        if mapped is None:
+            return []
+        values, states, _ = mapped
+        recovered = []
+        for section, (left, top, right, bottom) in regions:
+            path = f"{section}.sex"
+            if values[section]["sex"] or states[path] != "unverified_empty":
+                continue
+            block = [e for e in entries if left <= e["bbox"][0] < right and top <= sum(e["bbox"][1::2])/2 < bottom]
+            sex = [e for e in block if re.fullmatch(r"Sex\s*[:.]?", e["text"], re.I)]
+            civil = [e for e in block if re.fullmatch(label_pattern("Civil Status") + r"\s*[:.]?", e["text"], re.I)]
+            if len(sex) != 1 or len(civil) != 1:
+                continue
+            a, b = sex[0]["bbox"], civil[0]["bbox"]
+            height = a[3] - a[1]
+            x1, x2 = a[2]+1, b[0]-2
+            if height < 8 or not height <= x2-x1 <= height*6 or abs(sum(a[1::2])-sum(b[1::2])) > height:
+                continue
+            y1, y2 = max(top, min(a[1], b[1])-round(height*.4)), min(bottom, max(a[3], b[3]))
+            crop = image.crop((x1,y1,x2,y2))
+            gray = np.asarray(crop.convert("L"))
+            ink = (gray < np.percentile(gray, 75)-45).astype("uint8")
+            ink[ink.mean(axis=1) >= .5] = 0  # Ignore the printed horizontal rule.
+            components = cv2.connectedComponentsWithStats(ink)[2][1:]
+            strokes = [(x,y,w,h) for x,y,w,h,area in components
+                       if x > 0 and x+w < crop.width and w >= height*.15 and h >= height*.35 and area >= height]
+            if len(strokes) != 1:
+                continue
+            reading = self._recognize_sex_crop(crop)
+            if reading:
+                text, score = reading
+                x, y, w, h = map(int, strokes[0])
+                recovered.append({"page": sex[0]["page"], "text": text, "engine_score": score,
+                                  "bbox": [x1+x, y1+y, x1+x+w, y1+y+h], "sex_field": section})
+        return recovered
 
     @staticmethod
     def _model_complete(path: Path) -> bool:
@@ -319,6 +391,7 @@ class LocalOCR:
             if target == "full" and _bool_env("LOCAL_OCR_REFINE_INTAKE", True):
                 regions = intake_refinement_regions(entries, original.width, original.height)
                 refinement_started = time.perf_counter()
+                page_refinement_start = len(refinements)
                 for section, (x1, top, x2, bottom) in regions:
                     if x2 <= x1 or bottom <= top:
                         continue
@@ -337,6 +410,10 @@ class LocalOCR:
                         item["region"] = f"{section.split('_', 1)[0]}_refinement"
                     refinements.extend(refined)
                 if regions:
+                    try:
+                        refinements.extend(self._recover_sex_fields(original, entries, refinements[page_refinement_start:], regions))
+                    except OfflineOCRError:
+                        warnings.append(f"Page {page_number}: focused Sex field recognition unavailable; compare with the scan.")
                     page_timings[-1]['refinement_seconds'] = round(time.perf_counter()-refinement_started, 3)
                     page_timings[-1]['refinement_regions'] = len(regions)
             if target == "client":
