@@ -62,24 +62,26 @@ export function ScanViewer({ url, pdf, evidence, focusBox, focusSelection, label
   const scale = fit * zoom;
   const reset = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
   const closeDialog = () => dialog.current?.close();
-  const button = 'min-h-11 rounded border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-700 disabled:opacity-40';
+  const button = 'inline-flex h-8 items-center justify-center rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389] disabled:opacity-40';
 
   return <>
     <section aria-label={fullSize ? 'Full-size original scan' : 'Original scan'} className="flex h-full min-h-0 flex-col bg-slate-100">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-white p-3">
-        <h3 id={fullSize ? 'scan-full-title' : undefined} className="mr-auto font-semibold">{fullSize ? 'Original scan — full-size viewer' : 'Original scan'}</h3>
-        {fullSize ? <button type="button" className={button} onClick={onClose}>Close viewer</button> :
-          <button ref={openButton} type="button" className={`${button} border-purple-700 text-purple-900`} onClick={() => setOpen(true)}>Open full size</button>}
-        {!pdf && <>
-          <button type="button" className={button} onClick={reset}>Fit</button>
-          {fullSize && <button type="button" className={button} onClick={() => { setZoom(Math.max(1, Math.min(16, 1 / Math.max(fit, .01)))); setPan({ x: 0, y: 0 }); }}>Actual size</button>}
-          <button type="button" aria-label="Zoom out" className={button} disabled={zoom <= 1} onClick={() => setZoom(value => Math.max(1, value / 1.4))}>Zoom out</button>
-          <button type="button" aria-label="Zoom in" className={button} disabled={zoom >= 16} onClick={() => setZoom(value => Math.min(16, value * 1.4))}>Zoom in</button>
-          <button type="button" className={button} onClick={() => { setRotation(value => (value + 90) % 360); reset(); }}>Rotate 90°</button>
-          {evidence && <button type="button" className={button} aria-pressed={showHighlight} onClick={() => setShowHighlight(value => !value)}>{showHighlight ? 'Hide highlight' : 'Show highlight'}</button>}
-        </>}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2">
+        <h3 id={fullSize ? 'scan-full-title' : undefined} className="text-xs font-semibold uppercase tracking-wide text-slate-700 sm:text-sm">{fullSize ? 'Original scan — full-size viewer' : 'Original scan'}</h3>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {!pdf && <>
+            <button type="button" className={button} onClick={reset}>Fit</button>
+            {fullSize && <button type="button" className={button} onClick={() => { setZoom(Math.max(1, Math.min(16, 1 / Math.max(fit, .01)))); setPan({ x: 0, y: 0 }); }}>Actual size</button>}
+            <button type="button" aria-label="Zoom out" className={button} disabled={zoom <= 1} onClick={() => setZoom(value => Math.max(1, value / 1.4))}>Zoom out</button>
+            <button type="button" aria-label="Zoom in" className={button} disabled={zoom >= 16} onClick={() => setZoom(value => Math.min(16, value * 1.4))}>Zoom in</button>
+            <button type="button" className={button} onClick={() => { setRotation(value => (value + 90) % 360); reset(); }}>Rotate 90°</button>
+            {evidence && <button type="button" className={button} aria-pressed={showHighlight} onClick={() => setShowHighlight(value => !value)}>{showHighlight ? 'Hide highlight' : 'Show highlight'}</button>}
+          </>}
+          {fullSize ? <button type="button" className={button} onClick={onClose}>Close viewer</button> :
+            <button ref={openButton} type="button" className={`${button} border-[#704389] font-semibold text-[#704389] hover:bg-[#FAF7FC]`} onClick={() => setOpen(true)}>Open full size</button>}
+        </div>
       </div>
-      <p className="shrink-0 px-3 py-2 text-sm text-slate-700" aria-live="polite">{label ? `${label} — ${evidence?.location_kind === 'label_answer_area' ? 'approximate answer area; check for blank or unreadable handwriting' : evidence ? 'source outlined below' : targetBox ? 'source row centered; compare the answer with the scan' : 'compare with the scan'}` : 'Select a field to see its source. Drag or use arrow keys to pan.'}</p>
+      <p className="shrink-0 border-b border-slate-200/80 bg-slate-50/90 px-3 py-1.5 text-xs text-slate-600" aria-live="polite">{label ? `${label} — ${evidence?.location_kind === 'label_answer_area' ? 'approximate answer area; check for blank or unreadable handwriting' : evidence ? 'source outlined below' : targetBox ? 'source row centered; compare the answer with the scan' : 'compare with the scan'}` : 'Select a field to see its source. Drag or use arrow keys to pan.'}</p>
       <div ref={viewport} tabIndex={pdf ? undefined : 0} aria-label="Scan viewport. Drag or use arrow keys to pan. Use zoom controls to enlarge."
         className="relative min-h-0 flex-1 touch-none overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-700"
         onKeyDown={event => { const moves: Record<string, [number, number]> = { ArrowLeft: [40, 0], ArrowRight: [-40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] }; const move = moves[event.key]; if (move) { event.preventDefault(); setPan(position => ({ x: position.x + move[0], y: position.y + move[1] })); } }}

@@ -59,10 +59,11 @@ function validEmail(value: string) {
 }
 
 /** Manual client entry only; this path never uploads a document or invokes OCR. */
-export function ManualClientCreation({ onSaved, onDirtyChange, onReviewChange }: {
+export function ManualClientCreation({ onSaved, onDirtyChange, onReviewChange, onCancel }: {
   onSaved: (client: ClientRecord) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onReviewChange?: (review: boolean) => void;
+  onCancel?: () => void;
 }) {
   const [fields, setFields] = useState<Record<string, string>>(() => ({ ...initialFields }));
   const [spouseNone, setSpouseNone] = useState(false);
@@ -374,10 +375,16 @@ export function ManualClientCreation({ onSaved, onDirtyChange, onReviewChange }:
     <footer className="sticky bottom-0 flex shrink-0 justify-between gap-3 border-t border-[#E5E7EB] bg-white px-5 py-4 sm:px-6">
       {review ? <>
         <button type="button" disabled={saving} onClick={() => { onReviewChange?.(false); setReview(false); setError(''); }} className="intake-secondary">Back to edit</button>
-        <button type="button" disabled={saving} onClick={() => void saveClient()} className="intake-primary disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'Saving client…' : 'Save client'}</button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onCancel && <button type="button" disabled={saving} onClick={onCancel} className="intake-secondary">Cancel</button>}
+          <button type="button" disabled={saving} onClick={() => void saveClient()} className="intake-primary disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'Saving client…' : 'Save client'}</button>
+        </div>
       </> : <>
         <span aria-hidden="true" />
-        <button type="button" onClick={reviewClient} className="intake-primary">Review client</button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onCancel && <button type="button" disabled={saving} onClick={onCancel} className="intake-secondary">Cancel</button>}
+          <button type="button" onClick={reviewClient} className="intake-primary">Review client</button>
+        </div>
       </>}
     </footer>
   </div>;

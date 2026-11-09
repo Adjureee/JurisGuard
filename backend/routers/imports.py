@@ -13,6 +13,7 @@ import models
 from case_import import (
     MAX_WORKBOOK_BYTES,
     extract_case_title_client_names,
+    is_valid_import_nature_of_case,
     normalize_binary_indicator,
     read_workbook,
     resolve_incident_location,
@@ -133,6 +134,8 @@ def register_import_routes(
                 "location_type",
                 "incident_barangay",
             )
+            if case_type == "Criminal":
+                shared_fields = tuple(field for field in shared_fields if field != "nature_of_case")
             for field in shared_fields:
                 value = row.get(field)
                 if value in (None, ""):
@@ -341,12 +344,13 @@ def register_import_routes(
             results.append(
                 {
                     "import_key": f"case-{index + 1}",
+                    "case_type": case_type,
                     "control_no": control_no,
                     "title": fields.get("title") or "",
                     "court": fields.get("court") or "",
                     "case_no": fields.get("case_no") or "",
                     "cause_of_action": fields.get("cause_of_action") or "",
-                    "nature_of_case": fields.get("nature_of_case") or "",
+                    "nature_of_case": fields.get("nature_of_case") or "" if case_type == "Civil" else "",
                     "status": fields.get("status") or "",
                     "last_action": fields.get("last_action") or "",
                     "cause_of_termination": fields.get("cause_of_termination") or "",
@@ -460,8 +464,7 @@ def register_import_routes(
                 or len(control_no) > 20
                 or not title
                 or len(title) > 255
-                or str(entry.get("nature_of_case") or "").strip()
-                not in {"Criminal", "Administrative", "Civil", "Labor", "Appeal"}
+                or not is_valid_import_nature_of_case(payload.case_type, entry.get("nature_of_case"))
                 or status_raw.lower() not in {"pending", "terminated"}
                 or not clients
                 or parse_date(received_raw) is None
@@ -622,7 +625,7 @@ def register_import_routes(
                     form_date=form_date,
                     party_represented=party,
                     applicant_role=party,
-                    nature_of_case=limit_text(entry.get("nature_of_case"), 50),
+                    nature_of_case=limit_text(entry.get("nature_of_case"), 50) if payload.case_type == "Civil" else None,
                 )
                 db.add(intake)
                 db.flush()

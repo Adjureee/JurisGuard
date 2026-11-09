@@ -1254,15 +1254,25 @@ def dashboard_case_categories(
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
 ):
+    case_type_col = getattr(models.Case, "case_type", None)
+    category = (
+        func.coalesce(
+            func.nullif(models.IntakeRecord.nature_of_case, ""),
+            func.nullif(case_type_col, ""),
+            "Uncategorized",
+        )
+        if case_type_col is not None
+        else func.coalesce(func.nullif(models.IntakeRecord.nature_of_case, ""), "Uncategorized")
+    )
     rows = (
         apply_case_date_filters(scoped_case_query(db, user), date_from, date_to)
-        .with_entities(models.IntakeRecord.nature_of_case, func.count(models.Case.case_id).label("total_cases"))
-        .group_by(models.IntakeRecord.nature_of_case)
+        .with_entities(category.label("category"), func.count(models.Case.case_id).label("total_cases"))
+        .group_by(category)
         .order_by(func.count(models.Case.case_id).desc())
         .all()
     )
     categories = [
-        {"category": row.nature_of_case or "Uncategorized", "total_cases": row.total_cases}
+        {"category": row.category or "Uncategorized", "total_cases": row.total_cases}
         for row in rows
     ]
     return categories

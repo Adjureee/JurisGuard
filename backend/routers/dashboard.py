@@ -322,8 +322,12 @@ def register_dashboard_routes(
         for record in cases:
             status = normalize_case_status(record.status_of_case)
             status_counts[status] = status_counts.get(status, 0) + 1
-            if record.client_id:
+            participant_ids = [participant.client_id for participant in record.participants if participant.client_id]
+            if participant_ids:
+                client_ids.extend(participant_ids)
+            elif record.client_id:
                 client_ids.append(record.client_id)
+        client_ids = list(dict.fromkeys(client_ids))
         clients = db.query(models.Client).filter(models.Client.client_id.in_(client_ids[:20])).all() if client_ids else []
         return {
             "assigned_cases": len(cases),

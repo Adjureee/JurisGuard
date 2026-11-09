@@ -67,13 +67,6 @@ export function ManualInputSelectionModal({
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-white/70 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-            >
-              Close
-            </button>
           </header>
           <div className="space-y-3 p-5">
             <button

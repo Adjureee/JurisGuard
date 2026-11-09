@@ -103,6 +103,21 @@ export async function submitCaseSubmission(id: string) {
   return response.data;
 }
 
+export async function startCaseSubmissionReview(id: string) {
+  const response = await apiClient.post<CaseSubmission>(`/case-submissions/${id}/review`);
+  return response.data;
+}
+
+export async function requestCaseSubmissionCorrection(id: string, comments: string) {
+  const response = await apiClient.post<CaseSubmission>(`/case-submissions/${id}/request-correction`, { comments });
+  return response.data;
+}
+
+export async function approveCaseSubmission(id: string) {
+  const response = await apiClient.post<CaseSubmission>(`/case-submissions/${id}/approve`);
+  return response.data;
+}
+
 export async function resubmitCaseSubmission(id: string, payload: CaseSubmissionPayload) {
   const response = await apiClient.post<CaseSubmission>(`/case-submissions/${id}/resubmit`, payload);
   return response.data;

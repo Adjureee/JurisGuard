@@ -757,10 +757,10 @@ export default function CriminalCasesPage({
         />
       )}
       {showScanWorkflowModal && (
-        <ScanIntakeModal onClose={() => setShowScanWorkflowModal(false)} />
+        <ScanIntakeModal caseType={caseType} onClose={() => setShowScanWorkflowModal(false)} />
       )}
       {showUploadWorkflowModal && (
-        <UploadIntakeModal onClose={() => setShowUploadWorkflowModal(false)} />
+        <UploadIntakeModal caseType={caseType} onClose={() => setShowUploadWorkflowModal(false)} />
       )}
       <AddClientModal
         isOpen={showClientModal}

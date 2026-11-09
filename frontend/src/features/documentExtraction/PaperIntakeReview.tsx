@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { ScanViewer } from './ScanViewer';
@@ -21,16 +21,16 @@ function message(error: unknown) {
   return typeof detail === 'string' ? detail : error instanceof Error ? error.message : 'Unable to process intake.';
 }
 
-export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onStageChange, inputMethod = 'both' }: {
-  onSaved?: (client: ClientRecord) => void; saved?: SavedPaperIntake; clientId?: string; onDirtyChange?: (dirty: boolean) => void; onStageChange?: (stage: IntakeStage)=>void; inputMethod?: 'both'|'scan'|'upload';
+export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onStageChange, onCancel, inputMethod = 'both', renderStageFrame }: {
+  onSaved?: (client: ClientRecord) => void; saved?: SavedPaperIntake; clientId?: string; onDirtyChange?: (dirty: boolean) => void; onStageChange?: (stage: IntakeStage)=>void; onCancel?: () => void; inputMethod?: 'both'|'scan'|'upload'; renderStageFrame?: (stage: IntakeStage, content: ReactNode) => ReactNode;
 }) {
   const confirm = useConfirmation();
   const [dirty, setDirty] = useState(false);
   const [activeField, setActiveField] = useState<{ path: string; label: string; selection: number }>();
   const [fieldEvidence, setFieldEvidence] = useState<Record<string, FieldEvidence>>(saved?.candidate_snapshot?.diagnostics.image_preparation?.selected_copy ? {} : saved?.candidate_snapshot?.diagnostics.field_evidence ?? {});
   const [fieldStates, setFieldStates] = useState<Record<string, string>>(saved?.candidate_snapshot?.diagnostics.field_states ?? {});
+  const [extractionWarnings, setExtractionWarnings] = useState<string[]>(saved?.candidate_snapshot?.diagnostics.warnings ?? []);
   const [unreadableFields, setUnreadableFields] = useState<string[]>(saved?.unreadable_fields ?? []);
-  const [mobilePane, setMobilePane] = useState<'scan' | 'fields'>('fields');
   const [pageNumber, setPageNumber] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [pageUrl, setPageUrl] = useState('');
@@ -122,10 +122,11 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
   }, [preview, documentId, pageNumber]);
 
   function applyExtraction(result: PaperExtraction) {
-    setDirty(true); setMobilePane('fields');
+    setDirty(true);
     setActiveField(undefined);
     setFieldEvidence(result.extracted_data.diagnostics.image_preparation?.selected_copy ? {} : result.extracted_data.diagnostics.field_evidence ?? {});
     setFieldStates(result.extracted_data.diagnostics.field_states ?? {});
+    setExtractionWarnings(result.extracted_data.diagnostics.warnings ?? []);
     setUnreadableFields([]);
     setPageCount(result.extracted_data.diagnostics.page_count ?? 1); setPageNumber(1);
     setSourceDraftId(result.source_draft_id);
@@ -146,7 +147,7 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
     const request = extraction.startExtraction('Reading Parts II and II-A…');
     if (!request) return;
     setDirty(true); setRetryFile(file); setRetryOriginal(original);
-    setSections(undefined); setDocumentId(undefined); setPreview(original ?? file); setScanError(''); setOcrFailure(''); setSaveError(''); setSuccess('');
+    setSections(undefined); setDocumentId(undefined); setPreview(original ?? file); setScanError(''); setOcrFailure(''); setExtractionWarnings([]); setSaveError(''); setSuccess('');
     try {
       const result = await extractPaper(file, request.controller.signal, mode, original);
       if (extraction.isCurrentExtraction(request)) {
@@ -209,19 +210,24 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
         const control = (event.target as HTMLElement).closest<HTMLElement>('input, select, label');
         if (control) selectSource(control.dataset.sourcePath);
       }}>
-      <button type="button" onClick={() => { selectSource(); setMobilePane('scan'); requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label^="Scan viewport"]')?.focus()); }} className="float-right rounded px-2 text-xs font-medium text-purple-800 underline lg:hidden" aria-label={`View scan for ${label}`}>View scan</button>
-      <label className="block text-sm font-medium text-slate-700" htmlFor={checkbox ? 'paper-detained-oo' : `paper-${section}-${key}`}>{label}:</label>
-      {!checkbox && original !== undefined && original !== value && <p className="mt-1 text-sm text-slate-600">Original extracted reading: {original || 'No text recognized'}</p>}
-      {!checkbox && suggested === value && ['ocr_failed', 'uncertain'].includes(fieldStates[path]) && <p className="mt-1 text-sm text-amber-800">{value ? 'Check this reading against the scan.' : 'No reliable reading. Check the scan for a blank or unreadable entry.'}</p>}
-      {!checkbox && unreadableFields.includes(path) && <p className="mt-1 text-sm text-amber-800">Marked unreadable after review. The value will remain empty.</p>}
-      {checkbox ? <div className="mt-2 space-y-2">
-        <div className="grid grid-cols-2 gap-3">{(['oo', 'hindi'] as const).map(option => {
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+        <label className="block text-xs font-semibold text-slate-700 sm:text-sm" htmlFor={checkbox ? 'paper-detained-oo' : `paper-${section}-${key}`}>{label}:</label>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => { selectSource(); document.getElementById('review-scan')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label^="Scan viewport"]')?.focus()); }} className="rounded px-1.5 py-0.5 text-xs font-medium text-[#704389] underline underline-offset-2 hover:text-[#542F69] lg:hidden" aria-label={`View scan for ${label}`}>View scan</button>
+          {!checkbox && !readOnly && <button type="button" disabled={busy} aria-pressed={unreadableFields.includes(path)} onClick={() => {
+            if (unreadableFields.includes(path)) { setUnreadableFields(current => current.filter(field => field !== path)); setDirty(true); return; }
+            change(''); setUnreadableFields(current => [...current, path]);
+          }} className="rounded px-1.5 py-0.5 text-xs font-medium text-[#704389] underline underline-offset-2 hover:text-[#542F69]">{unreadableFields.includes(path) ? 'Remove unreadable flag' : 'Mark unreadable'}</button>}
+        </div>
+      </div>
+      {checkbox ? <div className="mt-1.5 space-y-1.5">
+        <div className="grid grid-cols-2 gap-2.5">{(['oo', 'hindi'] as const).map(option => {
           const optionPath = checkboxPrefix + option, state = checkboxStates?.[optionPath] ?? 'unknown';
           const optionLabel = option === 'oo' ? 'Oo' : 'Hindi';
-          return <label key={option} className="block text-sm font-medium">{optionLabel} box
-            {readOnly ? <span className="mt-2 block min-h-11 rounded border bg-slate-50 px-3 py-2">{state === 'checked' ? 'Checked' : state === 'unchecked' ? 'Unchecked' : 'Unknown'}</span> :
+          return <label key={option} className="block text-xs font-medium text-slate-700">{optionLabel} box
+            {readOnly ? <span className="mt-1 block h-9 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm">{state === 'checked' ? 'Checked' : state === 'unchecked' ? 'Unchecked' : 'Unknown'}</span> :
             <select id={`paper-detained-${option}`} data-source-path={optionPath} aria-label={`${optionLabel} box`} value={state} disabled={busy}
-              className="mt-2 min-h-11 w-full rounded border border-slate-300 bg-white px-3 py-2 text-base"
+              className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900"
               onChange={event => {
                 const next = { ...(checkboxStates ?? unknownBoxes()), [optionPath]: event.target.value as CheckboxState };
                 setCheckboxStates(next); change(detainedSummary(next));
@@ -230,44 +236,57 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
             </select>}
           </label>;
         })}</div>
-        {checkboxStates && Object.values(checkboxStates).every(state => state === 'checked') && <p role="status" className="text-sm text-amber-800">Both boxes are marked. Confirm the selections against the scan; no single answer is assumed.</p>}
-        {checkboxStates && Object.values(checkboxStates).some(state => state === 'unknown') && !detainedSummary(checkboxStates) && <p className="text-sm text-amber-800">No single visible selection was identified. Inspect both boxes in the scan; unclear boxes remain unknown.</p>}
-        {checkboxStates && Object.values(checkboxStates).some(state => state === 'unknown') && !!detainedSummary(checkboxStates) && <p role="status" className="text-sm text-slate-600">{detainedSummary(checkboxStates)} is selected from its visible mark. The other box remains unknown unless you verify it as visibly empty.</p>}
+        {checkboxStates && Object.values(checkboxStates).every(state => state === 'checked') && <p role="status" className="text-xs text-amber-800">Both boxes are marked. Confirm the selections against the scan; no single answer is assumed.</p>}
+        {checkboxStates && Object.values(checkboxStates).some(state => state === 'unknown') && !detainedSummary(checkboxStates) && <p className="text-xs text-amber-800">No single visible selection was identified. Inspect both boxes in the scan; unclear boxes remain unknown.</p>}
+        {checkboxStates && Object.values(checkboxStates).some(state => state === 'unknown') && !!detainedSummary(checkboxStates) && <p role="status" className="text-xs text-slate-600">{detainedSummary(checkboxStates)} is selected from its visible mark. The other box remains unknown unless you verify it as visibly empty.</p>}
       </div> : <input id={`paper-${section}-${key}`} type="text" value={value} readOnly={readOnly} disabled={busy}
         ref={section === 'representative_personal_circumstances' && key === 'name' ? representativeNameRef : undefined}
         autoComplete="off" onChange={event => change(event.target.value)}
-        className="mt-2 min-h-11 w-full min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-base disabled:bg-slate-100" />}
-      {!checkbox && !readOnly && <button type="button" disabled={busy} aria-pressed={unreadableFields.includes(path)} onClick={() => {
-        if (unreadableFields.includes(path)) { setUnreadableFields(current => current.filter(field => field !== path)); setDirty(true); return; }
-        change(''); setUnreadableFields(current => [...current, path]);
-      }} className="mt-1 rounded px-2 py-2 text-sm text-purple-800 underline">{unreadableFields.includes(path) ? 'Remove unreadable flag' : 'Mark unreadable'}</button>}
+        className="mt-1 h-9 w-full min-w-0 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 disabled:bg-slate-100" />}
+      {!checkbox && original !== undefined && original !== value && <p className="mt-1 text-xs text-slate-600">Original extracted reading: {original || 'No text recognized'}</p>}
+      {!checkbox && suggested === value && ['ocr_failed', 'uncertain'].includes(fieldStates[path]) && <p className="mt-1 text-xs text-amber-800">{value ? 'Check this reading against the scan.' : 'No reliable reading. Check the scan for a blank or unreadable entry.'}</p>}
+      {!checkbox && unreadableFields.includes(path) && <p className="mt-1 text-xs text-amber-800">Marked unreadable after review. The value will remain empty.</p>}
     </div>;
   }
-  return <div className="flex h-full min-h-0 flex-col [&_button]:min-h-11 [&_button:focus-visible]:outline [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-2 [&_button:focus-visible]:outline-[#704389] [&_input:focus-visible]:outline [&_input:focus-visible]:outline-2 [&_input:focus-visible]:outline-[#704389] [&_select:focus-visible]:outline [&_select:focus-visible]:outline-2 [&_select:focus-visible]:outline-[#704389] [&_a:focus-visible]:outline [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-[#704389]">
+  const content = <div className="flex h-full min-h-0 flex-col [&_button:focus-visible]:outline [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-2 [&_button:focus-visible]:outline-[#704389] [&_input:focus-visible]:outline [&_input:focus-visible]:outline-2 [&_input:focus-visible]:outline-[#704389] [&_select:focus-visible]:outline [&_select:focus-visible]:outline-2 [&_select:focus-visible]:outline-[#704389] [&_a:focus-visible]:outline [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-[#704389]">
     {!saved && <details key={sections ? 'review-settings' : 'scan-setup'} open={!sections}
-      className={sections ? 'max-h-[36dvh] shrink-0 overflow-y-auto border-b px-4 py-2' : 'min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8'}>
-      <summary className={sections ? 'cursor-pointer py-2 text-sm font-semibold' : 'hidden'} tabIndex={sections ? 0 : -1} aria-hidden={!sections}>Replace scan or change OCR settings</summary>
-      <div className={`space-y-5 ${sections ? 'pb-3' : 'mx-auto w-full max-w-5xl pb-8'}`}>
+      className={sections ? 'max-h-[34dvh] shrink-0 overflow-y-auto border-b border-slate-200 bg-slate-50/75 px-4 py-1 sm:px-5' : 'min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 [&_button]:min-h-11'}>
+      <summary className={sections ? 'cursor-pointer select-none py-1 text-xs font-semibold text-[#704389] hover:text-[#542F69]' : 'hidden'} tabIndex={sections ? 0 : -1} aria-hidden={!sections}>Replace scan or change OCR settings</summary>
+      <div className={`space-y-4 ${sections ? 'pt-2 pb-3' : 'mx-auto w-full max-w-5xl pb-8'}`}>
       <PaperDocumentSetup inputMethod={inputMethod} disabled={busy} schemaReady={!!schema} mode={mode} onModeChange={setMode} onExtract={(file,original)=>void scan(file,original)} onPending={pending=>{if(pending||!sections)setDirty(pending);}} onStageChange={setSetupStage}/>
     </div></details>}
-    {extraction.isExtracting && <div role="status" className="shrink-0 space-y-3 border-b bg-[#FAF7FC] px-5 py-4 text-sm text-[#542F69]">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold">Processing captured document</p><p className="mt-1">Extracting Parts II and II-A and preparing the information for review… {extraction.elapsedSeconds}s</p></div>
-        <button type="button" onClick={() => { extraction.cancelExtraction(); setDirty(true); setScanError('OCR stopped. Retry the same scan or choose another.'); }} className="rounded border border-[#704389]/40 bg-white px-4 py-2 font-semibold text-[#704389]">Cancel extraction</button>
+    {extraction.isExtracting && <div role="status" className="shrink-0 space-y-2.5 border-b bg-[#FAF7FC] px-4 py-3 text-xs text-[#542F69] sm:px-5 sm:text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold">Processing captured document</p><p className="mt-0.5">Extracting Parts II and II-A and preparing the information for review… {extraction.elapsedSeconds}s</p></div>
+        <button type="button" onClick={() => { extraction.cancelExtraction(); setDirty(true); setScanError('OCR stopped. Retry the same scan or choose another.'); }} className="h-9 rounded-md border border-[#704389]/40 bg-white px-3 py-1.5 text-xs font-semibold text-[#704389] sm:text-sm">Cancel extraction</button>
       </div>
-      <div role="progressbar" aria-label="Document extraction progress" aria-valuetext="Processing document; progress is indeterminate" className="h-2 overflow-hidden rounded-full bg-[#E5D9EB]"><div className="pao-progress-indeterminate h-full w-1/3 rounded-full bg-[#704389]" /></div>
+      <div role="progressbar" aria-label="Document extraction progress" aria-valuetext="Processing document; progress is indeterminate" className="h-1.5 overflow-hidden rounded-full bg-[#E5D9EB]"><div className="pao-progress-indeterminate h-full w-1/3 rounded-full bg-[#704389]" /></div>
     </div>}
-    {schemaError && <div role="alert" className="flex flex-wrap items-center gap-3 rounded border border-rose-200 bg-rose-50 p-4 text-rose-800"><p>{schemaError}</p><button type="button" onClick={()=>setSchemaAttempt(value=>value+1)} className="min-h-11 rounded border border-rose-300 bg-white px-4 py-2 font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Retry loading intake fields</button></div>}
-    {scanError && <div role="alert" className="flex shrink-0 flex-wrap items-center gap-3 border-b bg-rose-50 px-4 py-2 text-sm text-rose-800"><span>{scanError}</span>{retryFile && !busy && <button type="button" onClick={() => void scan(retryFile, retryOriginal)} className="rounded border border-rose-300 bg-white px-3 py-2 font-semibold">Retry OCR</button>}</div>}
-    {ocrFailure && <p role="alert" className="shrink-0 border-b bg-rose-50 px-4 py-2 text-sm text-rose-800">{ocrFailure}</p>}
-    {sections && <p className="shrink-0 border-b bg-slate-50 px-4 py-2 text-sm text-slate-700">Compare every entry, including the Oo/Hindi boxes, with the complete original scan. Correct the fields before saving.</p>}
-    {sections && <div className="flex shrink-0 gap-2 border-b px-4 lg:hidden" role="group" aria-label="Review view">
-      {(['scan', 'fields'] as const).map(pane => <button type="button" key={pane} aria-pressed={mobilePane === pane} aria-controls={`review-${pane}`} onClick={() => setMobilePane(pane)} className={`px-4 py-2 font-medium ${mobilePane === pane ? 'border-b-2 border-purple-700 text-purple-900' : 'text-slate-600'}`}>{pane === 'scan' ? 'Original scan' : 'Extracted fields'}</button>)}
+    {schemaError && <div role="alert" className="flex flex-wrap items-center gap-3 rounded border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 sm:text-sm"><p>{schemaError}</p><button type="button" onClick={()=>setSchemaAttempt(value=>value+1)} className="h-9 rounded border border-rose-300 bg-white px-3 py-1.5 font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Retry loading intake fields</button></div>}
+    {scanError && <div role="alert" className="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-rose-200 bg-rose-50 px-4 py-1.5 text-xs text-rose-800 sm:px-5"><span>{scanError}</span>{retryFile && !busy && <button type="button" onClick={() => void scan(retryFile, retryOriginal)} className="h-7 rounded border border-rose-300 bg-white px-2.5 py-0.5 text-xs font-semibold">Retry OCR</button>}</div>}
+    {!sections && ocrFailure && <p role="alert" className="shrink-0 border-b border-rose-200 bg-rose-50 px-4 py-1.5 text-xs text-rose-800 sm:px-5">{ocrFailure}</p>}
+    {sections && <div className={`shrink-0 border-b px-4 py-1.5 text-xs sm:px-5 ${ocrFailure ? 'border-rose-200 bg-rose-50/90 text-rose-900' : extractionWarnings.length > 0 ? 'border-amber-200 bg-amber-50/80 text-slate-800' : 'border-slate-200 bg-slate-50/90 text-slate-700'}`}>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-0.5">
+          {ocrFailure && <p role="alert" className="font-semibold text-rose-800">{ocrFailure}</p>}
+          <p className="text-slate-700">Compare every entry, including the Oo/Hindi boxes, with the complete original scan. Correct the fields before saving.</p>
+        </div>
+        {extractionWarnings.length > 0 && (
+          <details className="group text-xs">
+            <summary className="cursor-pointer select-none font-semibold text-amber-900 underline underline-offset-2 hover:text-amber-950">
+              OCR diagnostic notes ({extractionWarnings.length})
+            </summary>
+            <div role="status" className="mt-1.5 max-h-24 space-y-1 overflow-y-auto rounded border border-amber-200/80 bg-white/90 px-2.5 py-1.5 text-xs text-amber-950">
+              {extractionWarnings.map((warning, idx) => <p key={idx}>{warning}</p>)}
+            </div>
+          </details>
+        )}
+      </div>
     </div>}
-    {sections && <div className="grid min-h-0 flex-1 lg:grid-cols-[48%_52%]">
-      <div id="review-scan" className={`${mobilePane === 'scan' ? 'flex' : 'hidden'} min-h-0 flex-col border-r lg:flex`}>
+    {sections && <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[minmax(440px,48%)_minmax(480px,52%)] lg:overflow-hidden">
+      <div id="review-scan" className="flex h-[380px] min-h-[320px] shrink-0 flex-col border-b border-slate-200 lg:h-full lg:min-h-0 lg:border-b-0 lg:border-r">
         {previewUrl ? <>
-          {preview?.type === 'application/pdf' && <div className="flex shrink-0 items-center gap-3 px-3 py-1"><button type="button" disabled={pageNumber <= 1} onClick={() => setPageNumber(p => p - 1)}>Previous page</button><span>Page {pageNumber} of {pageCount}</span><button type="button" disabled={pageNumber >= pageCount} onClick={() => setPageNumber(p => p + 1)}>Next page</button></div>}
-          {pageError && <p role="alert" className="px-3 text-sm text-amber-900">{pageError}</p>}
+          {preview?.type === 'application/pdf' && <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 py-1 text-xs"><button type="button" className="h-7 rounded border border-slate-300 px-2 font-medium disabled:opacity-40" disabled={pageNumber <= 1} onClick={() => setPageNumber(p => p - 1)}>Previous page</button><span>Page {pageNumber} of {pageCount}</span><button type="button" className="h-7 rounded border border-slate-300 px-2 font-medium disabled:opacity-40" disabled={pageNumber >= pageCount} onClick={() => setPageNumber(p => p + 1)}>Next page</button></div>}
+          {pageError && <p role="alert" className="px-3 py-1 text-xs text-amber-900">{pageError}</p>}
           <ScanViewer
             url={pageUrl || previewUrl}
             pdf={preview?.type === 'application/pdf' && !pageUrl}
@@ -278,38 +297,45 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
           />
         </> : <p className="p-8 text-slate-500">The full scan will appear here.</p>}
       </div>
-      <div id="review-fields" className={`${mobilePane === 'fields' ? 'flex' : 'hidden'} min-h-0 flex-col lg:flex`}>
-        <nav aria-label="Interview sheet sections" className="flex shrink-0 flex-wrap gap-2 border-b bg-white px-4 py-2">
-          {sectionOrder.map((section, index) => <button type="button" key={section} className="rounded border border-slate-300 px-3 py-2 text-sm font-semibold" onClick={() => { const node = fieldsRef.current?.querySelector<HTMLElement>(`[data-section="${section}"]`); node?.scrollIntoView({ block: 'start' }); node?.focus({ preventScroll: true }); }}>{index === 0 ? 'Part II · Applicant' : 'Part II-A · Representative'}</button>)}
-        </nav>
-        <div ref={fieldsRef} aria-label="Extracted fields" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable]">
-      {sections && schema && <div className="space-y-6 pb-4">{sectionOrder.map(section => {
+      <div id="review-fields" className="flex min-h-0 flex-1 flex-col bg-slate-50/50 lg:h-full">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-[#FAF7FC] px-4 py-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[#542F69]">Extracted Details</span>
+          <nav aria-label="Interview sheet sections" className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-slate-200/90 bg-white p-0.5 shadow-2xs">
+            {sectionOrder.map((section, index) => <button type="button" key={section} className="h-7 rounded-md px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-[#FAF7FC] hover:text-[#704389]" onClick={() => { const node = fieldsRef.current?.querySelector<HTMLElement>(`[data-section="${section}"]`); node?.scrollIntoView({ block: 'start' }); node?.focus({ preventScroll: true }); }}>{index === 0 ? 'Part II · Applicant' : 'Part II-A · Representative'}</button>)}
+          </nav>
+        </div>
+        <div ref={fieldsRef} aria-label="Extracted fields" className="min-h-0 flex-1 p-3 sm:p-4 [scrollbar-gutter:stable] lg:overflow-y-auto lg:overscroll-contain">
+      {sections && schema && <div className="space-y-4 pb-3">{sectionOrder.map(section => {
         const blankRepresentative = section === 'representative_personal_circumstances' && representativeIsEmpty(sections);
-        return <fieldset key={section} data-section={section} tabIndex={-1} className="min-w-0 scroll-mt-2 border-b border-slate-200 pb-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]">
-          <legend className="px-1 font-semibold">{titles[section]}</legend>
-          {blankRepresentative && <p className="my-3 text-sm text-slate-700">{saved ? 'No representative details provided' : 'No representative text was extracted. Check Part II-A in the scan before leaving it blank.'}</p>}
-          {blankRepresentative && !representativeExpanded ? (!readOnly && <button type="button" onClick={() => { setRepresentativeExpanded(true); requestAnimationFrame(() => representativeNameRef.current?.focus()); }} className="rounded border border-slate-300 bg-white px-4 py-3 text-sm font-semibold">Review representative fields</button>) :
-            <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
+        return <fieldset key={section} data-section={section} tabIndex={-1} className="min-w-0 scroll-mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]">
+          <legend className="px-1 text-sm font-semibold text-slate-800">{titles[section]}</legend>
+          {blankRepresentative && <p className="my-2 text-xs text-slate-600 sm:text-sm">{saved ? 'No representative details provided' : 'No representative text was extracted. Check Part II-A in the scan before leaving it blank.'}</p>}
+          {blankRepresentative && !representativeExpanded ? (!readOnly && <button type="button" onClick={() => { setRepresentativeExpanded(true); requestAnimationFrame(() => representativeNameRef.current?.focus()); }} className="mt-1 inline-flex h-8 items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Review representative fields</button>) :
+            <div className="mt-2 grid gap-x-4 gap-y-3 sm:grid-cols-2">
               <div className="min-w-0 sm:col-span-2">{field(section, ...schema[section][0])}</div>
-              <div className="grid min-w-0 gap-4 sm:col-span-2 sm:grid-cols-3">{schema[section].slice(1, 4).map(([key, label]) => field(section, key, label))}</div>
+              <div className="grid min-w-0 gap-3 sm:col-span-2 sm:grid-cols-3">{schema[section].slice(1, 4).map(([key, label]) => field(section, key, label))}</div>
               {schema[section].slice(4).map(([key, label]) => field(section, key, label))}
             </div>}
         </fieldset>;
       })}</div>}
-    {saved?.field_reviews && <details className="text-sm text-slate-600"><summary className="min-h-11 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]">Previously recorded field notes</summary>
-      <p className="mb-2">These stored notes are retained. Editing the text does not change them.</p>
+    {saved?.field_reviews && <details className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"><summary className="cursor-pointer py-0.5 font-medium text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]">Previously recorded field notes</summary>
+      <p className="mt-1.5 mb-1">These stored notes are retained. Editing the text does not change them.</p>
       {sectionOrder.flatMap(section => (schema?.[section] ?? []).map(([key, label]) => {
         const state = saved.field_reviews?.[`${section}.${key}`];
         return state ? <p key={`${section}.${key}`}>{section === 'applicant_personal_circumstances' ? 'Part II' : 'Part II-A'} — {label}: {reviewLabels[state]}</p> : null;
       }))}</details>}
-    {!readOnly && documentId && <details className="text-sm text-slate-600"><summary className="min-h-11 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]">Re-read the original scan</summary><p className="mb-3">Replaces unsaved edits with a new draft. The original scan and saved record stay unchanged until you save.</p><button type="button" disabled={busy} onClick={() => void reread()} className="rounded border border-slate-300 px-5 py-3 font-semibold">Re-extract original scan</button></details>}
+    {!readOnly && documentId && <details className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"><summary className="cursor-pointer py-0.5 font-medium text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]">Re-read the original scan</summary><p className="mt-1.5 mb-2">Replaces unsaved edits with a new draft. The original scan and saved record stay unchanged until you save.</p><button type="button" disabled={busy} onClick={() => void reread()} className="h-8 rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Re-extract original scan</button></details>}
     </div></div></div>}
-    {!readOnly && sections && <div className="shrink-0 space-y-2 border-t bg-white px-4 py-3">
-      {saveError && <div ref={errorRef} tabIndex={-1} role="alert" className="rounded border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 focus:outline focus:outline-2 focus:outline-rose-700">{saveError}</div>}
-      {success && <p role="status" className="rounded bg-emerald-50 p-3 font-medium text-emerald-800">{success}</p>}
-      <div className="flex flex-wrap items-center justify-between gap-4"><p className="text-sm text-slate-600">Compare both sections with the scan before saving.</p>
-        <button type="button" disabled={busy || !schema} onClick={() => void save()} className="rounded bg-[#704389] px-6 py-3 font-semibold text-white hover:bg-[#5f3675] disabled:opacity-50">{saving ? 'Saving reviewed record…' : 'Save reviewed record'}</button>
+    {!readOnly && sections && <div className="shrink-0 space-y-1.5 border-t border-slate-200 bg-white px-4 py-2.5 sm:px-5">
+      {saveError && <div ref={errorRef} tabIndex={-1} role="alert" className="rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 focus:outline focus:outline-2 focus:outline-rose-700 sm:text-sm">{saveError}</div>}
+      {success && <p role="status" className="rounded bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 sm:text-sm">{success}</p>}
+      <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-600 sm:text-sm">Compare both sections with the scan before saving.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          {onCancel && <button type="button" disabled={saving} onClick={onCancel} className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50 disabled:opacity-50">Cancel</button>}
+          <button type="button" disabled={busy || !schema} onClick={() => void save()} className="inline-flex h-9 items-center justify-center rounded-lg bg-[#704389] px-4 py-1.5 text-sm font-semibold text-white shadow-xs transition hover:bg-[#5f3675] disabled:opacity-50">{saving ? 'Saving reviewed record…' : 'Save reviewed record'}</button>
+        </div>
       </div>
     </div>}
   </div>;
+  return renderStageFrame ? <>{renderStageFrame(stage, content)}</> : content;
 }

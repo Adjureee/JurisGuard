@@ -5,20 +5,30 @@ import MainLayout from "../layouts/MainLayout";
 import DateFilterSelect from "../components/DateFilterSelect";
 import PageHeader from "../components/PageHeader";
 import ModalPortal from "../components/modals/ModalPortal";
+import { useAuth } from "../contexts/AuthContext";
+import { useAuditLogStore } from "../features/auditLogs/auditLogStore";
 import { useNotificationStore } from "../features/notifications/notificationStore";
 import ProtectedProfileImage from "../components/ProtectedProfileImage";
+import { createAuditLog } from "../services/auditService";
 import {
+  approveCaseSubmission,
   createCaseSubmission,
   getCaseSubmission,
   getCaseSubmissionHistory,
   listCaseSubmissions,
   previewCaseSubmission,
+  requestCaseSubmissionCorrection,
   resubmitCaseSubmission,
+  startCaseSubmissionReview,
   submitCaseSubmission,
   updateCaseSubmission,
   type CaseSubmission,
   type SubmissionSnapshot,
 } from "../services/caseSubmissionService";
+import {
+  buildCriminalCasesExcelHtml,
+  type CriminalCaseRow,
+} from "../services/exportService";
 import {
   matchesDateFilter,
   type DateFilterValue,
@@ -53,6 +63,16 @@ function initials(name: string) {
     .toUpperCase();
 }
 
+function downloadText(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function statusClass(status: string) {
   const normalizedStatus = normalizeStatus(status);
   if (normalizedStatus === "Approved") return "bg-[#ECFDF5] text-[#065F46]";
@@ -82,15 +102,26 @@ function reviewRoundFor(
   ).length;
 }
 
+function snapshotRows(items: SubmissionSnapshot[]): CriminalCaseRow[] {
+  return items.map((item) => ({
+    record: item.record,
+    client: item.client ?? undefined,
+    clientName: item.client_name,
+  }));
+}
+
 type ReportModalMode = "create" | "edit-draft" | "revise";
 
 export default function CaseSubmissionsPage() {
+  const { user } = useAuth();
+  const addLog = useAuditLogStore((state) => state.addLog);
   const addNotification = useNotificationStore(
     (state) => state.addNotification,
   );
   const [submissions, setSubmissions] = useState<CaseSubmission[]>([]);
   const [selected, setSelected] = useState<CaseSubmission | null>(null);
   const [history, setHistory] = useState<CaseSubmission[]>([]);
+  const [feedbackText, setFeedbackText] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingSubmissions, setLoadingSubmissions] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -117,6 +148,7 @@ export default function CaseSubmissionsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("all");
 
+  const isAdmin = user?.role === "admin";
   const selectedStatus = selected ? normalizeStatus(selected.status) : "";
   const orderedHistory = useMemo(
     () => [...history].sort((left, right) => left.version - right.version),
@@ -212,12 +244,18 @@ export default function CaseSubmissionsPage() {
   }, []);
 
   const openSubmission = async (submission: CaseSubmission) => {
+    const status = normalizeStatus(submission.status);
+    const reviewed =
+      isAdmin && (status === "Submitted" || status === "Resubmitted")
+        ? await startCaseSubmissionReview(submission.submission_id)
+        : submission;
     const [details, historyRows] = await Promise.all([
-      getCaseSubmission(submission.submission_id),
-      getCaseSubmissionHistory(submission.submission_id),
+      getCaseSubmission(reviewed.submission_id),
+      getCaseSubmissionHistory(reviewed.submission_id),
     ]);
     setSelected(details);
     setHistory(historyRows);
+    if (reviewed.status !== submission.status) await loadSubmissions();
   };
 
   const openCreateModal = () => {
@@ -300,7 +338,7 @@ export default function CaseSubmissionsPage() {
           targetRole: "admin",
           title: "Report Resubmitted",
           message: `${updated.staff_name} resubmitted ${updated.title} version ${updated.version}`,
-          redirectTo: "/dashboard",
+          redirectTo: "/case-review-center",
           entityType: "case_submission",
           entityId: updated.submission_id,
         });
@@ -319,13 +357,13 @@ export default function CaseSubmissionsPage() {
 
   const submitDraft = async (submission: CaseSubmission) => {
     const updated = await submitCaseSubmission(submission.submission_id);
-    toast.success("Report submitted");
+    toast.success("Report submitted to admin");
     addNotification({
       type: "workflow",
       targetRole: "admin",
       title: "Draft Submitted",
       message: `${updated.staff_name} submitted ${updated.title}`,
-      redirectTo: "/dashboard",
+      redirectTo: "/case-review-center",
       entityType: "case_submission",
       entityId: updated.submission_id,
     });
@@ -333,23 +371,105 @@ export default function CaseSubmissionsPage() {
     await openSubmission(updated);
   };
 
+  const requestCorrection = async () => {
+    if (!selected || !feedbackText.trim()) return;
+    const updated = await requestCaseSubmissionCorrection(
+      selected.submission_id,
+      feedbackText.trim(),
+    );
+    toast.success("Correction request sent");
+    addNotification({
+      type: "workflow",
+      userId: updated.staff_id,
+      title: "Correction Requested",
+      message: `${updated.title} version ${updated.version} requires correction: ${feedbackText.trim()}`,
+      redirectTo: "/case-submissions",
+      entityType: "case_submission",
+      entityId: updated.submission_id,
+    });
+    setFeedbackText("");
+    await loadSubmissions();
+    await openSubmission(updated);
+  };
+
+  const approveSubmission = async () => {
+    if (!selected) return;
+    const updated = await approveCaseSubmission(selected.submission_id);
+    toast.success("Report approved");
+    addNotification({
+      type: "workflow",
+      userId: updated.staff_id,
+      title: "Report Approved",
+      message: `${updated.title} version ${updated.version} has been approved.`,
+      redirectTo: "/case-submissions",
+      entityType: "case_submission",
+      entityId: updated.submission_id,
+    });
+    await loadSubmissions();
+    await openSubmission(updated);
+  };
+
+  const exportSubmission = async () => {
+    if (!selected || selected.status === "Draft" || !isAdmin) return;
+    const rows = snapshotRows(selected.items.map((item) => item.snapshot));
+    const filters = {
+      status: "All" as const,
+      date_from: "",
+      date_to: "",
+      location_type: "All" as const,
+      barangay: "All",
+      case_category: "All",
+      gender: "All" as const,
+      staff: "All",
+      ocr_status: "All",
+      termination_status: "All",
+    };
+    const stamp = new Date().toISOString().slice(0, 10);
+    try {
+      await createAuditLog({
+        action: "Export Excel", module: "Export",
+        entity_type: "case_submission", entity_id: selected.submission_id,
+      });
+    } catch {
+      toast.error("Unable to record the submission export. Please retry.");
+      return;
+    }
+    downloadText(
+      `report-submission-${selected.submission_id}_${stamp}.xls`,
+      buildCriminalCasesExcelHtml(rows, filters),
+      "application/vnd.ms-excel;charset=utf-8",
+    );
+    addLog({
+      userId: user?.user_id,
+      user: user?.full_name || user?.email,
+      action: "Version Exported",
+      module: "Export",
+      description: `Exported ${selected.title} version ${selected.version} as EXCEL`,
+      entityType: "case_submission",
+      entityId: selected.submission_id,
+    });
+    toast.success("EXCEL exported");
+  };
+
   return (
     <MainLayout>
       <div className="flex h-[calc(100vh-110px)] min-w-0 max-w-full flex-col gap-4 overflow-hidden">
         <div className="shrink-0">
           <PageHeader
-            eyebrow="Case Submissions"
-            title="Report Management"
-            description="Create, submit, and manage your report drafts and corrections."
+            eyebrow={isAdmin ? "Case Review Center" : "Case Submissions"}
+            title={isAdmin ? "Supervisory Report Review" : "Report Management"}
+            description="Internal PAO report review workflow with snapshots, correction tracking, version history, and approved export packages."
             compact
             actions={
-              <button
-                type="button"
-                onClick={openCreateModal}
-                className="h-9 rounded-lg bg-[#704389] px-3.5 text-sm font-semibold text-white hover:bg-[#5F3675]"
-              >
-                Create Report
-              </button>
+              !isAdmin ? (
+                <button
+                  type="button"
+                  onClick={openCreateModal}
+                  className="h-9 rounded-lg bg-[#704389] px-3.5 text-sm font-semibold text-white hover:bg-[#5F3675]"
+                >
+                  Create Report
+                </button>
+              ) : null
             }
           />
         </div>
@@ -364,7 +484,11 @@ export default function CaseSubmissionsPage() {
               type="text"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search report, period, status..."
+              placeholder={
+                isAdmin
+                  ? "Search staff, report, status..."
+                  : "Search report, period, status..."
+              }
               className="mt-1 h-9 w-full rounded-md border border-[#D1D5DB] bg-white px-3 text-sm text-[#2B3642] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
             />
           </label>
@@ -394,20 +518,30 @@ export default function CaseSubmissionsPage() {
           </div>
         </div>
         <div className="relative min-h-0 max-w-full flex-1 overflow-y-auto overflow-x-auto rounded-lg border border-[#CBD5E1]">
-          <StaffSubmissionTable
-            error={loadError}
-            loading={loadingSubmissions}
-            submissions={filteredSubmissions}
-            onOpen={(submission) => void openSubmission(submission)}
-            onEdit={(submission) =>
-              void openEditModal(submission, "edit-draft")
-            }
-            onRevise={(submission) =>
-              void openEditModal(submission, "revise")
-            }
-            onSubmit={(submission) => void submitDraft(submission)}
-            onRetry={() => void loadSubmissions().catch(() => undefined)}
-          />
+          {isAdmin ? (
+            <AdminSubmissionTable
+              error={loadError}
+              loading={loadingSubmissions}
+              submissions={filteredSubmissions}
+              onOpen={(submission) => void openSubmission(submission)}
+              onRetry={() => void loadSubmissions().catch(() => undefined)}
+            />
+          ) : (
+            <StaffSubmissionTable
+              error={loadError}
+              loading={loadingSubmissions}
+              submissions={filteredSubmissions}
+              onOpen={(submission) => void openSubmission(submission)}
+              onEdit={(submission) =>
+                void openEditModal(submission, "edit-draft")
+              }
+              onRevise={(submission) =>
+                void openEditModal(submission, "revise")
+              }
+              onSubmit={(submission) => void submitDraft(submission)}
+              onRetry={() => void loadSubmissions().catch(() => undefined)}
+            />
+          )}
         </div>
       </section>
       </div>
@@ -615,6 +749,25 @@ export default function CaseSubmissionsPage() {
                         ))
                       )}
                     </div>
+                    {isAdmin &&
+                      selectedIsLatest &&
+                      selectedStatus !== "Approved" &&
+                      selectedStatus !== "Draft" && (
+                        <textarea
+                          value={feedbackText}
+                          onChange={(event) =>
+                            setFeedbackText(event.target.value)
+                          }
+                          placeholder="Correction notes"
+                          className="mt-4 min-h-24 w-full rounded-lg border border-[#D1D5DB] px-3 py-2 text-sm focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+                        />
+                      )}
+                    {isAdmin && !selectedIsLatest && (
+                      <p className="mt-4 rounded-lg bg-[#F9FAFB] p-3 text-sm text-[#6B7280]">
+                        Historical versions are read-only for review actions.
+                        Export remains available.
+                      </p>
+                    )}
                   </section>
                 </div>
               </div>
@@ -626,7 +779,7 @@ export default function CaseSubmissionsPage() {
                 >
                   Close
                 </button>
-                {selectedIsLatest && selectedStatus === "Draft" && (
+                {!isAdmin && selectedIsLatest && selectedStatus === "Draft" && (
                   <button
                     type="button"
                     onClick={() => void openEditModal(selected, "edit-draft")}
@@ -635,7 +788,7 @@ export default function CaseSubmissionsPage() {
                     Edit Draft
                   </button>
                 )}
-                {selectedIsLatest && selectedStatus === "Draft" && (
+                {!isAdmin && selectedIsLatest && selectedStatus === "Draft" && (
                   <button
                     type="button"
                     onClick={() => void submitDraft(selected)}
@@ -644,7 +797,8 @@ export default function CaseSubmissionsPage() {
                     Submit Report
                   </button>
                 )}
-                {selectedIsLatest &&
+                {!isAdmin &&
+                  selectedIsLatest &&
                   selectedStatus === "Correction Required" && (
                     <button
                       type="button"
@@ -654,6 +808,39 @@ export default function CaseSubmissionsPage() {
                       Revise Report
                     </button>
                   )}
+                {isAdmin &&
+                  selectedIsLatest &&
+                  selectedStatus !== "Approved" &&
+                  selectedStatus !== "Draft" && (
+                    <button
+                      type="button"
+                      onClick={() => void requestCorrection()}
+                      className="rounded-lg border border-[#F59E0B] bg-white px-4 py-2 text-sm font-semibold text-[#92400E] hover:bg-[#FFFBEB]"
+                    >
+                      Request Correction
+                    </button>
+                  )}
+                {isAdmin &&
+                  selectedIsLatest &&
+                  selectedStatus !== "Approved" &&
+                  selectedStatus !== "Draft" && (
+                    <button
+                      type="button"
+                      onClick={() => void approveSubmission()}
+                      className="rounded-lg bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675]"
+                    >
+                      Approve Report
+                    </button>
+                  )}
+                {isAdmin && selectedStatus !== "Draft" && (
+                  <button
+                    type="button"
+                    onClick={() => void exportSubmission()}
+                    className="rounded-lg bg-[#704389] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F3675]"
+                  >
+                    Export Excel
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -763,6 +950,85 @@ function StaffSubmissionTable({
                       </button>
                     )}
                   </div>
+                </td>
+              </tr>
+            );
+          })}
+        </SubmissionTableRows>
+      </tbody>
+    </table>
+  );
+}
+
+function AdminSubmissionTable({
+  error,
+  loading,
+  submissions,
+  onOpen,
+  onRetry,
+}: {
+  error: string;
+  loading: boolean;
+  submissions: CaseSubmission[];
+  onOpen: (submission: CaseSubmission) => void;
+  onRetry: () => void;
+}) {
+  return (
+    <table className="w-full min-w-[920px] text-sm">
+      <thead className="sticky top-0 z-10 border-b border-[#D1D5DB] bg-[#E5E7EB] text-xs uppercase tracking-wide text-[#374151]">
+        <tr>
+          <th className="px-3 py-3 text-left font-semibold">Submitted By</th>
+          <th className="px-3 py-3 text-left font-semibold">Submission</th>
+          <th className="px-3 py-3 text-left font-semibold">Period</th>
+          <th className="px-3 py-3 text-left font-semibold">Cases</th>
+          <th className="px-3 py-3 text-left font-semibold">Status</th>
+          <th className="px-3 py-3 text-left font-semibold">Submitted</th>
+          <th className="px-3 py-3 text-right font-semibold">Actions</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-[#E5E7EB]">
+        <SubmissionTableRows
+          colSpan={7}
+          emptyMessage="No submitted staff reports are ready for review yet."
+          error={error}
+          loading={loading}
+          onRetry={onRetry}
+        >
+          {submissions.map((submission) => {
+            const status = normalizeStatus(submission.status);
+            return (
+              <tr key={submission.submission_id} className="odd:bg-white even:bg-[#F9FAFB] transition duration-200 hover:bg-[#F3F7FB]">
+                <td className="px-3 py-4">
+                  <StaffIdentity submission={submission} />
+                </td>
+                <td className="px-3 py-4 font-semibold text-[#2B3642]">
+                  {submission.title}
+                </td>
+                <td className="px-3 py-4 text-[#4B5563]">
+                  {formatDate(submission.date_from)} -{" "}
+                  {formatDate(submission.date_to)}
+                </td>
+                <td className="px-3 py-4 text-[#4B5563]">
+                  {submission.case_count}
+                </td>
+                <td className="px-3 py-4">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusClass(status)}`}
+                  >
+                    {status}
+                  </span>
+                </td>
+                <td className="px-3 py-4 text-[#4B5563]">
+                  {formatDate(submission.submitted_at)}
+                </td>
+                <td className="px-3 py-4 text-right">
+                  <button
+                    type="button"
+                    onClick={() => onOpen(submission)}
+                    className="rounded-md bg-[#704389] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#5F3675]"
+                  >
+                    View Report
+                  </button>
                 </td>
               </tr>
             );
@@ -989,6 +1255,22 @@ function VersionHistoryTable({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function StaffIdentity({ submission }: { submission: CaseSubmission }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F7F0FA] text-xs font-bold text-[#704389]">
+        <ProtectedProfileImage path={submission.staff_profile_image_path} className="h-full w-full object-cover" fallback={initials(submission.staff_name)} />
+      </div>
+      <div>
+        <p className="font-semibold text-[#2B3642]">{submission.staff_name}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+          {submission.staff_role}
+        </p>
+      </div>
     </div>
   );
 }

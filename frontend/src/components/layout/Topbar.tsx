@@ -181,7 +181,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
               targetRole: "admin",
               title: submission.version > 1 ? "Submission Resubmitted" : "New Submission Received",
               message: `${submission.staff_name} submitted ${submission.title}`,
-              redirectTo: "/dashboard",
+              redirectTo: "/case-review-center",
               entityType: "case_submission",
               entityId: `${submission.submission_id}-${submission.status}-v${submission.version}`,
             });
