@@ -307,7 +307,61 @@ export async function getDashboardOverview(range?: DashboardDateRange) {
 }
 
 export async function getDashboardIntelligenceBrief() {
-  const response = await apiClient.get<DashboardIntelligenceBrief>("/dashboard/intelligence-brief");
+  const [overviewResult, intakeResult, barangayResult, categoryResult, submissionsResult, casesResult] =
+    await Promise.allSettled([
+      getDashboardOverview(),
+      getIntakeLoadAnalytics(),
+      getBarangayStats(),
+      getCaseCategories(),
+      apiClient.get<Array<{ status?: string }>>("/case-submissions", { timeout: 20000 }),
+      apiClient.get<Array<{ case_type?: string }>>("/cases/", { params: { case_type: "All" }, timeout: 20000 }),
+    ]);
+  if (overviewResult.status === "rejected" && casesResult.status === "rejected") {
+    throw overviewResult.reason;
+  }
+  const overview = overviewResult.status === "fulfilled" ? overviewResult.value : null;
+  const intakeLoad = intakeResult.status === "fulfilled" ? intakeResult.value : null;
+  const barangays = barangayResult.status === "fulfilled" && Array.isArray(barangayResult.value) ? barangayResult.value : [];
+  const categories = categoryResult.status === "fulfilled" && Array.isArray(categoryResult.value) ? categoryResult.value : [];
+  const submissions =
+    submissionsResult.status === "fulfilled" && Array.isArray(submissionsResult.value.data)
+      ? submissionsResult.value.data
+      : [];
+  const cases =
+    casesResult.status === "fulfilled" && Array.isArray(casesResult.value.data)
+      ? casesResult.value.data
+      : null;
+  const totalCases = overview?.total_cases ?? cases?.length ?? 0;
+  const criminalCases = cases
+    ? cases.filter((item) => (item.case_type || "Criminal").toLowerCase() === "criminal").length
+    : categories
+        .filter((row) => row.category.toLowerCase().includes("criminal"))
+        .reduce((sum, row) => sum + row.total_cases, 0);
+  const civilCases = cases
+    ? cases.filter((item) => (item.case_type || "").toLowerCase() === "civil").length
+    : Math.max(totalCases - criminalCases, 0);
+  const reviewStatuses = new Set(["Submitted", "Under Review", "Resubmitted"]);
+  const pendingReviews = submissions.filter((item) => item.status && reviewStatuses.has(item.status)).length;
+  const topBarangay = barangays.find((row) => row.total_cases > 0)?.barangay ?? null;
+  const leadingCategory = categories.find((row) => row.total_cases > 0)?.category ?? null;
+  const busiestDay =
+    intakeLoad?.busiest_day && intakeLoad.busiest_day.total_cases > 0 ? intakeLoad.busiest_day.day : null;
+  const busiestHour =
+    intakeLoad?.busiest_hour && intakeLoad.busiest_hour.total_cases > 0 ? intakeLoad.busiest_hour.hour : null;
+  const response: { data: DashboardIntelligenceBrief } = {
+    data: {
+      total_cases: totalCases,
+      active_cases: overview?.active_cases ?? 0,
+      criminal_cases: criminalCases,
+      civil_cases: civilCases,
+      cases_this_month: overview?.cases_this_month ?? 0,
+      busiest_day: busiestDay,
+      busiest_hour: busiestHour,
+      top_barangay: topBarangay,
+      leading_category: leadingCategory,
+      pending_reviews: pendingReviews,
+    },
+  };
   return response.data;
 }
 

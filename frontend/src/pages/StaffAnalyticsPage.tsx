@@ -88,7 +88,6 @@ export default function StaffAnalyticsPage() {
     heatmap,
     terminatedStats,
     ocrAnalytics,
-    overview,
     error: analyticsError,
     retry: retryTrends,
     isLoading: trendsLoading,
@@ -146,7 +145,6 @@ export default function StaffAnalyticsPage() {
     [terminatedStats],
   );
 
-  const intakeTotal = useMemo(() => monthlyTrends.reduce((total, row) => total + row.total_cases, 0), [monthlyTrends]);
   const categoryTotal = caseTypes.reduce((total, row) => total + row.total_cases, 0);
 
   const applyPreset = (preset: AnalyticsPreset) => {
@@ -231,15 +229,6 @@ export default function StaffAnalyticsPage() {
         <div className="mt-6"><EmptyState message="Personal analytics could not be loaded. Use Retry analytics to try again." /></div>
       ) : (
         <>
-          <dl aria-label="Personal period summary" className="mt-6 grid grid-cols-2 divide-x divide-[#E5E7EB] rounded-xl border border-[#CBD5E1] bg-white lg:grid-cols-4">
-            {[
-              ["Cases received", overview?.cases_in_range ?? intakeTotal],
-              ["Clients registered", overview?.clients_in_range ?? 0],
-              ["Cases terminated", terminatedStats?.total ?? overview?.range_terminated_cases ?? 0],
-              ["Documents uploaded", ocrAnalytics?.total_scans ?? 0],
-            ].map(([label, value]) => <div key={label} className="min-w-0 px-5 py-4"><dt className="text-sm text-[#4B5563]">{label}</dt><dd className="mt-1 text-3xl font-semibold tabular-nums text-[#2B3642]">{Number(value).toLocaleString()}</dd></div>)}
-          </dl>
-
           <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
             <AnalyticsPanel title="Client locations" subtitle="Unique clients grouped by recorded address in the selected registration period." headerClassName="rounded-t-xl bg-[#604477]">
               {heatmap && heatmap.barangays.length > 0 ? (
@@ -274,7 +263,7 @@ export default function StaffAnalyticsPage() {
             </AnalyticsPanel>
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="mt-6 grid gap-6 xl:grid-cols-2">
             <AnalyticsPanel title="Case Intake Trends" subtitle="Case movement from your currently assigned cases." headerClassName="rounded-t-xl bg-[#604477]">
               {displayMonthlyTrends.length === 0 ? <EmptyState message="No personal case productivity data is available yet." /> : (
                 <div className="h-72">
@@ -383,4 +372,3 @@ export default function StaffAnalyticsPage() {
     </MainLayout>
   );
 }
-

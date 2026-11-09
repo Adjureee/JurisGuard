@@ -440,43 +440,104 @@ export default function CalendarReminders() {
     const key = dateKey(date);
     const events = remindersByDate.get(key) ?? [];
     const holidayEvents = holidaysByDate.get(key) ?? [];
+    const maxVisibleEvents = compact ? (holidayEvents.length > 0 ? 1 : 2) : 2;
+    const visibleEvents = events.slice(0, maxVisibleEvents);
+    const hiddenEventCount = Math.max(0, events.length - visibleEvents.length);
     return (
-      <div key={key} className={`flex min-w-0 flex-col border-r border-b border-[#E5E7EB] ${compact ? "min-h-[84px] p-1" : "min-h-[118px] p-2"}`}>
+      <div
+        key={key}
+        data-calendar-date={key}
+        className={`flex min-w-0 flex-col overflow-hidden border-r border-b border-[#E5E7EB] bg-white ${
+          compact ? "h-[112px] p-1.5" : "min-h-[118px] p-2"
+        }`}
+      >
         <button
           type="button"
           onClick={() => chooseDate(date)}
-          className={`mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-            key === todayKey ? "bg-[#704389] text-white" : key === dateKey(selectedDate) ? "bg-[#F7F0FA] text-[#704389]" : "text-[#4B5563] hover:bg-[#F3F4F6]"
+          className={`!min-h-0 mb-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+            key === todayKey
+              ? "bg-[#704389] text-white"
+              : key === dateKey(selectedDate)
+                ? "bg-[#F7F0FA] text-[#704389]"
+                : "text-[#4B5563] hover:bg-[#F3F4F6]"
           }`}
           aria-label={`Show reminders for ${formatDate(date)}`}
         >
           {date.getDate()}
         </button>
-        <div className="min-w-0 space-y-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
           {compact && holidayEvents.length > 1 ? (
-            <button type="button" onClick={() => { chooseDate(date); setCalendarView("day"); }} title={holidayEvents.map((holiday) => `${holiday.name} - ${holiday.classification}`).join(", ")} className={`flex w-full min-w-0 items-center gap-1 rounded-sm border px-1 py-0.5 text-left text-[10px] leading-4 ${holidayEvents.every((holiday) => holiday.coverage === "National") ? "border-red-200 bg-red-50 text-[#DC2626] hover:bg-red-100" : holidayEvents.every((holiday) => holiday.coverage !== "National") ? "border-green-200 bg-green-50 text-[#16A34A] hover:bg-green-100" : "border-[#E5E7EB] bg-white text-[#2B3642] hover:bg-[#F9FAFB]"}`}>
-              {holidayEvents.some((holiday) => holiday.coverage === "National") && <span aria-label="National holiday" className="h-2 w-2 shrink-0 rounded-full bg-[#DC2626]" />}{holidayEvents.some((holiday) => holiday.coverage !== "National") && <span aria-label="Local holiday" className="h-2 w-2 shrink-0 rounded-full bg-[#16A34A]" />}<span className="truncate">{holidayEvents.length} holidays</span>
+            <button
+              type="button"
+              onClick={() => {
+                chooseDate(date);
+                setCalendarView("day");
+              }}
+              title={holidayEvents.map((holiday) => `${holiday.name} - ${holiday.classification}`).join(", ")}
+              className={`!min-h-0 flex h-5 w-full min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-[10px] leading-4 ${
+                holidayEvents.every((holiday) => holiday.coverage === "National")
+                  ? "border-red-200 bg-red-50 text-[#DC2626] hover:bg-red-100"
+                  : holidayEvents.every((holiday) => holiday.coverage !== "National")
+                    ? "border-green-200 bg-green-50 text-[#16A34A] hover:bg-green-100"
+                    : "border-[#E5E7EB] bg-white text-[#2B3642] hover:bg-[#F9FAFB]"
+              }`}
+            >
+              {holidayEvents.some((holiday) => holiday.coverage === "National") && (
+                <span aria-label="National holiday" className="h-2 w-2 shrink-0 rounded-full bg-[#DC2626]" />
+              )}
+              {holidayEvents.some((holiday) => holiday.coverage !== "National") && (
+                <span aria-label="Local holiday" className="h-2 w-2 shrink-0 rounded-full bg-[#16A34A]" />
+              )}
+              <span className="min-w-0 flex-1 truncate font-medium">{holidayEvents.length} holidays</span>
             </button>
-          ) : holidayEvents.slice(0, compact ? 1 : holidayEvents.length).map((holiday) => (
-            <button key={holiday.holiday_id} type="button" onClick={() => { setActiveReminder(null); setActiveHoliday(holiday); }} title={`${holiday.name} - ${holiday.classification} (${holiday.geographic_scope})`} className={`flex w-full min-w-0 items-center gap-1 rounded-sm border px-1 py-0.5 text-left text-[10px] leading-4 ${holiday.coverage === "National" ? "border-red-200 bg-red-50 text-[#DC2626] hover:bg-red-100" : "border-green-200 bg-green-50 text-[#16A34A] hover:bg-green-100"}`}>
-              <span className="truncate">{holiday.name}</span>
-            </button>
-          ))}
-          {events.slice(0, compact ? 1 : 2).map((reminder) => (
+          ) : (
+            holidayEvents.slice(0, compact ? 1 : holidayEvents.length).map((holiday) => (
+              <button
+                key={holiday.holiday_id}
+                type="button"
+                onClick={() => {
+                  setActiveReminder(null);
+                  setActiveHoliday(holiday);
+                }}
+                title={`${holiday.name} - ${holiday.classification} (${holiday.geographic_scope})`}
+                className={`!min-h-0 flex h-5 w-full min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-[10px] leading-4 ${
+                  holiday.coverage === "National"
+                    ? "border-red-200 bg-red-50 text-[#DC2626] hover:bg-red-100"
+                    : "border-green-200 bg-green-50 text-[#16A34A] hover:bg-green-100"
+                }`}
+              >
+                <span className="min-w-0 flex-1 truncate font-medium">{holiday.name}</span>
+              </button>
+            ))
+          )}
+          {visibleEvents.map((reminder) => (
             <button
               key={reminder.reminder_id}
               type="button"
               onClick={() => setActiveReminder(reminder)}
               title={reminder.title}
-              className={`flex w-full min-w-0 items-center gap-1 rounded-sm px-1 py-0.5 text-left text-[10px] leading-4 ${reminder.status === "Done" ? "opacity-50" : reminder.status === "Overdue" ? "bg-[#FFF1F2] text-[#9F1239]" : "bg-[#F8FAFC] text-[#374151]"} hover:bg-[#F7F0FA]`}
+              className={`!min-h-0 flex h-5 w-full min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-[10px] leading-4 ${
+                reminder.status === "Done"
+                  ? "border-[#E5E7EB] bg-[#F8FAFC] text-[#374151] opacity-50"
+                  : reminder.status === "Overdue"
+                    ? "border-[#FECACA] bg-[#FFF1F2] text-[#9F1239]"
+                    : "border-[#E5E7EB] bg-[#F8FAFC] text-[#374151]"
+              } hover:border-[#D8C7E2] hover:bg-[#F7F0FA]`}
             >
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${CATEGORY_TONES[reminder.category]}`} />
-              <span className="truncate">{reminder.status === "Overdue" ? "Overdue · " : ""}{reminder.title}</span>
+              <span className="min-w-0 flex-1 truncate font-medium">
+                {reminder.status === "Overdue" ? "Overdue · " : ""}
+                {reminder.title}
+              </span>
             </button>
           ))}
-          {events.length > (compact ? 1 : 2) && (
-            <button type="button" onClick={() => chooseDate(date)} className="px-1 text-[10px] font-semibold text-[#704389]">
-              +{events.length - (compact ? 1 : 2)} more
+          {hiddenEventCount > 0 && (
+            <button
+              type="button"
+              onClick={() => chooseDate(date)}
+              className="!min-h-0 flex h-4 shrink-0 items-center px-1 text-left text-[10px] font-semibold leading-none text-[#704389] hover:underline"
+            >
+              +{hiddenEventCount} more
             </button>
           )}
         </div>
@@ -487,17 +548,17 @@ export default function CalendarReminders() {
   const renderMonthCalendar = () => (
     <div className="overflow-x-auto">
       <div className="min-w-[620px]">
-        <div className="grid grid-cols-7 border-t border-l border-[#E5E7EB] bg-[#F8FAFC]">
+        <div className="grid grid-cols-[repeat(7,minmax(0,1fr))] border-t border-l border-[#E5E7EB] bg-[#F8FAFC]">
           {(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]).map((day) => (
-            <div key={day} className="border-r border-b border-[#E5E7EB] px-2 py-2 text-center text-[11px] font-semibold text-[#6B7280]">{day}</div>
+            <div key={day} className="min-w-0 border-r border-b border-[#E5E7EB] px-2 py-2 text-center text-[11px] font-semibold text-[#6B7280]">{day}</div>
           ))}
         </div>
-        <div className="grid grid-cols-7 border-l border-[#E5E7EB]">
+        <div className="grid auto-rows-[112px] grid-cols-[repeat(7,minmax(0,1fr))] border-l border-[#E5E7EB]">
           {monthDates.map((date, index) => (
             date ? (
-              <div key={dateKey(date)}>{dateForCell(date, true)}</div>
+              dateForCell(date, true)
             ) : (
-              <div key={`blank-${index}`} aria-hidden="true" className="min-h-[84px] border-r border-b border-[#E5E7EB]" />
+              <div key={`blank-${index}`} aria-hidden="true" className="h-[112px] min-w-0 border-r border-b border-[#E5E7EB] bg-[#F8FAFC]/40" />
             )
           ))}
         </div>
@@ -507,23 +568,23 @@ export default function CalendarReminders() {
 
   const renderWeekCalendar = () => (
     <div className="overflow-x-auto">
-      <div className="grid min-w-[700px] grid-cols-7 border-l border-t border-[#E5E7EB]">
+      <div className="grid min-w-[700px] grid-cols-[repeat(7,minmax(0,1fr))] border-l border-t border-[#E5E7EB]">
         {weekDates.map((date) => (
-          <div key={dateKey(date)} className="min-h-[390px] border-r border-b border-[#E5E7EB]">
-            <button type="button" onClick={() => chooseDate(date)} className={`w-full border-b border-[#E5E7EB] px-2 py-3 text-center ${dateKey(date) === dateKey(selectedDate) ? "bg-[#F7F0FA]" : "bg-[#F8FAFC]"}`}>
+          <div key={dateKey(date)} className="flex min-h-[390px] min-w-0 flex-col overflow-hidden border-r border-b border-[#E5E7EB] bg-white">
+            <button type="button" onClick={() => chooseDate(date)} className={`!min-h-0 w-full shrink-0 border-b border-[#E5E7EB] px-2 py-3 text-center ${dateKey(date) === dateKey(selectedDate) ? "bg-[#F7F0FA]" : "bg-[#F8FAFC]"}`}>
               <span className="block text-[10px] font-semibold uppercase text-[#6B7280]">{formatDate(date, { weekday: "short" })}</span>
               <span className={`mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${dateKey(date) === todayKey ? "bg-[#704389] text-white" : "text-[#2B3642]"}`}>{date.getDate()}</span>
             </button>
-            <div className="space-y-1.5 p-1.5">
+            <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-1.5">
               {(holidaysByDate.get(dateKey(date)) ?? []).map((holiday) => (
-                <button key={holiday.holiday_id} type="button" onClick={() => { setActiveReminder(null); setActiveHoliday(holiday); }} className={`flex w-full items-center gap-1.5 rounded-sm border p-1.5 text-left text-[10px] leading-4 ${holiday.coverage === "National" ? "border-red-200 bg-red-50 text-[#DC2626]" : "border-green-200 bg-green-50 text-[#16A34A]"}`}>
-                  <span className="min-w-0"><span className="block truncate font-semibold">{holiday.name}</span><span className="block truncate">{holiday.classification}</span></span>
+                <button key={holiday.holiday_id} type="button" onClick={() => { setActiveReminder(null); setActiveHoliday(holiday); }} className={`!min-h-0 flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-sm border p-1.5 text-left text-[10px] leading-4 ${holiday.coverage === "National" ? "border-red-200 bg-red-50 text-[#DC2626]" : "border-green-200 bg-green-50 text-[#16A34A]"}`}>
+                  <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{holiday.name}</span><span className="block truncate">{holiday.classification}</span></span>
                 </button>
               ))}
               {(remindersByDate.get(dateKey(date)) ?? []).map((reminder) => (
-                <button key={reminder.reminder_id} type="button" onClick={() => setActiveReminder(reminder)} className={`flex w-full items-start gap-1.5 rounded-sm border border-[#E5E7EB] bg-white p-1.5 text-left text-[10px] leading-4 text-[#374151] hover:bg-[#F7F0FA] ${reminder.status === "Done" ? "opacity-50" : reminder.status === "Overdue" ? "border-[#FECACA] bg-[#FFF1F2] text-[#9F1239]" : ""}`}>
+                <button key={reminder.reminder_id} type="button" onClick={() => setActiveReminder(reminder)} className={`!min-h-0 flex w-full min-w-0 items-start gap-1.5 overflow-hidden rounded-sm border border-[#E5E7EB] bg-white p-1.5 text-left text-[10px] leading-4 text-[#374151] hover:bg-[#F7F0FA] ${reminder.status === "Done" ? "opacity-50" : reminder.status === "Overdue" ? "border-[#FECACA] bg-[#FFF1F2] text-[#9F1239]" : ""}`}>
                   <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${CATEGORY_TONES[reminder.category]}`} />
-                  <span className="min-w-0"><span className="block truncate font-semibold">{reminder.title}</span><span className="block truncate text-[#6B7280]">{reminder.status === "Overdue" ? "Overdue · " : ""}{reminder.start_time ? formatTime(reminder.start_time) : "All day"}</span></span>
+                  <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{reminder.title}</span><span className="block truncate text-[#6B7280]">{reminder.status === "Overdue" ? "Overdue · " : ""}{reminder.start_time ? formatTime(reminder.start_time) : "All day"}</span></span>
                 </button>
               ))}
             </div>
@@ -540,14 +601,14 @@ export default function CalendarReminders() {
       <div className="max-h-[430px] overflow-y-auto border-t border-[#E5E7EB]">
         <div className="grid grid-cols-[72px_minmax(0,1fr)] border-l border-[#E5E7EB]">
           <div className="border-b border-r border-[#E5E7EB] bg-[#F8FAFC] px-2 py-2 text-xs font-semibold text-[#6B7280]">All day</div>
-          <div className="min-h-10 space-y-1 border-b border-r border-[#E5E7EB] p-1.5">
+          <div className="min-h-10 min-w-0 space-y-1 overflow-hidden border-b border-r border-[#E5E7EB] p-1.5">
             {selectedHolidays.map((holiday) => (
-              <button key={holiday.holiday_id} type="button" onClick={() => { setActiveReminder(null); setActiveHoliday(holiday); }} className={`mr-1 inline-flex max-w-full items-center gap-1 rounded-sm border px-2 py-1 text-xs font-semibold ${holiday.coverage === "National" ? "border-red-200 bg-red-50 text-[#DC2626]" : "border-green-200 bg-green-50 text-[#16A34A]"}`}>
+              <button key={holiday.holiday_id} type="button" onClick={() => { setActiveReminder(null); setActiveHoliday(holiday); }} className={`!min-h-0 mr-1 inline-flex max-w-full items-center gap-1 overflow-hidden rounded-sm border px-2 py-1 text-xs font-semibold ${holiday.coverage === "National" ? "border-red-200 bg-red-50 text-[#DC2626]" : "border-green-200 bg-green-50 text-[#16A34A]"}`}>
                 <span className="truncate">{holiday.name}</span>
               </button>
             ))}
             {events.filter((event) => !event.start_time).map((event) => (
-              <button key={event.reminder_id} type="button" onClick={() => setActiveReminder(event)} className={`mr-1 inline-flex max-w-full items-center gap-1 rounded-sm px-2 py-1 text-xs font-semibold ${event.status === "Overdue" ? "bg-[#FFF1F2] text-[#9F1239]" : "bg-[#F7F0FA] text-[#704389]"}`}><span className={`h-1.5 w-1.5 shrink-0 rounded-full ${CATEGORY_TONES[event.category]}`} /><span className="truncate">{event.status === "Overdue" ? "Overdue · " : ""}{event.title}</span></button>
+              <button key={event.reminder_id} type="button" onClick={() => setActiveReminder(event)} className={`!min-h-0 mr-1 inline-flex max-w-full items-center gap-1 overflow-hidden rounded-sm px-2 py-1 text-xs font-semibold ${event.status === "Overdue" ? "bg-[#FFF1F2] text-[#9F1239]" : "bg-[#F7F0FA] text-[#704389]"}`}><span className={`h-1.5 w-1.5 shrink-0 rounded-full ${CATEGORY_TONES[event.category]}`} /><span className="truncate">{event.status === "Overdue" ? "Overdue · " : ""}{event.title}</span></button>
             ))}
           </div>
           {Array.from({ length: 24 }, (_, hour) => {
@@ -556,9 +617,9 @@ export default function CalendarReminders() {
             return (
               <div key={hour} className="contents">
                 <div className="min-h-[48px] border-b border-r border-[#E5E7EB] bg-[#F8FAFC] px-2 py-2 text-xs text-[#6B7280]">{label}</div>
-                <div className="min-h-[48px] space-y-1 border-b border-r border-[#E5E7EB] p-1.5">
+                <div className="min-h-[48px] min-w-0 space-y-1 overflow-hidden border-b border-r border-[#E5E7EB] p-1.5">
                   {timed.map((event) => (
-                    <button key={event.reminder_id} type="button" onClick={() => { setActiveHoliday(null); setActiveReminder(event); }} className={`flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left text-xs font-semibold ${event.status === "Overdue" ? "bg-[#FFF1F2] text-[#9F1239]" : "bg-[#F7F0FA] text-[#704389]"}`}><span className={`h-2 w-2 shrink-0 rounded-full ${CATEGORY_TONES[event.category]}`} /><span className="truncate">{event.status === "Overdue" ? "Overdue · " : ""}{formatTime(event.start_time)} · {event.title}</span></button>
+                    <button key={event.reminder_id} type="button" onClick={() => { setActiveHoliday(null); setActiveReminder(event); }} className={`!min-h-0 flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-sm px-2 py-1 text-left text-xs font-semibold ${event.status === "Overdue" ? "bg-[#FFF1F2] text-[#9F1239]" : "bg-[#F7F0FA] text-[#704389]"}`}><span className={`h-2 w-2 shrink-0 rounded-full ${CATEGORY_TONES[event.category]}`} /><span className="min-w-0 flex-1 truncate">{event.status === "Overdue" ? "Overdue · " : ""}{formatTime(event.start_time)} · {event.title}</span></button>
                   ))}
                 </div>
               </div>
@@ -579,15 +640,15 @@ export default function CalendarReminders() {
         <section className="flex min-h-[600px] min-w-0 flex-col border-b border-[#E5E7EB] lg:border-b-0 lg:border-r">
           <header className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] bg-[#604477] px-5 py-4">
             <div><h2 className="text-lg font-bold text-white">Upcoming Events</h2><p className="mt-0.5 text-sm text-[#F0EAF4]">Don't miss your schedule</p></div>
-            <button type="button" onClick={openCreate} title="Add reminder" aria-label="Add reminder" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/10 text-white hover:bg-white/20"><Plus className="h-4 w-4" /></button>
+            <button type="button" onClick={openCreate} title="Add reminder" aria-label="Add reminder" className="!min-h-0 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/10 text-white hover:bg-white/20"><Plus className="h-4 w-4" /></button>
           </header>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-            {filterDate && <div className="flex items-center justify-between text-xs text-[#6B7280]"><span>Showing {formatDate(parseDate(filterDate))}</span><button type="button" onClick={() => setFilterDate(null)} className="font-semibold text-[#704389]">All upcoming</button></div>}
+            {filterDate && <div className="flex items-center justify-between text-xs text-[#6B7280]"><span>Showing {formatDate(parseDate(filterDate))}</span><button type="button" onClick={() => setFilterDate(null)} className="!min-h-0 font-semibold text-[#704389]">All upcoming</button></div>}
             {loading ? <p className="py-8 text-center text-sm text-[#6B7280]">Loading reminders...</p>
               : upcomingReminders.length === 0 ? <div className="rounded-md border border-dashed border-[#D1D5DB] px-4 py-10 text-center"><CalendarDays className="mx-auto h-7 w-7 text-[#9CA3AF]" /><p className="mt-2 text-sm font-semibold text-[#4B5563]">No upcoming events</p><p className="mt-1 text-xs text-[#6B7280]">Your schedule is clear.</p></div>
                 : upcomingReminders.map((reminder) => (
                   <article key={reminder.reminder_id} className="relative rounded-md border border-[#E5E7EB] bg-white p-3 hover:border-[#D8C7E2]">
-                    <button type="button" onClick={() => { setActiveHoliday(null); setActiveReminder(reminder); }} className="block w-full min-w-0 text-left">
+                    <button type="button" onClick={() => { setActiveHoliday(null); setActiveReminder(reminder); }} className="!min-h-0 block w-full min-w-0 text-left">
                       <div className="flex items-start gap-2.5">
                         <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${CATEGORY_TONES[reminder.category]}`} />
                         <div className="min-w-0 flex-1">
@@ -601,13 +662,13 @@ export default function CalendarReminders() {
                         </div>
                       </div>
                     </button>
-                    <button type="button" onClick={() => setOpenMenuId((current) => current === reminder.reminder_id ? null : reminder.reminder_id)} aria-label={`Actions for ${reminder.title}`} className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded text-[#6B7280] hover:bg-[#F3F4F6]"><MoreHorizontal className="h-4 w-4" /></button>
+                    <button type="button" onClick={() => setOpenMenuId((current) => current === reminder.reminder_id ? null : reminder.reminder_id)} aria-label={`Actions for ${reminder.title}`} className="!min-h-0 absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded text-[#6B7280] hover:bg-[#F3F4F6]"><MoreHorizontal className="h-4 w-4" /></button>
                     {openMenuId === reminder.reminder_id && <div className="absolute right-2 top-9 z-10 w-40 rounded-md border border-[#E5E7EB] bg-white p-1 shadow-lg">
-                      <button type="button" onClick={() => { setActiveHoliday(null); setActiveReminder(reminder); setOpenMenuId(null); }} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[#374151] hover:bg-[#F8FAFC]">View details</button>
+                      <button type="button" onClick={() => { setActiveHoliday(null); setActiveReminder(reminder); setOpenMenuId(null); }} className="!min-h-0 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[#374151] hover:bg-[#F8FAFC]">View details</button>
                       {canManage(reminder) && <>
-                        <button type="button" onClick={() => openEdit(reminder)} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[#374151] hover:bg-[#F8FAFC]"><Pencil className="h-3.5 w-3.5" />Edit</button>
-                        {isReminderCompletionEligible(reminder, completionClock) && <button type="button" onClick={() => void markComplete(reminder)} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[#374151] hover:bg-[#F8FAFC]"><Check className="h-3.5 w-3.5" />Mark completed</button>}
-                        <button type="button" onClick={() => void removeReminder(reminder)} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[#B91C1C] hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" />Delete</button>
+                        <button type="button" onClick={() => openEdit(reminder)} className="!min-h-0 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[#374151] hover:bg-[#F8FAFC]"><Pencil className="h-3.5 w-3.5" />Edit</button>
+                        {isReminderCompletionEligible(reminder, completionClock) && <button type="button" onClick={() => void markComplete(reminder)} className="!min-h-0 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[#374151] hover:bg-[#F8FAFC]"><Check className="h-3.5 w-3.5" />Mark completed</button>}
+                        <button type="button" onClick={() => void removeReminder(reminder)} className="!min-h-0 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[#B91C1C] hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" />Delete</button>
                       </>}
                     </div>}
                   </article>
@@ -618,9 +679,9 @@ export default function CalendarReminders() {
         <section className="min-w-0 p-4 sm:p-5">
           <header className="flex flex-wrap items-center justify-between gap-3 pb-4">
             <div className="flex items-center gap-1">
-              <button type="button" onClick={() => moveCalendar(-1)} aria-label="Previous period" className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F8FAFC]"><ChevronLeft className="h-4 w-4" /></button>
-              <button type="button" onClick={() => moveCalendar(1)} aria-label="Next period" className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F8FAFC]"><ChevronRight className="h-4 w-4" /></button>
-              <button type="button" onClick={goToday} className="ml-1 h-9 rounded-md border border-[#E5E7EB] px-3 text-xs font-semibold text-[#4B5563] hover:bg-[#F8FAFC]">Today</button>
+              <button type="button" onClick={() => moveCalendar(-1)} aria-label="Previous period" className="!min-h-0 inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F8FAFC]"><ChevronLeft className="h-4 w-4" /></button>
+              <button type="button" onClick={() => moveCalendar(1)} aria-label="Next period" className="!min-h-0 inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F8FAFC]"><ChevronRight className="h-4 w-4" /></button>
+              <button type="button" onClick={goToday} className="!min-h-0 ml-1 h-9 rounded-md border border-[#E5E7EB] px-3 text-xs font-semibold text-[#4B5563] hover:bg-[#F8FAFC]">Today</button>
               {calendarView === "month" ? (
                 <div className="relative ml-2" ref={monthPickerRef}>
                   <button
@@ -630,7 +691,7 @@ export default function CalendarReminders() {
                     aria-expanded={monthPickerOpen}
                     aria-controls="calendar-month-picker"
                     onClick={() => setMonthPickerOpen((open) => !open)}
-                    className="inline-flex items-center gap-1 text-base font-bold text-[#2B3642] hover:text-[#704389] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#704389] focus-visible:ring-offset-2"
+                    className="!min-h-0 inline-flex items-center gap-1 text-base font-bold text-[#2B3642] hover:text-[#704389] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#704389] focus-visible:ring-offset-2"
                   >
                     {calendarHeading}
                     <ChevronDown className={`h-3.5 w-3.5 text-[#704389] transition-transform ${monthPickerOpen ? "rotate-180" : ""}`} />
@@ -647,7 +708,7 @@ export default function CalendarReminders() {
                           type="button"
                           aria-label="Previous year"
                           onClick={() => shiftPickerYear(-1)}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded text-[#6B7280] hover:bg-[#F7F0FA] hover:text-[#5F3675] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#704389]"
+                          className="!min-h-0 inline-flex h-7 w-7 items-center justify-center rounded text-[#6B7280] hover:bg-[#F7F0FA] hover:text-[#5F3675] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#704389]"
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </button>
@@ -656,7 +717,7 @@ export default function CalendarReminders() {
                           type="button"
                           aria-label="Next year"
                           onClick={() => shiftPickerYear(1)}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded text-[#6B7280] hover:bg-[#F7F0FA] hover:text-[#5F3675] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#704389]"
+                          className="!min-h-0 inline-flex h-7 w-7 items-center justify-center rounded text-[#6B7280] hover:bg-[#F7F0FA] hover:text-[#5F3675] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#704389]"
                         >
                           <ChevronRight className="h-4 w-4" />
                         </button>
@@ -670,7 +731,7 @@ export default function CalendarReminders() {
                               type="button"
                               aria-pressed={selected}
                               onClick={() => selectPickerMonth(anchorDate.getFullYear(), index)}
-                              className={`rounded px-2 py-1.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#704389] ${selected ? "bg-[#704389] text-white" : "text-[#2B3642] hover:bg-[#F7F0FA] hover:text-[#5F3675]"}`}
+                              className={`!min-h-0 rounded px-2 py-1.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#704389] ${selected ? "bg-[#704389] text-white" : "text-[#2B3642] hover:bg-[#F7F0FA] hover:text-[#5F3675]"}`}
                             >
                               {month}
                             </button>
@@ -684,7 +745,7 @@ export default function CalendarReminders() {
                           setMonthPickerOpen(false);
                           monthHeadingRef.current?.focus();
                         }}
-                        className="mt-2 w-full border-t border-[#E5E7EB] pt-2 text-left text-xs font-semibold text-[#704389] hover:text-[#5F3675] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#704389]"
+                        className="!min-h-0 mt-2 w-full border-t border-[#E5E7EB] pt-2 text-left text-xs font-semibold text-[#704389] hover:text-[#5F3675] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#704389]"
                       >
                         Go to Today
                       </button>
@@ -696,7 +757,7 @@ export default function CalendarReminders() {
               )}
             </div>
             <div className="inline-flex rounded-md border border-[#E5E7EB] bg-[#F8FAFC] p-0.5" role="group" aria-label="Calendar view">
-              {(["day", "week", "month"] as const).map((view) => <button key={view} type="button" onClick={() => setCalendarView(view)} className={`rounded-sm px-3 py-1.5 text-xs font-semibold capitalize ${calendarView === view ? "bg-white text-[#704389] shadow-sm" : "text-[#6B7280] hover:text-[#2B3642]"}`}>{view}</button>)}
+              {(["day", "week", "month"] as const).map((view) => <button key={view} type="button" onClick={() => setCalendarView(view)} className={`!min-h-0 rounded-sm px-3 py-1.5 text-xs font-semibold capitalize ${calendarView === view ? "bg-white text-[#704389] shadow-sm" : "text-[#6B7280] hover:text-[#2B3642]"}`}>{view}</button>)}
             </div>
           </header>
           {calendarView === "month" ? renderMonthCalendar() : calendarView === "week" ? renderWeekCalendar() : renderDayCalendar()}

@@ -504,15 +504,6 @@ export default function AnalyticsPage() {
 
       {error && <div role="alert" className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">{error}<button type="button" onClick={retry} className="ml-3 min-h-11 rounded-md border border-red-300 bg-white px-4 font-semibold focus-visible:outline focus-visible:outline-2">Retry</button></div>}
       {isLoading ? <div role="status" aria-label="Loading analytics"><SkeletonBlock className="mb-6 h-28" /><SkeletonBlock className="h-80" /></div> : !invalidRange && !error ? <>
-        <dl aria-label="Period summary" className="mb-6 grid grid-cols-2 divide-x divide-[#E5E7EB] rounded-xl border border-[#CBD5E1] bg-white lg:grid-cols-4">
-          {[
-            ["Cases received", intakeTotal],
-            ["Clients registered", overview?.clients_in_range ?? 0],
-            ["Cases terminated", terminatedStats?.total ?? 0],
-            ["Documents uploaded", ocrAnalytics?.total_scans ?? 0],
-          ].map(([label, value]) => <div key={label} className="min-w-0 px-5 py-4"><dt className="text-sm text-[#4B5563]">{label}</dt><dd className="mt-1 text-3xl font-semibold tabular-nums text-[#2B3642]">{Number(value).toLocaleString()}</dd></div>)}
-        </dl>
-
         <div className="grid items-start gap-6 xl:grid-cols-[1.3fr_1fr]">
           <AnalyticsPanel title="Cases received over time" subtitle="Recorded case volume by received date.">
             <div className="mb-3 flex justify-end"><ChartDownloadButton label="Download PNG" onClick={() => download(monthlyChartRef.current, "Cases received over time")} /></div>
@@ -568,4 +559,3 @@ export default function AnalyticsPage() {
     </MainLayout>
   );
 }
-
