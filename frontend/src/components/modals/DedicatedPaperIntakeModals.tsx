@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode, Ref } from 'react';
-import { ArrowRight, Camera, Upload, X } from 'lucide-react';
+import { ArrowRight, Camera, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import '../../features/documentExtraction/intake-modal.css';
 import type { CaseType, ClientRecord } from '../../types';
@@ -33,13 +33,12 @@ function UploadStageSteps({ stage }: { stage: IntakeStage }) {
   );
 }
 
-function IntakeModalFrame({ title, description, icon, dialogRef, onClose, hideHeaderClose = false, children, stage, modalKind, surfaceClassName }: {
+function IntakeModalFrame({ title, description, icon, dialogRef, children, stage, modalKind, surfaceClassName }: {
   title: string;
   description: string;
   icon: ReactNode;
   dialogRef: Ref<HTMLDivElement>;
-  onClose: () => void;
-  hideHeaderClose?: boolean;
+  onClose?: () => void;
   children: ReactNode;
   stage?: IntakeStage;
   modalKind?: 'upload-selection' | 'upload-review';
@@ -52,7 +51,6 @@ function IntakeModalFrame({ title, description, icon, dialogRef, onClose, hideHe
           {icon}
           <div className="min-w-0"><h2 className="text-base font-semibold leading-tight sm:text-lg">{title}</h2><p className="mt-0.5 truncate text-xs text-white/85">{description}</p></div>
         </div>
-        {!hideHeaderClose && <button type="button" onClick={onClose} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-white/70 bg-white/10 px-3 py-1 text-xs font-semibold text-white transition hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:text-sm"><X size={15} aria-hidden="true" />Close</button>}
       </header>
       {children}
     </div>
@@ -98,7 +96,6 @@ function UploadReviewModal({ stage, dialogRef, onClose, children }: {
       title="Upload PAO Sheet"
       description="Compare the original document with the extracted details and review every entry before saving."
       onClose={onClose}
-      hideHeaderClose
     >
       <UploadStageSteps stage={stage} />
       <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
@@ -118,8 +115,8 @@ export function ScanIntakeModal({ onClose, caseType = 'Criminal' }: { onClose: (
   const upsertCase = useCriminalCasesStore(state => state.upsertCase);
   const setStoreClients = useCriminalCasesStore(state => state.setClients);
 
-  const close = useCallback(async () => {
-    if (dirty && !await confirm({ title: 'Discard unsaved entry?', message: 'Your selected scan or corrections have not been saved. Cancel to keep working.', confirmLabel: 'Discard entry' })) return;
+  const close = useCallback(async (forceConfirm = false) => {
+    if ((dirty || forceConfirm) && !await confirm({ title: 'Discard unsaved entry?', message: 'Your selected scan or corrections have not been saved. Cancel to keep working.', confirmLabel: 'Discard entry' })) return;
     setDirty(false);
     onClose();
   }, [confirm, dirty, onClose]);
@@ -140,7 +137,7 @@ export function ScanIntakeModal({ onClose, caseType = 'Criminal' }: { onClose: (
   return <>
     {!client && <IntakeModalFrame stage={stage} dialogRef={dialog} icon={<Camera className="mt-1 h-5 w-5 shrink-0" aria-hidden="true" />} title="Scan PAO Sheet" description="Capture the complete paper document and review the extracted details." onClose={() => void close()}>
       <ol aria-label="Document intake stages" className="flex shrink-0 flex-wrap gap-x-4 gap-y-2 border-b bg-slate-50 px-5 py-3 text-xs sm:text-sm">{(['Select document', 'Review crop', 'Extract', 'Review details', 'Save'] as const).map((label, index) => <li key={label} aria-current={['select', 'crop', 'extract', 'review', 'save'].indexOf(stage) === index ? 'step' : undefined} className={`flex items-center gap-2 ${['select', 'crop', 'extract', 'review', 'save'].indexOf(stage) === index ? 'font-semibold text-[#704389]' : 'text-slate-600'}`}><span>{label}</span>{index < 4 && <ArrowRight size={12} aria-hidden="true" />}</li>)}</ol>
-      <div className="min-h-0 flex-1 overflow-hidden"><PaperIntakeReview key={addingAnother} inputMethod="scan" onStageChange={setStage} onDirtyChange={setDirty} onSaved={saved => { setDirty(false); upsertClient(saved); setClient(saved); }} /></div>
+      <div className="min-h-0 flex-1 overflow-hidden"><PaperIntakeReview key={addingAnother} inputMethod="scan" onStageChange={setStage} onDirtyChange={setDirty} onCancel={() => void close(stage === 'review' || stage === 'save')} onSaved={saved => { setDirty(false); upsertClient(saved); setClient(saved); }} /></div>
     </IntakeModalFrame>}
     {client && !viewingCase && <IntakeModalFrame stage={stage} dialogRef={dialog} icon={<Camera className="mt-1 h-5 w-5 shrink-0" aria-hidden="true" />} title="Scan PAO Sheet" description="Reviewed intake saved with its original scan." onClose={onClose}>
       <div className="flex min-h-0 flex-1 flex-col p-5"><p role="status" className="flex-1 font-semibold text-emerald-800">{client.client.name} — Reviewed intake saved successfully.</p>
@@ -152,7 +149,7 @@ export function ScanIntakeModal({ onClose, caseType = 'Criminal' }: { onClose: (
       </div>
     </IntakeModalFrame>}
     {client && viewingCase && <IntakeModalFrame stage={stage} dialogRef={dialog} icon={<Camera className="mt-1 h-5 w-5 shrink-0" aria-hidden="true" />} title="Scan PAO Sheet" description="Continue with the case details." onClose={onClose}>
-      <div className="min-h-0 flex-1 overflow-y-auto"><CaseWorkflow caseType={caseType} clients={[]} lockedClient={client} lockedClients={[client]} submitLabel="Save Case" onClientUpdated={updated => { upsertClient(updated); setClient(updated); }} onSubmit={async values => {
+      <div className="min-h-0 flex-1 overflow-y-auto"><CaseWorkflow caseType={caseType} clients={[]} lockedClient={client} lockedClients={[client]} submitLabel="Save Case" onCancel={() => void close(true)} onClientUpdated={updated => { upsertClient(updated); setClient(updated); }} onSubmit={async values => {
         const record = await createCaseRecord(values, caseType); upsertCase(record);
         try { setStoreClients(await listClientRecords()); } catch { /* Refreshes on the next page load. */ }
         toast.success('Case saved'); onClose();
@@ -199,7 +196,7 @@ export function UploadIntakeModal({ onClose, caseType = 'Criminal' }: { onClose:
         inputMethod="upload"
         onStageChange={setStage}
         onDirtyChange={setDirty}
-        onCancel={() => void close(true)}
+        onCancel={() => void close(stage === 'review' || stage === 'save')}
         onSaved={saved => { setDirty(false); upsertClient(saved); setClient(saved); }}
         renderStageFrame={(currentStage, content) =>
           currentStage === 'review' || currentStage === 'save' ? (
@@ -224,7 +221,7 @@ export function UploadIntakeModal({ onClose, caseType = 'Criminal' }: { onClose:
       </div>
     </IntakeModalFrame>}
     {client && viewingCase && <IntakeModalFrame stage={stage} dialogRef={dialog} icon={<Upload className="mt-1 h-5 w-5 shrink-0" aria-hidden="true" />} title="Upload PAO Sheet" description="Continue with the case details." onClose={onClose}>
-      <div className="min-h-0 flex-1 overflow-y-auto"><CaseWorkflow caseType={caseType} clients={[]} lockedClient={client} lockedClients={[client]} submitLabel="Save Case" onClientUpdated={updated => { upsertClient(updated); setClient(updated); }} onSubmit={async values => {
+      <div className="min-h-0 flex-1 overflow-y-auto"><CaseWorkflow caseType={caseType} clients={[]} lockedClient={client} lockedClients={[client]} submitLabel="Save Case" onCancel={() => void close(true)} onClientUpdated={updated => { upsertClient(updated); setClient(updated); }} onSubmit={async values => {
         const record = await createCaseRecord(values, caseType); upsertCase(record);
         try { setStoreClients(await listClientRecords()); } catch { /* Refreshes on the next page load. */ }
         toast.success('Case saved'); onClose();

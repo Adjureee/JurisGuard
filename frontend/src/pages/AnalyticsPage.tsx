@@ -1,15 +1,23 @@
-import { lazy, Suspense, useMemo, useRef, useState } from "react";
-import { Download } from "lucide-react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  BarChart3,
+  Download,
+  FolderCheck,
+} from "lucide-react";
 import toast from "react-hot-toast";
-import { createAuditLog } from "../services/auditService";
 import {
   Area,
   AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
+  Label,
+  LabelList,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -18,12 +26,15 @@ import {
 import ErrorBoundary from "../components/ErrorBoundary";
 import {
   AnalyticsPanel,
+  CHART_COLORS,
   EmptyState,
+  getStableCategoryColorMap,
   SkeletonBlock,
 } from "../components/dashboard/AnalyticsPrimitives";
 import ReportExportModal, { type ReportExportRow } from "../components/modals/ReportExportModal";
 import MainLayout from "../layouts/MainLayout";
 import PageHeader from "../components/PageHeader";
+import { createAuditLog } from "../services/auditService";
 import { formatLegalMonth } from "../services/dashboardService";
 import { useDashboardAnalytics } from "./dashboard/useDashboardAnalytics";
 
@@ -55,8 +66,30 @@ function formatExportDate(value: string) {
       });
 }
 
+function formatIntakeTrendDate(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const date = new Date(`${value}T00:00:00`);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+  }
+  return formatLegalMonth(value);
+}
+
+function coveragePeriodLabel(
+  preset: DatePreset,
+  dateRange: { dateFrom: string; dateTo: string },
+) {
+  if (preset !== "custom") return datePresetLabels[preset];
+  return `${formatExportDate(dateRange.dateFrom)} - ${formatExportDate(dateRange.dateTo)}`;
+}
+
 function presetRange(preset: DatePreset) {
-  if (preset === 'all') return { dateFrom: '', dateTo: '' };
+  if (preset === "all") return { dateFrom: "", dateTo: "" };
   const now = new Date();
   const start = new Date(now);
   if (preset === "last7") start.setDate(now.getDate() - 6);
@@ -83,7 +116,7 @@ function ChartTooltip({
     <div className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm shadow-xl ">
       <p className="font-semibold text-[#2B3642]">{label}</p>
       {payload.map((item) => (
-        <p key={item.name ?? "value"} className="text-[#4B5563]">
+        <p key={item.name ?? "value"} className="text-[#475569]">
           {item.name ?? "Cases"}: <span className="font-semibold">{item.value}</span>
         </p>
       ))}
@@ -271,7 +304,6 @@ async function downloadChartPng(
   });
 }
 
-
 function ChartDownloadButton({
   label,
   onClick,
@@ -283,7 +315,7 @@ function ChartDownloadButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-3 text-xs font-semibold text-[#4B5563] transition hover:border-[#704389] hover:text-[#704389] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]"
+      className="inline-flex h-9 items-center gap-2 rounded-md border border-[#D1D5DB] bg-white px-3 text-xs font-semibold text-[#4B5563] transition hover:border-[#704389] hover:text-[#704389]"
     >
       <Download className="h-4 w-4" />
       {label}
@@ -295,7 +327,9 @@ export default function AnalyticsPage() {
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
   const [dateRange, setDateRange] = useState(() => presetRange("all"));
   const [dateInputs, setDateInputs] = useState(dateRange);
-  const invalidRange = datePreset !== 'all' && (!dateInputs.dateFrom || !dateInputs.dateTo || dateInputs.dateFrom > dateInputs.dateTo);
+  const invalidRange =
+    datePreset !== "all" &&
+    (!dateInputs.dateFrom || !dateInputs.dateTo || dateInputs.dateFrom > dateInputs.dateTo);
   const {
     barangays,
     caseCategories,
@@ -311,14 +345,16 @@ export default function AnalyticsPage() {
   } = useDashboardAnalytics({ dateRange });
   const [selectedBarangay, setSelectedBarangay] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const hotspotPanelRef = useRef<HTMLDivElement>(null);
   const monthlyChartRef = useRef<HTMLDivElement>(null);
   const weeklyChartRef = useRef<HTMLDivElement>(null);
   const categoryChartRef = useRef<HTMLDivElement>(null);
   const terminatedChartRef = useRef<HTMLDivElement>(null);
+  const [hotspotPanelHeight, setHotspotPanelHeight] = useState<number | null>(null);
 
   const intakeTotal = useMemo(() => monthlyTrends.reduce((sum, row) => sum + row.total_cases, 0), [monthlyTrends]);
   const displayMonthlyTrends = useMemo(
-    () => monthlyTrends.map((row) => ({ ...row, month: formatLegalMonth(row.month) })),
+    () => monthlyTrends.map((row) => ({ ...row, month: formatIntakeTrendDate(row.month) })),
     [monthlyTrends]
   );
   const displayTerminatedMonthly = useMemo(
@@ -329,9 +365,18 @@ export default function AnalyticsPage() {
     () => displayMonthlyTrends.reduce<typeof displayMonthlyTrends[number] | null>((best, row) => (!best || row.total_cases > best.total_cases ? row : best), null),
     [displayMonthlyTrends]
   );
-  const topBarangays = useMemo(() => barangays, [barangays]);
+  const mostCommonReason = terminatedStats?.most_common_reason ?? terminatedStats?.by_reason[0]?.reason ?? "No closures in range";
+  const averageDailyIntake = intakeLoad?.average_daily_intake ?? 0;
+  const topBarangays = useMemo(
+    () => (heatmap?.barangays?.length ? heatmap.barangays : barangays),
+    [barangays, heatmap],
+  );
   const activeBarangay = topBarangays.some((row) => row.barangay === selectedBarangay) ? selectedBarangay : null;
-  const categoryPie = useMemo(() => caseCategories, [caseCategories]);
+  const categoryPie = useMemo(() => caseCategories.slice(0, 7), [caseCategories]);
+  const categoryColors = useMemo(
+    () => getStableCategoryColorMap(caseCategories.map((row) => row.category)),
+    [caseCategories],
+  );
   const categoryTotal = caseCategories.reduce((sum, row) => sum + row.total_cases, 0);
   const categoryLegendItems = useMemo(
     () =>
@@ -341,15 +386,21 @@ export default function AnalyticsPage() {
         percentage: categoryTotal
           ? Math.round((row.total_cases / categoryTotal) * 100)
           : 0,
-        color: "#704389",
+        color: categoryColors.get(row.category) ?? CHART_COLORS[0],
       })),
-    [categoryPie, categoryTotal],
+    [categoryPie, categoryTotal, categoryColors],
   );
   const hourlyRows = useMemo(
     () => (intakeLoad?.hourly ?? []).filter((row) => Number.isFinite(row.total_cases) && row.total_cases > 0),
     [intakeLoad]
   );
   const terminationReasons = useMemo(() => terminatedStats?.by_reason ?? [], [terminatedStats]);
+  const maxTerminationReason = useMemo(
+    () => Math.max(...terminationReasons.map((row) => row.total_cases), 1),
+    [terminationReasons]
+  );
+  const busiestHour = intakeLoad?.busiest_hour;
+  const leadingCategory = caseCategories[0];
   const exportRows = useMemo<ReportExportRow[]>(() => {
     const monthlyRows = monthlyTrends.map((row) => ({
       dataset: "monthly_intake_trends",
@@ -379,7 +430,7 @@ export default function AnalyticsPage() {
       secondary_label: "",
       secondary_value: "",
     }));
-    const hourlyRows = (intakeLoad?.hourly ?? []).map((row) => ({
+    const hourlyExportRows = (intakeLoad?.hourly ?? []).map((row) => ({
       dataset: "hourly_intake_heat",
       case_category: "Peak Operational Hours",
       date: "",
@@ -407,19 +458,19 @@ export default function AnalyticsPage() {
       secondary_label: "",
       secondary_value: "",
     }));
-    const barangayRows = barangays.map((row) => ({
+    const barangayRows = topBarangays.map((row) => ({
       dataset: "barangay_hotspots",
       case_category: row.most_common_category,
       date: "",
       label: row.barangay,
       value: row.total_cases,
-      case_status: "",
+      case_status: row.terminated_cases === row.total_cases && row.total_cases > 0 ? "Terminated" : "Pending",
       barangay: row.barangay,
       staff: "",
       ocr_status: "",
-      termination_status: "",
+      termination_status: row.terminated_cases > 0 ? "Has Terminations" : "No Terminations",
       secondary_label: row.most_common_category,
-      secondary_value: "",
+      secondary_value: row.terminated_cases,
     }));
     const terminatedRows = (terminatedStats?.monthly ?? []).map((row) => ({
       dataset: "terminated_case_movement",
@@ -444,118 +495,564 @@ export default function AnalyticsPage() {
       case_status: "",
       barangay: "",
       staff: "",
-      ocr_status: "All",
+      ocr_status: "Processed",
       termination_status: "",
       secondary_label: "",
       secondary_value: "",
     }));
-    return [...monthlyRows, ...weeklyRows, ...hourlyRows, ...categoryRows, ...barangayRows, ...terminatedRows, ...ocrRows];
-  }, [barangays, caseCategories, intakeLoad, monthlyTrends, ocrAnalytics, terminatedStats]);
+    return [...monthlyRows, ...weeklyRows, ...hourlyExportRows, ...categoryRows, ...barangayRows, ...terminatedRows, ...ocrRows];
+  }, [caseCategories, intakeLoad, monthlyTrends, ocrAnalytics, terminatedStats, topBarangays]);
 
   const applyPreset = (preset: DatePreset) => {
     setSelectedBarangay(null);
     setDatePreset(preset);
     if (preset !== "custom") {
-      const range = presetRange(preset);
-      setDateRange(range);
-      setDateInputs(range);
+      const nextRange = presetRange(preset);
+      setDateRange(nextRange);
+      setDateInputs(nextRange);
     }
   };
+
   const changeDate = (field: "dateFrom" | "dateTo", value: string) => {
     setDatePreset("custom");
-    const range = { ...dateInputs, [field]: value };
-    setDateInputs(range);
-    if (range.dateFrom && range.dateTo && range.dateFrom <= range.dateTo) setDateRange(range);
+    const nextRange = { ...dateInputs, [field]: value };
+    setDateInputs(nextRange);
+    if (nextRange.dateFrom && nextRange.dateTo && nextRange.dateFrom <= nextRange.dateTo) {
+      setSelectedBarangay(null);
+      setDateRange(nextRange);
+    }
   };
-  const period = datePreset === 'all' ? 'All dates' : `${formatExportDate(dateRange.dateFrom)} – ${formatExportDate(dateRange.dateTo)}`;
-  const download = (ref: HTMLDivElement | null, title: string, legend?: ChartExportContext["legend"]) =>
+
+  const handleExportChart = (
+    container: HTMLElement | null,
+    filename: string,
+    exportContext: ChartExportContext,
+  ) => {
     void createAuditLog({ action: "Export PNG", module: "Export", entity_type: "analytics_chart_export" })
-      .then(() => downloadChartPng(ref, `jurisguard-${title.toLowerCase().replaceAll(" ", "-")}.png`, {
-      title, description: "Recorded data for the selected period.", coveragePeriod: period,
-      filtersApplied: "Selected date range; permitted records only", legend,
-      }))
+      .then(() => downloadChartPng(container, filename, exportContext))
       .catch(() => toast.error("Unable to record and export the chart. Please retry."));
-  const statusRows = [
-    { name: "Not terminated", count: overview?.range_active_cases ?? 0, color: "#B45309" },
-    { name: "Terminated", count: overview?.range_terminated_cases ?? 0, color: "#B91C1C" },
-  ];
+  };
+
+  useEffect(() => {
+    const panel = hotspotPanelRef.current;
+    if (!panel) return;
+
+    const updateHeight = () => {
+      setHotspotPanelHeight(Math.ceil(panel.getBoundingClientRect().height));
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(panel);
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [heatmap, activeBarangay, topBarangays]);
+
   return (
     <MainLayout>
-      <PageHeader eyebrow="" title="Analytics" description="Case activity, client locations, and recorded outcomes."
-        actions={<button type="button" onClick={() => setExportOpen(true)} disabled={isLoading || invalidRange || Boolean(error) || exportRows.length === 0}
-          className="min-h-11 rounded-md bg-[#704389] px-4 text-sm font-semibold text-white hover:bg-[#5F3675] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389] disabled:opacity-50">Export report</button>} />
+      <PageHeader
+        eyebrow="Analytics Workspace"
+        title="Deep Analytics & Export"
+        description="Review GIS hotspots, intake trends, case categories, closure patterns, and export-ready operational datasets."
+        actions={
+          <button
+            type="button"
+            onClick={() => setExportOpen(true)}
+            className="inline-flex h-10 items-center justify-center rounded-md bg-[#704389] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5F3675] disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isLoading || invalidRange || Boolean(error) || exportRows.length === 0}
+          >
+            Advanced Report Export
+          </button>
+        }
+      />
 
-      <section aria-label="Analytics filters" className="mb-6 rounded-xl border border-[#CBD5E1] bg-white p-4">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-6 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-sm font-bold text-[#111827]">Analytics Date Range</p>
+            <p className="mt-1 text-xs font-medium text-[#6B7280]">
+              Trends, intake load, client locations, and closure analytics refresh from this range.
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Reporting period">
-            {(["all", "last7", "last30", "month", "year"] as const).map((value) =>
-              <button key={value} type="button" aria-pressed={datePreset === value} onClick={() => applyPreset(value)}
-                className={`min-h-11 rounded-md border px-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389] ${datePreset === value ? "border-[#704389] bg-[#F7F0FA] text-[#5F3675]" : "border-[#CBD5E1] text-[#4B5563] hover:bg-[#F8FAFC]"}`}>{datePresetLabels[value]}</button>)}
-            <button type="button" aria-pressed={datePreset === "custom"} onClick={() => setDatePreset("custom")} className={`min-h-11 rounded-md border px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389] ${datePreset === "custom" ? "border-[#704389] bg-[#F7F0FA] text-[#5F3675]" : "border-[#CBD5E1] text-[#4B5563]"}`}>Custom range</button>
-          </div>
-          <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
-            <label className="text-sm font-medium">Start date<input type="date" aria-label="Start date" value={dateInputs.dateFrom} max={dateInputs.dateTo || undefined} onChange={(event) => changeDate("dateFrom", event.target.value)} className="mt-1 block min-h-11 w-full min-w-0 rounded-md border border-[#CBD5E1] px-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]" /></label>
-            <label className="text-sm font-medium">End date<input type="date" aria-label="End date" value={dateInputs.dateTo} min={dateInputs.dateFrom || undefined} onChange={(event) => changeDate("dateTo", event.target.value)} className="mt-1 block min-h-11 w-full min-w-0 rounded-md border border-[#CBD5E1] px-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]" /></label>
+            {([
+              ["all", "All dates"],
+              ["last7", "Last 7 Days"],
+              ["last30", "Last 30 Days"],
+              ["month", "This Month"],
+              ["year", "This Year"],
+              ["custom", "Custom Range"],
+            ] as Array<[DatePreset, string]>).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={datePreset === value}
+                onClick={() => applyPreset(value)}
+                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                  datePreset === value
+                    ? "border-[#704389] bg-[#F7F0FA] text-[#704389]"
+                    : "border-[#D1D5DB] bg-white text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#111827]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
-        {invalidRange ? <p role="alert" className="mt-3 text-sm text-red-800">Start date and end date are required; start date must be on or before end date.</p>
-          : <p className="mt-3 text-sm text-[#4B5563]" aria-live="polite">{period} · Cases by received date, clients by registration date, terminations by termination date.</p>}
-      </section>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Start Date</span>
+            <input
+              type="date"
+              aria-label="Start date"
+              value={dateInputs.dateFrom}
+              max={dateInputs.dateTo || undefined}
+              onChange={(event) => changeDate("dateFrom", event.target.value)}
+              className="mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">End Date</span>
+            <input
+              type="date"
+              aria-label="End date"
+              value={dateInputs.dateTo}
+              min={dateInputs.dateFrom || undefined}
+              onChange={(event) => changeDate("dateTo", event.target.value)}
+              className="mt-1 h-10 w-full rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm text-[#111827] outline-none focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20"
+            />
+          </label>
+        </div>
+        {invalidRange && (
+          <p role="alert" className="mt-3 text-sm text-red-800">
+            Start date and end date are required; start date must be on or before end date.
+          </p>
+        )}
+      </div>
 
-      {error && <div role="alert" className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">{error}<button type="button" onClick={retry} className="ml-3 min-h-11 rounded-md border border-red-300 bg-white px-4 font-semibold focus-visible:outline focus-visible:outline-2">Retry</button></div>}
-      {isLoading ? <div role="status" aria-label="Loading analytics"><SkeletonBlock className="mb-6 h-28" /><SkeletonBlock className="h-80" /></div> : !invalidRange && !error ? <>
-        <div className="grid items-start gap-6 xl:grid-cols-[1.3fr_1fr]">
-          <AnalyticsPanel title="Cases received over time" subtitle="Recorded case volume by received date.">
-            <div className="mb-3 flex justify-end"><ChartDownloadButton label="Download PNG" onClick={() => download(monthlyChartRef.current, "Cases received over time")} /></div>
-            <div ref={monthlyChartRef} className="h-72">{intakeTotal === 0 ? <EmptyState message="No cases received in this period." /> :
-              <ResponsiveContainer width="100%" height="100%"><LineChart data={displayMonthlyTrends} margin={{top:20,right:20,bottom:12,left:0}}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" /><XAxis dataKey="month" fontSize={12} minTickGap={30} /><YAxis allowDecimals={false} width={38} fontSize={12} /><Tooltip content={<ChartTooltip />} /><Line type="linear" dataKey="total_cases" name="Cases received" stroke="#704389" strokeWidth={3} dot={{r:4}} isAnimationActive={false} />
-              </LineChart></ResponsiveContainer>}</div>
-            <p className="mt-3 text-xs text-[#4B5563]">Purple line: cases received · {intakePeak ? `Highest recorded period: ${intakePeak.month} (${intakePeak.total_cases})` : "No recorded peak"}</p>
-          </AnalyticsPanel>
-          <AnalyticsPanel title="Case categories" subtitle="Composition of cases received in the selected period.">
-            <div className="mb-3 flex justify-end"><ChartDownloadButton label="Download PNG" onClick={() => download(categoryChartRef.current, "Case categories", categoryLegendItems)} /></div>
-            <div ref={categoryChartRef}>{categoryTotal === 0 ? <EmptyState message="No case categories recorded in this period." /> :
-<div className="h-48"><ResponsiveContainer width="100%" height="100%"><BarChart data={caseCategories} margin={{top:20,right:10,bottom:10,left:0}}><XAxis dataKey="category" fontSize={11} tickFormatter={(value: string) => value.length > 18 ? `${value.slice(0, 17)}…` : value} /><YAxis allowDecimals={false} width={34} fontSize={12} /><Tooltip content={<ChartTooltip />} /><Bar dataKey="total_cases" name="Cases" fill="#704389" isAnimationActive={false} radius={[4,4,0,0]} /></BarChart></ResponsiveContainer></div>}
-              <ul className="mt-3 space-y-2" aria-label="Case category counts">{caseCategories.map((row) => <li key={row.category} className="flex justify-between gap-4 text-sm"><span className="break-words text-[#2B3642]">{row.category}</span><span className="shrink-0 tabular-nums text-[#4B5563]">{row.total_cases} · {categoryTotal ? Math.round(row.total_cases / categoryTotal * 100) : 0}%</span></li>)}</ul>
+      {error && (
+        <div role="alert" className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+          {error}
+          <button
+            type="button"
+            onClick={retry}
+            className="ml-3 min-h-11 rounded-md border border-red-300 bg-white px-4 font-semibold focus-visible:outline focus-visible:outline-2"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="grid gap-6" role="status" aria-label="Loading analytics">
+          <SkeletonBlock className="h-[520px]" />
+          <div className="grid gap-6 xl:grid-cols-2">
+            <SkeletonBlock className="h-80" />
+            <SkeletonBlock className="h-80" />
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="grid items-start gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+            <div ref={hotspotPanelRef} className="min-w-0">
+              <AnalyticsPanel
+                title="Client locations"
+                subtitle="Unique clients grouped by recorded address in the selected registration period."
+                headerClassName="rounded-t-xl bg-[#604477]"
+              >
+                {heatmap ? (
+                  <ErrorBoundary fallback={<EmptyState message="The map could not render. Client address counts remain available." />}>
+                    <Suspense fallback={<SkeletonBlock className="h-[520px]" />}>
+                      <GeoAnalyticsMap
+                        center={heatmap.center}
+                        points={heatmap.points}
+                        barangays={topBarangays}
+                        selectedBarangay={activeBarangay}
+                        onSelectBarangay={(value) => setSelectedBarangay(value || null)}
+                      />
+                    </Suspense>
+                  </ErrorBoundary>
+                ) : (
+                  <EmptyState message="No client map data available." />
+                )}
+              </AnalyticsPanel>
             </div>
-          </AnalyticsPanel>
-        </div>
 
-        <div className="mt-6 grid items-start gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-          <AnalyticsPanel title="Current case status" subtitle="Current status of the cases received in this period.">
-            {intakeTotal === 0 ? <EmptyState message="No cases to classify in this period." /> : <ul className="space-y-5">{statusRows.map((row) => <li key={row.name}><div className="mb-2 flex justify-between text-sm"><span>{row.name}</span><strong className="tabular-nums">{row.count}</strong></div><div className="h-3 overflow-hidden rounded-full bg-[#EEF2F6]"><div className="h-full rounded-full" style={{width:`${intakeTotal ? row.count/intakeTotal*100 : 0}%`,backgroundColor:row.color}} /></div></li>)}</ul>}
-          </AnalyticsPanel>
-          <AnalyticsPanel title="Terminations over time" subtitle="Cases terminated during the period, regardless of when they were received.">
-            <div className="mb-3 flex justify-end"><ChartDownloadButton label="Download PNG" onClick={() => download(terminatedChartRef.current, "Terminations over time")} /></div>
-            <div ref={terminatedChartRef} className="h-56">{displayTerminatedMonthly.length === 0 ? <EmptyState message="No terminations recorded in this period." /> :
-              <ResponsiveContainer width="100%" height="100%"><AreaChart data={displayTerminatedMonthly} margin={{top:15,right:15,bottom:10,left:0}}><CartesianGrid vertical={false} stroke="#E5E7EB" /><XAxis dataKey="month" fontSize={12} /><YAxis allowDecimals={false} width={35} fontSize={12} /><Tooltip content={<ChartTooltip />} /><Area type="linear" dataKey="total_cases" name="Terminated cases" stroke="#B91C1C" fill="#FEE2E2" isAnimationActive={false} /></AreaChart></ResponsiveContainer>}</div>
-            <details className="mt-4 border-t border-[#E5E7EB] pt-3"><summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]">Termination reasons</summary><ul className="mt-2 space-y-2">{terminationReasons.length ? terminationReasons.map((row) => <li key={row.reason} className="flex justify-between gap-3 text-sm"><span>{row.reason}</span><strong>{row.total_cases}</strong></li>) : <li className="text-sm text-[#4B5563]">No termination reasons recorded.</li>}</ul></details>
-          </AnalyticsPanel>
-        </div>
+            <div className="min-h-0" style={hotspotPanelHeight ? { height: `${hotspotPanelHeight}px` } : undefined}>
+              <AnalyticsPanel
+                title="Client address groups"
+                subtitle="Ranked by the number of unique clients."
+                className="h-full min-h-0"
+                headerClassName="rounded-t-xl bg-[#604477]"
+              >
+                <button
+                  type="button"
+                  aria-pressed={!activeBarangay}
+                  onClick={() => setSelectedBarangay(null)}
+                  className="mb-3 min-h-11 w-full rounded-md border border-[#CBD5E1] px-3 text-left text-sm font-semibold text-[#704389] transition hover:bg-[#F7F0FA] focus-visible:outline focus-visible:outline-2"
+                >
+                  Show all client locations
+                </button>
+                <div className="max-h-[520px] min-h-[420px] space-y-3 overflow-y-auto pr-2">
+                  {topBarangays.length === 0 ? (
+                    <EmptyState message="No clients registered in this period." />
+                  ) : (
+                    topBarangays.map((barangay, index) => (
+                      <button
+                        key={barangay.barangay}
+                        type="button"
+                        aria-pressed={activeBarangay === barangay.barangay}
+                        onClick={() => setSelectedBarangay(barangay.barangay)}
+                        className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${
+                          activeBarangay === barangay.barangay
+                            ? "border-[#704389] bg-[#F7F0FA]"
+                            : "border-[#E5E7EB] bg-[#F9FAFB] hover:bg-[#F8FAFC]"
+                        }`}
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#704389] text-sm font-bold text-white">
+                          {index + 1}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-[#2B3642]">{barangay.barangay}</span>
+                          <span className="text-xs text-[#4B5563]">{barangay.most_common_category}</span>
+                        </span>
+                        <span className="rounded-full bg-[#F7F0FA] px-2.5 py-1 text-xs font-bold text-[#704389]">
+                          {barangay.total_cases}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </AnalyticsPanel>
+            </div>
+          </div>
 
-        <section className="mt-8" aria-labelledby="client-geography-title">
-          <h2 id="client-geography-title" className="text-lg font-semibold">Where registered clients live</h2>
-          <p className="mb-4 mt-1 text-sm text-[#4B5563]">Clients registered: {period}. Address selection changes map focus only; counts are unique clients, not crime incidents.</p>
-          <div className="grid items-start gap-6 xl:grid-cols-[1.7fr_1fr]">
-            <div className="min-w-0">{heatmap ? <ErrorBoundary fallback={<EmptyState message="The map could not render. Client address counts remain available." />}><Suspense fallback={<SkeletonBlock className="h-[520px]" />}><GeoAnalyticsMap center={heatmap.center} points={heatmap.points} barangays={heatmap.barangays} selectedBarangay={activeBarangay} onSelectBarangay={(value) => setSelectedBarangay(value || null)} /></Suspense></ErrorBoundary> : <EmptyState message="No client map data available." />}</div>
-            <AnalyticsPanel title="Client address groups">
-              <button type="button" aria-pressed={!activeBarangay} onClick={() => setSelectedBarangay(null)} className="mb-3 min-h-11 w-full rounded-md border border-[#CBD5E1] px-3 text-left text-sm font-semibold text-[#704389] focus-visible:outline focus-visible:outline-2">Show all client locations</button>
-              {topBarangays.length === 0 ? <EmptyState message="No clients registered in this period." /> : <ul className="max-h-[32rem] space-y-2 overflow-y-auto">{topBarangays.map((row) => <li key={row.barangay}><button type="button" aria-pressed={activeBarangay===row.barangay} onClick={() => setSelectedBarangay(row.barangay)} className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-md border p-3 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389] ${activeBarangay===row.barangay ? "border-[#704389] bg-[#F7F0FA]" : "border-[#E5E7EB] hover:bg-[#F8FAFC]"}`}><span className="break-words">{row.barangay}</span><strong className="shrink-0 tabular-nums">{row.total_cases}</strong></button></li>)}</ul>}
+          <div className="mt-6 grid gap-6 xl:grid-cols-2">
+            <AnalyticsPanel title="Case Intake Trends" subtitle="Case and client movement for the selected date range." headerClassName="rounded-t-xl bg-[#604477]">
+              <div className="mb-4 flex justify-end">
+                <ChartDownloadButton
+                  label="Download PNG"
+                  onClick={() =>
+                    handleExportChart(
+                      monthlyChartRef.current,
+                      "jurisguard-case-intake-trends.png",
+                      {
+                        title: "Case Intake Trends",
+                        description: "Shows changes in recorded case volume across the selected period.",
+                        coveragePeriod: coveragePeriodLabel(datePreset, dateRange),
+                        filtersApplied: "No additional filters",
+                      },
+                    )
+                  }
+                />
+              </div>
+              <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Intake Volume</p>
+                  <p className="mt-1 text-xl font-bold text-[#111827]">{intakeTotal}</p>
+                </div>
+                <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Client Growth</p>
+                  <p className="mt-1 text-xl font-bold text-[#111827]">{overview?.clients_in_range ?? 0}</p>
+                </div>
+                <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Peak Spike</p>
+                  <p className="mt-1 truncate text-xl font-bold text-[#111827]">{intakePeak ? `${intakePeak.month}: ${intakePeak.total_cases}` : "-"}</p>
+                </div>
+              </div>
+              <div ref={monthlyChartRef} className="h-80">
+                {displayMonthlyTrends.length === 0 ? <EmptyState message="No intake records match the selected date range." /> : (
+                  <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
+                    <LineChart data={displayMonthlyTrends}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                      <XAxis dataKey="month" stroke="#475569" tick={{ fill: "#475569" }} fontSize={12}>
+                        <Label value="Month" offset={-4} position="insideBottom" fill="#475569" />
+                      </XAxis>
+                      <YAxis stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} allowDecimals={false}>
+                        <Label value="Number of Cases" angle={-90} position="insideLeft" fill="#475569" />
+                      </YAxis>
+                      <Tooltip content={<ChartTooltip />} />
+                      <Line type="monotone" dataKey="total_cases" name="Cases" stroke={CHART_COLORS[0]} strokeWidth={3} dot={{ r: 4, fill: CHART_COLORS[0], stroke: CHART_COLORS[0] }} activeDot={{ r: 7, fill: CHART_COLORS[0], stroke: CHART_COLORS[0] }}>
+                        <LabelList dataKey="total_cases" position="top" fill="#475569" fontSize={10} />
+                      </Line>
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </AnalyticsPanel>
+
+            <AnalyticsPanel title="Weekly Volume Distribution" subtitle="Busiest intake days from encoded form dates." headerClassName="rounded-t-xl bg-[#604477]">
+              <div className="mb-4 flex justify-end">
+                <ChartDownloadButton
+                  label="Download PNG"
+                  onClick={() =>
+                    handleExportChart(
+                      weeklyChartRef.current,
+                      "jurisguard-weekly-volume-distribution.png",
+                      {
+                        title: "Weekly Volume Distribution",
+                        description: "Shows the distribution of recorded intake volume by day of the week.",
+                        coveragePeriod: coveragePeriodLabel(datePreset, dateRange),
+                        filtersApplied: "No additional filters",
+                      },
+                    )
+                  }
+                />
+              </div>
+              <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg bg-[#F7F0FA] p-3 text-[#704389]">
+                  <p className="text-xs font-semibold uppercase tracking-wide">Most Crowded</p>
+                  <p className="mt-1 text-lg font-bold">{intakeLoad?.busiest_day?.day ?? "-"}</p>
+                </div>
+                <div className="rounded-lg bg-[#F9FAFB] p-3 text-[#111827]">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Average Daily</p>
+                  <p className="mt-1 text-lg font-bold">{averageDailyIntake}</p>
+                </div>
+                <div className="rounded-lg bg-[#F9FAFB] p-3 text-[#111827]">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Range Cases</p>
+                  <p className="mt-1 text-lg font-bold">{intakeLoad?.total_weekly_cases ?? 0}</p>
+                </div>
+              </div>
+              <div ref={weeklyChartRef} className="h-80">
+                <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
+                  <BarChart data={intakeLoad?.weekly ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                    <XAxis dataKey="day" stroke="#475569" tick={{ fill: "#475569" }} fontSize={11}>
+                      <Label value="Day of Week" offset={-4} position="insideBottom" fill="#475569" />
+                    </XAxis>
+                    <YAxis stroke="#475569" tick={{ fill: "#475569" }} fontSize={12} allowDecimals={false}>
+                      <Label value="Recorded Cases" angle={-90} position="insideLeft" fill="#475569" />
+                    </YAxis>
+                    <Tooltip content={<ChartTooltip />} />
+                    <Bar dataKey="total_cases" name="Cases" radius={[8, 8, 0, 0]} fill={CHART_COLORS[0]}>
+                      <LabelList dataKey="total_cases" position="top" fill="#475569" fontSize={10} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </AnalyticsPanel>
           </div>
-        </section>
 
-        <details className="mt-6 rounded-xl border border-[#CBD5E1] bg-white p-5">
-          <summary className="min-h-11 cursor-pointer py-2 text-base font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]">Intake patterns by weekday and hour</summary>
-          <p className="mb-4 mt-1 text-sm text-[#4B5563]">Planning detail from recorded intake dates and times in this period.</p>
-          <div className="grid gap-6 xl:grid-cols-2">
-            <div><div className="mb-3 flex items-center justify-between gap-2"><h3 className="font-semibold">Cases by weekday</h3><ChartDownloadButton label="Download PNG" onClick={() => download(weeklyChartRef.current, "Cases by weekday")} /></div><div ref={weeklyChartRef} className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={intakeLoad?.weekly ?? []}><XAxis dataKey="day" tickFormatter={(day:string)=>day.slice(0,3)} fontSize={12} /><YAxis allowDecimals={false} width={35} fontSize={12} /><Tooltip content={<ChartTooltip />} /><Bar dataKey="total_cases" name="Cases received" fill="#704389" isAnimationActive={false} /></BarChart></ResponsiveContainer></div></div>
-            <div><h3 className="mb-4 font-semibold">Cases by recorded hour</h3>{hourlyRows.length ? <ul className="space-y-3">{hourlyRows.map((row)=><li key={row.hour} className="flex justify-between text-sm"><span>{row.hour}</span><strong>{row.total_cases}</strong></li>)}</ul> : <EmptyState message="No recorded intake times in this period." />}</div>
+          <div className="mt-6 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+            <AnalyticsPanel title="Hourly Intake Heat Analytics" subtitle="Actual encoded intake hours only." headerClassName="rounded-t-xl bg-[#604477]">
+              <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-[#FEF3C7] bg-[#FFFBEB] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#92400E]">Peak Intake Window</p>
+                  <p className="mt-1 text-lg font-bold text-[#111827]">{busiestHour ? busiestHour.hour : "-"}</p>
+                </div>
+                <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Recorded Time Blocks</p>
+                  <p className="mt-1 text-lg font-bold text-[#111827]">{hourlyRows.length}</p>
+                </div>
+              </div>
+              {hourlyRows.length === 0 ? (
+                <EmptyState message="No timestamped intake hours are available in the selected date range." />
+              ) : (
+                <div className="grid gap-2">
+                  {hourlyRows.map((item) => {
+                    const max = Math.max(...hourlyRows.map((row) => row.total_cases), 1);
+                    return (
+                      <div key={item.hour} className="grid grid-cols-[64px_1fr_42px] items-center gap-3 text-sm">
+                        <span className="font-semibold text-[#4B5563]">{item.hour}</span>
+                        <div className="h-3 overflow-hidden rounded-full bg-[#E5E7EB]">
+                          <div className="h-full rounded-full" style={{ width: `${Math.max((item.total_cases / max) * 100, 8)}%`, backgroundColor: CHART_COLORS[0] }} />
+                        </div>
+                        <span className="text-right font-bold text-[#475569]">{item.total_cases}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </AnalyticsPanel>
+
+            <AnalyticsPanel title="Legal Service Demand" subtitle="Most common encoded case types." headerClassName="rounded-t-xl bg-[#604477]">
+              <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-[#E7D7EE] bg-[#F7F0FA] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#704389]">Leading Demand</p>
+                  <p className="mt-1 truncate text-lg font-bold text-[#111827]">{leadingCategory?.category ?? "-"}</p>
+                </div>
+                <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Categorized Cases</p>
+                  <p className="mt-1 text-lg font-bold text-[#111827]">{categoryTotal}</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {caseCategories.length === 0 ? <EmptyState message="No case category data is available yet." /> : caseCategories.slice(0, 6).map((item) => (
+                  <div key={item.category}>
+                    <div className="mb-1 flex justify-between text-sm">
+                      <span className="font-semibold text-[#2B3642]">{item.category}</span>
+                      <span className="text-[#475569]">{item.total_cases}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-[#E5E7EB]">
+                      <div className="h-2 rounded-full" style={{ width: `${Math.max((item.total_cases / Math.max(...caseCategories.map((row) => row.total_cases), 1)) * 100, 4)}%`, backgroundColor: categoryColors.get(item.category) ?? CHART_COLORS[0] }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </AnalyticsPanel>
           </div>
-        </details>
-      </> : null}
-<ReportExportModal periodLocked isOpen={exportOpen} title="Analytics report export" description={`Report coverage: ${period}. Dates are set by the page; other export filters refine these datasets.`} fileName="jurisguard_analytics_report" rows={exportRows} scope="admin" redirectTo="/analytics" onClose={() => setExportOpen(false)} />
+
+          <div className="mt-6 grid gap-6 xl:grid-cols-3">
+            <AnalyticsPanel title="Case Category Analytics" subtitle="Common criminal case categories and distribution." headerClassName="rounded-t-xl bg-[#604477]">
+              <div className="mb-4 flex justify-end">
+                <ChartDownloadButton
+                  label="Download PNG"
+                  onClick={() =>
+                    handleExportChart(
+                      categoryChartRef.current,
+                      "jurisguard-case-category-analytics.png",
+                      {
+                        title: "Case Category Analytics",
+                        description: "Shows the distribution of recorded cases by legal service category.",
+                        coveragePeriod: coveragePeriodLabel(datePreset, dateRange),
+                        filtersApplied: "No additional filters",
+                        legend: categoryLegendItems,
+                      },
+                    )
+                  }
+                />
+              </div>
+              <div className="mb-3 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Distribution Base</p>
+                <p className="mt-1 text-sm font-bold text-[#111827]">{categoryTotal} categorized case record(s)</p>
+              </div>
+              <div ref={categoryChartRef}>
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 288 }}>
+                    <PieChart>
+                      <Pie data={categoryPie} dataKey="total_cases" nameKey="category" innerRadius={58} outerRadius={96} paddingAngle={3}>
+                        {categoryPie.map((entry) => <Cell key={entry.category} fill={categoryColors.get(entry.category) ?? CHART_COLORS[0]} />)}
+                      </Pie>
+                      <Tooltip content={<ChartTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2" aria-label="Case category legend">
+                  {categoryLegendItems.map((item) => (
+                    <div key={item.label} className="flex min-w-0 items-center gap-2 text-xs text-[#374151]">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: item.color }} aria-hidden="true" />
+                      <span className="min-w-0 truncate font-medium">
+                        {item.label} - {item.value} ({item.percentage}%)
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </AnalyticsPanel>
+
+            <AnalyticsPanel title="Terminated Case Analytics" subtitle="Closure volume, archive movement, and reason patterns." className="border-[#FECACA] xl:col-span-2" headerClassName="rounded-t-xl bg-[#604477]">
+              <div className="mb-4 flex justify-end">
+                <ChartDownloadButton
+                  label="Download PNG"
+                  onClick={() =>
+                    handleExportChart(
+                      terminatedChartRef.current,
+                      "jurisguard-terminated-case-analytics.png",
+                      {
+                        title: "Terminated Case Analytics",
+                        description: "Shows changes in terminated case volume across the selected period.",
+                        coveragePeriod: coveragePeriodLabel(datePreset, dateRange),
+                        filtersApplied: "No additional filters",
+                      },
+                    )
+                  }
+                />
+              </div>
+              <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                <div className="flex items-center gap-3 rounded-xl bg-[#FEF2F2] p-4 text-[#991B1B] sm:col-span-1">
+                  <FolderCheck className="h-6 w-6" />
+                  <div>
+                    <p className="text-2xl font-bold">{terminatedStats?.total ?? 0}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide">Terminated closures</p>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[#FECACA] bg-white p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#991B1B]">Common Reason</p>
+                  <p className="mt-1 truncate text-sm font-bold text-[#111827]">{mostCommonReason}</p>
+                </div>
+                <div className="rounded-xl border border-[#FECACA] bg-white p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#991B1B]">Closure Rate</p>
+                  <p className="mt-1 text-sm font-bold text-[#111827]">{terminatedStats?.closure_rate ?? 0}%</p>
+                </div>
+              </div>
+              <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+                <div ref={terminatedChartRef} className="rounded-xl border border-[#FECACA] bg-[#FFF7F7] p-3">
+                  {displayTerminatedMonthly.length === 0 ? (
+                    <EmptyState message="No terminated case records match the selected date range." />
+                  ) : (
+                    <ResponsiveContainer width="100%" height={240} initialDimension={{ width: 300, height: 240 }}>
+                      <AreaChart data={displayTerminatedMonthly}>
+                        <defs>
+                          <linearGradient id="terminatedGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#DC2626" stopOpacity={0.35} />
+                            <stop offset="95%" stopColor="#DC2626" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                        <XAxis dataKey="month" stroke="#475569" tick={{ fill: "#475569" }} fontSize={11}>
+                          <Label value="Month" offset={-4} position="insideBottom" fill="#475569" />
+                        </XAxis>
+                        <YAxis allowDecimals={false} stroke="#475569" tick={{ fill: "#475569" }} fontSize={12}>
+                          <Label value="Terminated Cases" angle={-90} position="insideLeft" fill="#475569" />
+                        </YAxis>
+                        <Tooltip content={<ChartTooltip />} />
+                        <Area type="monotone" dataKey="total_cases" name="Terminated" stroke="#DC2626" strokeWidth={2.5} fill="url(#terminatedGradient)">
+                          <LabelList dataKey="total_cases" position="top" fill="#475569" fontSize={10} />
+                        </Area>
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+                <div className="rounded-xl border border-[#FECACA] bg-white p-4">
+                  <p className="text-sm font-bold text-[#111827]">Closure Reasons</p>
+                  <p className="mt-1 text-xs font-medium text-[#6B7280]">Ranked from the selected date range.</p>
+                  <div className="mt-4 max-h-[220px] space-y-3 overflow-y-auto pr-2">
+                    {terminationReasons.length === 0 ? (
+                      <EmptyState message="No closure reasons available." />
+                    ) : (
+                      terminationReasons.map((row) => (
+                        <div key={row.reason}>
+                          <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+                            <span className="min-w-0 truncate font-semibold text-[#2B3642]">{row.reason}</span>
+                            <span className="shrink-0 rounded-full bg-[#FEE2E2] px-2.5 py-1 text-xs font-bold text-[#991B1B]">{row.total_cases}</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-[#FEE2E2]">
+                            <div className="h-2 rounded-full bg-[#DC2626]" style={{ width: `${Math.max((row.total_cases / maxTerminationReason) * 100, 8)}%` }} />
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </AnalyticsPanel>
+          </div>
+        </>
+      )}
+
+      <div className="mt-6 rounded-xl border border-[#E5E7EB] bg-white p-5 text-sm text-[#4B5563] shadow-sm ">
+        <div className="flex items-start gap-3">
+          <BarChart3 className="mt-0.5 h-5 w-5 shrink-0 text-[#704389]" />
+          <p>
+            Export includes monthly trends, weekly volume, category distribution, barangay density, and terminated case movement from the live database.
+          </p>
+        </div>
+      </div>
+
+      <ReportExportModal
+        isOpen={exportOpen}
+        title="Advanced Analytics Report Export"
+        description="Filter and export GIS, workload, category, OCR, and termination intelligence as CSV or Excel."
+        fileName="jurisguard_analytics_report"
+        rows={exportRows}
+        scope="admin"
+        redirectTo="/analytics"
+        onClose={() => setExportOpen(false)}
+      />
     </MainLayout>
   );
 }

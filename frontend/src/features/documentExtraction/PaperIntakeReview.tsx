@@ -326,6 +326,9 @@ export function PaperIntakeReview({ onSaved, saved, clientId, onDirtyChange, onS
       }))}</details>}
     {!readOnly && documentId && <details className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"><summary className="cursor-pointer py-0.5 font-medium text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#704389]">Re-read the original scan</summary><p className="mt-1.5 mb-2">Replaces unsaved edits with a new draft. The original scan and saved record stay unchanged until you save.</p><button type="button" disabled={busy} onClick={() => void reread()} className="h-8 rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Re-extract original scan</button></details>}
     </div></div></div>}
+    {!readOnly && !sections && onCancel && <div className="flex shrink-0 items-center justify-end border-t border-slate-200 bg-[#F8FAFC] px-4 py-3 sm:px-5">
+      <button type="button" onClick={onCancel} className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50">Cancel</button>
+    </div>}
     {!readOnly && sections && <div className="shrink-0 space-y-1.5 border-t border-slate-200 bg-white px-4 py-2.5 sm:px-5">
       {saveError && <div ref={errorRef} tabIndex={-1} role="alert" className="rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 focus:outline focus:outline-2 focus:outline-rose-700 sm:text-sm">{saveError}</div>}
       {success && <p role="status" className="rounded bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 sm:text-sm">{success}</p>}
