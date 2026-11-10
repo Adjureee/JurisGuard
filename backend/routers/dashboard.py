@@ -3,7 +3,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Query
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 import models
 
@@ -226,10 +226,10 @@ def register_dashboard_routes(
 
     @app.get("/api/dashboard/recent-activities")
     def dashboard_recent_activities(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-        query = db.query(models.AuditLog).outerjoin(models.User)
+        query = db.query(models.AuditLog).options(joinedload(models.AuditLog.user))
         if not is_admin(user):
             query = query.filter(models.AuditLog.user_id == user.user_id)
-        rows = query.order_by(models.AuditLog.timestamp.desc()).limit(12).all()
+        rows = query.order_by(models.AuditLog.timestamp.desc(), models.AuditLog.log_id.desc()).limit(12).all()
         return [
             {
                 "id": str(row.log_id),
@@ -313,7 +313,7 @@ def register_dashboard_routes(
         logs = (
             db.query(models.AuditLog)
             .filter(models.AuditLog.user_id == user.user_id)
-            .order_by(models.AuditLog.timestamp.desc())
+            .order_by(models.AuditLog.timestamp.desc(), models.AuditLog.log_id.desc())
             .limit(10)
             .all()
         )

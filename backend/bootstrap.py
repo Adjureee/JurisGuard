@@ -293,6 +293,13 @@ def ensure_schema_compatibility() -> None:
         "ALTER TABLE case_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS entity_id VARCHAR(100)",
+        "CREATE INDEX IF NOT EXISTS ix_audit_log_user_id ON audit_log (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_audit_log_action ON audit_log (action)",
+        "CREATE INDEX IF NOT EXISTS ix_audit_log_timestamp ON audit_log (timestamp)",
+        "CREATE INDEX IF NOT EXISTS ix_audit_log_timestamp_log_id ON audit_log (timestamp, log_id)",
+        "CREATE INDEX IF NOT EXISTS ix_audit_log_user_timestamp_log_id ON audit_log (user_id, timestamp, log_id)",
+        "CREATE INDEX IF NOT EXISTS ix_audit_log_action_timestamp_log_id ON audit_log (action, timestamp, log_id)",
+        "CREATE INDEX IF NOT EXISTS ix_audit_log_target_entity_id ON audit_log (target_entity, entity_id)",
         """
         CREATE OR REPLACE FUNCTION prevent_audit_log_mutation() RETURNS trigger
         LANGUAGE plpgsql AS $$

@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import logo1 from "../logo/logo1.png";
+import jurisguardLogo from "../logo/jurisguard-logo.svg";
 
 function DashboardIcon() {
   return (
@@ -125,9 +125,9 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
       }`}>
       <div className="mb-4 flex justify-center">
         <img
-          src={logo1}
+          src={jurisguardLogo}
           alt="JurisGuard logo"
-          className="h-36 w-36 shrink-0 object-cover object-center"
+          className="h-32 w-auto max-w-full shrink-0 object-contain object-center"
         />
       </div>
 

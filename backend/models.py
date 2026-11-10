@@ -368,12 +368,18 @@ class ExtractedMetadata(Base):
 
 class AuditLog(Base):
     __tablename__ = "audit_log"
+    __table_args__ = (
+        Index("ix_audit_log_timestamp_log_id", "timestamp", "log_id"),
+        Index("ix_audit_log_user_timestamp_log_id", "user_id", "timestamp", "log_id"),
+        Index("ix_audit_log_action_timestamp_log_id", "action", "timestamp", "log_id"),
+        Index("ix_audit_log_target_entity_id", "target_entity", "entity_id"),
+    )
 
     log_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("user.user_id"))
-    action = Column(String(50), nullable=False)
+    user_id = Column(Integer, ForeignKey("user.user_id"), index=True)
+    action = Column(String(50), nullable=False, index=True)
     target_entity = Column(String(50))
-    timestamp = Column(DateTime, nullable=False, server_default=func.now())
+    timestamp = Column(DateTime, nullable=False, server_default=func.now(), index=True)
     ip_address = Column(String(45))
     description = Column(Text)
     entity_id = Column(String(100))

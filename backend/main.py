@@ -19,7 +19,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy import func, or_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 import models
 from auth_limits import auth_attempts, source_attempts
@@ -63,6 +63,7 @@ models.Base.metadata.create_all(bind=engine)
 for _case_list_index in (
     models.IntakeRecord.__table__.indexes,
     models.Case.__table__.indexes,
+    models.AuditLog.__table__.indexes,
 ):
     for _index in _case_list_index:
         if _index.name in {
@@ -70,6 +71,10 @@ for _case_list_index in (
             "ix_case_type_status_updated_id",
             "ix_case_intake_id",
             "ix_case_client_id",
+            "ix_audit_log_timestamp_log_id",
+            "ix_audit_log_user_timestamp_log_id",
+            "ix_audit_log_action_timestamp_log_id",
+            "ix_audit_log_target_entity_id",
         }:
             _index.create(bind=engine, checkfirst=True)
 
@@ -1866,22 +1871,87 @@ ensure_transfer_access = register_transfer_routes(
 )
 
 
-@app.get("/api/audit-logs/")
-def list_audit_logs(
-    user: models.User = Depends(current_user),
-    db: Session = Depends(get_db),
-    limit: int = Query(100, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    action: str | None = Query(None),
-    date_from: str | None = Query(None),
-    date_to: str | None = Query(None),
-    user_id: int | None = Query(None),
-    search: str | None = Query(None),
+_AUDIT_MODULE_LABELS = {
+    "user": "Admin",
+    "client": "Clients",
+    "case": "Cases",
+    "ocr": "Cases",
+    "export": "Export",
+    "authentication": "Authentication",
+}
+_ADMIN_ROLE_NAMES = ("admin", "administrator", "system admin", "system administrator")
+_ADMIN_ROLE_PERMISSIONS = ("all", "all_access", "*", "admin")
+
+
+def _serialize_audit_log(row: models.AuditLog) -> dict[str, Any]:
+    target = row.target_entity or ""
+    target_key = target.lower()
+    export_event = row.action.startswith("Export ") or row.action == "Print Form"
+    module = (
+        "Export"
+        if export_event or "export" in target_key
+        else _AUDIT_MODULE_LABELS.get(target_key, target or "Admin")
+    )
+    role_name = display_role_name(row.user)
+    return {
+        "id": str(row.log_id),
+        "timestamp": row.timestamp.isoformat() if row.timestamp else "",
+        "userId": row.user_id,
+        "createdBy": row.user_id,
+        "user_id": row.user_id,
+        "user": row.user.full_name or row.user.email or row.user.username if row.user else "System",
+        "userRole": role_name,
+        "user_role": role_name,
+        "action": row.action,
+        "module": module,
+        "description": row.description or "",
+        "entity_type": row.target_entity,
+        "entity_id": row.entity_id,
+        "ip_address": row.ip_address,
+        "extraction_mode": row.extraction_mode,
+        "fallback_reason": row.fallback_reason,
+        "previous_hash": row.previous_hash,
+        "current_hash": row.current_hash,
+    }
+
+
+def _filtered_audit_log_query(
+    db: Session,
+    user: models.User,
+    *,
+    action: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    user_id: int | None = None,
+    user_role: str | None = None,
+    search: str | None = None,
 ):
-    query = db.query(models.AuditLog).outerjoin(models.User)
+    normalized_role = (user_role or "").strip().lower()
+    normalized_search = (search or "").strip()
+    needs_user_join = bool(normalized_search) or (
+        is_admin(user) and normalized_role in {"admin", "staff"}
+    )
+    query = db.query(models.AuditLog)
+    if needs_user_join:
+        query = query.outerjoin(models.User)
     if is_admin(user):
         if user_id is not None:
             query = query.filter(models.AuditLog.user_id == user_id)
+        if normalized_role == "system":
+            query = query.filter(models.AuditLog.user_id.is_(None))
+        elif normalized_role in {"admin", "staff"}:
+            query = query.outerjoin(models.Role, models.User.role_id == models.Role.role_id)
+            admin_expr = or_(
+                func.lower(func.trim(models.Role.role_name)).in_(_ADMIN_ROLE_NAMES),
+                func.lower(func.trim(models.Role.permissions)).in_(_ADMIN_ROLE_PERMISSIONS),
+            )
+            if normalized_role == "admin":
+                query = query.filter(models.AuditLog.user_id.is_not(None), admin_expr)
+            else:
+                query = query.filter(
+                    models.AuditLog.user_id.is_not(None),
+                    or_(models.Role.role_id.is_(None), ~admin_expr),
+                )
     else:
         query = query.filter(models.AuditLog.user_id == user.user_id)
     if action and action.lower() != "all":
@@ -1892,65 +1962,147 @@ def list_audit_logs(
     to_date = parse_date(date_to)
     if to_date:
         query = query.filter(models.AuditLog.timestamp < to_date + timedelta(days=1))
-    if search:
-        term = f"%{search.strip()}%"
+    if normalized_search:
+        escaped_search = (
+            normalized_search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        )
+        term = f"%{escaped_search}%"
         query = query.filter(
             or_(
-                models.AuditLog.action.ilike(term),
-                models.AuditLog.description.ilike(term),
-                models.AuditLog.target_entity.ilike(term),
-                models.User.full_name.ilike(term),
-                models.User.email.ilike(term),
-                models.User.username.ilike(term),
+                models.AuditLog.action.ilike(term, escape="\\"),
+                models.AuditLog.description.ilike(term, escape="\\"),
+                models.AuditLog.target_entity.ilike(term, escape="\\"),
+                models.User.full_name.ilike(term, escape="\\"),
+                models.User.email.ilike(term, escape="\\"),
+                models.User.username.ilike(term, escape="\\"),
             )
         )
+    return query
+
+
+@app.get("/api/audit-logs/")
+def list_audit_logs(
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+    limit: int = Query(100, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    page: int | None = Query(None, ge=1),
+    page_size: int | None = Query(None, ge=1, le=100),
+    action: str | None = Query(None),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+    user_id: int | None = Query(None),
+    user_role: str | None = Query(None),
+    search: str | None = Query(None),
+):
+    effective_limit = page_size if page_size is not None else limit
+    effective_offset = ((page - 1) * effective_limit) if page is not None else offset
+    query = _filtered_audit_log_query(
+        db,
+        user,
+        action=action,
+        date_from=date_from,
+        date_to=date_to,
+        user_id=user_id,
+        user_role=user_role,
+        search=search,
+    )
     rows = (
-        query.order_by(models.AuditLog.timestamp.desc(), models.AuditLog.log_id.desc())
-        .offset(offset)
-        .limit(limit)
+        query.options(joinedload(models.AuditLog.user).joinedload(models.User.role))
+        .order_by(models.AuditLog.timestamp.desc(), models.AuditLog.log_id.desc())
+        .offset(effective_offset)
+        .limit(effective_limit)
         .all()
     )
-    module_labels = {
-        "user": "Admin",
-        "client": "Clients",
-        "case": "Cases",
-        "ocr": "Cases",
-        "export": "Export",
-        "Authentication": "Authentication",
-    }
-    payload = []
-    for row in rows:
-        target = row.target_entity or ""
-        target_key = target.lower()
-        export_event = row.action.startswith("Export ") or row.action == "Print Form"
-        module = (
-            "Export"
-            if export_event or "export" in target_key
-            else module_labels.get(target_key, target or "Admin")
+    return [_serialize_audit_log(row) for row in rows]
+
+
+@app.get("/api/audit-logs/paged")
+def list_audit_logs_paged(
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+    action: str | None = Query(None),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+    user_id: int | None = Query(None),
+    user_role: str | None = Query(None),
+    search: str | None = Query(None),
+):
+    query = _filtered_audit_log_query(
+        db,
+        user,
+        action=action,
+        date_from=date_from,
+        date_to=date_to,
+        user_id=user_id,
+        user_role=user_role,
+        search=search,
+    )
+    total = query.order_by(None).count()
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    effective_page = min(page, total_pages)
+    rows = (
+        query.options(joinedload(models.AuditLog.user).joinedload(models.User.role))
+        .order_by(models.AuditLog.timestamp.desc(), models.AuditLog.log_id.desc())
+        .offset((effective_page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    actions_query = db.query(models.AuditLog.action).distinct()
+    if not is_admin(user):
+        actions_query = actions_query.filter(models.AuditLog.user_id == user.user_id)
+    available_actions = sorted(row[0] for row in actions_query.all() if row[0])
+
+    if is_admin(user):
+        user_ids_subquery = (
+            db.query(models.AuditLog.user_id)
+            .filter(models.AuditLog.user_id.is_not(None))
+            .distinct()
+            .subquery()
         )
-        payload.append(
+        user_rows = (
+            db.query(models.User)
+            .options(joinedload(models.User.role))
+            .join(user_ids_subquery, models.User.user_id == user_ids_subquery.c.user_id)
+            .order_by(models.User.user_id.asc())
+            .all()
+        )
+        available_users = [
             {
-                "id": str(row.log_id),
-                "timestamp": row.timestamp.isoformat() if row.timestamp else "",
-                "userId": row.user_id,
-                "createdBy": row.user_id,
-                "user_id": row.user_id,
-                "user": row.user.full_name or row.user.email or row.user.username if row.user else "System",
-                "userRole": display_role_name(row.user),
-                "user_role": display_role_name(row.user),
-                "action": row.action,
-                "module": module,
-                "description": row.description or "",
-                "entity_type": row.target_entity,
-                "entity_id": row.entity_id,
-                "ip_address": row.ip_address,
-                "extraction_mode": row.extraction_mode,
-                "fallback_reason": row.fallback_reason,
-                "previous_hash": row.previous_hash,
-                "current_hash": row.current_hash,
+                "user_id": person.user_id,
+                "name": person.full_name or person.email or person.username,
+                "role": display_role_name(person) or "staff",
             }
+            for person in user_rows
+        ]
+        roles_set = {entry["role"] for entry in available_users}
+        has_system = (
+            db.query(models.AuditLog.log_id)
+            .filter(models.AuditLog.user_id.is_(None))
+            .limit(1)
+            .first()
+            is not None
         )
-    return payload
+        if has_system:
+            roles_set.add("system")
+        available_roles = sorted(roles_set)
+    else:
+        available_users = []
+        available_roles = [display_role_name(user) or "staff"]
+
+    return {
+        "items": [_serialize_audit_log(row) for row in rows],
+        "total": total,
+        "page": effective_page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "available_actions": available_actions,
+        "available_users": available_users,
+        "available_roles": available_roles,
+    }
 
 
 @app.post("/api/audit-logs/")

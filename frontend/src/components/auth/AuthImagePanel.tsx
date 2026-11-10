@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import jurisguardLogo from "../../logo/jurisguard-logo.svg";
 
 interface AuthImagePanelProps {
   eyebrow?: string;
@@ -29,13 +30,12 @@ export default function AuthImagePanel({
         transition={{ duration: 0.45, ease: "easeOut" }}
         className="absolute left-8 top-8 flex items-center gap-3 text-white"
       >
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 shadow-sm backdrop-blur">
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6">
-            <path
-              fill="currentColor"
-              d="M12 3 4 6v5c0 5 3.4 8.3 8 10 4.6-1.7 8-5 8-10V6l-8-3Zm0 3.2 5 1.9V11c0 3.4-2 5.8-5 7.2-3-1.4-5-3.8-5-7.2V8.1l5-1.9ZM9 10h6v2H9v-2Zm1 3h4v2h-4v-2Z"
-            />
-          </svg>
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 p-1.5 ring-1 ring-white/20 backdrop-blur">
+          <img
+            src={jurisguardLogo}
+            alt="JurisGuard emblem"
+            className="h-full w-full object-contain"
+          />
         </div>
         <div>
           <p className="text-base font-bold tracking-wide">{eyebrow}</p>

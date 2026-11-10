@@ -35,3 +35,59 @@ test('dashboard activity preserves useful scan description and hides unknown pay
     description: '{"client_ids":[1,2,3]}',
   }), 'Attorney recorded an account activity');
 });
+
+const auditServiceSource = path.resolve(__dirname, '../../frontend/src/services/auditService.ts');
+const auditStub = fs.readFileSync(auditServiceSource, 'utf8')
+  .replace('import { apiClient } from "../api/client";', 'const apiClient = { get: async () => ({ data: [] }), post: async () => ({ data: {} }) };');
+const auditModule = new Module(auditServiceSource, module);
+auditModule.filename = auditServiceSource;
+auditModule.paths = module.paths;
+auditModule._compile(ts.transpileModule(auditStub, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, auditServiceSource);
+const {
+  AUDIT_LOG_PAGE_SIZE,
+  resolveAuditDateRange,
+  buildAuditLogQueryParams,
+} = auditModule.exports;
+
+test('audit service resolves preset and explicit date ranges and scopes non-admin filters', () => {
+  assert.equal(AUDIT_LOG_PAGE_SIZE, 25);
+  const refDate = new Date(2026, 3, 15, 14, 30, 0);
+  assert.deepEqual(resolveAuditDateRange('today', '', '', refDate), {
+    date_from: '2026-04-15',
+    date_to: '2026-04-15',
+  });
+  assert.deepEqual(resolveAuditDateRange('month', '2026-04-05', '2026-04-12', refDate), {
+    date_from: '2026-04-05',
+    date_to: '2026-04-12',
+  });
+
+  const staffParams = buildAuditLogQueryParams({
+    page: 2,
+    pageSize: 25,
+    action: 'Create Case',
+    userId: '10',
+    userRole: 'admin',
+    search: '  synthetic  ',
+    currentUser: { user_id: 20, role: 'staff', username: 'staff', email: 's@local', full_name: 'Staff' },
+  });
+  assert.equal(staffParams.page, 2);
+  assert.equal(staffParams.page_size, 25);
+  assert.equal(staffParams.action, 'Create Case');
+  assert.equal(staffParams.user_id, undefined);
+  assert.equal(staffParams.user_role, undefined);
+  assert.equal(staffParams.search, 'synthetic');
+
+  const adminParams = buildAuditLogQueryParams({
+    page: 1,
+    pageSize: 25,
+    action: 'all',
+    userId: '10',
+    userRole: 'staff',
+    currentUser: { user_id: 1, role: 'admin', username: 'admin', email: 'a@local', full_name: 'Admin' },
+  });
+  assert.equal(adminParams.action, undefined);
+  assert.equal(adminParams.user_id, 10);
+  assert.equal(adminParams.user_role, 'staff');
+});

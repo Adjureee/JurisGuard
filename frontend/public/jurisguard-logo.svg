@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none">
+  <defs>
+    <linearGradient id="jg-shield-outer" x1="64" y1="36" x2="448" y2="476" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8452A1" />
+      <stop offset="50%" stop-color="#704389" />
+      <stop offset="100%" stop-color="#4A275E" />
+    </linearGradient>
+    <linearGradient id="jg-shield-inner" x1="96" y1="72" x2="416" y2="440" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2B3642" />
+      <stop offset="100%" stop-color="#161F29" />
+    </linearGradient>
+    <linearGradient id="jg-gold" x1="140" y1="100" x2="372" y2="390" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FDE68A" />
+      <stop offset="45%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#B45309" />
+    </linearGradient>
+    <filter id="jg-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#0F172A" flood-opacity="0.22" />
+    </filter>
+  </defs>
+
+  <!-- Outer Shield ("Guard") -->
+  <path
+    filter="url(#jg-shadow)"
+    d="M256 28 76 96v138c0 122.4 76.8 209.6 180 250 103.2-40.4 180-127.6 180-250V96L256 28Z"
+    fill="url(#jg-shield-outer)"
+  />
+
+  <!-- Gold Trim Border -->
+  <path
+    d="M256 50 96 110.5V234c0 108.8 68.1 187.2 160 224.2 91.9-37 160-115.4 160-224.2V110.5L256 50Z"
+    stroke="url(#jg-gold)"
+    stroke-width="6"
+    fill="url(#jg-shield-inner)"
+  />
+
+  <!-- Subtle Inner Legal Document Corner & Scan Lines -->
+  <rect x="196" y="138" width="120" height="154" rx="10" fill="#704389" fill-opacity="0.22" stroke="#A78BFA" stroke-opacity="0.35" stroke-width="2" />
+  <line x1="216" y1="168" x2="296" y2="168" stroke="#E9D5FF" stroke-opacity="0.35" stroke-width="4" stroke-linecap="round" />
+  <line x1="216" y1="190" x2="296" y2="190" stroke="#E9D5FF" stroke-opacity="0.35" stroke-width="4" stroke-linecap="round" />
+  <line x1="216" y1="212" x2="276" y2="212" stroke="#E9D5FF" stroke-opacity="0.35" stroke-width="4" stroke-linecap="round" />
+
+  <!-- Scales of Justice ("Juris") -->
+  <!-- Central Pillar & Finial -->
+  <circle cx="256" cy="122" r="14" fill="url(#jg-gold)" />
+  <rect x="250" y="134" width="12" height="202" rx="6" fill="url(#jg-gold)" />
+
+  <!-- Crossbeam -->
+  <path
+    d="M148 166c34 0 68-14 108-14s74 14 108 14"
+    stroke="url(#jg-gold)"
+    stroke-width="10"
+    stroke-linecap="round"
+  />
+  <circle cx="148" cy="166" r="8" fill="#FDE68A" />
+  <circle cx="364" cy="166" r="8" fill="#FDE68A" />
+
+  <!-- Left Scale Strings & Pan -->
+  <path d="M148 172 118 252M148 172l30 80" stroke="#FDE68A" stroke-width="4" stroke-linecap="round" />
+  <path d="M108 252h80c-6 22-21 34-40 34s-34-12-40-34Z" fill="url(#jg-gold)" />
+
+  <!-- Right Scale Strings & Pan -->
+  <path d="M364 172 334 252M364 172l30 80" stroke="#FDE68A" stroke-width="4" stroke-linecap="round" />
+  <path d="M324 252h80c-6 22-21 34-40 34s-34-12-40-34Z" fill="url(#jg-gold)" />
+
+  <!-- Pedestal Base -->
+  <path d="M212 336h88l12 18H200l12-18Z" fill="url(#jg-gold)" />
+  <rect x="188" y="356" width="136" height="12" rx="6" fill="url(#jg-gold)" />
+
+  <!-- Verification Checkmark Badge at Shield Point -->
+  <circle cx="256" cy="404" r="22" fill="#704389" stroke="url(#jg-gold)" stroke-width="4" />
+  <path d="m245 404 8 8 15-16" stroke="#FEF3C7" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
