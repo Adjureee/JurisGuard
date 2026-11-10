@@ -53,6 +53,7 @@ interface CaseWorkflowProps {
   requireReviewBeforeSubmit?: boolean;
   submitLabel?: string;
   stepNumberOffset?: number;
+  hideStepIndicator?: boolean;
   onClientUpdated?: (client: ClientRecord) => void;
   onCancel?: () => void;
   onSubmit: (values: AddCaseFormValues) => void | Promise<void>;
@@ -66,6 +67,7 @@ export function CaseWorkflow({
   requireReviewBeforeSubmit = false,
   submitLabel = "Save Case",
   stepNumberOffset = 0,
+  hideStepIndicator = false,
   onClientUpdated,
   onCancel,
   onSubmit,
@@ -399,6 +401,63 @@ export function CaseWorkflow({
 
   const continueToReview = () => setStep(reviewStep);
 
+  const handleControlNoKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      [
+        "Backspace",
+        "Delete",
+        "Tab",
+        "ArrowLeft",
+        "ArrowRight",
+        "ArrowUp",
+        "ArrowDown",
+        "Home",
+        "End",
+        "Enter",
+        "Escape",
+      ].includes(event.key)
+    ) {
+      return;
+    }
+    if (!/^[0-9]$/.test(event.key)) {
+      event.preventDefault();
+      return;
+    }
+    const input = event.currentTarget;
+    const selectionLength = (input.selectionEnd ?? 0) - (input.selectionStart ?? 0);
+    if (input.value.length >= 11 && selectionLength === 0) {
+      event.preventDefault();
+    }
+  };
+
+  const handleControlNoPaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
+    event.preventDefault();
+    const pasteData = event.clipboardData.getData("text");
+    const digitsOnly = pasteData.replace(/\D/g, "");
+    const input = event.currentTarget;
+    const currentVal = input.value;
+    const start = input.selectionStart ?? currentVal.length;
+    const end = input.selectionEnd ?? currentVal.length;
+    const nextVal = (currentVal.slice(0, start) + digitsOnly + currentVal.slice(end)).slice(0, 11);
+    input.value = nextVal;
+    setValue("intake_record.control_no", nextVal, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+
+  const handleControlNoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitized = event.target.value.replace(/\D/g, "").slice(0, 11);
+    event.target.value = sanitized;
+    setValue("intake_record.control_no", sanitized, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+
   const toggleRepresentativeCollapse = (
     clientId: string,
     shouldCollapse: boolean,
@@ -531,9 +590,11 @@ export function CaseWorkflow({
       )}
       className="flex max-h-[calc(92vh-138px)] flex-col"
     >
-      <div className="border-b border-[#E5E7EB] bg-white px-6 py-4">
-        <StepIndicator steps={steps} currentStep={step} stepNumberOffset={stepNumberOffset} />
-      </div>
+      {!hideStepIndicator && steps.length > 1 && (
+        <div className="border-b border-[#E5E7EB] bg-white px-6 py-4">
+          <StepIndicator steps={steps} currentStep={step} stepNumberOffset={stepNumberOffset} />
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8FAFC] px-6 py-5">
         {!hasLockedSelection && step === 0 && (
@@ -620,6 +681,12 @@ export function CaseWorkflow({
                     label="Control Number"
                     registration={register("intake_record.control_no")}
                     error={errors.intake_record?.control_no?.message}
+                    maxLength={11}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    onKeyDown={handleControlNoKeyDown}
+                    onPaste={handleControlNoPaste}
+                    onChange={handleControlNoChange}
                   />
                   <label className="block">
                     <span className="text-sm font-medium text-[#4B5563]">
@@ -759,6 +826,12 @@ export function CaseWorkflow({
                       label="Control No."
                       registration={register("intake_record.control_no")}
                       error={errors.intake_record?.control_no?.message}
+                      maxLength={11}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      onKeyDown={handleControlNoKeyDown}
+                      onPaste={handleControlNoPaste}
+                      onChange={handleControlNoChange}
                     />
                     <label className="block">
                       <span className="text-sm font-medium text-[#4B5563]">

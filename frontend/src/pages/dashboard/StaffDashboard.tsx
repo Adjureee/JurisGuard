@@ -146,7 +146,6 @@ export default function StaffDashboard() {
     <MainLayout>
       <DashboardGreeting
         name={user?.full_name || user?.email || "Attorney/Staff"}
-        context="Staff Workspace · My Legal Intake Dashboard"
         actions={<DashboardClock />}
       />
 

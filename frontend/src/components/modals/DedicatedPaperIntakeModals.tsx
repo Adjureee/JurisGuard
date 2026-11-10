@@ -46,7 +46,7 @@ function IntakeModalFrame({ title, description, icon, dialogRef, children, stage
 }) {
   return <ModalPortal><div ref={dialogRef} data-intake-stage={stage} data-intake-modal={modalKind} className="jurisguard-modal-overlay intake-modal bg-black/60 p-2 sm:p-4" role="dialog" aria-modal="true" aria-label={title}>
     <div className={`intake-session-surface flex h-[92vh] max-h-[92vh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-xl ${surfaceClassName ?? 'max-w-6xl'}`}>
-      <header className="flex shrink-0 items-center justify-between gap-3 bg-[#704389] px-4 py-2.5 text-white sm:px-5">
+      <header className="flex shrink-0 items-center justify-between gap-3 rounded-t-2xl bg-[#704389] px-4 py-2.5 text-white sm:px-5">
         <div className="flex min-w-0 items-center gap-2.5">
           {icon}
           <div className="min-w-0"><h2 className="text-base font-semibold leading-tight sm:text-lg">{title}</h2><p className="mt-0.5 truncate text-xs text-white/85">{description}</p></div>
@@ -113,7 +113,14 @@ export function ScanIntakeModal({ onClose, caseType = 'Criminal' }: { onClose: (
   const dialog = useRef<HTMLDivElement>(null);
   const upsertClient = useCriminalCasesStore(state => state.upsertClient);
   const upsertCase = useCriminalCasesStore(state => state.upsertCase);
+  const storeClients = useCriminalCasesStore(state => state.clients);
   const setStoreClients = useCriminalCasesStore(state => state.setClients);
+
+  useEffect(() => {
+    listClientRecords()
+      .then(records => setStoreClients(records))
+      .catch(() => { /* keep existing store clients */ });
+  }, [setStoreClients]);
 
   const close = useCallback(async (forceConfirm = false) => {
     if ((dirty || forceConfirm) && !await confirm({ title: 'Discard unsaved entry?', message: 'Your selected scan or corrections have not been saved. Cancel to keep working.', confirmLabel: 'Discard entry' })) return;
@@ -149,7 +156,7 @@ export function ScanIntakeModal({ onClose, caseType = 'Criminal' }: { onClose: (
       </div>
     </IntakeModalFrame>}
     {client && viewingCase && <IntakeModalFrame stage={stage} dialogRef={dialog} icon={<Camera className="mt-1 h-5 w-5 shrink-0" aria-hidden="true" />} title="Scan PAO Sheet" description="Continue with the case details." onClose={onClose}>
-      <div className="min-h-0 flex-1 overflow-y-auto"><CaseWorkflow caseType={caseType} clients={[]} lockedClient={client} lockedClients={[client]} submitLabel="Save Case" onCancel={() => void close(true)} onClientUpdated={updated => { upsertClient(updated); setClient(updated); }} onSubmit={async values => {
+      <div className="min-h-0 flex-1 overflow-y-auto"><CaseWorkflow caseType={caseType} clients={client ? [client, ...storeClients.filter(c => c.client_id !== client.client_id)] : storeClients} lockedClient={client} lockedClients={client ? [client] : []} submitLabel="Save Case" onCancel={() => void close(true)} onClientUpdated={updated => { upsertClient(updated); setClient(updated); }} onSubmit={async values => {
         const record = await createCaseRecord(values, caseType); upsertCase(record);
         try { setStoreClients(await listClientRecords()); } catch { /* Refreshes on the next page load. */ }
         toast.success('Case saved'); onClose();
@@ -168,7 +175,14 @@ export function UploadIntakeModal({ onClose, caseType = 'Criminal' }: { onClose:
   const dialog = useRef<HTMLDivElement>(null);
   const upsertClient = useCriminalCasesStore(state => state.upsertClient);
   const upsertCase = useCriminalCasesStore(state => state.upsertCase);
+  const storeClients = useCriminalCasesStore(state => state.clients);
   const setStoreClients = useCriminalCasesStore(state => state.setClients);
+
+  useEffect(() => {
+    listClientRecords()
+      .then(records => setStoreClients(records))
+      .catch(() => { /* keep existing store clients */ });
+  }, [setStoreClients]);
 
   const close = useCallback(async (forceConfirm = false) => {
     if ((dirty || forceConfirm) && !await confirm({ title: 'Discard unsaved entry?', message: 'Your selected document or corrections have not been saved. Cancel to keep working.', confirmLabel: 'Discard entry' })) return;
@@ -221,7 +235,7 @@ export function UploadIntakeModal({ onClose, caseType = 'Criminal' }: { onClose:
       </div>
     </IntakeModalFrame>}
     {client && viewingCase && <IntakeModalFrame stage={stage} dialogRef={dialog} icon={<Upload className="mt-1 h-5 w-5 shrink-0" aria-hidden="true" />} title="Upload PAO Sheet" description="Continue with the case details." onClose={onClose}>
-      <div className="min-h-0 flex-1 overflow-y-auto"><CaseWorkflow caseType={caseType} clients={[]} lockedClient={client} lockedClients={[client]} submitLabel="Save Case" onCancel={() => void close(true)} onClientUpdated={updated => { upsertClient(updated); setClient(updated); }} onSubmit={async values => {
+      <div className="min-h-0 flex-1 overflow-y-auto"><CaseWorkflow caseType={caseType} clients={client ? [client, ...storeClients.filter(c => c.client_id !== client.client_id)] : storeClients} lockedClient={client} lockedClients={client ? [client] : []} submitLabel="Save Case" onCancel={() => void close(true)} onClientUpdated={updated => { upsertClient(updated); setClient(updated); }} onSubmit={async values => {
         const record = await createCaseRecord(values, caseType); upsertCase(record);
         try { setStoreClients(await listClientRecords()); } catch { /* Refreshes on the next page load. */ }
         toast.success('Case saved'); onClose();

@@ -136,7 +136,12 @@ const caseFormShape = {
     client_ids: z.array(optionalText).optional(),
     case_type: z.enum(["Criminal", "Civil"]).optional(),
     intake_record: z.object({
-      control_no: requiredText("Control number"),
+      control_no: z
+        .string()
+        .trim()
+        .min(1, "Control number is required")
+        .regex(/^\d+$/, "Control number must contain numbers only")
+        .max(11, "Control number must be at most 11 digits"),
       form_date: requiredDate("Form date"),
       region: optionalText,
       district_office: requiredText("District office"),

@@ -764,6 +764,7 @@ export default function CriminalCasesPage({
       )}
       <AddClientModal
         isOpen={showClientModal}
+        caseType={caseType}
         initialMode={dashboardIntakeMode}
         onClose={() => {
           setShowClientModal(false);

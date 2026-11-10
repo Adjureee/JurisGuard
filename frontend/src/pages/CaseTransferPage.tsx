@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
+import { useConfirmation } from "../components/ConfirmationProvider";
 import MainLayout from "../layouts/MainLayout";
 import PageHeader from "../components/PageHeader";
 import ModalPortal from "../components/modals/ModalPortal";
@@ -11,7 +12,7 @@ import { createAuditLog } from "../services/auditService";
 import {
   confirmCaseTransfer, createCaseTransfer, getCaseTransfer, listCaseTransfers,
   listTransferAttorneys, listTransferCases, returnCaseTransfer, submitCaseTransfer,
-  updateCaseTransfer, buildCaseTransferExcel, type CaseTransfer, type TransferAdminEntry, type TransferAttorney,
+  updateCaseTransfer, buildCaseTransferExcel, getTransferErrorMessage, type CaseTransfer, type TransferAdminEntry, type TransferAttorney,
   type TransferCase,
 } from "../services/caseTransferService";
 
@@ -34,6 +35,7 @@ function statusClass(status: string) {
 
 export default function CaseTransferPage() {
   const { user } = useAuth();
+  const confirm = useConfirmation();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedReportId = searchParams.get("report");
   const [reports, setReports] = useState<CaseTransfer[]>([]);
@@ -124,18 +126,96 @@ export default function CaseTransferPage() {
 
   const openCreate = () => { setSelected(null); setEditingReportId(null); setEditingEntryIndex(null); setSelectedIds([]); setEntries([]); setRecipient(""); setSourceAttorney(user?.role === "admin" ? "" : String(user?.user_id || "")); setSearch({ Criminal: "", Civil: "" }); setTitle("Transfer of Cases"); setReportDate(new Date().toISOString().slice(0, 10)); setModal("create"); };
   const openEdit = (report: CaseTransfer) => { setEditingReportId(report.report_id); setSelectedIds(report.items.map((item) => item.case_id)); setEntries(report.administrative_entries); setRecipient(String(report.to_user_id)); setSourceAttorney(String(report.from_user_id)); setSearch({ Criminal: "", Civil: "" }); setCases({ Criminal: [], Civil: [] }); setCasesLoading({ Criminal: false, Civil: false }); setCasesError({ Criminal: null, Civil: null }); setTitle(report.title); setReportDate(report.report_date.slice(0, 10)); setModal("create"); };
-  const closeDraft = () => {
+  const closeDraft = async () => {
     const hasChanges = Boolean(editingReportId || selectedIds.length || entries.length || recipient || title !== "Transfer of Cases");
-    if (hasChanges && !window.confirm("Discard the current transfer draft changes? The original cases will not be changed.")) return;
+    if (hasChanges) {
+      const confirmed = await confirm({
+        title: "Discard Transfer Report?",
+        message: "Are you sure you want to cancel? Any unsaved selections or changes to this transfer report will be discarded.",
+        confirmLabel: "Discard Report",
+      });
+      if (!confirmed) return;
+    }
     setModal(null);
   };
   const openReport = async (report: CaseTransfer) => { setBusy(true); try { setSelected(await getCaseTransfer(report.report_id)); setModal("view"); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to open report"); } finally { setBusy(false); } };
   const toggleCase = (caseId: number) => setSelectedIds((current) => current.includes(caseId) ? current.filter((id) => id !== caseId) : [...current, caseId]);
   const payload = () => ({ title, report_date: reportDate, from_user_id: Number(sourceAttorney), to_user_id: Number(recipient), case_ids: selectedIds, administrative_entries: entries });
-  const saveDraft = async () => { if (!sourceUserId || !recipient || !selectedIds.length) { toast.error("Select transferring and receiving attorneys and at least one case."); return; } if (sourceUserId === Number(recipient)) { toast.error("The transferring and receiving attorneys must be different."); return; } setBusy(true); try { const report = editingReportId ? await updateCaseTransfer(editingReportId, payload()) : await createCaseTransfer(payload()); toast.success(editingReportId ? "Transfer report updated" : "Transfer draft created"); await load(); setSelected(report); setEditingReportId(null); setModal("view"); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to save transfer"); } finally { setBusy(false); } };
-  const submit = async () => { if (!selected) return; setBusy(true); try { const report = await submitCaseTransfer(selected.report_id); setSelected(report); await load(); toast.success("Transfer submitted for receipt"); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to submit transfer"); } finally { setBusy(false); } };
-  const returnReport = async () => { if (!selected || !returnRemarks.trim()) return; setBusy(true); try { const report = await returnCaseTransfer(selected.report_id, returnRemarks); setSelected(report); setReturnRemarks(""); setModal("view"); await load(); toast.success("Transfer returned for correction"); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to return transfer"); } finally { setBusy(false); } };
-  const confirm = async () => { if (!selected || !window.confirm("Confirm receipt and update all selected case assignments?")) return; setBusy(true); try { const report = await confirmCaseTransfer(selected.report_id); setSelected(report); await load(); toast.success("Transfer received and assignments updated"); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to confirm transfer"); } finally { setBusy(false); } };
+  const saveDraft = async () => {
+    if (!sourceUserId || !recipient || !selectedIds.length) {
+      toast.error("Select transferring and receiving attorneys and at least one case.");
+      return;
+    }
+    if (sourceUserId === Number(recipient)) {
+      toast.error("The transferring and receiving attorneys must be different.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const report = editingReportId
+        ? await updateCaseTransfer(editingReportId, payload())
+        : await createCaseTransfer(payload());
+      toast.success(editingReportId ? "Transfer report updated" : "Transfer draft created");
+      await load();
+      setSelected(report);
+      setEditingReportId(null);
+      setModal("view");
+    } catch (error) {
+      toast.error(getTransferErrorMessage(error, "Unable to save transfer"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const submit = async () => {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      const report = await submitCaseTransfer(selected.report_id);
+      setSelected(report);
+      await load();
+      toast.success("Transfer submitted for receipt");
+    } catch (error) {
+      toast.error(getTransferErrorMessage(error, "Unable to submit transfer"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const returnReport = async () => {
+    if (!selected || !returnRemarks.trim()) return;
+    setBusy(true);
+    try {
+      const report = await returnCaseTransfer(selected.report_id, returnRemarks);
+      setSelected(report);
+      setReturnRemarks("");
+      setModal("view");
+      await load();
+      toast.success("Transfer returned for correction");
+    } catch (error) {
+      toast.error(getTransferErrorMessage(error, "Unable to return transfer"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const confirmAction = async () => {
+    if (!selected) return;
+    const confirmed = await confirm({
+      title: "Confirm Case Transfer?",
+      message: "Confirm receipt and update all selected case assignments to you?",
+      confirmLabel: "Confirm Receipt",
+    });
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      const report = await confirmCaseTransfer(selected.report_id);
+      setSelected(report);
+      await load();
+      toast.success("Transfer received and assignments updated");
+    } catch (error) {
+      toast.error(getTransferErrorMessage(error, "Unable to confirm transfer"));
+    } finally {
+      setBusy(false);
+    }
+  };
   const downloadExcel = async () => {
     if (!selected || user?.role !== "admin") return;
     setBusy(true);
@@ -273,7 +353,7 @@ export default function CaseTransferPage() {
           <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#E5E7EB] bg-white px-4 py-3 sm:px-6">
             {user?.role === "admin" && <button type="button" onClick={downloadExcel} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-4 text-sm font-semibold text-[#334155] transition hover:bg-[#F8FAFC]">Download Excel report</button>}
             {editable && selected.from_user_id === user?.user_id && <><button type="button" onClick={() => openEdit(selected)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-4 text-sm font-semibold text-[#334155] transition hover:bg-[#F8FAFC]">Edit report</button><button type="button" disabled={busy} onClick={() => void submit()} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#704389] px-4 text-sm font-semibold text-white transition hover:bg-[#5F3675]">Submit report</button></>}
-            {canReceive && <><button type="button" onClick={() => setModal("return")} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-800 transition hover:bg-amber-50">Return for correction</button><button type="button" disabled={busy} onClick={() => void confirm()} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800">Confirm receipt</button></>}
+            {canReceive && <><button type="button" onClick={() => setModal("return")} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-800 transition hover:bg-amber-50">Return for correction</button><button type="button" disabled={busy} onClick={() => void confirmAction()} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800">Confirm receipt</button></>}
           </div>
         </div>
       </div>

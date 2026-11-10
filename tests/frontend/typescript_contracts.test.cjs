@@ -14,9 +14,31 @@ const {criminalAddCaseFormSchema,addCaseFormSchema}=load('src/features/criminalC
 function fictionalInput(){
   const representative={rep_name:'',rep_age:'',rep_sex:'',civil_status:'',rep_address:'',rep_contact_no:'',relationship_to_applicant:'',rep_email:''};
   return {client_id:'SYN-1',client_ids:['SYN-1'],case_type:'Criminal',representative,client_representatives:[{client_id:'SYN-1',representative}],adverse_party:{role:'',name:'',address:''},
-    intake_record:{control_no:'FICTIONAL-001',form_date:'2026-01-10',region:'Region XI',district_office:'Fictional office',applicant_role:'Accused',applicant_role_other:''},
+    intake_record:{control_no:'00000000001',form_date:'2026-01-10',region:'Region XI',district_office:'Fictional office',applicant_role:'Accused',applicant_role_other:''},
     cases:{title_of_case:'',case_no:'FICTIONAL-CASE',court_body:'Fictional court',status_of_case:'Pending',incident_barangay:'',incident_city:'',last_action_taken:'Reviewed fictional record',detained:false,date_of_confinement:'',place_of_detention:'',location_type:'',cause_of_action:'Fictional cause'}};
 }
+test('control number validates numeric input up to 11 digits and preserves leading zeros',()=>{
+  const input=fictionalInput();
+  input.intake_record.control_no='00123456789';
+  const result=criminalAddCaseFormSchema.parse(input);
+  assert.equal(result.intake_record.control_no,'00123456789');
+
+  // Rejects letters/symbols
+  input.intake_record.control_no='12345A';
+  assert.equal(criminalAddCaseFormSchema.safeParse(input).success,false);
+
+  // Rejects spaces
+  input.intake_record.control_no='123 456';
+  assert.equal(criminalAddCaseFormSchema.safeParse(input).success,false);
+
+  // Rejects > 11 digits
+  input.intake_record.control_no='123456789012';
+  assert.equal(criminalAddCaseFormSchema.safeParse(input).success,false);
+
+  // Rejects empty
+  input.intake_record.control_no='';
+  assert.equal(criminalAddCaseFormSchema.safeParse(input).success,false);
+});
 test('criminal form normalizes raw representative ages and omits civil-only fields',()=>{
   const input=fictionalInput();input.cases.facts_of_case='Not part of criminal intake';input.intake_record.nature_of_case='Civil-only field';
   const result=criminalAddCaseFormSchema.parse(input);

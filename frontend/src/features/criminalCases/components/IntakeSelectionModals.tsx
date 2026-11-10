@@ -54,27 +54,25 @@ export function ManualInputSelectionModal({
           if (event.key === "Escape") onClose();
         }}
       >
-        <div className="jurisguard-modal-surface w-full max-w-xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
-          <header className="flex items-center justify-between gap-4 border-b border-[#5F3675] bg-[#704389] px-5 py-4 text-white">
-            <div className="flex items-center gap-3">
-              <Keyboard className="h-5 w-5 shrink-0" aria-hidden="true" />
-              <div>
-                <h2 id="manual-input-title" className="text-lg font-bold">
-                  Manual Input
-                </h2>
-                <p className="mt-1 text-sm text-white/85">
-                  Select what you want to add.
-                </p>
-              </div>
+        <div className="jurisguard-modal-surface w-full max-w-xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-[#704389] shadow-xl">
+          <header className="flex items-center gap-3 rounded-t-2xl border-b border-[#5F3675] bg-[#704389] px-5 py-4 text-white">
+            <Keyboard className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <div>
+              <h2 id="manual-input-title" className="text-lg font-bold">
+                Manual Input
+              </h2>
+              <p className="mt-1 text-sm text-white/85">
+                Select what you want to add.
+              </p>
             </div>
           </header>
-          <div className="space-y-3 p-5">
+          <div className="space-y-3 bg-white p-5">
             <button
               type="button"
               onClick={onSelectCase}
-              className="flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#704389] bg-[#FAF7FC] p-4 text-left transition hover:bg-[#F2E9F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
+              className="group flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#D1D5DB] bg-white p-4 text-left transition hover:border-[#704389] hover:bg-[#FAF7FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389] active:border-[#704389] active:bg-[#F2E9F7]"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white text-[#704389] shadow-sm">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[#4B5563] shadow-xs transition-colors group-hover:bg-[#FAF7FC] group-hover:text-[#704389]">
                 <PlusIcon />
               </span>
               <span className="min-w-0 flex-1">
@@ -86,16 +84,19 @@ export function ManualInputSelectionModal({
                   associated client information.
                 </span>
               </span>
-              <span aria-hidden="true" className="text-lg text-[#704389]">
+              <span
+                aria-hidden="true"
+                className="text-lg text-[#9CA3AF] transition-colors group-hover:text-[#704389]"
+              >
                 ›
               </span>
             </button>
             <button
               type="button"
               onClick={onSelectClient}
-              className="flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#D1D5DB] bg-white p-4 text-left transition hover:bg-[#F8FAFC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
+              className="group flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#D1D5DB] bg-white p-4 text-left transition hover:border-[#704389] hover:bg-[#FAF7FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389] active:border-[#704389] active:bg-[#F2E9F7]"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#15803D] shadow-sm">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[#4B5563] shadow-xs transition-colors group-hover:bg-[#FAF7FC] group-hover:text-[#704389]">
                 <UserPlusIcon />
               </span>
               <span className="min-w-0 flex-1">
@@ -106,12 +107,15 @@ export function ManualInputSelectionModal({
                   Create a new client record manually.
                 </span>
               </span>
-              <span aria-hidden="true" className="text-lg text-[#704389]">
+              <span
+                aria-hidden="true"
+                className="text-lg text-[#9CA3AF] transition-colors group-hover:text-[#704389]"
+              >
                 ›
               </span>
             </button>
           </div>
-          <footer className="flex justify-end border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+          <footer className="flex justify-end rounded-b-2xl border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
             <button
               type="button"
               onClick={onClose}
@@ -146,28 +150,26 @@ export function UploadScanSelectionModal({
           if (event.key === "Escape") onClose();
         }}
       >
-        <div className="jurisguard-modal-surface w-full max-w-xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-xl">
-          <header className="flex items-center justify-between gap-4 border-b border-[#5F3675] bg-[#704389] px-5 py-4 text-white">
-            <div className="flex items-center gap-3">
-              <FileScan className="h-5 w-5 shrink-0" aria-hidden="true" />
-              <div>
-                <h2 id="upload-scan-title" className="text-lg font-bold">
-                  Upload / Scan Input
-                </h2>
-                <p className="mt-1 text-sm text-white/85">
-                  Scan or upload the whole paper document.
-                </p>
-              </div>
+        <div className="jurisguard-modal-surface w-full max-w-xl overflow-hidden rounded-2xl border border-[#CBD5E1] bg-[#704389] shadow-xl">
+          <header className="flex items-center gap-3 rounded-t-2xl border-b border-[#5F3675] bg-[#704389] px-5 py-4 text-white">
+            <FileScan className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <div>
+              <h2 id="upload-scan-title" className="text-lg font-bold">
+                Upload / Scan Input
+              </h2>
+              <p className="mt-1 text-sm text-white/85">
+                Scan or upload the whole paper document.
+              </p>
             </div>
           </header>
-          <div className="space-y-3 p-5">
+          <div className="space-y-3 bg-white p-5">
             <button
               type="button"
               onClick={onSelectScan}
-              className="flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#704389] bg-[#FAF7FC] p-4 text-left transition hover:bg-[#F2E9F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
+              className="group flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#D1D5DB] bg-white p-4 text-left transition hover:border-[#704389] hover:bg-[#FAF7FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389] active:border-[#704389] active:bg-[#F2E9F7]"
             >
               <Camera
-                className="ml-1 h-6 w-6 shrink-0 text-[#704389]"
+                className="ml-1 h-6 w-6 shrink-0 text-[#6B7280] transition-colors group-hover:text-[#704389]"
                 aria-hidden="true"
               />
               <span className="flex-1">
@@ -176,17 +178,20 @@ export function UploadScanSelectionModal({
                   Open the camera-only scanning workflow.
                 </span>
               </span>
-              <span aria-hidden="true" className="text-lg text-[#704389]">
+              <span
+                aria-hidden="true"
+                className="text-lg text-[#9CA3AF] transition-colors group-hover:text-[#704389]"
+              >
                 ›
               </span>
             </button>
             <button
               type="button"
               onClick={onSelectUpload}
-              className="flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#D1D5DB] bg-white p-4 text-left transition hover:border-[#704389] hover:bg-[#F8FAFC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389]"
+              className="group flex min-h-20 w-full items-center gap-4 rounded-xl border border-[#D1D5DB] bg-white p-4 text-left transition hover:border-[#704389] hover:bg-[#FAF7FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#704389] active:border-[#704389] active:bg-[#F2E9F7]"
             >
               <Upload
-                className="ml-1 h-6 w-6 shrink-0 text-[#704389]"
+                className="ml-1 h-6 w-6 shrink-0 text-[#6B7280] transition-colors group-hover:text-[#704389]"
                 aria-hidden="true"
               />
               <span className="flex-1">
@@ -197,12 +202,15 @@ export function UploadScanSelectionModal({
                   Open the file-upload-only workflow.
                 </span>
               </span>
-              <span aria-hidden="true" className="text-lg text-[#704389]">
+              <span
+                aria-hidden="true"
+                className="text-lg text-[#9CA3AF] transition-colors group-hover:text-[#704389]"
+              >
                 ›
               </span>
             </button>
           </div>
-          <footer className="flex justify-end border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+          <footer className="flex justify-end rounded-b-2xl border-t border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
             <button
               type="button"
               onClick={onClose}

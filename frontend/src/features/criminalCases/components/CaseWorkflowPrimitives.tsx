@@ -14,6 +14,12 @@ export function TextInput({
   type = "text",
   disabled = false,
   readOnly = false,
+  maxLength,
+  inputMode,
+  pattern,
+  onKeyDown,
+  onPaste,
+  onChange,
 }: {
   label: string;
   registration: UseFormRegisterReturn;
@@ -21,7 +27,14 @@ export function TextInput({
   type?: string;
   disabled?: boolean;
   readOnly?: boolean;
+  maxLength?: number;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  pattern?: string;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  onPaste?: React.ClipboardEventHandler<HTMLInputElement>;
+  onChange?: React.ChangeEventHandler<HTMLInputElement>;
 }) {
+  const { onChange: regOnChange, ...restReg } = registration;
   return (
     <label className="block">
       <span className="text-sm font-medium text-[#4B5563]">{label}</span>
@@ -29,7 +42,19 @@ export function TextInput({
         type={type}
         disabled={disabled}
         readOnly={readOnly}
-        {...registration}
+        maxLength={maxLength}
+        inputMode={inputMode}
+        pattern={pattern}
+        {...restReg}
+        onChange={(event) => {
+          if (onChange) {
+            onChange(event);
+          } else {
+            void regOnChange(event);
+          }
+        }}
+        onKeyDown={onKeyDown}
+        onPaste={onPaste}
         className="mt-1 w-full rounded-md border border-[#D1D5DB] bg-white px-3 py-2 text-sm text-[#2B3642] outline-none transition duration-200 focus:border-[#704389] focus:ring-2 focus:ring-[#704389]/20 disabled:cursor-not-allowed disabled:bg-[#F3F4F6] disabled:text-[#6B7280]"
       />
       <FieldError message={error} />

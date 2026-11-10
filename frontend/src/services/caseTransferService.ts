@@ -1,4 +1,22 @@
+import { AxiosError } from "axios";
 import { apiClient } from "../api/client";
+
+export function getTransferErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof AxiosError) {
+    const detail = error.response?.data?.detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+      return (
+        detail
+          .map((item) => item?.msg || item?.message)
+          .filter(Boolean)
+          .join(", ") || fallback
+      );
+    }
+    return error.message || fallback;
+  }
+  return error instanceof Error ? error.message : fallback;
+}
 
 export type TransferStatus = "Draft" | "Pending Receipt" | "Returned for Correction" | "Completed";
 export type TransferSection = "Criminal" | "Civil" | "ADMIN 1" | "ADMIN 2" | "ADMIN 3";

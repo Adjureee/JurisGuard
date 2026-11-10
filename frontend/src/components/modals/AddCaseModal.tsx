@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import toast from "react-hot-toast";
 import { useConfirmation } from "../ConfirmationProvider";
 import { CaseWorkflow } from "./CaseWorkflow";
@@ -27,6 +28,24 @@ export default function AddCaseModal({
   const upsertCase = useCriminalCasesStore((state) => state.upsertCase);
   const addLog = useAuditLogStore((state) => state.addLog);
   const addNotification = useNotificationStore((state) => state.addNotification);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let isCancelled = false;
+    listClientRecords()
+      .then((records) => {
+        if (!isCancelled) {
+          setClients(records);
+        }
+      })
+      .catch(() => {
+        // Fall back to existing cached clients in store
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isOpen, setClients]);
 
   if (!isOpen) return null;
 
