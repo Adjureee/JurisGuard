@@ -10,6 +10,7 @@ import os
 import secrets
 from pathlib import Path
 
+import argon2
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, make_url
@@ -50,10 +51,9 @@ def target_url(source: str, database_name: str = DEMO_DB_NAME) -> URL:
 
 
 def hash_password(password: str) -> str:
-    """Match the application's PBKDF2-SHA256 storage format."""
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120_000)
-    return f"pbkdf2_sha256${salt}${digest.hex()}"
+    """Match the application's Argon2id storage format."""
+    hasher = argon2.PasswordHasher(time_cost=3, memory_cost=65536, parallelism=4, type=argon2.Type.ID)
+    return hasher.hash(password)
 
 
 def seed_accounts(engine, accounts=DEMO_ACCOUNTS, *, rotate_passwords: bool = False) -> list[tuple[str, str]]:

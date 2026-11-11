@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
+import argon2
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -142,14 +143,22 @@ seed_roles()
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120_000)
-    return f"pbkdf2_sha256${salt}${digest.hex()}"
+    """Hash a password with Argon2id (RFC 9106: memory-hard, per-password random salt)."""
+    hasher = argon2.PasswordHasher(time_cost=3, memory_cost=65536, parallelism=4, type=argon2.Type.ID)
+    return hasher.hash(password)
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
     if not stored_hash:
         return False
+    if stored_hash.startswith("$argon2id$"):
+        hasher = argon2.PasswordHasher(time_cost=3, memory_cost=65536, parallelism=4, type=argon2.Type.ID)
+        try:
+            return hasher.verify(stored_hash, password)
+        except (argon2.exceptions.VerificationError, argon2.exceptions.InvalidHashError):
+            return False
+    # Legacy PBKDF2-SHA256 hashes remain verifiable so existing accounts can sign in;
+    # login() upgrades them to Argon2id after a successful verification.
     if not stored_hash.startswith("pbkdf2_sha256$"):
         return False
 
@@ -1412,6 +1421,9 @@ def login(
             if remember_device and not REQUIRE_MFA:
                 new_trusted_device_token = create_mfa_trusted_device_token(user)
 
+    if not user.password_hash.startswith("$argon2id$"):
+        # Transparently upgrade legacy PBKDF2 hashes to Argon2id on successful sign-in.
+        user.password_hash = hash_password(form.password)
     user.last_login_at = datetime.now()
     write_audit(db, user.user_id, "Login", "user", "User signed in", str(user.user_id), request)
     db.commit()

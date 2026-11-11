@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from urllib.parse import quote, urlparse, parse_qs
 import unittest
 from unittest.mock import Mock
+import argon2
 from fastapi import HTTPException, FastAPI, Depends, Form, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.testclient import TestClient
@@ -185,10 +186,31 @@ class AuthenticationTests(unittest.TestCase):
         self.assertEqual(caught.exception.status_code, 401)
 
     def test_password_rejection_is_safe(self):
-        for stored in ('plaintext', 'pbkdf2_sha256$', 'pbkdf2_sha256$x$bad'):
+        for stored in ('plaintext', 'pbkdf2_sha256$', 'pbkdf2_sha256$x$bad', '$argon2id$garbage'):
             self.assertFalse(self.auth['verify_password']('plaintext', stored))
         with self.assertRaises(HTTPException):
             self.login(password='incorrect')
+
+    def test_passwords_are_hashed_with_argon2id(self):
+        first = self.auth['hash_password']('synthetic-password')
+        second = self.auth['hash_password']('synthetic-password')
+        self.assertTrue(first.startswith('$argon2id$v=19$m=65536,t=3,p=4$'))
+        self.assertNotEqual(first, second)
+        self.assertTrue(self.auth['verify_password']('synthetic-password', first))
+        self.assertFalse(self.auth['verify_password']('synthetic-passworD', first))
+
+    def test_legacy_pbkdf2_hash_is_upgraded_to_argon2id_on_login(self):
+        salt = secrets.token_hex(16)
+        digest = hashlib.pbkdf2_hmac('sha256', b'synthetic-password', salt.encode(), 120_000).hex()
+        legacy = f'pbkdf2_sha256${salt}${digest}'
+        self.assertTrue(self.auth['verify_password']('synthetic-password', legacy))
+        self.user.password_hash = legacy
+        with self.assertRaises(HTTPException):
+            self.login(password='incorrect')
+        self.assertEqual(self.user.password_hash, legacy)
+        self.login()
+        self.assertTrue(self.user.password_hash.startswith('$argon2id$'))
+        self.assertTrue(self.auth['verify_password']('synthetic-password', self.user.password_hash))
 
     def test_totp_reference_vector_and_bad_input(self):
         secret = base64.b32encode(b'12345678901234567890').decode()

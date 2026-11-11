@@ -1,7 +1,8 @@
 """Demo account creation must stay isolated from the configured database."""
 
-import hashlib
 import unittest
+
+import argon2
 
 from seed_demo_users import DEMO_ACCOUNTS, FRESH_ACCOUNTS, hash_password, marker_for, target_url
 
@@ -34,12 +35,11 @@ class DemoSeedTests(unittest.TestCase):
         first = hash_password("synthetic-test-password")
         second = hash_password("synthetic-test-password")
         self.assertNotEqual(first, second)
-        scheme, salt, digest = first.split("$", 2)
-        self.assertEqual(scheme, "pbkdf2_sha256")
-        self.assertEqual(
-            hashlib.pbkdf2_hmac("sha256", b"synthetic-test-password", salt.encode(), 120_000).hex(),
-            digest,
-        )
+        self.assertTrue(first.startswith("$argon2id$v=19$m=65536,t=3,p=4$"))
+        hasher = argon2.PasswordHasher()
+        self.assertTrue(hasher.verify(first, "synthetic-test-password"))
+        with self.assertRaises(argon2.exceptions.VerifyMismatchError):
+            hasher.verify(first, "wrong-password")
 
 
 if __name__ == "__main__":

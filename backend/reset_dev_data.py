@@ -19,6 +19,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+import argon2
 from sqlalchemy import MetaData, Table, func, inspect, or_, select, text
 from sqlalchemy.engine import URL
 
@@ -461,9 +462,10 @@ def apply_plan(plan: dict[str, Any], args: argparse.Namespace) -> None:
         if tombstone_ids:
             tombstone_values: dict[str, Any] = {}
             if "password_hash" in user_table.c:
-                salt = secrets.token_hex(16)
-                digest = hashlib.pbkdf2_hmac("sha256", secrets.token_bytes(32), salt.encode("utf-8"), 120_000)
-                tombstone_values["password_hash"] = f"pbkdf2_sha256${salt}${digest.hex()}"
+                # Argon2id hash of a random secret nobody knows, so archived accounts can never sign in.
+                tombstone_values["password_hash"] = argon2.PasswordHasher(
+                    time_cost=3, memory_cost=65536, parallelism=4, type=argon2.Type.ID
+                ).hash(secrets.token_urlsafe(32))
             for column, value in {
                 "email": None,
                 "full_name": "Archived account",
